@@ -9,7 +9,7 @@ import { DocsSidebar } from "~/components/docs/DocsSidebar";
 import { MarkdownContent } from "~/components/docs/MarkdownContent";
 import { getDocMetadata } from "~/utils/docsConfig";
 
-function getSlugFromParams(params: Route.Params | { [key: string]: string }): string {
+function getSlugFromParams(params: any): string {
     // Route is configured as /docs/* so React Router provides the splat param as "*"
     const raw = (params as any)["*"] || "";
     // Normalize by trimming any leading/trailing slashes
