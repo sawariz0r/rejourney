@@ -118,7 +118,7 @@ GITHUB_CLIENT_ID=xxx
 GITHUB_CLIENT_SECRET=xxx
 ```
 
-For complete reference, see [env.selfhosted.example](./env.selfhosted.example) which documents all environment variables.
+For complete reference, see [env.selfhosted.example](https://github.com/rejourneyco/rejourney/blob/main/docs/selfhosted/env.selfhosted.example) which documents all environment variables.
 
 ---
 

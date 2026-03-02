@@ -26,7 +26,8 @@ const NAVIGATION: NavCategory[] = [
                     { label: "3 Line Setup", href: "/docs/reactnative/overview#3-line-setup", isRoute: false },
                     { label: "Screen Tracking", href: "/docs/reactnative/overview#screen-tracking", isRoute: false },
                     { label: "User Identification", href: "/docs/reactnative/overview#user-identification", isRoute: false },
-                    { label: "Custom Events & Metadata", href: "/docs/reactnative/overview#custom-events-metadata", isRoute: false },
+                    { label: "Custom Events", href: "/docs/reactnative/overview#custom-events", isRoute: false },
+                    { label: "Metadata", href: "/docs/reactnative/overview#metadata", isRoute: false },
                     { label: "Privacy Controls", href: "/docs/reactnative/overview#privacy-controls", isRoute: false },
                 ]
             }

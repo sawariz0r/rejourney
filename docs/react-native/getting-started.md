@@ -107,11 +107,24 @@ Rejourney.clearUserIdentity();
 > [!IMPORTANT]
 > **Privacy:** Use internal IDs or UUIDs. If you must use PII (email, phone), hash it before sending.
 
-## Custom Events & Metadata
+## Custom Events
 
-You can track custom events and assign metadata to sessions to filter and segment them later in the dashboard.
+Use custom events to track key user interactions (taps, flows, funnels) that you want to analyze alongside session replays.
 
 ```javascript
+import { Rejourney } from '@rejourneyco/react-native';
+
+// Log a custom event with properties
+Rejourney.logEvent('button_clicked', { buttonName: 'signup' });
+```
+
+## Metadata
+
+Attach metadata to the session to make filtering and segmentation easier in the dashboard.
+
+```javascript
+import { Rejourney } from '@rejourneyco/react-native';
+
 // Set a single metadata property
 Rejourney.setMetadata('plan', 'premium');
 

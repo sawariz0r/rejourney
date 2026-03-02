@@ -25,7 +25,7 @@ In the Distributed Cloud deployment, the database schema is the absolute source 
 * **Multi-Bucket Suport**: This allows the system to support multiple S3 buckets across different projects or regions without needing to restart services or update environment variables.
 * **Redundancy**: Supports "Shadow Endpoints," where the backend automatically pipes recording data to multiple storage providers simultaneously for failover.
 * **Security**: The STORAGE_ENCRYPTION_KEY is used to encrypt S3 secret keys before they are saved to the database.
-* **Management**: Use the [manage-s3-endpoints.mjs](/scripts/k8s/manage-s3-endpoints.mjs) interactive script to add new storage providers to your live cluster without downtime.
+* **Management**: Use the [manage-s3-endpoints.mjs](https://github.com/rejourneyco/rejourney/blob/main/scripts/k8s/manage-s3-endpoints.mjs) interactive script to add new storage providers to your live cluster without downtime.
 
 ### Single-Node Cloud (Simplified Fallback)
 For self-hosted developers, we prioritize simplicity.

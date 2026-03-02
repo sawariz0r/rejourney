@@ -9,9 +9,15 @@ import { DocsSidebar } from "~/components/docs/DocsSidebar";
 import { MarkdownContent } from "~/components/docs/MarkdownContent";
 import { getDocMetadata } from "~/utils/docsConfig";
 
+function getSlugFromParams(params: Route.Params | { [key: string]: string }): string {
+    // Route is configured as /docs/* so React Router provides the splat param as "*"
+    const raw = (params as any)["*"] || "";
+    // Normalize by trimming any leading/trailing slashes
+    return String(raw).replace(/^\/+|\/+$/g, "");
+}
+
 export const meta: Route.MetaFunction = ({ params, location }) => {
-    // Single-segment docs route: /docs/:slug
-    const slug = (params as any)?.slug || "";
+    const slug = getSlugFromParams(params as any);
     const metadata = getDocMetadata(slug);
     const domain = "https://rejourney.co";
     const canonicalUrl = `${domain}${location.pathname}`;
@@ -46,8 +52,7 @@ export const meta: Route.MetaFunction = ({ params, location }) => {
 
 export async function loader({ params }: Route.LoaderArgs) {
     const { loadDocContent, getDocMetadata } = await import("~/utils/docsLoader.server");
-    // Single-segment docs route: /docs/:slug
-    const slug = (params as any)?.slug || "";
+    const slug = getSlugFromParams(params as any);
     const content = loadDocContent(slug);
     const metadata = getDocMetadata(slug);
 
