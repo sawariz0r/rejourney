@@ -24,10 +24,14 @@
 #import <ReactCommon/RCTTurboModule.h>
 #if __has_include(<RejourneySpec/RejourneySpec.h>)
 #import <RejourneySpec/RejourneySpec.h>
+#define RJ_USE_NEW_ARCH_CODEGEN 1
 #elif __has_include("RejourneySpec.h")
 #import "RejourneySpec.h"
+#define RJ_USE_NEW_ARCH_CODEGEN 1
+#endif
 #endif
 
+#if defined(RCT_NEW_ARCH_ENABLED) && defined(RJ_USE_NEW_ARCH_CODEGEN)
 @interface Rejourney : NSObject <NativeRejourneySpec>
 #else
 @interface Rejourney : NSObject <RCTBridgeModule>

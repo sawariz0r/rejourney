@@ -34,13 +34,13 @@ export default function ChangelogPage() {
                     {/* Versions List */}
                     <div className="space-y-24">
 
-                        {/* Version 1.0.10 */}
+                        {/* Version 1.0.11 */}
                         <div className="relative">
                             <div className="absolute -left-4 top-0 bottom-0 w-1 bg-black hidden sm:block" />
                             <div className="flex flex-col md:flex-row gap-8 items-start">
                                 <div className="md:w-1/4">
                                     <div className="sticky top-24">
-                                        <div className="text-4xl font-black uppercase tracking-tighter mb-2">v1.0.10</div>
+                                        <div className="text-4xl font-black uppercase tracking-tighter mb-2">v1.0.11</div>
                                         <div className="text-xs font-mono font-black uppercase tracking-widest text-blue-600 mb-4">Mar 01, 2026</div>
                                         <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-widest rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] border border-black">
                                             Latest
@@ -55,7 +55,7 @@ export default function ChangelogPage() {
                                         </h2>
                                         <div className="prose prose-lg prose-slate max-w-none">
                                             <p className="font-bold text-gray-700">
-                                                Version 1.0.10 improves screen tracking, device fingerprinting accuracy, DOM capture reliability, metadata and custom event logging, and delivers performance optimizations across iOS and Android.
+                                                Version 1.0.11 improves screen tracking, device fingerprinting accuracy, DOM capture reliability, metadata and custom event logging, and delivers performance optimizations across iOS and Android.
                                             </p>
                                             <ul className="list-none pl-0 space-y-4 mt-6">
                                                 <li className="flex gap-4">

@@ -61,6 +61,7 @@ jobs:
     strategy:
       matrix:
         platform: [ios, android]
+        app_type: [bare, expo]
     runs-on: ${{ matrix.platform == 'ios' && 'macos-latest' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +97,11 @@ jobs:
       - name: Create Test App
         run: |
           cd /tmp
-          npx --yes @react-native-community/cli init ValidationApp --skip-install
+          if [ "${{ matrix.app_type }}" == "expo" ]; then
+            npx create-expo-app ValidationApp -t default
+          else
+            npx --yes @react-native-community/cli init ValidationApp --skip-install
+          fi
       
       - name: Install SDK in Test App
         run: |
@@ -106,15 +111,23 @@ jobs:
 
       - name: Build iOS
         if: matrix.platform == 'ios'
-        working-directory: /tmp/ValidationApp/ios
+        working-directory: /tmp/ValidationApp
         run: |
+          if [ "${{ matrix.app_type }}" == "expo" ]; then
+            npx expo prebuild --platform ios
+          fi
+          cd ios
           pod install
           xcodebuild -workspace ValidationApp.xcworkspace -scheme ValidationApp -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' clean build CODE_SIGNING_ALLOWED=NO | xcpretty
 
       - name: Build Android
         if: matrix.platform == 'android'
-        working-directory: /tmp/ValidationApp/android
+        working-directory: /tmp/ValidationApp
         run: |
+          if [ "${{ matrix.app_type }}" == "expo" ]; then
+            npx expo prebuild --platform android
+          fi
+          cd android
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 

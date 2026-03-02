@@ -33,8 +33,10 @@
 #import <ReactCommon/RCTTurboModule.h>
 #if __has_include(<RejourneySpec/RejourneySpec.h>)
 #import <RejourneySpec/RejourneySpec.h>
+#define RJ_USE_NEW_ARCH_CODEGEN 1
 #elif __has_include("RejourneySpec.h")
 #import "RejourneySpec.h"
+#define RJ_USE_NEW_ARCH_CODEGEN 1
 #endif
 #endif
 
@@ -110,7 +112,7 @@ RCT_EXPORT_METHOD(removeListeners : (double)count) {
   return _impl;
 }
 
-#ifdef RCT_NEW_ARCH_ENABLED
+#if defined(RCT_NEW_ARCH_ENABLED) && defined(RJ_USE_NEW_ARCH_CODEGEN)
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params {
   return std::make_shared<facebook::react::NativeRejourneySpecJSI>(params);
@@ -137,20 +139,6 @@ RCT_EXPORT_METHOD(startSession : (NSString *)userId apiUrl : (NSString *)
            publicKey:publicKey
              resolve:resolve
               reject:reject];
-}
-
-RCT_EXPORT_METHOD(startSessionWithOptions : (NSDictionary *)options resolve : (
-    RCTPromiseResolveBlock)resolve reject : (RCTPromiseRejectBlock)reject) {
-  RejourneyImpl *impl = [self ensureImpl];
-  if (!impl) {
-    resolve(@{
-      @"success" : @NO,
-      @"sessionId" : @"",
-      @"error" : @"Native module not available"
-    });
-    return;
-  }
-  [impl startSessionWithOptions:options resolve:resolve reject:reject];
 }
 
 RCT_EXPORT_METHOD(stopSession : (RCTPromiseResolveBlock)
