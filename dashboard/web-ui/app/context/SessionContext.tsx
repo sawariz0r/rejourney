@@ -30,7 +30,6 @@ function apiProjectToProject(apiProject: ApiProject): Project {
     sessionsLast7Days: apiProject.sessionsLast7Days || 0,
     errorsLast7Days: apiProject.errorsLast7Days || 0,
 
-    avgUxScore: 0,
   };
 }
 
@@ -68,9 +67,7 @@ interface SessionContextValue {
   dashboardStats: {
     totalSessions: number;
     avgDuration: number;
-    avgUxScore: number;
     errorRate: number;
-
   };
 }
 
@@ -105,9 +102,7 @@ export function SessionDataProvider({ children }: Props) {
   const [dashboardStats, setDashboardStats] = useState({
     totalSessions: 0,
     avgDuration: 0,
-    avgUxScore: 0,
     errorRate: 0,
-
   });
 
   // Clear state when team changes to ensure pages show fresh data
@@ -180,7 +175,7 @@ export function SessionDataProvider({ children }: Props) {
       const partialErrors: string[] = [];
 
       const apiSessions = sessionsResult.status === 'fulfilled' ? sessionsResult.value : (() => { partialErrors.push('sessions'); return []; })();
-      const stats = statsResult.status === 'fulfilled' ? statsResult.value : (() => { partialErrors.push('stats'); return { totalSessions: 0, avgDuration: 0, avgUxScore: 0, errorRate: 0 }; })();
+      const stats = statsResult.status === 'fulfilled' ? statsResult.value : (() => { partialErrors.push('stats'); return { totalSessions: 0, avgDuration: 0, errorRate: 0 }; })();
       const apiProjects = projectsResult.status === 'fulfilled' ? projectsResult.value : (() => { partialErrors.push('projects'); return []; })();
       const trends = trendsResult.status === 'fulfilled' ? trendsResult.value : (() => { partialErrors.push('trends'); return { daily: [] }; })();
 
@@ -212,7 +207,6 @@ export function SessionDataProvider({ children }: Props) {
         completedSessions: day.sessions,
         avgDurationSeconds: 0,
         avgInteractionScore: 0,
-        avgUxScore: day.avgUxScore,
         avgApiErrorRate: 0,
         p50Duration: 0,
         p90Duration: 0,
@@ -228,7 +222,6 @@ export function SessionDataProvider({ children }: Props) {
       setDashboardStats({
         totalSessions: stats.totalSessions,
         avgDuration: stats.avgDuration,
-        avgUxScore: stats.avgUxScore,
         errorRate: stats.errorRate,
       });
 

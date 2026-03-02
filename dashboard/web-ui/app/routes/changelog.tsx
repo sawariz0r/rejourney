@@ -41,7 +41,7 @@ export default function ChangelogPage() {
                                 <div className="md:w-1/4">
                                     <div className="sticky top-24">
                                         <div className="text-4xl font-black uppercase tracking-tighter mb-2">v1.0.10</div>
-                                        <div className="text-xs font-mono font-black uppercase tracking-widest text-blue-600 mb-4">Feb 27, 2026</div>
+                                        <div className="text-xs font-mono font-black uppercase tracking-widest text-blue-600 mb-4">Mar 01, 2026</div>
                                         <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-widest rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] border border-black">
                                             Latest
                                         </div>
@@ -51,11 +51,11 @@ export default function ChangelogPage() {
                                     <div>
                                         <h2 className="text-3xl font-black uppercase tracking-tighter mb-6 flex items-center gap-3">
                                             <Rocket size={32} strokeWidth={3} />
-                                            React Native Tracking Polish
+                                            Tracking, Fingerprinting & Performance
                                         </h2>
                                         <div className="prose prose-lg prose-slate max-w-none">
                                             <p className="font-bold text-gray-700">
-                                                Version 1.0.10 tightens up screen tracking across React Native projects and clarifies how to wire in custom tracking.
+                                                Version 1.0.10 improves screen tracking, device fingerprinting accuracy, DOM capture reliability, metadata and custom event logging, and delivers performance optimizations across iOS and Android.
                                             </p>
                                             <ul className="list-none pl-0 space-y-4 mt-6">
                                                 <li className="flex gap-4">
@@ -70,6 +70,48 @@ export default function ChangelogPage() {
                                                     <div>
                                                         <strong className="uppercase tracking-tight text-sm">Auto Screen Tracking Fixes:</strong>
                                                         <p className="text-gray-600 mt-1">Resolved bugs in the auto screen tracking pipeline for setups that do not use Expo Router, ensuring consistent screen names and session timelines.</p>
+                                                    </div>
+                                                </li>
+                                                <li className="flex gap-4">
+                                                    <div className="mt-1 flex-shrink-0 w-6 h-6 bg-black text-white flex items-center justify-center text-[10px] font-bold">03</div>
+                                                    <div>
+                                                        <strong className="uppercase tracking-tight text-sm">Expo Router Bug Fix:</strong>
+                                                        <p className="text-gray-600 mt-1">Fixed screen tracking and navigation issues when using Expo Router.</p>
+                                                    </div>
+                                                </li>
+                                                <li className="flex gap-4">
+                                                    <div className="mt-1 flex-shrink-0 w-6 h-6 bg-black text-white flex items-center justify-center text-[10px] font-bold">04</div>
+                                                    <div>
+                                                        <strong className="uppercase tracking-tight text-sm">Device Fingerprinting on OS Updates:</strong>
+                                                        <p className="text-gray-600 mt-1">More accurate device fingerprinting that correctly handles OS updates, improving session association across system upgrades.</p>
+                                                    </div>
+                                                </li>
+                                                <li className="flex gap-4">
+                                                    <div className="mt-1 flex-shrink-0 w-6 h-6 bg-black text-white flex items-center justify-center text-[10px] font-bold">05</div>
+                                                    <div>
+                                                        <strong className="uppercase tracking-tight text-sm">Accurate Device Model ID on iOS:</strong>
+                                                        <p className="text-gray-600 mt-1">Improved device model identification on iOS for better analytics and device segmentation.</p>
+                                                    </div>
+                                                </li>
+                                                <li className="flex gap-4">
+                                                    <div className="mt-1 flex-shrink-0 w-6 h-6 bg-black text-white flex items-center justify-center text-[10px] font-bold">06</div>
+                                                    <div>
+                                                        <strong className="uppercase tracking-tight text-sm">DOM Capture for Background Sessions:</strong>
+                                                        <p className="text-gray-600 mt-1">Fixed DOM capture missing for sessions started from background—visual capture now initializes correctly regardless of app launch state.</p>
+                                                    </div>
+                                                </li>
+                                                <li className="flex gap-4">
+                                                    <div className="mt-1 flex-shrink-0 w-6 h-6 bg-black text-white flex items-center justify-center text-[10px] font-bold">07</div>
+                                                    <div>
+                                                        <strong className="uppercase tracking-tight text-sm">Performance Improvements:</strong>
+                                                        <p className="text-gray-600 mt-1">Optimizations on both iOS and Android for smoother capture, lower memory usage, and reduced battery impact.</p>
+                                                    </div>
+                                                </li>
+                                                <li className="flex gap-4">
+                                                    <div className="mt-1 flex-shrink-0 w-6 h-6 bg-black text-white flex items-center justify-center text-[10px] font-bold">08</div>
+                                                    <div>
+                                                        <strong className="uppercase tracking-tight text-sm">Metadata & Custom Events:</strong>
+                                                        <p className="text-gray-600 mt-1">Added metadata support and logging of custom events in the Rejourney package for richer analytics and session context.</p>
                                                     </div>
                                                 </li>
                                             </ul>

@@ -31,6 +31,7 @@ import android.view.View
 import com.rejourney.engine.DeviceRegistrar
 import com.rejourney.engine.DiagnosticLog
 import com.rejourney.engine.PerformanceSnapshot
+import com.rejourney.utility.gzipCompress
 import org.json.JSONObject
 import java.io.File
 import java.util.*
@@ -505,6 +506,7 @@ class ReplayOrchestrator private constructor(private val context: Context) {
         visitedScreens.clear()
         bgTimeMs = 0
         bgStartMs = null
+        lastHierarchyHash = null
 
         TelemetryPipeline.shared?.currentReplayId = replayId
         SegmentDispatcher.shared.currentReplayId = replayId
@@ -797,9 +799,10 @@ class ReplayOrchestrator private constructor(private val context: Context) {
         lastHierarchyHash = hash
 
         val json = JSONObject(hierarchy).toString().toByteArray(Charsets.UTF_8)
+        val compressed = json.gzipCompress() ?: return
         val ts = System.currentTimeMillis()
 
-        SegmentDispatcher.shared.transmitHierarchy(sid, json, ts, null)
+        SegmentDispatcher.shared.transmitHierarchy(sid, compressed, ts, null)
     }
 
     private fun hierarchyHash(h: Map<String, Any>): String {

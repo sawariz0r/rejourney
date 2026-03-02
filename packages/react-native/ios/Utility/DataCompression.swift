@@ -26,8 +26,8 @@ extension Data {
             stream.avail_in = uint(self.count)
             stream.total_out = 0
             
-            // MAX_WBITS + 16 = gzip format
-            if deflateInit2_(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, MAX_WBITS + 16, 8, Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) != Z_OK {
+            // MAX_WBITS + 16 = gzip format; level 9 for best ratio (smaller S3 payloads)
+            if deflateInit2_(&stream, 9, Z_DEFLATED, MAX_WBITS + 16, 8, Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) != Z_OK {
                 return nil
             }
             

@@ -32,6 +32,7 @@ import {
     ObservabilityDeepMetrics,
     UserEngagementTrends,
 } from '../services/api';
+import { DataWatermarkBanner } from '../components/dashboard/DataWatermarkBanner';
 import { DashboardPageHeader } from '../components/ui/DashboardPageHeader';
 import { TimeFilter, TimeRange } from '../components/ui/TimeFilter';
 import { usePathPrefix } from '../hooks/usePathPrefix';
@@ -1227,7 +1228,10 @@ export const GeneralOverview: React.FC = () => {
                 icon={<MessageSquareWarning className="w-6 h-6" />}
                 iconColor="bg-sky-50"
             >
-                <TimeFilter value={timeRange} onChange={setTimeRange} />
+                <div className="flex items-center gap-3">
+                    <DataWatermarkBanner dataCompleteThrough={trends?.dataCompleteThrough} />
+                    <TimeFilter value={timeRange} onChange={setTimeRange} />
+                </div>
             </DashboardPageHeader>
 
             <div className="mx-auto w-full max-w-[1600px] space-y-4 px-6 py-6">

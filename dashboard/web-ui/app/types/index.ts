@@ -40,7 +40,6 @@ export interface Project {
   createdAt: string;
   sessionsLast7Days: number;
   errorsLast7Days: number;
-  avgUxScore: number;
 }
 
 export interface RecordingSession {
@@ -81,7 +80,6 @@ export interface RecordingSession {
   screensVisited: string[];
   interactionScore: number;
   explorationScore: number;
-  uxScore: number;
   customEventCount: number;
   crashCount: number;
   anrCount: number;
@@ -119,7 +117,6 @@ export interface ProjectDailyStats {
   completedSessions: number;
   avgDurationSeconds: number;
   avgInteractionScore: number;
-  avgUxScore: number;
   avgApiErrorRate: number;
 
   p50Duration: number;
@@ -184,7 +181,6 @@ export interface IssueSession {
   deviceModel: string;
   platform: string;
   durationSeconds: number;
-  uxScore: number;
   createdAt: string;
   coverPhotoUrl: string | null;
 }

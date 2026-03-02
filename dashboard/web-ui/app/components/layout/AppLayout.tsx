@@ -29,8 +29,6 @@ function apiProjectToProject(apiProject: ApiProject): Project {
     createdAt: apiProject.createdAt,
     sessionsLast7Days: apiProject.sessionsLast7Days || 0,
     errorsLast7Days: apiProject.errorsLast7Days || 0,
-
-    avgUxScore: 0,
   };
 }
 

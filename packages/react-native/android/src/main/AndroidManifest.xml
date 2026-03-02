@@ -4,6 +4,12 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     
     <application>
+        <!-- Run before bridge init so OkHttpClientProvider uses our factory when NetworkingModule is created -->
+        <provider
+            android:name=".RejourneyOkHttpInitProvider"
+            android:authorities="${applicationId}.rejourney.okhttpinit"
+            android:exported="false"
+            android:initOrder="100" />
         <!-- Service to detect app termination when swiped away from recent apps -->
         <!-- stopWithTask="false" is CRITICAL - allows onTaskRemoved() to fire when app is killed -->
         <service

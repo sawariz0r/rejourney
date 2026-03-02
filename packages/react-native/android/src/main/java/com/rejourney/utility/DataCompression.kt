@@ -17,21 +17,33 @@
 package com.rejourney.utility
 
 import java.io.ByteArrayOutputStream
+import java.io.OutputStream
+import java.util.zip.Deflater
 import java.util.zip.GZIPOutputStream
 
 /**
  * Data compression utilities
  * Android implementation aligned with iOS DataCompression.swift
+ * Uses level 9 (BEST_COMPRESSION) for smaller S3 payloads.
  */
 object DataCompression {
+
+    /**
+     * GZIPOutputStream that uses Deflater.BEST_COMPRESSION for maximum ratio.
+     */
+    private class GzipLevel9OutputStream(out: OutputStream) : GZIPOutputStream(out) {
+        init {
+            def.setLevel(Deflater.BEST_COMPRESSION)
+        }
+    }
     
     /**
-     * Compress data using gzip
+     * Compress data using gzip (level 9)
      */
     fun gzipCompress(data: ByteArray): ByteArray? {
         return try {
             val bos = ByteArrayOutputStream()
-            GZIPOutputStream(bos).use { gzip ->
+            GzipLevel9OutputStream(bos).use { gzip ->
                 gzip.write(data)
             }
             bos.toByteArray()

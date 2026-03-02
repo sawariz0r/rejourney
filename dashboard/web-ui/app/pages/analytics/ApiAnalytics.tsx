@@ -39,6 +39,7 @@ import {
     ObservabilityDeepMetrics,
     RegionPerformance,
 } from '../../services/api';
+import { DataWatermarkBanner } from '../../components/dashboard/DataWatermarkBanner';
 import { DashboardPageHeader } from '../../components/ui/DashboardPageHeader';
 import { TimeFilter, TimeRange, DEFAULT_TIME_RANGE } from '../../components/ui/TimeFilter';
 import { KpiCardItem, KpiCardsGrid, computePeriodDeltaFromSeries } from '../../components/dashboard/KpiCardsGrid';
@@ -631,7 +632,10 @@ export const ApiAnalytics: React.FC = () => {
                     icon={<Activity className="w-6 h-6" />}
                     iconColor="bg-emerald-500"
                 >
-                    <TimeFilter value={timeRange} onChange={setTimeRange} />
+                    <div className="flex items-center gap-3">
+                        <DataWatermarkBanner dataCompleteThrough={trends?.dataCompleteThrough} />
+                        <TimeFilter value={timeRange} onChange={setTimeRange} />
+                    </div>
                 </DashboardPageHeader>
             </div>
 

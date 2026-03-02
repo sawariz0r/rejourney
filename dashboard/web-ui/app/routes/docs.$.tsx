@@ -3,14 +3,25 @@
  * Handles routes like /docs/reactnative/overview, /docs/selfhosted/troubleshooting, etc.
  */
 
-import type { Route } from "./+types/docs.$";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { DocsLayout } from "~/components/docs/DocsLayout";
 import { DocsSidebar } from "~/components/docs/DocsSidebar";
 import { MarkdownContent } from "~/components/docs/MarkdownContent";
 import { getDocMetadata } from "~/utils/docsConfig";
 
-export const meta: Route.MetaFunction = ({ params, location }) => {
-  const slug = (params as { "*"?: string })["*"] || "";
+interface DocsLoaderData {
+  content: string;
+  metadata: ReturnType<typeof getDocMetadata>;
+}
+
+export const meta: MetaFunction = ({
+  params,
+  location,
+}: {
+  params: { "*"?: string };
+  location: { pathname: string };
+}) => {
+  const slug = params["*"] || "";
   const metadata = getDocMetadata(slug);
   const domain = "https://rejourney.co";
   const canonicalUrl = `${domain}${location.pathname}`;
@@ -43,7 +54,7 @@ export const meta: Route.MetaFunction = ({ params, location }) => {
   ];
 };
 
-export async function loader({ params }: Route.LoaderArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
   const { loadDocContent, getDocMetadata } = await import("~/utils/docsLoader.server");
   const slug = (params as { "*"?: string })["*"] || "";
   const content = loadDocContent(slug);
@@ -59,7 +70,7 @@ export async function loader({ params }: Route.LoaderArgs) {
   };
 }
 
-export default function DocSplatPage({ loaderData }: Route.ComponentProps) {
+export default function DocSplatPage({ loaderData }: { loaderData: DocsLoaderData }) {
   const { content, metadata } = loaderData;
 
   if (!metadata) {

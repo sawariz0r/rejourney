@@ -958,7 +958,10 @@ router.get(
                 };
             });
 
-        const response = { daily };
+        const response = {
+            daily,
+            dataCompleteThrough: lastRolledUpDate,
+        };
         await redis.set(cacheKey, JSON.stringify(response), 'EX', CACHE_TTL);
 
         // Force browser to bypass cache

@@ -18,7 +18,6 @@ interface DemoModeContextValue {
     demoDashboardStats: {
         totalSessions: number;
         avgDuration: number;
-        avgUxScore: number;
         errorRate: number;
     };
     demoDailyStats: ProjectDailyStats[];
@@ -35,7 +34,7 @@ export function useDemoMode(): DemoModeContextValue {
             isDemoMode: false,
             demoProjects: [],
             demoSessions: [],
-            demoDashboardStats: { totalSessions: 0, avgDuration: 0, avgUxScore: 0, errorRate: 0 },
+            demoDashboardStats: { totalSessions: 0, avgDuration: 0, errorRate: 0 },
             demoDailyStats: [],
             featuredSessionId: ''
         };

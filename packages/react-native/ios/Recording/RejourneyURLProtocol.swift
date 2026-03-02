@@ -115,11 +115,6 @@ public class RejourneyURLProtocol: URLProtocol, URLSessionDataDelegate, URLSessi
             return false
         }
         
-        // Ignore requests to the Rejourney API endpoints themselves to prevent ingestion duplication
-        if let host = url.host, host.contains("api.rejourney.co") {
-            return false
-        }
-        
         return true
     }
     

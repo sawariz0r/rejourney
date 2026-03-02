@@ -19,6 +19,7 @@ package com.rejourney.recording
 import com.rejourney.engine.DiagnosticLog
 import kotlinx.coroutines.*
 import okhttp3.*
+import com.rejourney.recording.RejourneyNetworkInterceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -127,6 +128,8 @@ class SegmentDispatcher private constructor() {
         .connectTimeout(5, TimeUnit.SECONDS) // Short timeout for debugging
         .readTimeout(10, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS)
+        // Mirror iOS URLProtocol: ensure native upload/auth traffic is captured
+        .addInterceptor(RejourneyNetworkInterceptor())
         .build()
     
     private val retryQueue = mutableListOf<PendingUpload>()

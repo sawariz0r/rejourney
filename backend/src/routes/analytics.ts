@@ -448,10 +448,12 @@ router.get(
 
             const teamIds = membership.map(m => m.teamId);
             if (teamIds.length === 0) {
+                const emptyWatermark = await getLastRolledUpDate();
                 res.json({
                     totalSessions: 0, avgDuration: 0, avgUxScore: 0, errorRate: 0,
                     platformBreakdown: { ios: 0, android: 0 },
-                    totalErrors: 0, totalRageTaps: 0, totalDeadTaps: 0, dau: 0, wau: 0, mau: 0
+                    totalErrors: 0, totalRageTaps: 0, totalDeadTaps: 0, dau: 0, wau: 0, mau: 0,
+                    dataCompleteThrough: emptyWatermark,
                 });
                 return;
             }
@@ -463,10 +465,12 @@ router.get(
 
             const projectIds = accessibleProjects.map(p => p.id);
             if (projectIds.length === 0) {
+                const emptyWatermark = await getLastRolledUpDate();
                 res.json({
                     totalSessions: 0, avgDuration: 0, avgUxScore: 0, errorRate: 0,
                     platformBreakdown: { ios: 0, android: 0 },
-                    totalErrors: 0, totalRageTaps: 0, totalDeadTaps: 0, dau: 0, wau: 0, mau: 0
+                    totalErrors: 0, totalRageTaps: 0, totalDeadTaps: 0, dau: 0, wau: 0, mau: 0,
+                    dataCompleteThrough: emptyWatermark,
                 });
                 return;
             }
@@ -483,6 +487,7 @@ router.get(
             // We reuse similar logic but sum across projectIds
             // For simplicity, we can just loop or use IN clause
 
+            const lastRolledUpDate = await getLastRolledUpDate();
             const stats = {
                 totalSessions: 0, avgDuration: 0, avgUxScore: 0, errorRate: 0,
                 platformBreakdown: { ios: 0, android: 0 }, totalErrors: 0, totalRageTaps: 0, totalDeadTaps: 0,
@@ -496,6 +501,7 @@ router.get(
                     explorers: 0,
                     loyalists: 0,
                 },
+                dataCompleteThrough: lastRolledUpDate,
             };
 
             // TODO: Implement aggregation logic properly for multi-project.
@@ -573,6 +579,7 @@ router.get(
             return;
         }
 
+        const lastRolledUpDate = await getLastRolledUpDate();
         const stats = {
             totalSessions: 0,
             avgDuration: 0,
@@ -594,6 +601,7 @@ router.get(
                 loyalists: 0,
             },
             dau: 0, wau: 0, mau: 0, // active users
+            dataCompleteThrough: lastRolledUpDate,
         };
 
         if (!timeRange || timeRange === 'all') {

@@ -451,6 +451,7 @@ public final class ReplayOrchestrator: NSObject {
         _visitedScreens.removeAll()
         _bgTimeMs = 0
         _bgStartMs = nil
+        _lastHierarchyHash = nil
 
         TelemetryPipeline.shared.currentReplayId = replayId
         SegmentDispatcher.shared.currentReplayId = replayId
@@ -674,9 +675,10 @@ public final class ReplayOrchestrator: NSObject {
         _lastHierarchyHash = hash
 
         guard let json = try? JSONSerialization.data(withJSONObject: hierarchy) else { return }
+        guard let compressed = json.gzipCompress() else { return }
         let ts = UInt64(Date().timeIntervalSince1970 * 1000)
 
-        SegmentDispatcher.shared.transmitHierarchy(replayId: sid, hierarchyPayload: json, timestampMs: ts, completion: nil)
+        SegmentDispatcher.shared.transmitHierarchy(replayId: sid, hierarchyPayload: compressed, timestampMs: ts, completion: nil)
     }
 
     private func _hierarchyHash(_ h: [String: Any]) -> String {

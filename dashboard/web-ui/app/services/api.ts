@@ -1,4 +1,3 @@
-import { calculateUxScoreFromSession } from '../utils/uxScore';
 import {
   User,
   Project,
@@ -264,14 +263,12 @@ export interface ApiSessionSummary {
 export interface DashboardStats {
   totalSessions: number;
   avgDuration: number;
-  avgUxScore: number;
   errorRate: number;
   funnelCompletionRate: number;
   avgFunnelStep: number;
   activeUsers: number;
   activeUsersTrend: number;
   avgDurationTrend: number;
-  avgUxScoreTrend: number;
   errorRateTrend: number;
   dau?: number;
   wau?: number;
@@ -282,6 +279,8 @@ export interface DashboardStats {
     explorers: number;
     loyalists: number;
   };
+  /** Last date (YYYY-MM-DD) for which rollups are complete. Metrics exclude days after this. */
+  dataCompleteThrough?: string;
 }
 
 // =============================================================================
@@ -704,7 +703,6 @@ export interface ApiProject {
   errorsTotal?: number;
   crashesTotal?: number;
   anrsTotal?: number;
-  avgUxScoreAllTime?: number;
   apiErrorsTotal?: number;
   apiTotalCount?: number;
   rageTapTotal?: number;
@@ -1554,7 +1552,6 @@ export interface InsightsTrends {
     sessions: number;
     crashes: number;
     rageTaps: number;
-    avgUxScore: number;
     dau: number;
     mau: number;
     // NEW: Additional metrics for overview graphs
@@ -1565,6 +1562,8 @@ export interface InsightsTrends {
     appVersionBreakdown: Record<string, number>;
     totalApiCalls: number;
   }>;
+  /** Last date (YYYY-MM-DD) for which rollups are complete. Metrics exclude days after this. */
+  dataCompleteThrough?: string;
 }
 
 export interface FrictionHeatmap {
@@ -2083,10 +2082,9 @@ export interface GeoSummary {
     count: number;
     latitude?: number;
     longitude?: number;
-    avgUxScore?: number;
     crashCount?: number;
     rageTapCount?: number;
-    topCities: Array<{ city: string; count: number; latitude?: number; longitude?: number; avgUxScore?: number }>;
+    topCities: Array<{ city: string; count: number; latitude?: number; longitude?: number }>;
   }>;
   totalWithGeo: number;
 }
@@ -2097,7 +2095,6 @@ export interface GeoRegionalValue {
     sessions: number;
     valueSessions: number;
     valueShare: number;
-    avgUxScore: number;
     avgDurationSeconds: number;
     engagementSegments: {
       bouncers: number;
@@ -2110,7 +2107,6 @@ export interface GeoRegionalValue {
     totalSessions: number;
     totalValueSessions: number;
     valueShare: number;
-    avgUxScore: number;
     avgDurationSeconds: number;
     regionCount: number;
   };

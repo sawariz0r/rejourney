@@ -19,13 +19,6 @@ class RejourneyNetworkInterceptor : Interceptor {
     @Throws(IOException::class)
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val host = request.url.host
-
-        // Skip Rejourney's own API traffic to avoid ingestion duplication (mirrors iOS RejourneyURLProtocol)
-        if (host.contains("api.rejourney.co") || host.contains("rejourney")) {
-            return chain.proceed(request)
-        }
-
         val startMs = System.currentTimeMillis()
 
         var response: Response? = null

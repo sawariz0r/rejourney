@@ -43,7 +43,7 @@ import { api } from '../../services/api';
 import DOMInspector, { HierarchySnapshot } from '../../components/ui/DOMInspector';
 import { TouchOverlay, TouchEvent } from '../../components/ui/TouchOverlay';
 import { MarkerTooltip } from '../../components/ui/MarkerTooltip';
-import ScreenshotReplayPlayer, { ScreenshotReplayPlayerRef } from '../../components/ui/ScreenshotReplayPlayer';
+import { VideoReplayPlayer, VideoReplayPlayerRef } from '../../components/ui/VideoReplayPlayer';
 import { SessionLoadingOverlay } from '../../components/recordings/SessionLoadingOverlay';
 import { formatGeoDisplay } from '../../utils/geoDisplay';
 
@@ -614,7 +614,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const progressRef = useRef<HTMLDivElement>(null);
     const activityViewportRef = useRef<HTMLDivElement>(null);
     const terminalViewportRef = useRef<HTMLDivElement>(null);
-    const replayPlayerRef = useRef<ScreenshotReplayPlayerRef>(null);
+    const replayPlayerRef = useRef<VideoReplayPlayerRef | null>(null);
 
     // Ref-based playback state to avoid stale closures in animation loop
     const currentPlaybackTimeRef = useRef<number>(0);
@@ -2126,11 +2126,10 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                     </div>
                                 ) : playbackMode === 'video' ? (
                                     <div className="w-full max-w-[320px]">
-                                        <ScreenshotReplayPlayer
+                                        <VideoReplayPlayer
                                             ref={replayPlayerRef}
                                             sessionId={fullSession?.id || id || 'demo-session'}
-                                            playbackMode="video"
-                                            videoSegments={videoSegments}
+                                            segments={videoSegments}
                                             events={allTimelineEvents}
                                             crashes={(fullSession as any)?.crashes || []}
                                             anrs={(fullSession as any)?.anrs || []}
@@ -2140,7 +2139,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                             deviceWidth={deviceWidth}
                                             deviceHeight={deviceHeight}
                                             onTimeUpdate={(time) => setCurrentPlaybackTime(time)}
-                                            className="w-[320px] max-w-[80vw] rounded-[2.4rem] border border-slate-700 shadow-[0_22px_55px_rgba(15,23,42,0.35)]"
+                                            className="w-[320px] max-w-[80vw]"
                                         />
                                     </div>
                                 ) : (

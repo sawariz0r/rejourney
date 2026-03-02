@@ -23,6 +23,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
+import { DataWatermarkBanner } from '../../components/dashboard/DataWatermarkBanner';
 import { DashboardPageHeader } from '../../components/ui/DashboardPageHeader';
 import { useSessionData } from '../../context/SessionContext';
 import { TimeFilter, TimeRange, DEFAULT_TIME_RANGE } from '../../components/ui/TimeFilter';
@@ -712,7 +713,10 @@ export const Journeys: React.FC = () => {
                     icon={<Route className="w-6 h-6" />}
                     iconColor="bg-fuchsia-500"
                 >
-                    <TimeFilter value={timeRange} onChange={setTimeRange} />
+                    <div className="flex items-center gap-3">
+                        <DataWatermarkBanner dataCompleteThrough={trends?.dataCompleteThrough} />
+                        <TimeFilter value={timeRange} onChange={setTimeRange} />
+                    </div>
                 </DashboardPageHeader>
             </div>
 

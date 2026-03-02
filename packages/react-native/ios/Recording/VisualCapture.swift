@@ -327,7 +327,7 @@ public final class VisualCapture: NSObject {
         
         guard !images.isEmpty else { return }
         
-        // All heavy work (tar, gzip, network) happens in background queue
+        // All heavy work (package, gzip, network) happens in background queue
         _encodeQueue.addOperation { [weak self] in
             self?._packageAndShip(images: images, sessionEpoch: sessionEpoch)
         }
@@ -466,34 +466,38 @@ public final class VisualCapture: NSObject {
         )
     }
     
+    /// Android-compatible binary format: [8-byte BE timestamp offset][4-byte BE size][jpeg] per frame. Backend auto-detects.
     private func _packageFrameBundle(images: [(Data, UInt64)], sessionEpoch: UInt64) -> Data? {
         var archive = Data()
-        
         for (jpeg, timestamp) in images {
-            let name = "\(sessionEpoch)_1_\(timestamp).jpeg"
-            archive.append(_tarHeader(name: name, size: jpeg.count))
+            let tsOffset = timestamp - sessionEpoch
+            archive.append(_uint64BigEndian(tsOffset))
+            archive.append(_uint32BigEndian(UInt32(jpeg.count)))
             archive.append(jpeg)
-            let padding = (512 - (jpeg.count % 512)) % 512
-            if padding > 0 { archive.append(Data(repeating: 0, count: padding)) }
         }
-        
-        archive.append(Data(repeating: 0, count: 1024))
         return archive.gzipCompress()
     }
     
-    private func _tarHeader(name: String, size: Int) -> Data {
-        var h = Data(count: 512)
-        if let nd = name.data(using: .utf8) { h.replaceSubrange(0..<min(100, nd.count), with: nd.prefix(100)) }
-        "0000644\0".data(using: .utf8).map { h.replaceSubrange(100..<108, with: $0) }
-        let z = "0000000\0".data(using: .utf8)!
-        h.replaceSubrange(108..<124, with: z + z)
-        String(format: "%011o\0", size).data(using: .utf8).map { h.replaceSubrange(124..<136, with: $0) }
-        String(format: "%011o\0", Int(Date().timeIntervalSince1970)).data(using: .utf8).map { h.replaceSubrange(136..<148, with: $0) }
-        h[156] = 0x30
-        "        ".data(using: .utf8).map { h.replaceSubrange(148..<156, with: $0) }
-        let sum = h.reduce(0) { $0 + Int($1) }
-        String(format: "%06o\0 ", sum).data(using: .utf8).map { h.replaceSubrange(148..<156, with: $0) }
-        return h
+    private func _uint64BigEndian(_ value: UInt64) -> Data {
+        Data([
+            UInt8((value >> 56) & 0xff),
+            UInt8((value >> 48) & 0xff),
+            UInt8((value >> 40) & 0xff),
+            UInt8((value >> 32) & 0xff),
+            UInt8((value >> 24) & 0xff),
+            UInt8((value >> 16) & 0xff),
+            UInt8((value >> 8) & 0xff),
+            UInt8(value & 0xff)
+        ])
+    }
+    
+    private func _uint32BigEndian(_ value: UInt32) -> Data {
+        Data([
+            UInt8((value >> 24) & 0xff),
+            UInt8((value >> 16) & 0xff),
+            UInt8((value >> 8) & 0xff),
+            UInt8(value & 0xff)
+        ])
     }
 }
 

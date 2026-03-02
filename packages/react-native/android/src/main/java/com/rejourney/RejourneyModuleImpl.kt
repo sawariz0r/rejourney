@@ -37,7 +37,11 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.facebook.react.bridge.*
+import com.facebook.react.modules.network.CustomClientBuilder
+import com.facebook.react.modules.network.OkHttpClientFactory
 import com.facebook.react.modules.network.OkHttpClientProvider
+import com.facebook.react.modules.network.NetworkingModule
+import okhttp3.OkHttpClient
 import com.rejourney.engine.DeviceRegistrar
 import com.rejourney.engine.DiagnosticLog
 
@@ -157,19 +161,39 @@ class RejourneyModuleImpl(
                     StabilityMonitor.getInstance(reactContext).transmitStoredReport()
                 }
                 
-                // Keep Android network inspector up to date 
+                // Register OkHttp interceptor so native/RN fetch() and XHR go through Rejourney.
+                // Use both mechanisms so we catch requests regardless of init order:
+                // 1) OkHttpClientProvider factory + clear cache (correct field: sClient)
+                // 2) NetworkingModule.setCustomClientBuilder — applied on every request's client
                 try {
-                    val client = OkHttpClientProvider.getOkHttpClient()
-                    val hasInterceptor = client.interceptors().any { it is RejourneyNetworkInterceptor }
-                    if (!hasInterceptor) {
-                        val newClient = client.newBuilder()
+                    OkHttpClientProvider.setOkHttpClientFactory(OkHttpClientFactory {
+                        OkHttpClientProvider.createClientBuilder()
                             .addInterceptor(RejourneyNetworkInterceptor())
                             .build()
-                        OkHttpClientProvider.setOkHttpClientFactory { newClient }
-                        DiagnosticLog.notice("[Rejourney] Successfully registered RejourneyNetworkInterceptor")
+                    })
+                    // React Native caches the client in OkHttpClientProvider.sClient (not "client").
+                    // Clear it so the next getOkHttpClient() uses our factory.
+                    try {
+                        val clientField = OkHttpClientProvider::class.java.getDeclaredField("sClient")
+                        clientField.isAccessible = true
+                        clientField.set(null, null)
+                    } catch (_: Exception) {}
+                    OkHttpClientProvider.getOkHttpClient()
+                    // Ensure every request (including those already using a cached client) gets our
+                    // interceptor. NetworkingModule builds per-request clients via mClient.newBuilder()
+                    // and applies this builder, so this catches all native API calls.
+                    try {
+                        NetworkingModule.setCustomClientBuilder(object : CustomClientBuilder {
+                            override fun apply(builder: OkHttpClient.Builder) {
+                                builder.addInterceptor(RejourneyNetworkInterceptor())
+                            }
+                        })
+                        DiagnosticLog.notice("[Rejourney] Registered OkHttp interceptor + CustomClientBuilder")
+                    } catch (e: Exception) {
+                        DiagnosticLog.notice("[Rejourney] OkHttp interceptor registered (CustomClientBuilder skipped: ${e.message})")
                     }
                 } catch (e: Exception) {
-                    DiagnosticLog.fault("[Rejourney] Failed to register OkHttp interceptor: ${e.message}")
+                    DiagnosticLog.fault("[Rejourney] Failed to register OkHttp interceptor factory: ${e.message}")
                 }
                 
                 // Android-specific: OEM detection and task removed handling
@@ -343,6 +367,14 @@ class RejourneyModuleImpl(
         val savedUserId = currentUserIdentity
 
         DiagnosticLog.notice("[Rejourney] Starting new session after timeout (user: $savedUserId)")
+
+        // Refresh activity on capture components (guards against race with onActivityResumed)
+        val activity = reactContext.currentActivity
+        if (activity != null) {
+            VisualCapture.shared?.setCurrentActivity(activity)
+            ViewHierarchyScanner.shared?.setCurrentActivity(activity)
+            InteractionRecorder.shared?.setCurrentActivity(activity)
+        }
 
         // Try fast path with cached credentials
         val existingCred = DeviceRegistrar.shared?.uploadCredential

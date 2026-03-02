@@ -31,17 +31,21 @@ import { DEMO_FEATURED_SESSION_ID } from './demoData';
 // Dashboard Stats (for Overview and Growth pages)
 // ================================================================================
 
+const demoWatermark = (() => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().split('T')[0];
+})();
+
 export const demoDashboardStatsApi: DashboardStats = {
     totalSessions: 28456, // Sessions > MAU since users have multiple sessions
     avgDuration: 342, // avgDuration (not avgDurationSeconds)
-    avgUxScore: 78,
     errorRate: 2.3, // error rate percentage
     funnelCompletionRate: 45.6,
     avgFunnelStep: 2.8,
     activeUsers: 1234,
     activeUsersTrend: 8.5, // % change
     avgDurationTrend: -2.3,
-    avgUxScoreTrend: 5.1,
     errorRateTrend: -12.4,
     dau: 823,
     wau: 4567,
@@ -52,6 +56,7 @@ export const demoDashboardStatsApi: DashboardStats = {
         explorers: 10456,
         loyalists: 5321,
     },
+    dataCompleteThrough: demoWatermark,
 };
 
 // ================================================================================
@@ -131,7 +136,6 @@ export const demoInsightsTrends: InsightsTrends = {
             sessions: Math.round(baseSessions * variance), // Sessions per day (800-1200)
             crashes: Math.round(1 + Math.random() * 3),
             rageTaps: Math.round(5 + Math.random() * 10),
-            avgUxScore: Math.round(75 + Math.random() * 8),
             dau: Math.round(200 + Math.random() * 100), // DAU (200-300) < sessions
             mau: Math.round(850 + (Math.random() - 0.5) * 50), // MAU varies slightly (825-875)
             // NEW: Additional metrics for overview graphs
@@ -150,6 +154,7 @@ export const demoInsightsTrends: InsightsTrends = {
             totalApiCalls: Math.round(baseSessions * (15 + Math.random() * 5)),
         };
     }),
+    dataCompleteThrough: demoWatermark,
 };
 
 // ================================================================================
@@ -163,15 +168,14 @@ export const demoGeoSummary: GeoSummary = {
             count: 6234,
             latitude: 37.0902,
             longitude: -95.7129,
-            avgUxScore: 79,
             crashCount: 23,
             rageTapCount: 156,
             topCities: [
-                { city: 'Austin', count: 987, latitude: 30.2672, longitude: -97.7431, avgUxScore: 82 },
-                { city: 'San Francisco', count: 876, latitude: 37.7749, longitude: -122.4194, avgUxScore: 81 },
-                { city: 'New York', count: 765, latitude: 40.7128, longitude: -74.0060, avgUxScore: 78 },
-                { city: 'Los Angeles', count: 654, latitude: 34.0522, longitude: -118.2437, avgUxScore: 77 },
-                { city: 'Chicago', count: 543, latitude: 41.8781, longitude: -87.6298, avgUxScore: 76 },
+                { city: 'Austin', count: 987, latitude: 30.2672, longitude: -97.7431 },
+                { city: 'San Francisco', count: 876, latitude: 37.7749, longitude: -122.4194 },
+                { city: 'New York', count: 765, latitude: 40.7128, longitude: -74.0060 },
+                { city: 'Los Angeles', count: 654, latitude: 34.0522, longitude: -118.2437 },
+                { city: 'Chicago', count: 543, latitude: 41.8781, longitude: -87.6298 },
             ],
         },
         {
@@ -179,12 +183,11 @@ export const demoGeoSummary: GeoSummary = {
             count: 1876,
             latitude: 55.3781,
             longitude: -3.4360,
-            avgUxScore: 77,
             crashCount: 8,
             rageTapCount: 67,
             topCities: [
-                { city: 'London', count: 876, latitude: 51.5074, longitude: -0.1278, avgUxScore: 78 },
-                { city: 'Manchester', count: 234, latitude: 53.4808, longitude: -2.2426, avgUxScore: 76 },
+                { city: 'London', count: 876, latitude: 51.5074, longitude: -0.1278 },
+                { city: 'Manchester', count: 234, latitude: 53.4808, longitude: -2.2426 },
             ],
         },
         {
@@ -192,12 +195,11 @@ export const demoGeoSummary: GeoSummary = {
             count: 1245,
             latitude: 51.1657,
             longitude: 10.4515,
-            avgUxScore: 81,
             crashCount: 5,
             rageTapCount: 45,
             topCities: [
-                { city: 'Berlin', count: 456, latitude: 52.5200, longitude: 13.4050, avgUxScore: 82 },
-                { city: 'Munich', count: 234, latitude: 48.1351, longitude: 11.5820, avgUxScore: 80 },
+                { city: 'Berlin', count: 456, latitude: 52.5200, longitude: 13.4050 },
+                { city: 'Munich', count: 234, latitude: 48.1351, longitude: 11.5820 },
             ],
         },
         {
@@ -205,12 +207,11 @@ export const demoGeoSummary: GeoSummary = {
             count: 987,
             latitude: 36.2048,
             longitude: 138.2529,
-            avgUxScore: 84,
             crashCount: 2,
             rageTapCount: 23,
             topCities: [
-                { city: 'Tokyo', count: 654, latitude: 35.6762, longitude: 139.6503, avgUxScore: 85 },
-                { city: 'Osaka', count: 198, latitude: 34.6937, longitude: 135.5023, avgUxScore: 83 },
+                { city: 'Tokyo', count: 654, latitude: 35.6762, longitude: 139.6503 },
+                { city: 'Osaka', count: 198, latitude: 34.6937, longitude: 135.5023 },
             ],
         },
         {
@@ -218,12 +219,11 @@ export const demoGeoSummary: GeoSummary = {
             count: 756,
             latitude: 56.1304,
             longitude: -106.3468,
-            avgUxScore: 78,
             crashCount: 3,
             rageTapCount: 34,
             topCities: [
-                { city: 'Toronto', count: 345, latitude: 43.6532, longitude: -79.3832, avgUxScore: 79 },
-                { city: 'Vancouver', count: 198, latitude: 49.2827, longitude: -123.1207, avgUxScore: 80 },
+                { city: 'Toronto', count: 345, latitude: 43.6532, longitude: -79.3832 },
+                { city: 'Vancouver', count: 198, latitude: 49.2827, longitude: -123.1207 },
             ],
         },
         {
@@ -231,12 +231,11 @@ export const demoGeoSummary: GeoSummary = {
             count: 654,
             latitude: -25.2744,
             longitude: 133.7751,
-            avgUxScore: 76,
             crashCount: 4,
             rageTapCount: 45,
             topCities: [
-                { city: 'Sydney', count: 345, latitude: -33.8688, longitude: 151.2093, avgUxScore: 77 },
-                { city: 'Melbourne', count: 198, latitude: -37.8136, longitude: 144.9631, avgUxScore: 75 },
+                { city: 'Sydney', count: 345, latitude: -33.8688, longitude: 151.2093 },
+                { city: 'Melbourne', count: 198, latitude: -37.8136, longitude: 144.9631 },
             ],
         },
         {
@@ -244,12 +243,11 @@ export const demoGeoSummary: GeoSummary = {
             count: 543,
             latitude: -14.2350,
             longitude: -51.9253,
-            avgUxScore: 72,
             crashCount: 6,
             rageTapCount: 78,
             topCities: [
-                { city: 'São Paulo', count: 287, latitude: -23.5505, longitude: -46.6333, avgUxScore: 71 },
-                { city: 'Rio de Janeiro', count: 156, latitude: -22.9068, longitude: -43.1729, avgUxScore: 73 },
+                { city: 'São Paulo', count: 287, latitude: -23.5505, longitude: -46.6333 },
+                { city: 'Rio de Janeiro', count: 156, latitude: -22.9068, longitude: -43.1729 },
             ],
         },
         {
@@ -257,12 +255,11 @@ export const demoGeoSummary: GeoSummary = {
             count: 432,
             latitude: 20.5937,
             longitude: 78.9629,
-            avgUxScore: 68,
             crashCount: 8,
             rageTapCount: 89,
             topCities: [
-                { city: 'Mumbai', count: 198, latitude: 19.0760, longitude: 72.8777, avgUxScore: 67 },
-                { city: 'Bangalore', count: 145, latitude: 12.9716, longitude: 77.5946, avgUxScore: 70 },
+                { city: 'Mumbai', count: 198, latitude: 19.0760, longitude: 72.8777 },
+                { city: 'Bangalore', count: 145, latitude: 12.9716, longitude: 77.5946 },
             ],
         },
     ],
@@ -276,7 +273,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 6234,
             valueSessions: 4012,
             valueShare: 64.36,
-            avgUxScore: 79,
             avgDurationSeconds: 338,
             engagementSegments: { bouncers: 512, casuals: 1710, explorers: 2201, loyalists: 1811 },
         },
@@ -285,7 +281,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 1876,
             valueSessions: 1125,
             valueShare: 59.97,
-            avgUxScore: 77,
             avgDurationSeconds: 302,
             engagementSegments: { bouncers: 231, casuals: 520, explorers: 680, loyalists: 445 },
         },
@@ -294,7 +289,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 1245,
             valueSessions: 817,
             valueShare: 65.62,
-            avgUxScore: 81,
             avgDurationSeconds: 346,
             engagementSegments: { bouncers: 134, casuals: 294, explorers: 482, loyalists: 335 },
         },
@@ -303,7 +297,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 987,
             valueSessions: 721,
             valueShare: 73.05,
-            avgUxScore: 84,
             avgDurationSeconds: 371,
             engagementSegments: { bouncers: 74, casuals: 192, explorers: 392, loyalists: 329 },
         },
@@ -312,7 +305,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 756,
             valueSessions: 466,
             valueShare: 61.64,
-            avgUxScore: 78,
             avgDurationSeconds: 315,
             engagementSegments: { bouncers: 92, casuals: 198, explorers: 282, loyalists: 184 },
         },
@@ -321,7 +313,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 654,
             valueSessions: 361,
             valueShare: 55.2,
-            avgUxScore: 76,
             avgDurationSeconds: 284,
             engagementSegments: { bouncers: 104, casuals: 189, explorers: 229, loyalists: 132 },
         },
@@ -330,7 +321,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 543,
             valueSessions: 266,
             valueShare: 49.0,
-            avgUxScore: 72,
             avgDurationSeconds: 229,
             engagementSegments: { bouncers: 131, casuals: 146, explorers: 176, loyalists: 90 },
         },
@@ -339,7 +329,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 432,
             valueSessions: 176,
             valueShare: 40.74,
-            avgUxScore: 68,
             avgDurationSeconds: 204,
             engagementSegments: { bouncers: 139, casuals: 117, explorers: 122, loyalists: 54 },
         },
@@ -348,7 +337,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 512,
             valueSessions: 276,
             valueShare: 53.91,
-            avgUxScore: 75,
             avgDurationSeconds: 246,
             engagementSegments: { bouncers: 102, casuals: 134, explorers: 184, loyalists: 92 },
         },
@@ -357,7 +345,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
             sessions: 378,
             valueSessions: 236,
             valueShare: 62.43,
-            avgUxScore: 82,
             avgDurationSeconds: 332,
             engagementSegments: { bouncers: 56, casuals: 86, explorers: 142, loyalists: 94 },
         },
@@ -366,7 +353,6 @@ export const demoGeoRegionalValue: GeoRegionalValue = {
         totalSessions: 13617,
         totalValueSessions: 8456,
         valueShare: 62.1,
-        avgUxScore: 78.4,
         avgDurationSeconds: 320.1,
         regionCount: 10,
     },

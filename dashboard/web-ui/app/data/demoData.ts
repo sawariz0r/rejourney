@@ -35,7 +35,6 @@ export const demoProjects: Project[] = [
         createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
         sessionsLast7Days: 1247,
         errorsLast7Days: 23,
-        avgUxScore: 78
     }
 ];
 
@@ -43,7 +42,6 @@ export const demoProjects: Project[] = [
 export const demoDashboardStats = {
     totalSessions: 12847,
     avgDuration: 342, // 5.7 minutes in seconds
-    avgUxScore: 78,
     errorRate: 2.3
 };
 
@@ -684,7 +682,6 @@ export const demoDailyStats: ProjectDailyStats[] = Array.from({ length: 30 }, (_
         completedSessions: Math.round(baseSessions * (1 + variance) * 0.92),
         avgDurationSeconds: Math.round(300 + Math.random() * 120),
         avgInteractionScore: Math.round(70 + Math.random() * 15),
-        avgUxScore: Math.round(75 + Math.random() * 10),
         avgApiErrorRate: Math.round((2 + Math.random() * 2) * 100) / 100,
         p50Duration: Math.round(280 + Math.random() * 60),
         p90Duration: Math.round(600 + Math.random() * 200),

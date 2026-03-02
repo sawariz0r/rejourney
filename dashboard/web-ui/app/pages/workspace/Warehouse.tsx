@@ -166,7 +166,6 @@ function toProjectModel(project: WarehouseProject): Project {
     createdAt: project.createdAt,
     sessionsLast7Days: project.sessionsLast7Days,
     errorsLast7Days: project.errorsLast7Days,
-    avgUxScore: 0,
   };
 }
 
