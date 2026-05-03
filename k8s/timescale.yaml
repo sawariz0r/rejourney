@@ -1,7 +1,7 @@
 # TimescaleDB CNPG cluster for ts_recording_artifacts hypertable.
 #
-# IMPORTANT: This file is NOT applied automatically by CI. After committing,
-# apply manually via SSH:
+# CI applies this file automatically (it's in k8s/ which deploy-release.sh applies).
+# Before the first deploy, create the required secrets via SSH:
 #   kubectl create secret generic timescale-app-secret \
 #     --from-literal=username=app --from-literal=password='<pw>' -n rejourney
 #   kubectl create secret generic timescale-secret \
@@ -36,7 +36,7 @@ spec:
     topologyKey: kubernetes.io/hostname
     podAntiAffinityType: required
 
-  imageName: timescale/timescaledb-ha:pg17
+  imageName: timescale/timescaledb-ha:pg18.3-ts2.26.4-oss
 
   postgresql:
     parameters:
