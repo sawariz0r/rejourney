@@ -143,4 +143,10 @@ if [ -n "${SMTP_HOST:-}" ] && [ -n "${SMTP_USER:-}" ] && [ -n "${SMTP_PASS:-}" ]
         --from-literal=SMTP_SECURE="${SMTP_SECURE:-false}"
 fi
 
+if [ -n "${TIMESCALE_PASSWORD:-}" ]; then
+    create_or_update_secret timescale-secret \
+        --from-literal=TIMESCALE_PASSWORD="$TIMESCALE_PASSWORD" \
+        --from-literal=TIMESCALE_URL="postgresql://app:${TIMESCALE_PASSWORD}@timescale:5432/rejourney_ts"
+fi
+
 log "Local secrets synced successfully."

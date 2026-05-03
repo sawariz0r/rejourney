@@ -280,6 +280,12 @@ spec:
               value: "536870912000"     # 500 GB/day (default was 100 GB)
             - name: INGEST_IP_BYTES_PER_MINUTE
               value: "524288000"        # 500 MB/min (default was 100 MB, raised for CGNAT)
+            - name: TIMESCALE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: timescale-secret
+                  key: TIMESCALE_URL
+                  optional: true
             # Monitoring
             - name: PUSHGATEWAY_URL
               value: "http://pushgateway.rejourney.svc.cluster.local:9091"
@@ -574,6 +580,7 @@ spec:
           args:
             - >-
               node --import tsx scripts/applyDatabaseSchema.ts
+              && node --import tsx scripts/applyTimescaleSchema.ts
               && node --import tsx scripts/seedIfDatabaseEmpty.ts
               && node --import tsx scripts/bootstrapSystemData.ts
               && node --import tsx scripts/syncStorageEndpoint.ts
@@ -625,3 +632,9 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
+            - name: TIMESCALE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: timescale-secret
+                  key: TIMESCALE_URL
+                  optional: true

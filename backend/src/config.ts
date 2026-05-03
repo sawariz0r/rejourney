@@ -135,6 +135,9 @@ const envSchema = z.object({
     // Storage encryption
     STORAGE_ENCRYPTION_KEY: z.string().length(64).optional(), // 32-byte hex key
 
+    // TimescaleDB (optional — absent until Phase 1 SSH provisions the cluster)
+    TIMESCALE_URL: z.string().optional(),
+
     // Logging
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 

@@ -1,0 +1,85 @@
+# Local TimescaleDB for Rejourney development.
+# Plain StatefulSet — no CNPG needed locally.
+# Service: timescale:5432 (in-cluster), localhost:30433 (host access).
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescale
+  namespace: rejourney-local
+  labels:
+    app: timescale
+    app.kubernetes.io/part-of: rejourney
+spec:
+  type: NodePort
+  ports:
+    - port: 5432
+      targetPort: 5432
+      nodePort: 30433
+  selector:
+    app: timescale
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescale
+  namespace: rejourney-local
+  labels:
+    app.kubernetes.io/part-of: rejourney
+spec:
+  serviceName: timescale
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescale
+  template:
+    metadata:
+      labels:
+        app: timescale
+    spec:
+      containers:
+        - name: timescale
+          image: timescale/timescaledb:latest-pg17
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: app
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: timescale-secret
+                  key: TIMESCALE_PASSWORD
+            - name: POSTGRES_DB
+              value: rejourney_ts
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: timescale-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app", "-d", "rejourney_ts"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app", "-d", "rejourney_ts"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: timescale-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 10Gi
