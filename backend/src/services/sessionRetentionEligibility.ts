@@ -60,11 +60,6 @@ NOT EXISTS (
                 FROM recording_artifacts ra
                 WHERE ra.session_id = ${sessionAlias}.id
             )
-            AND NOT EXISTS (
-                SELECT 1
-                FROM ingest_jobs ij
-                WHERE ij.session_id = ${sessionAlias}.id
-            )
             AND COALESCE(${sessionAlias}.replay_available, false) = false
             AND COALESCE(${sessionAlias}.replay_segment_count, 0) = 0
             AND COALESCE(${sessionAlias}.replay_storage_bytes, 0) = 0

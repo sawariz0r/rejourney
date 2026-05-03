@@ -522,43 +522,6 @@ export const storageEndpoints = pgTable('storage_endpoints', {
 });
 
 // =============================================================================
-// Ingest & Idempotency Models
-// =============================================================================
-
-export const ingestJobs = pgTable(
-    'ingest_jobs',
-    {
-        id: uuid('id').primaryKey().defaultRandom(),
-        projectId: uuid('project_id').notNull().references(() => projects.id),
-        sessionId: varchar('session_id', { length: 64 }),
-        artifactId: uuid('artifact_id').references(() => recordingArtifacts.id, { onDelete: 'cascade' }),
-        kind: varchar('kind', { length: 50 }), // 'events', 'screenshots', 'hierarchy', 'crashes', 'anrs'
-        payloadRef: text('payload_ref'),
-        status: varchar('status', { length: 20 }).default('pending').notNull(),
-        attempts: integer('attempts').default(0).notNull(),
-        nextRunAt: timestamp('next_run_at'),
-        errorMsg: text('error_msg'),
-        startedAt: timestamp('started_at'),
-        completedAt: timestamp('completed_at'),
-        workerId: varchar('worker_id', { length: 255 }),
-        createdAt: timestamp('created_at').defaultNow().notNull(),
-        updatedAt: timestamp('updated_at').defaultNow().notNull(),
-    },
-    (table) => [
-        index('ingest_jobs_status_next_run_idx').on(table.status, table.nextRunAt),
-        index('ingest_jobs_project_id_idx').on(table.projectId),
-        index('ingest_jobs_session_idx').on(table.sessionId),
-        index('ingest_jobs_monitoring_idx')
-            .on(table.status, table.kind, table.nextRunAt, table.createdAt)
-            .where(sql`${table.status} IN ('pending', 'processing', 'dlq', 'failed')`),
-        /** Speeds EXISTS lookups from session list rows (pending/processing jobs only) */
-        index('ingest_jobs_session_pending_idx')
-            .on(table.sessionId)
-            .where(sql`${table.status} IN ('pending', 'processing')`),
-        uniqueIndex('ingest_jobs_artifact_id_unique').on(table.artifactId),
-    ]
-);
-
 export const sessionBackupLog = pgTable(
     'session_backup_log',
     {
@@ -1285,7 +1248,6 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     projectUsage: many(projectUsage),
     appDailyStats: many(appDailyStats),
     storageEndpoints: many(storageEndpoints),
-    ingestJobs: many(ingestJobs),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
@@ -1312,10 +1274,6 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
 
 export const deviceUsageRelations = relations(deviceUsage, ({ one }) => ({
     project: one(projects, { fields: [deviceUsage.projectId], references: [projects.id] }),
-}));
-
-export const ingestJobsRelations = relations(ingestJobs, ({ one }) => ({
-    project: one(projects, { fields: [ingestJobs.projectId], references: [projects.id] }),
 }));
 
 export const projectFunnelStatsRelations = relations(projectFunnelStats, ({ one }) => ({

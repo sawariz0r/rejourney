@@ -282,13 +282,11 @@ export async function backfillArtifactDrivenLifecycleState(): Promise<void> {
                     coalesce(max(ra.created_at), s.started_at),
                     coalesce(max(ra.upload_completed_at), s.started_at),
                     coalesce(max(ra.ready_at), s.started_at),
-                    coalesce(max(ij.updated_at), s.started_at),
                     coalesce(s.ended_at, s.started_at),
                     coalesce(s.updated_at, s.started_at)
                 ) as activity_at
             from ${sessions} s
             left join ${recordingArtifacts} ra on ra.session_id = s.id
-            left join ingest_jobs ij on ij.session_id = s.id
             group by s.id
         )
         update ${sessions} s

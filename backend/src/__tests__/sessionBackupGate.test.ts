@@ -52,7 +52,6 @@ describe('sessionBackupGate', () => {
         expect(sql).toContain('FROM sessions s');
         expect(sql).toContain('LEFT JOIN session_backup_log bl ON bl.session_id = s.id');
         expect(sql).toContain('FROM session_metrics sm');
-        expect(sql).toContain('FROM ingest_jobs ij');
         expect(sql).toContain('COALESCE(s.replay_segment_count, 0) = 0');
         expect(sql).not.toContain('s.observe_only = true');
     });

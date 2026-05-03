@@ -2,16 +2,16 @@
  * Retention Worker
  *
  * Deletes S3 objects and recording_artifacts rows for sessions whose
- * retention period has expired AND that have been safely backed up.
+ * retention period has expired.
  *
- * Safety rule: only touches sessions backed by a complete session_backup_log
- * entry, unless the session is provably empty and safe to purge outright.
+ * Retention expiry is the source of truth for purge eligibility; archived
+ * backup completion is no longer required before deleting canonical recordings.
  *
  * Default mode (local/dev): long-running loop.
  * Production mode: `--once` for cron-style single-cycle execution.
  */
 
-import { and, eq, gt, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { db, pool, projects, retentionPolicies, sessions } from '../db/client.js';
 import { getRedis } from '../db/redis.js';
 import { logger } from '../logger.js';
@@ -21,7 +21,6 @@ import {
     purgeSessionArtifacts,
     repairExpiredSessionArtifactsBatch,
 } from '../services/sessionArtifactPurge.js';
-import { partitionBackedUpSessions } from '../services/sessionBackupGate.js';
 import { buildEmptySessionPredicateSql } from '../services/sessionRetentionEligibility.js';
 import {
     buildRetentionRunOwnerId,
@@ -118,7 +117,7 @@ type ExpiredSessionCandidate = {
 };
 
 type ExpiredSessionCollectionResult = {
-    backedUpSessions: ExpiredSessionCandidate[];
+    sessionsToPurge: ExpiredSessionCandidate[];
     skippedNotBackedUpCount: number;
     reachedProcessingCap: boolean;
 };
@@ -149,90 +148,39 @@ async function collectExpiredSessionsReadyForPurge(
     expiryDate: Date,
     limit: number,
 ): Promise<ExpiredSessionCollectionResult> {
-    const backedUpSessions: ExpiredSessionCandidate[] = [];
-    let skippedNotBackedUpCount = 0;
-    let cursor: { startedAt: Date; id: string } | null = null;
+    const currentRetentionPeriodExpired = sql`
+        ${sessions.startedAt} < NOW() - (${sessions.retentionDays} * INTERVAL '1 day')
+    `;
 
-    while (backedUpSessions.length < limit) {
-        let expiredSessions: ExpiredSessionCandidate[];
-
-        if (cursor) {
-            expiredSessions = await db
-                .select({
-                    id: sessions.id,
-                    retentionTier: sessions.retentionTier,
-                    retentionDays: sessions.retentionDays,
-                    startedAt: sessions.startedAt,
-                })
-                .from(sessions)
-                .innerJoin(projects, eq(sessions.projectId, projects.id))
-                .where(
-                    and(
-                        eq(sessions.retentionTier, tierConfig.tier),
-                        lt(sessions.startedAt, expiryDate),
-                        eq(sessions.recordingDeleted, false),
-                        or(
-                            eq(sessions.status, 'ready'),
-                            eq(sessions.status, 'completed'),
-                        ),
-                        isNull(projects.deletedAt),
-                        or(
-                            gt(sessions.startedAt, cursor.startedAt),
-                            and(eq(sessions.startedAt, cursor.startedAt), gt(sessions.id, cursor.id)),
-                        ),
-                    ),
-                )
-                .orderBy(sessions.startedAt, sessions.id)
-                .limit(limit);
-        } else {
-            expiredSessions = await db
-                .select({
-                    id: sessions.id,
-                    retentionTier: sessions.retentionTier,
-                    retentionDays: sessions.retentionDays,
-                    startedAt: sessions.startedAt,
-                })
-                .from(sessions)
-                .innerJoin(projects, eq(sessions.projectId, projects.id))
-                .where(
-                    and(
-                        eq(sessions.retentionTier, tierConfig.tier),
-                        lt(sessions.startedAt, expiryDate),
-                        eq(sessions.recordingDeleted, false),
-                        or(
-                            eq(sessions.status, 'ready'),
-                            eq(sessions.status, 'completed'),
-                        ),
-                        isNull(projects.deletedAt),
-                    ),
-                )
-                .orderBy(sessions.startedAt, sessions.id)
-                .limit(limit);
-        }
-
-        if (expiredSessions.length === 0) {
-            break;
-        }
-
-        const { backedUp, notBackedUp } = await partitionBackedUpSessions(expiredSessions);
-        skippedNotBackedUpCount += notBackedUp.length;
-        backedUpSessions.push(...backedUp.slice(0, limit - backedUpSessions.length));
-
-        const lastSession = expiredSessions[expiredSessions.length - 1];
-        cursor = {
-            startedAt: lastSession.startedAt,
-            id: lastSession.id,
-        };
-
-        if (expiredSessions.length < limit) {
-            break;
-        }
-    }
+    const sessionsToPurge = await db
+        .select({
+            id: sessions.id,
+            retentionTier: sessions.retentionTier,
+            retentionDays: sessions.retentionDays,
+            startedAt: sessions.startedAt,
+        })
+        .from(sessions)
+        .innerJoin(projects, eq(sessions.projectId, projects.id))
+        .where(
+            and(
+                eq(sessions.retentionTier, tierConfig.tier),
+                lt(sessions.startedAt, expiryDate),
+                currentRetentionPeriodExpired,
+                eq(sessions.recordingDeleted, false),
+                or(
+                    eq(sessions.status, 'ready'),
+                    eq(sessions.status, 'completed'),
+                ),
+                isNull(projects.deletedAt),
+            ),
+        )
+        .orderBy(sessions.startedAt, sessions.id)
+        .limit(limit);
 
     return {
-        backedUpSessions,
-        skippedNotBackedUpCount,
-        reachedProcessingCap: backedUpSessions.length >= limit,
+        sessionsToPurge,
+        skippedNotBackedUpCount: 0,
+        reachedProcessingCap: sessionsToPurge.length >= limit,
     };
 }
 
@@ -265,14 +213,14 @@ async function processExpiredSessions(runId: string, trigger: string): Promise<{
         const expiryDate = new Date(now.getTime() - tierConfig.days * 24 * 60 * 60 * 1000);
 
         const tierResult = await collectExpiredSessionsReadyForPurge(tierConfig, expiryDate, BATCH_SIZE);
-        const { backedUpSessions } = tierResult;
-        attemptedCount += backedUpSessions.length;
+        const { sessionsToPurge } = tierResult;
+        attemptedCount += sessionsToPurge.length;
         skippedNotBackedUpCount += tierResult.skippedNotBackedUpCount;
         reachedProcessingCap ||= tierResult.reachedProcessingCap;
 
-        const metadataBySessionId = await loadSessionPurgeMetadata(backedUpSessions.map((session) => session.id));
+        const metadataBySessionId = await loadSessionPurgeMetadata(sessionsToPurge.map((session) => session.id));
 
-        for (const session of backedUpSessions) {
+        for (const session of sessionsToPurge) {
             const purgeMetadata = metadataBySessionId.get(session.id);
             const isEmptySession = purgeMetadata?.empty_session ?? false;
 

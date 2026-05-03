@@ -20,17 +20,18 @@ function extractFunctionBlock(source: string, functionName: string): string {
 }
 
 describe('retention backlog drain', () => {
-    it('pages past skipped expired sessions until it finds purgeable rows', () => {
+    it('collects currently expired ready/completed sessions without a backup prerequisite', () => {
         const worker = readWorkspaceFile('../worker/retentionWorker.ts');
         const block = extractFunctionBlock(worker, 'collectExpiredSessionsReadyForPurge');
 
-        expect(block).toContain('while (backedUpSessions.length < limit)');
         expect(block).toContain('.orderBy(sessions.startedAt, sessions.id)');
+        expect(block).toContain('lt(sessions.startedAt, expiryDate)');
+        expect(block).toContain("INTERVAL '1 day'");
+        expect(block).toContain('eq(sessions.recordingDeleted, false)');
         expect(block).toContain("eq(sessions.status, 'ready')");
         expect(block).toContain("eq(sessions.status, 'completed')");
-        expect(block).toContain('gt(sessions.startedAt, cursor.startedAt)');
-        expect(block).toContain('and(eq(sessions.startedAt, cursor.startedAt), gt(sessions.id, cursor.id))');
-        expect(block).toContain('reachedProcessingCap: backedUpSessions.length >= limit');
+        expect(block).toContain('reachedProcessingCap: sessionsToPurge.length >= limit');
+        expect(block).not.toContain('partitionBackedUpSessions');
     });
 
     it('keeps draining retention backlog when a full purgeable batch was collected', () => {
@@ -42,13 +43,15 @@ describe('retention backlog drain', () => {
         expect(block).not.toContain('expiredResult.processedCount >= BATCH_SIZE');
     });
 
-    it('applies the same paged scan to expired-repair cleanup', () => {
+    it('keeps expired-repair cleanup bound to the current retention period', () => {
         const purgeSource = readWorkspaceFile('../services/sessionArtifactPurge.ts');
         const block = extractFunctionBlock(purgeSource, 'collectExpiredRepairCandidates');
 
-        expect(block).toContain('while (backedUpSessions.length < limit)');
         expect(block).toContain('.orderBy(sessions.startedAt, sessions.id)');
-        expect(block).toContain('gt(sessions.startedAt, cursor.startedAt)');
-        expect(block).toContain('reachedProcessingCap: backedUpSessions.length >= limit');
+        expect(block).toContain('eq(sessions.recordingDeleted, true)');
+        expect(block).toContain('eq(sessions.isReplayExpired, true)');
+        expect(block).toContain("INTERVAL '1 day'");
+        expect(block).toContain('reachedProcessingCap: sessionsToRepair.length >= limit');
+        expect(block).not.toContain('partitionBackedUpSessions');
     });
 });

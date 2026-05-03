@@ -30,7 +30,6 @@ describe('monitoring query shape', () => {
         expect(schema).toContain("index('recording_artifacts_pending_stalled_idx')");
         expect(schema).toContain("index('recording_artifacts_session_ready_endpoint_idx')");
         expect(schema).toContain("index('recording_artifacts_failed_recent_idx')");
-        expect(schema).toContain("index('ingest_jobs_monitoring_idx')");
     });
 
     it('keeps postgres exporter queries on pre-aggregated rollups before endpoint joins', () => {

@@ -15,11 +15,6 @@ const mocks = vi.hoisted(() => ({
         insert: vi.fn(),
         update: vi.fn(),
     },
-    ingestJobs: {
-        id: 'ingest_jobs.id',
-        artifactId: 'ingest_jobs.artifact_id',
-        status: 'ingest_jobs.status',
-    } as any,
     recordingArtifacts: {
         id: 'recording_artifacts.id',
         sessionId: 'recording_artifacts.session_id',
@@ -51,7 +46,6 @@ vi.mock('drizzle-orm', () => ({
 
 vi.mock('../db/client.js', () => ({
     db: mocks.db,
-    ingestJobs: mocks.ingestJobs,
     recordingArtifacts: mocks.recordingArtifacts,
     sessions: mocks.sessions,
 }));

@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
         select: vi.fn(),
         transaction: vi.fn(),
     },
-    ingestJobs: { id: 'ingest_jobs.id', sessionId: 'ingest_jobs.session_id' } as any,
     recordingArtifacts: {
         id: 'recording_artifacts.id',
         sessionId: 'recording_artifacts.session_id',
@@ -43,7 +42,6 @@ let tx: any;
 
 vi.mock('../db/client.js', () => ({
     db: mocks.db,
-    ingestJobs: mocks.ingestJobs,
     recordingArtifacts: mocks.recordingArtifacts,
     sessionMetrics: mocks.sessionMetrics,
     sessions: mocks.sessions,
@@ -134,12 +132,9 @@ describe('sessionArtifactPurge', () => {
             },
         ];
 
-        const jobs = [{ id: 'job_1' }];
-
         mocks.db.select
             .mockImplementationOnce(() => createSessionSelectResult(sessionResult))
-            .mockImplementationOnce(() => createSimpleSelectResult(artifacts))
-            .mockImplementationOnce(() => createSimpleSelectResult(jobs));
+            .mockImplementationOnce(() => createSimpleSelectResult(artifacts));
 
         mocks.db.transaction.mockImplementation(async (callback: (client: any) => Promise<void>) => callback(tx));
 
@@ -149,14 +144,6 @@ describe('sessionArtifactPurge', () => {
 
         tx = {
             delete: vi.fn((table: unknown) => {
-                if (table === mocks.ingestJobs) {
-                    return {
-                        where: vi.fn(() => ({
-                            returning: vi.fn(async () => jobs),
-                        })),
-                    };
-                }
-
                 if (table === mocks.recordingArtifacts) {
                     return {
                         where: vi.fn(() => ({
@@ -258,12 +245,10 @@ describe('sessionArtifactPurge', () => {
             projectId: 'project_1',
             teamId: 'team_1',
             deletedArtifactCount: 3,
-            deletedJobCount: 1,
             deletedObjectCount: 3,
             deletedBytes: 900,
             plannedArtifactCount: 3,
             plannedArtifactBytes: 505,
-            plannedJobCount: 1,
             storageMissing: false,
             deletedBackupObjectCount: 0,
             deletedBackupBytes: 0,
@@ -297,7 +282,7 @@ describe('sessionArtifactPurge', () => {
             expect.objectContaining({
                 status: 'completed',
                 deletedArtifactRowCount: 3,
-                deletedIngestJobCount: 1,
+                deletedIngestJobCount: 0,
                 deletedObjectCount: 3,
                 deletedBytes: 900,
             }),
@@ -373,7 +358,7 @@ describe('sessionArtifactPurge', () => {
         });
 
         expect(result.storageMissing).toBe(true);
-        expect(tx.delete).toHaveBeenCalledTimes(2);
+        expect(tx.delete).toHaveBeenCalledTimes(1);
         expect(mocks.finalizeRetentionDeletionLog).toHaveBeenCalledWith(
             'canonical_log',
             expect.objectContaining({

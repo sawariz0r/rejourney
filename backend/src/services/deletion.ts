@@ -10,7 +10,6 @@ import {
     db,
     projects,
     apiKeys,
-    ingestJobs,
     projectUsage,
     storageEndpoints,
     sessions,
@@ -90,7 +89,6 @@ export async function hardDeleteProject(target: ProjectDeletionTarget): Promise<
 
     // Explicitly clean tables that don't have ON DELETE CASCADE.
     await db.transaction(async (tx) => {
-        await tx.delete(ingestJobs).where(eq(ingestJobs.projectId, target.id));
         await tx.delete(projectUsage).where(eq(projectUsage.projectId, target.id));
         await tx.delete(storageEndpoints).where(eq(storageEndpoints.projectId, target.id));
         await tx.delete(sessions).where(eq(sessions.projectId, target.id));
