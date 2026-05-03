@@ -117,12 +117,6 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-            - name: TIMESCALE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: timescale-secret
-                  key: TIMESCALE_URL
-                  optional: true
             # Monitoring
             - name: PUSHGATEWAY_URL
               value: "http://pushgateway.rejourney.svc.cluster.local:9091"
@@ -301,12 +295,6 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-            - name: TIMESCALE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: timescale-secret
-                  key: TIMESCALE_URL
-                  optional: true
             - name: PUSHGATEWAY_URL
               value: "http://pushgateway.rejourney.svc.cluster.local:9091"
             - name: PUBLIC_DASHBOARD_URL
@@ -409,12 +397,6 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-            - name: TIMESCALE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: timescale-secret
-                  key: TIMESCALE_URL
-                  optional: true
             - name: PUSHGATEWAY_URL
               value: "http://pushgateway.rejourney.svc.cluster.local:9091"
           resources:
@@ -559,12 +541,6 @@ spec:
                     secretKeyRef:
                       name: app-secret
                       key: STORAGE_ENCRYPTION_KEY
-                - name: TIMESCALE_URL
-                  valueFrom:
-                    secretKeyRef:
-                      name: timescale-secret
-                      key: TIMESCALE_URL
-                      optional: true
                 - name: PUSHGATEWAY_URL
                   value: "http://pushgateway.rejourney.svc.cluster.local:9091"
               resources:
@@ -798,12 +774,6 @@ spec:
                     secretKeyRef:
                       name: app-secret
                       key: STORAGE_ENCRYPTION_KEY
-                      optional: true
-                - name: TIMESCALE_URL
-                  valueFrom:
-                    secretKeyRef:
-                      name: timescale-secret
-                      key: TIMESCALE_URL
                       optional: true
                 - name: PUSHGATEWAY_URL
                   value: "http://pushgateway.rejourney.svc.cluster.local:9091"

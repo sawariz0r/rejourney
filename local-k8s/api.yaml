@@ -127,12 +127,6 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-            - name: TIMESCALE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: timescale-secret
-                  key: TIMESCALE_URL
-                  optional: true
             - name: QUERY_BUILDER_KEY
               valueFrom:
                 secretKeyRef:
@@ -469,7 +463,6 @@ spec:
           args:
             - >-
               node --import tsx scripts/applyDatabaseSchema.ts
-              && node --import tsx scripts/applyTimescaleSchema.ts
               && node --import tsx scripts/seedIfDatabaseEmpty.ts
               && node --import tsx scripts/bootstrapSystemData.ts
               && node --import tsx scripts/syncLocalStorageEndpoint.ts
@@ -521,9 +514,3 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-            - name: TIMESCALE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: timescale-secret
-                  key: TIMESCALE_URL
-                  optional: true

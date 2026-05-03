@@ -86,12 +86,6 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-            - name: TIMESCALE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: timescale-secret
-                  key: TIMESCALE_URL
-                  optional: true
             - name: SMTP_HOST
               valueFrom:
                 secretKeyRef:
@@ -234,12 +228,6 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-            - name: TIMESCALE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: timescale-secret
-                  key: TIMESCALE_URL
-                  optional: true
             - name: SMTP_HOST
               valueFrom:
                 secretKeyRef:
@@ -351,12 +339,6 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-            - name: TIMESCALE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: timescale-secret
-                  key: TIMESCALE_URL
-                  optional: true
           resources:
             requests:
               cpu: 50m
@@ -445,12 +427,6 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-            - name: TIMESCALE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: timescale-secret
-                  key: TIMESCALE_URL
-                  optional: true
           resources:
             requests:
               cpu: 10m
