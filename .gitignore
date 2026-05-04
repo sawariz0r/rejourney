@@ -7,6 +7,8 @@ docker/.env
 **/node_modules/
 
 # Build outputs
+.build/
+.swiftpm/
 packages/**/lib/
 packages/react-native/*.tgz
 
@@ -54,8 +56,9 @@ api_logs.txt
 temp_env.txt
 .DS_Store
 examples/react-native-boilerplate/.env.dev.example
-.DS_Store
+.
 backend/src/utils/rejourney.code-workspace
 .env.selfhosted
 .config.kiro
+.kiro/
 dev_docs/scaling-plan.md
