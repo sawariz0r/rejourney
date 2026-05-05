@@ -16,10 +16,17 @@
     <a href="https://rejourney.co"><strong>Explore the Website »</strong></a>
   </p>
   
-  <p>
-    <a href="https://reactnative.dev"><img src="https://img.shields.io/badge/React%20Native-61DAFB?logo=react&logoColor=black" alt="React Native" /></a>
-    <a href="https://expo.dev"><img src="https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white" alt="Expo" /></a>
-  </p>
+<p>
+  <a href="https://reactnative.dev">
+    <img src="https://img.shields.io/badge/React%20Native-61DAFB?logo=react&logoColor=black" alt="React Native" />
+  </a>
+  <a href="https://expo.dev">
+    <img src="https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white" alt="Expo" />
+  </a>
+  <a href="https://www.swift.org">
+    <img src="https://img.shields.io/badge/Swift-F05138?logo=swift&logoColor=white" alt="Swift" />
+  </a>
+</p>
 </div>
 
 ## Features
