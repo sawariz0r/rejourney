@@ -21,6 +21,7 @@ import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
 import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
+import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 
 const getCrashStatusVariant = (status?: string): 'danger' | 'warning' | 'success' | 'neutral' | 'info' => {
   const normalized = (status || '').toLowerCase();
@@ -259,7 +260,9 @@ export const CrashDetail: React.FC<{ crashId?: string; projectId?: string }> = (
               <div className="space-y-3 text-sm">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Model</p>
-                  <p className="mt-1 font-semibold text-slate-800">{crash.deviceMetadata?.model || 'Unknown device'}</p>
+                  <p className="mt-1 font-semibold text-slate-800" title={crash.deviceMetadata?.model}>
+                    {formatDeviceModel(crash.deviceMetadata?.model, 'Unknown device')}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">OS</p>

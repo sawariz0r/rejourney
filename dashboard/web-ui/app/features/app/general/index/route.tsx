@@ -41,6 +41,7 @@ import { TimeFilter } from '~/shared/ui/core/TimeFilter';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { useSharedAnalyticsTimeRange } from '~/shared/hooks/useSharedAnalyticsTimeRange';
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
+import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { MiniSessionCard } from '~/shared/ui/core/MiniSessionCard';
 import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
@@ -2045,7 +2046,7 @@ export const GeneralOverview: React.FC = () => {
                                         const iconStyle = getTopUserIconStyle(user.userKey);
                                         const platforms = [...new Set(user.sessions.map((s) => s.platform).filter(Boolean))];
                                         const appVersions = [...new Set(user.sessions.map((s) => s.appVersion).filter(Boolean))];
-                                        const devices = [...new Set(user.sessions.map((s) => s.deviceModel).filter(Boolean))];
+                                        const devices = [...new Set(user.sessions.map((s) => s.deviceModel).filter(Boolean).map((model) => formatDeviceModel(model, 'Unknown device')))];
                                         const platformLabel = platforms.length > 1 ? `${platforms.length} platforms` : (platforms[0] || 'unknown');
                                         const versionLabel = appVersions.length > 1 ? `${appVersions.length} versions` : (appVersions[0] ? `v${appVersions[0]}` : 'unknown version');
                                         const deviceLabel = devices.length > 1 ? `${devices.length} devices` : (devices[0] || 'Unknown device');
@@ -2262,8 +2263,11 @@ export const GeneralOverview: React.FC = () => {
 
                                                         <div className="mt-3 flex flex-col gap-3 border-t-2 border-black pt-3 sm:flex-row sm:items-start sm:justify-between">
                                                             <div className="min-w-0 flex-1">
-                                                                <div className="truncate text-[10px] font-black uppercase text-[#2563eb] hover:underline">
-                                                                    {rec.session.deviceModel || 'Unknown device'}
+                                                                <div
+                                                                    className="truncate text-[10px] font-black uppercase text-[#2563eb] hover:underline"
+                                                                    title={rec.session.deviceModel}
+                                                                >
+                                                                    {formatDeviceModel(rec.session.deviceModel, 'Unknown device')}
                                                                 </div>
                                                                 <div className="text-[10px] text-slate-500">
                                                                     {formatLastSeen(rec.session.startedAt)}

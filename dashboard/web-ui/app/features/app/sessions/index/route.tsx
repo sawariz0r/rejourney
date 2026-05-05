@@ -40,6 +40,7 @@ import { useDemoMode } from '~/shared/providers/DemoModeContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { useSafeTeam } from '~/shared/providers/TeamContext';
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
+import { formatDeviceModel, getDeviceModelSearchText } from '~/shared/lib/deviceModelNames';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { matchesSessionArchiveIssueFilter } from './sessionArchiveFilters';
 import { QueryBuilder } from './QueryBuilder';
@@ -407,7 +408,7 @@ export const RecordingsList: React.FC = () => {
           (session.userId && session.userId.toLowerCase().includes(q)) ||
           ((session as any).anonymousDisplayName &&
             (session as any).anonymousDisplayName.toLowerCase().includes(q)) ||
-          (session.deviceModel && session.deviceModel.toLowerCase().includes(q))
+          (session.deviceModel && getDeviceModelSearchText(session.deviceModel).includes(q))
         );
       });
     }
@@ -725,6 +726,7 @@ export const RecordingsList: React.FC = () => {
             const canOpenReplay = (session as any).canOpenReplay ?? hasReplay;
             const isLiveIngest = Boolean((session as any).isLiveIngest);
             const isBackgroundProcessing = Boolean((session as any).isBackgroundProcessing);
+            const displayDeviceModel = formatDeviceModel(session.deviceModel);
             const canNavigateToSession =
               canOpenReplay ||
               isLiveIngest ||
@@ -754,7 +756,7 @@ export const RecordingsList: React.FC = () => {
                       <h3 className="truncate font-mono text-sm font-semibold text-slate-900" title={userId}>{userId}</h3>
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
-                      <span>{session.deviceModel || 'Unknown Device'}</span>
+                      <span title={session.deviceModel}>{displayDeviceModel}</span>
                       <span>v{session.appVersion || '?.?.?'}</span>
                       <span>{geoDisplay.hasLocation ? geoDisplay.fullLabel : 'Location unknown'}</span>
                     </div>
@@ -940,6 +942,7 @@ export const RecordingsList: React.FC = () => {
                   (isBackgroundProcessing ||
                     effectiveStatus === 'processing' ||
                     effectiveStatus === 'pending'));
+              const displayDeviceModel = formatDeviceModel(session.deviceModel);
 
               const hasIssues = (session.crashCount || 0) > 0 ||
                 ((session as any).anrCount || 0) > 0 ||
@@ -978,7 +981,7 @@ export const RecordingsList: React.FC = () => {
                         )}
                       </div>
                       <div className={`flex items-center gap-2 text-[10px] text-slate-600 uppercase font-medium tracking-tight mt-0.5 min-w-0 overflow-hidden ${isReplayBlocked ? 'opacity-50' : ''}`}>
-                        <span className="truncate min-w-0">{session.deviceModel || 'Unknown Device'}</span>
+                        <span className="truncate min-w-0" title={session.deviceModel}>{displayDeviceModel}</span>
                         <span className="w-1 h-1 bg-black"></span>
                         <span>v{session.appVersion || '?.?.?'}</span>
                       </div>

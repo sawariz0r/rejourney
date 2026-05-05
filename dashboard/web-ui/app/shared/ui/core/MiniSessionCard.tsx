@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play } from 'lucide-react';
 import { ModernPhoneFrame } from './ModernPhoneFrame';
 import { formatLastSeen } from '~/shared/lib/formatDates';
+import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 import { API_BASE_URL } from '~/shared/config/appConfig';
 
 // Dynamic import for heic2any to avoid SSR window error
@@ -134,8 +135,11 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
             </ModernPhoneFrame>
             {showMeta && (
                 <div className="mt-2">
-                    <div className="text-[10px] font-bold text-black truncate max-w-[140px] uppercase">
-                        {session.deviceModel || 'Unknown Device'}
+                    <div
+                        className="text-[10px] font-bold text-black truncate max-w-[140px] uppercase"
+                        title={session.deviceModel}
+                    >
+                        {formatDeviceModel(session.deviceModel)}
                     </div>
                     <div className="text-[9px] font-mono text-slate-500">
                         {formatLastSeen(session.createdAt)}

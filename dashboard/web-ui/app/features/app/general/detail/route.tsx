@@ -28,6 +28,7 @@ import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { MiniSessionCard } from '~/shared/ui/core/MiniSessionCard';
 import { formatLastSeen } from '~/shared/lib/formatDates';
+import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 
 export const IssueDetail: React.FC = () => {
     const { issueId } = useParams<{ issueId: string }>();
@@ -348,7 +349,9 @@ export const IssueDetail: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                     <Smartphone size={24} className="text-slate-400" />
                                     <div>
-                                        <p className="font-bold">{issue.sampleDeviceModel || 'Unknown Device'}</p>
+                                        <p className="font-bold" title={issue.sampleDeviceModel || undefined}>
+                                            {formatDeviceModel(issue.sampleDeviceModel)}
+                                        </p>
                                         <p className="text-sm text-slate-500">
                                             {issue.sampleOsVersion && `OS ${issue.sampleOsVersion}`}
                                             {issue.sampleOsVersion && issue.sampleAppVersion && ' • '}
@@ -401,8 +404,8 @@ export const IssueDetail: React.FC = () => {
                                                         {new Date(event.timestamp).toLocaleString()}
                                                     </span>
                                                     {event.deviceModel && (
-                                                        <span className="text-xs font-bold text-slate-600">
-                                                            {event.deviceModel}
+                                                        <span className="text-xs font-bold text-slate-600" title={event.deviceModel}>
+                                                            {formatDeviceModel(event.deviceModel)}
                                                         </span>
                                                     )}
                                                 </div>

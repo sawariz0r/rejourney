@@ -22,6 +22,7 @@ import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { getANRsOverview, type ANRRecord } from '~/shared/api/client';
 import { TimeFilter, TimeRange, DEFAULT_TIME_RANGE } from '~/shared/ui/core/TimeFilter';
 import { formatAge } from '~/shared/lib/formatDates';
+import { formatDeviceModel, getDeviceModelSearchText } from '~/shared/lib/deviceModelNames';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
@@ -83,7 +84,7 @@ export const ANRsList: React.FC = () => {
     return anrs.filter(
       (anr) =>
         anr.threadState?.toLowerCase().includes(query) ||
-        anr.deviceMetadata?.deviceModel?.toLowerCase().includes(query) ||
+        getDeviceModelSearchText(anr.deviceMetadata?.deviceModel).includes(query) ||
         anr.deviceMetadata?.appVersion?.toLowerCase().includes(query) ||
         anr.id.toLowerCase().includes(query),
     );
@@ -197,7 +198,8 @@ export const ANRsList: React.FC = () => {
 
             {searchedAnrs.map((anr) => {
               const isExpanded = expandedAnr === anr.id;
-              const deviceModel = anr.deviceMetadata?.deviceModel || 'Unknown Device';
+              const rawDeviceModel = anr.deviceMetadata?.deviceModel || 'Unknown Device';
+              const deviceModel = formatDeviceModel(rawDeviceModel);
               const appVersion = anr.deviceMetadata?.appVersion || '?';
               const shortThread = anr.threadState?.split('\n')[0] || 'App Not Responding';
               
@@ -226,7 +228,7 @@ export const ANRsList: React.FC = () => {
 
                     <div className="w-32 hidden md:block flex-shrink-0">
                       <div className="flex flex-col gap-1 items-start">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 rounded">{deviceModel}</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 rounded" title={rawDeviceModel}>{deviceModel}</span>
                         <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 rounded">v{appVersion}</span>
                       </div>
                     </div>
@@ -308,7 +310,8 @@ export const ANRsList: React.FC = () => {
                                <div className="flex flex-wrap gap-4 text-xs">
                                  <div className="flex items-center gap-1.5 text-slate-600 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
                                    <Smartphone size={12} className="text-slate-400" />
-                                   <span className="font-semibold text-slate-700">Device Model:</span> {anr.deviceMetadata?.deviceModel || 'Unknown Device'}
+                                   <span className="font-semibold text-slate-700">Device Model:</span>{' '}
+                                   <span title={rawDeviceModel}>{deviceModel}</span>
                                  </div>
                                  <div className="flex items-center gap-1.5 text-slate-600 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
                                    <Activity size={12} className="text-slate-400" />

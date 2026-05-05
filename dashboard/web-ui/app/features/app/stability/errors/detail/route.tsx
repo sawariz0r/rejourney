@@ -23,6 +23,7 @@ import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
 import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
+import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 
 interface JSErrorReport {
   id: string;
@@ -311,7 +312,9 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
               <div className="space-y-3 text-sm">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Device Model</p>
-                  <p className="mt-1 font-semibold text-slate-800">{errorData.deviceModel || 'Unknown device'}</p>
+                  <p className="mt-1 font-semibold text-slate-800" title={errorData.deviceModel}>
+                    {formatDeviceModel(errorData.deviceModel, 'Unknown device')}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">OS Version</p>

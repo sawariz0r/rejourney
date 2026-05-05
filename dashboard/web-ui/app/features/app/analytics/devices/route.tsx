@@ -31,6 +31,7 @@ import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { TimeFilter, TimeRange, DEFAULT_TIME_RANGE } from '~/shared/ui/core/TimeFilter';
 import { KpiCardItem, KpiCardsGrid, computePeriodDeltaFromSeries } from '~/features/app/shared/dashboard/KpiCardsGrid';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
+import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 
 type DeviceRiskRow = DeviceSummary['devices'][number] & {
     incidentRatePer100: number;
@@ -255,7 +256,7 @@ export const Devices: React.FC = () => {
             .filter((row) => isValidDeviceLabel(row.model) && row.impactScore > 0)
             .slice(0, 8)
             .map((row) => ({
-                device: row.model,
+                device: formatDeviceModel(row.model),
                 sessions: row.count,
                 incidentRatePer100: row.incidentRatePer100,
                 impactScore: row.impactScore,
@@ -344,7 +345,7 @@ export const Devices: React.FC = () => {
                 sortValue: compatibilityHotspotCount,
                 info: 'Device x OS cohorts exceeding issue-rate hotspot thresholds.',
                 detail: matrixHotspots[0]
-                    ? `${matrixHotspots[0].device} x v${matrixHotspots[0].version} at ${(matrixHotspots[0].issueRate * 100).toFixed(1)}%`
+                    ? `${formatDeviceModel(matrixHotspots[0].device, 'Unknown device')} x v${matrixHotspots[0].version} at ${(matrixHotspots[0].issueRate * 100).toFixed(1)}%`
                     : 'No matrix hotspot data',
                 delta: issuePressureDelta
                     ? {
@@ -484,7 +485,9 @@ export const Devices: React.FC = () => {
                                         <tbody className="divide-y divide-gray-200">
                                             {deviceRiskRows.slice(0, 12).map((row) => (
                                                 <tr key={row.model} className="hover:bg-[#f4f4f5]">
-                                                    <td className="py-3 pr-4 font-medium text-slate-900">{row.model}</td>
+                                                    <td className="py-3 pr-4 font-medium text-slate-900" title={row.model}>
+                                                        {formatDeviceModel(row.model)}
+                                                    </td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(row.count)}</td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{row.crashes}</td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{row.anrs}</td>
@@ -548,7 +551,9 @@ export const Devices: React.FC = () => {
                                     <div className="text-xs font-mono uppercase tracking-wide text-gray-500">Highest-risk device model</div>
                                     {topDevice ? (
                                         <div className="mt-2 space-y-1 text-sm text-slate-700">
-                                            <div className="font-medium text-slate-900">{topDevice.model}</div>
+                                            <div className="font-medium text-slate-900" title={topDevice.model}>
+                                                {formatDeviceModel(topDevice.model)}
+                                            </div>
                                             <div className="flex items-center justify-between text-xs">
                                                 <span>{formatCompact(topDevice.count)} sessions</span>
                                                 <span className="font-semibold text-rose-700">
@@ -744,7 +749,9 @@ export const Devices: React.FC = () => {
                                         <tbody className="divide-y divide-gray-200">
                                             {matrixHotspots.map((cell) => (
                                                 <tr key={`${cell.device}-${cell.version}`} className="hover:bg-[#f4f4f5]">
-                                                    <td className="py-3 pr-4 font-medium text-slate-900">{cell.device}</td>
+                                                    <td className="py-3 pr-4 font-medium text-slate-900" title={cell.device}>
+                                                        {formatDeviceModel(cell.device)}
+                                                    </td>
                                                     <td className="py-3 pr-4 text-slate-700">v{cell.version}</td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(cell.sessions)}</td>
                                                     <td className={`py-3 pr-4 text-right font-semibold ${cell.issueRate >= 0.05 ? 'text-rose-700' : cell.issueRate >= 0.02 ? 'text-rose-700' : 'text-slate-700'}`}>

@@ -43,6 +43,7 @@ import { TouchOverlay, TouchEvent as OverlayTouchEvent } from '~/shared/ui/core/
 import { MarkerTooltip } from '~/shared/ui/core/MarkerTooltip';
 import { SessionLoadingOverlay, SessionLoadingOverlayProps } from '~/features/app/sessions/shared/SessionLoadingOverlay';
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
+import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 
 // ============================================================================
 // Types
@@ -2050,7 +2051,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const durationMinutes = Math.floor(durationSeconds / 60);
     const durationSecs = Math.floor(durationSeconds % 60);
 
-    const deviceModel = fullSession?.deviceInfo?.model || session?.deviceModel || 'Unknown';
+    const rawDeviceModel = fullSession?.deviceInfo?.model || session?.deviceModel || 'Unknown';
+    const deviceModel = formatDeviceModel(rawDeviceModel, 'Unknown');
     const platform = fullSession?.deviceInfo?.systemName?.toLowerCase() || session?.platform || 'ios';
     const appVersion = fullSession?.deviceInfo?.appVersion || session?.appVersion || '';
     const geoLocation = fullSession?.geoLocation || fullSession?.geoInfo || session?.geoLocation || null;
@@ -2470,7 +2472,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                 </div>
                                 <div className="flex min-w-0 max-w-full items-center gap-1.5">
                                     <Smartphone className="h-3.5 w-3.5" />
-                                    <span className="min-w-0 truncate">{deviceModel}</span>
+                                    <span className="min-w-0 truncate" title={rawDeviceModel}>{deviceModel}</span>
                                 </div>
                                 <div className="flex min-w-0 max-w-full items-center gap-1.5">
                                     <MapPin className="h-3.5 w-3.5" />

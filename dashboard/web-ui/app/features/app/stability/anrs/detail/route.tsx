@@ -21,6 +21,7 @@ import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
 import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
+import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 
 const getStatusVariant = (status?: string): 'danger' | 'warning' | 'success' | 'neutral' | 'info' => {
   const normalized = (status || '').toLowerCase();
@@ -255,8 +256,8 @@ export const ANRDetail: React.FC<{ anrId?: string; projectId?: string }> = ({
               <div className="space-y-3 text-sm">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Model</p>
-                  <p className="mt-1 font-semibold text-slate-800">
-                    {deviceMeta.model || deviceMeta.manufacturer || 'Unknown device'}
+                  <p className="mt-1 font-semibold text-slate-800" title={deviceMeta.model || deviceMeta.manufacturer}>
+                    {formatDeviceModel(deviceMeta.model || deviceMeta.manufacturer, 'Unknown device')}
                   </p>
                 </div>
                 <div>

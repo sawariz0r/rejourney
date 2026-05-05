@@ -23,6 +23,7 @@ import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { getErrorsOverview, type ErrorOverviewGroup } from '~/shared/api/client';
 import { TimeFilter, TimeRange, DEFAULT_TIME_RANGE } from '~/shared/ui/core/TimeFilter';
 import { formatAge, formatLastSeen } from '~/shared/lib/formatDates';
+import { formatDeviceModel, getDeviceModelSearchText } from '~/shared/lib/deviceModelNames';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
@@ -86,7 +87,8 @@ export const ErrorsList: React.FC = () => {
       (group) =>
         group.errorName.toLowerCase().includes(query) ||
         group.message.toLowerCase().includes(query) ||
-        group.screens.some((screen) => screen.toLowerCase().includes(query)),
+        group.screens.some((screen) => screen.toLowerCase().includes(query)) ||
+        Object.keys(group.affectedDevices).some((device) => getDeviceModelSearchText(device).includes(query)),
     );
   }, [errorGroups, searchQuery]);
 
@@ -198,6 +200,7 @@ export const ErrorsList: React.FC = () => {
               const isExpanded = expandedGroup === group.fingerprint;
               const deviceList = Object.keys(group.affectedDevices);
               const topDevice = deviceList[0] || 'Unknown';
+              const topDeviceLabel = formatDeviceModel(topDevice, 'Unknown');
               const versionList = Object.keys(group.affectedVersions);
               const topVersion = versionList[0] || '?';
 
@@ -229,7 +232,7 @@ export const ErrorsList: React.FC = () => {
                     
                     <div className="w-32 hidden md:block flex-shrink-0">
                       <div className="flex flex-col gap-1 items-start">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 rounded">{topDevice}</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 rounded" title={topDevice}>{topDeviceLabel}</span>
                         <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 rounded">v{topVersion}</span>
                       </div>
                     </div>
@@ -361,7 +364,9 @@ export const ErrorsList: React.FC = () => {
                                </div>
                                <div>
                                   <dt className="text-slate-500 mb-0.5">Device</dt>
-                                  <dd className="font-medium text-slate-800">{group.sampleError.deviceModel || topDevice}</dd>
+                                  <dd className="font-medium text-slate-800" title={group.sampleError.deviceModel || topDevice}>
+                                    {formatDeviceModel(group.sampleError.deviceModel || topDevice, 'Unknown')}
+                                  </dd>
                                </div>
                                <div>
                                   <dt className="text-slate-500 mb-0.5">Error Name</dt>

@@ -23,6 +23,7 @@ import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { api, CrashReport, getCrashesOverview, type CrashOverviewGroup } from '~/shared/api/client';
 import { TimeFilter, TimeRange, DEFAULT_TIME_RANGE } from '~/shared/ui/core/TimeFilter';
 import { formatAge, formatLastSeen } from '~/shared/lib/formatDates';
+import { formatDeviceModel, getDeviceModelSearchText } from '~/shared/lib/deviceModelNames';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
@@ -86,7 +87,7 @@ export const CrashesList: React.FC = () => {
     return crashGroups.filter(
       (group) =>
         group.name.toLowerCase().includes(query) ||
-        Object.keys(group.affectedDevices).some((device) => device.toLowerCase().includes(query)) ||
+        Object.keys(group.affectedDevices).some((device) => getDeviceModelSearchText(device).includes(query)) ||
         Object.keys(group.affectedVersions).some((version) => version.toLowerCase().includes(query)),
     );
   }, [crashGroups, searchQuery]);
@@ -216,6 +217,7 @@ export const CrashesList: React.FC = () => {
               const hasLoadedDetail = Object.prototype.hasOwnProperty.call(crashDetails, group.name);
               const deviceList = Object.keys(group.affectedDevices);
               const topDevice = deviceList[0] || 'Unknown';
+              const topDeviceLabel = formatDeviceModel(topDevice, 'Unknown');
               const versionList = Object.keys(group.affectedVersions);
               const topVersion = versionList[0] || '?';
 
@@ -244,7 +246,7 @@ export const CrashesList: React.FC = () => {
 
                     <div className="w-32 hidden md:block flex-shrink-0">
                       <div className="flex flex-col gap-1 items-start">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 rounded">{topDevice}</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 rounded" title={topDevice}>{topDeviceLabel}</span>
                         <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-1.5 rounded">v{topVersion}</span>
                       </div>
                     </div>
@@ -335,7 +337,10 @@ export const CrashesList: React.FC = () => {
                                <div className="flex flex-wrap gap-4 text-xs">
                                  <div className="flex items-center gap-1.5 text-slate-600 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
                                    <Smartphone size={12} className="text-slate-400" />
-                                   <span className="font-semibold text-slate-700">Device Model:</span> {detail?.deviceMetadata?.model || topDevice}
+                                   <span className="font-semibold text-slate-700">Device Model:</span>{' '}
+                                   <span title={detail?.deviceMetadata?.model || topDevice}>
+                                     {formatDeviceModel(detail?.deviceMetadata?.model || topDevice, 'Unknown')}
+                                   </span>
                                  </div>
                                  <div className="flex items-center gap-1.5 text-slate-600 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
                                    <Activity size={12} className="text-slate-400" />
