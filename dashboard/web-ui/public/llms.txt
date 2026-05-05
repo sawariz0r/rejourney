@@ -1,11 +1,11 @@
 # Rejourney Documentation
 
-> Rejourney is a lightweight, open-source Sentry alternative for React Native. It provides native crash monitoring, performant session replay (1 FPS, pixel-perfect), and heatmaps with a zero-dependency SDK.
+> Rejourney is a lightweight, open-source analytics and observability stack for mobile apps. It provides crash reporting, performant session replay, journeys, and heatmaps with a light SDK.
 
 ## Core Documentation
 
 - [Introduction](/docs): Quick overview of Rejourney and its features.
-- [React Native SDK Setup](/docs): 3-line integration guide for React Native apps.
+- [SDK Setup](/docs): Integration guides for mobile apps, including React Native and native iOS.
 - [Self-Hosted Deployment](/docs/selfhosted): Guide to deploying Rejourney on your own infrastructure using Docker.
 - [Distributed vs Single-Node Cloud](/docs/architecture/distributed-vs-single-node): Comprehensive architecture breakdown of Kubernetes vs Docker Cloud models.
 - [CI/CD & Testing](/docs/architecture/ci-cd): Detailed explanation of our test suites (Backend, Web, SDK) and deployment pipelines.

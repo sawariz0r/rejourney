@@ -73,15 +73,15 @@ const RATE_COLORS: Record<RateBucket, { bg: string; border: string; shadow: stri
         label: '>=20%',
     },
     high: {
-        bg: 'bg-orange-500/55',
-        border: 'border-orange-600',
-        shadow: 'rgba(249, 115, 22, 0.5)',
+        bg: 'bg-pink-500/55',
+        border: 'border-pink-600',
+        shadow: 'rgba(244, 63, 94, 0.5)',
         label: '10-20%',
     },
     moderate: {
-        bg: 'bg-amber-400/55',
-        border: 'border-amber-500',
-        shadow: 'rgba(251, 191, 36, 0.45)',
+        bg: 'bg-pink-400/55',
+        border: 'border-pink-500',
+        shadow: 'rgba(249, 168, 212, 0.45)',
         label: '5-10%',
     },
     low: {
@@ -226,7 +226,7 @@ export const IssuesWorldMap: React.FC<IssuesWorldMapProps> = ({
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="font-medium text-slate-400">Issue rate</span>
-                                        <span className="font-bold text-amber-400">{formatRate(region.issueRate)}</span>
+                                        <span className="font-bold text-pink-400">{formatRate(region.issueRate)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="font-medium text-slate-400">Top issue</span>

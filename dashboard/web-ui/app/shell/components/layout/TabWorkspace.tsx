@@ -95,7 +95,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
     if (hideTabChrome) {
         return (
             <div className="flex h-full min-h-0 flex-col bg-transparent">
-                <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
+                <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
             </div>
         );
     }
@@ -105,7 +105,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
             <div className="flex flex-col h-full min-h-0 bg-transparent">
                 <TabBar group="primary" pathPrefix={tabPathPrefix} />
                 <div
-                    className="relative flex-1 min-h-0 overflow-y-auto"
+                    className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-10 pt-0"
                     ref={primaryScrollRef}
                     onDragOver={(event) => {
                         const tabId = extractDraggedTabId(event);
@@ -140,7 +140,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
             {/* Primary Pane */}
             <section className="flex min-w-0 flex-col border-r border-slate-200 h-full" style={{ width: `${splitRatio * 100}%` }}>
                 <TabBar group="primary" pathPrefix={tabPathPrefix} />
-                <div ref={primaryScrollRef} className="flex-1 min-h-0 overflow-y-auto relative">
+                <div ref={primaryScrollRef} className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-10 pt-0">
                     {children}
                 </div>
             </section>
@@ -155,7 +155,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
             {/* Secondary Pane */}
             <section className="flex min-w-0 flex-col h-full" style={{ width: `${(1 - splitRatio) * 100}%` }}>
                 <TabBar group="secondary" pathPrefix={tabPathPrefix} />
-                <div ref={secondaryScrollRef} className="flex-1 min-h-0 overflow-y-auto bg-transparent relative">
+                <div ref={secondaryScrollRef} className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-transparent pb-10 pt-0">
                     {SecondaryComponent && secondaryTabDefinition ? (
                         <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-slate-500">Loading tab…</div>}>
                             <SecondaryComponent key={secondaryTab.id} {...(secondaryTabDefinition.props || {})} />

@@ -7,6 +7,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENV_FILE="${1:-$ROOT_DIR/.env.k8s.local}"
 BOILERPLATE_ENV="$ROOT_DIR/examples/react-native-boilerplate/.env.local"
 BREW_ENV="$ROOT_DIR/examples/brew-coffee-labs/.env.local"
+SWIFT_EXAMPLE="$ROOT_DIR/examples/swift-clean-arch/CountriesSwiftUI/Core/RejourneyExample.swift"
 
 get_local_ip() {
     local ip=""
@@ -35,6 +36,14 @@ replace_or_append() {
     fi
 }
 
+replace_swift_api_url() {
+    local file="$1"
+    local value="$2"
+    if [ -f "$file" ]; then
+        perl -0pi -e "s|private static let fallbackAPIURL = URL\\(string: \".*\"\\)!|private static let fallbackAPIURL = URL(string: \"${value}\")!|m" "$file"
+    fi
+}
+
 LOCAL_IP="$(get_local_ip || true)"
 
 if [ -z "$LOCAL_IP" ]; then
@@ -55,7 +64,10 @@ replace_or_append "$ENV_FILE" "OAUTH_REDIRECT_BASE" "http://$LOCAL_IP:3000"
 replace_or_append "$BOILERPLATE_ENV" "API_URL" "http://$LOCAL_IP:3000"
 replace_or_append "$BREW_ENV" "EXPO_PUBLIC_API_URL" "http://$LOCAL_IP:3000"
 
+replace_swift_api_url "$SWIFT_EXAMPLE" "http://$LOCAL_IP:3000"
+
 echo "Updated:"
 echo "  $ENV_FILE"
 echo "  $BOILERPLATE_ENV"
 echo "  $BREW_ENV"
+echo "  $SWIFT_EXAMPLE"

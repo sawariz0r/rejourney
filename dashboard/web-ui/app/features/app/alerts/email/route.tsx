@@ -187,7 +187,7 @@ const AlertTypeCard: React.FC<{
 }> = ({ icon, title, description, enabled, onChange, color, recommended }) => {
     const colorVariants: Record<string, any> = {
         red: { badge: 'danger', icon: 'text-red-500' },
-        amber: { badge: 'warning', icon: 'text-amber-500' },
+        rose: { badge: 'warning', icon: 'text-rose-500' },
         indigo: { badge: 'info', icon: 'text-indigo-500' },
         blue: { badge: 'info', icon: 'text-blue-500' },
     };
@@ -537,7 +537,7 @@ export const AlertEmails: React.FC = () => {
                         description="Notification for app freezes (ANRs)"
                         enabled={settings?.anrAlertsEnabled ?? true}
                         onChange={(val) => handleSettingChange('anrAlertsEnabled', val)}
-                        color="amber"
+                        color="rose"
                         recommended
                     />
                     <AlertTypeCard
@@ -648,7 +648,7 @@ export const AlertEmails: React.FC = () => {
                                     emailLogs.map((log) => {
                                         const typeColors: Record<string, string> = {
                                             crash: 'bg-red-500',
-                                            anr: 'bg-amber-500',
+                                            anr: 'bg-rose-500',
                                             error_spike: 'bg-indigo-500',
                                             api_degradation: 'bg-blue-500',
                                         };

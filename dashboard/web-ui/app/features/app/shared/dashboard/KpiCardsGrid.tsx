@@ -306,12 +306,12 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
             {showControls && (
                 <div className="dashboard-surface mb-4 p-4">
                     <div className="flex flex-wrap items-center gap-3">
-                        <label className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase">
+                        <label className="inline-flex items-center gap-2 text-xs font-black text-slate-600 uppercase">
                             Trend
                             <select
                                 value={trendFilter}
                                 onChange={(event) => setTrendFilter(event.target.value as KpiTrendFilter)}
-                                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-black focus:outline-none focus:ring-2 focus:ring-sky-200"
+                                className="border-2 border-black bg-white px-2.5 py-1.5 text-xs font-black text-black shadow-neo-sm focus:outline-none focus:ring-2 focus:ring-black"
                             >
                                 <option value="all">All</option>
                                 <option value="improving">Improving</option>
@@ -321,12 +321,12 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
                             </select>
                         </label>
 
-                        <label className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase">
+                        <label className="inline-flex items-center gap-2 text-xs font-black text-slate-600 uppercase">
                             Sort
                             <select
                                 value={sortMode}
                                 onChange={(event) => setSortMode(event.target.value as KpiSortMode)}
-                                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-black focus:outline-none focus:ring-2 focus:ring-sky-200"
+                                className="border-2 border-black bg-white px-2.5 py-1.5 text-xs font-black text-black shadow-neo-sm focus:outline-none focus:ring-2 focus:ring-black"
                             >
                                 <option value="default">Default</option>
                                 <option value="value-desc">Highest value</option>
@@ -338,7 +338,7 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
 
                         <button
                             type="button"
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-black uppercase tracking-wide hover:border-slate-300 hover:shadow-sm transition-all"
+                            className="border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black uppercase shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo transition-all"
                             onClick={() => setCustomizeOpen((open) => !open)}
                         >
                             {customizeOpen ? 'Hide Customize' : 'Customize'}
@@ -350,13 +350,13 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
                     </div>
 
                     {customizeOpen && (
-                        <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+                        <div className="mt-3 space-y-3 border-t-2 border-black pt-3">
                             <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
                                 <input
                                     type="checkbox"
                                     checked={showDetails}
                                     onChange={(event) => setShowDetails(event.target.checked)}
-                                    className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                                    className="h-3.5 w-3.5 rounded-none border-black text-slate-900 focus:ring-black"
                                 />
                                 Show KPI detail line
                             </label>
@@ -367,13 +367,13 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
                                     return (
                                         <label
                                             key={card.id}
-                                        className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-all ${selected ? 'border-slate-300 bg-white text-black shadow-sm' : 'border-gray-300 bg-white text-gray-500 hover:border-slate-300'}`}
+                                        className={`inline-flex items-center gap-1.5 border-2 px-2 py-1.5 text-[11px] font-bold transition-all ${selected ? 'border-black bg-[#67e8f9] text-black shadow-neo-sm' : 'border-black bg-white text-gray-600 hover:bg-[#ecfeff]'}`}
                                         >
                                             <input
                                                 type="checkbox"
                                                 checked={selected}
                                                 onChange={() => toggleCardVisibility(card.id)}
-                                                className="h-3 w-3 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                                                className="h-3 w-3 rounded-none border-black text-slate-900 focus:ring-black"
                                             />
                                             {card.label}
                                         </label>
@@ -383,7 +383,7 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
 
                             <button
                                 type="button"
-                                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-black uppercase tracking-wide hover:border-slate-300 hover:shadow-sm transition-all"
+                                className="border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black uppercase shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo transition-all"
                                 onClick={resetPreferences}
                             >
                                 Reset

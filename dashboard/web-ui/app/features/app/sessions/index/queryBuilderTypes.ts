@@ -437,10 +437,10 @@ export const CONDITION_TYPE_META: Record<ConditionType, ConditionTypeMeta> = {
   lifecycle: {
     label: 'LIFECYCLE',
     description: 'Filter by user lifecycle stage',
-    pillBg: 'bg-amber-50',
-    pillBorder: 'border-amber-200',
-    pillText: 'text-amber-800',
-    menuBg: 'bg-amber-50',
+    pillBg: 'bg-pink-50',
+    pillBorder: 'border-pink-200',
+    pillText: 'text-pink-800',
+    menuBg: 'bg-pink-50',
   },
   conversion: {
     label: 'CONVERSION',

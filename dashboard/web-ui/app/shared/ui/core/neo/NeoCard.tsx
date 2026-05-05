@@ -40,7 +40,7 @@ export const NeoCard: React.FC<NeoCardProps> = ({
             {(title || action) && (
                 <div className={`flex justify-between items-center ${disablePadding ? 'p-6 pb-4' : 'mb-6 pb-4'} border-b-2 border-black`}>
                     {title && (
-                        <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">{title}</h3>
+                        <h3 className="text-sm font-black uppercase text-slate-800">{title}</h3>
                     )}
                     {action && <div className="flex gap-2">{action}</div>}
                 </div>

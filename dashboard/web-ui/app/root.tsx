@@ -47,34 +47,34 @@ export const links: Route.LinksFunction = () => [
 export const meta: Route.MetaFunction = () => [
     // charset and viewport are set explicitly in Layout head
     { name: "theme-color", content: "#ffffff" },
-    { title: "Rejourney: Open Source React Native Sentry Alternative" },
+    { title: "Rejourney: Open Source Mobile App Analytics & Observability" },
     {
         name: "description",
-        content: "Rejourney is the lightweight, open-source Sentry alternative for React Native. Get native crash monitoring, performant session replay, and heatmaps with a zero-dependency SDK.",
+        content: "Rejourney is a lightweight, open-source analytics and observability stack for mobile apps. Get session replay, crash reporting, journeys, and heatmaps with a light SDK.",
     },
     {
         name: "keywords",
-        content: "Sentry alternative, React Native monitoring, open source session replay, mobile observability, crash reporting, LogRocket alternative, lightweight SDK, self-hosted",
+        content: "mobile app analytics, mobile observability, open source session replay, crash reporting, heatmaps, product analytics, lightweight SDK, self-hosted",
     },
     { name: "robots", content: "index, follow" },
     { property: "og:type", content: "website" },
     { property: "og:url", content: "https://rejourney.co/" },
-    { property: "og:title", content: "Rejourney: Lightweight Mobile-First Sentry Alternative" },
+    { property: "og:title", content: "Rejourney: Lightweight Mobile App Analytics & Observability" },
     {
         property: "og:description",
-        content: "The definitive lightweight Sentry alternative for mobile apps. Crash monitoring and session replay built for performance.",
+        content: "Everything analytics for mobile apps: session replay, crashes, journeys, heatmaps, and product signals in a light SDK.",
     },
     { property: "og:image", content: "https://rejourney.co/rejourneyIcon-removebg-preview.png" },
     { property: "og:image:width", content: "1200" },
     { property: "og:image:height", content: "630" },
-    { property: "og:image:alt", content: "Rejourney - Open Source React Native Sentry Alternative" },
+    { property: "og:image:alt", content: "Rejourney - Open Source Mobile App Analytics" },
     { property: "og:image:type", content: "image/png" },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:url", content: "https://rejourney.co/" },
-    { name: "twitter:title", content: "Rejourney: Lightweight Mobile-First Sentry Alternative" },
+    { name: "twitter:title", content: "Rejourney: Lightweight Mobile App Analytics & Observability" },
     {
         name: "twitter:description",
-        content: "Lightweight, mobile-first Sentry alternative. Zero-dependency SDK for React Native with pixel-perfect session replay.",
+        content: "Everything analytics for mobile apps: session replay, crashes, journeys, heatmaps, and product signals in a light SDK.",
     },
     { name: "twitter:image", content: "https://rejourney.co/rejourneyIcon-removebg-preview.png" },
     { name: "twitter:site", content: "@rejourneyco" },
@@ -120,14 +120,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                     "@type": "SoftwareApplication",
                                     "name": "Rejourney",
                                     "applicationCategory": "DeveloperApplication",
-                                    "operatingSystem": "React Native",
+                                    "operatingSystem": "iOS, Android, React Native",
                                     "offers": {
                                         "@type": "Offer",
                                         "price": "0",
                                         "priceCurrency": "USD"
                                     },
                                     "url": "https://rejourney.co/",
-                                    "description": "Lightweight, open-source Sentry alternative for React Native with native crash monitoring, performant session replay, and heatmaps."
+                                    "description": "Lightweight, open-source analytics and observability for mobile apps with crash reporting, performant session replay, journeys, and heatmaps."
                                 },
                                 {
                                     "@type": "WebSite",

@@ -21,7 +21,7 @@ export function Badge({
     destructive: "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100",
     outline: "border-slate-200 text-slate-700 bg-transparent hover:bg-slate-100",
     success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    warning: "border-amber-200 bg-amber-50 text-amber-700",
+    warning: "border-pink-200 bg-pink-50 text-pink-700",
     error: "border-rose-200 bg-rose-50 text-rose-700",
     danger: "border-rose-200 bg-rose-50 text-rose-700",
   };

@@ -72,13 +72,13 @@ export function ClarityConsentBanner() {
     }
 
     return (
-        <aside className="fixed inset-x-4 bottom-4 z-[90] rounded-xl border border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur sm:inset-x-auto sm:right-4 sm:max-w-md">
+        <aside className="clarity-consent-banner fixed bottom-4 left-4 z-[90] max-w-none overflow-hidden rounded-xl border border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur sm:left-auto sm:right-4 sm:max-w-md">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Privacy Controls</p>
             <h2 className="mt-1 text-sm font-bold text-slate-900">Allow Analytics?</h2>
-            <p className="mt-2 text-xs leading-relaxed text-slate-600">
+            <p className="mt-2 max-w-full break-words text-xs leading-relaxed text-slate-600">
                 We use cookies to analyze how you interact with our website, understand your browsing habits, and improve your experience. By clicking 'Accept', you consent to our use of these analytics cookies. These are non-essential cookies. The site will work without them.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
                 <button
                     type="button"
                     onClick={rejectAnalytics}
@@ -95,7 +95,7 @@ export function ClarityConsentBanner() {
                 </button>
                 <a
                     href="/privacy-policy"
-                    className="ml-auto inline-flex items-center text-xs font-semibold text-slate-600 underline-offset-4 hover:underline"
+                    className="inline-flex items-center text-xs font-semibold text-slate-600 underline-offset-4 hover:underline sm:ml-auto"
                 >
                     Privacy Policy
                 </a>

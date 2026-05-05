@@ -49,6 +49,49 @@ const bundleChartData = bundleCompareRows.map((row) => ({
     href: row.href,
 }));
 
+const performanceMetricRows = [
+    {
+        metric: 'Main: UIKit + Metal Capture',
+        average: '12.4',
+        max: '28.2',
+        min: '8.1',
+        thread: 'Main',
+        threadClassName: 'text-red-600',
+    },
+    {
+        metric: 'BG: Async Image Processing',
+        average: '42.5',
+        max: '88.0',
+        min: '32.4',
+        thread: 'Background',
+        threadClassName: 'text-green-600',
+    },
+    {
+        metric: 'BG: Tar+Gzip Compression',
+        average: '14.2',
+        max: '32.5',
+        min: '9.6',
+        thread: 'Background',
+        threadClassName: 'text-green-600',
+    },
+    {
+        metric: 'BG: Upload Handshake',
+        average: '0.8',
+        max: '2.4',
+        min: '0.3',
+        thread: 'Background',
+        threadClassName: 'text-green-600',
+    },
+    {
+        metric: 'Total Main Thread Impact',
+        average: '12.4',
+        max: '28.2',
+        min: '8.1',
+        thread: 'Main',
+        threadClassName: 'text-red-600',
+    },
+];
+
 export const PerformanceMetrics: React.FC = () => {
     const sectionRef = useRef<HTMLElement>(null);
     const [isVisible, setIsVisible] = useState(false);
@@ -75,24 +118,24 @@ export const PerformanceMetrics: React.FC = () => {
     const rejourneyEfficiencyX = (sentryRow.minifiedKb / rejourneyRow.minifiedKb).toFixed(1);
 
     return (
-        <section ref={sectionRef} className="w-full px-4 sm:px-6 lg:px-8 py-24 border-t-2 border-black bg-slate-50 relative overflow-hidden">
+        <section ref={sectionRef} className="relative w-full overflow-hidden border-t-2 border-black bg-slate-50 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
             {/* Background Grid Pattern */}
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
 
             <div className="max-w-7xl mx-auto relative z-10">
 
                 {/* Header Section */}
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-16 gap-8">
+                <div className="mb-10 flex flex-col items-start justify-between gap-6 lg:mb-16 lg:flex-row lg:items-end lg:gap-8">
                     <div>
                         <div className="flex items-center gap-2 mb-4">
                             <Activity className="w-4 h-4 text-[#5dadec]" />
                             <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#5dadec]">Efficiency Audit</span>
                         </div>
-                        <h2 className="text-5xl sm:text-7xl font-black uppercase tracking-tighter leading-[0.85] mb-4">
+                        <h2 className="mb-4 text-4xl font-black uppercase leading-[0.88] tracking-tight sm:text-7xl sm:tracking-tighter">
                             Tiny Footprint.<br />
                             <span className="text-gray-400">Extreme Impact.</span>
                         </h2>
-                        <p className="font-mono text-sm text-gray-500 uppercase tracking-widest">
+                        <p className="max-w-xl break-words font-mono text-[11px] font-bold uppercase leading-relaxed tracking-wide text-gray-500 sm:text-sm sm:tracking-widest">
                             {rejourneyEfficiencyX}× smaller minified JS bundle vs {sentryRow.shortLabel}@{sentryRow.version} (BundlePhobia)
                         </p>
                     </div>
@@ -105,15 +148,15 @@ export const PerformanceMetrics: React.FC = () => {
                 </div>
 
                 {/* Main Content Box */}
-                <div className="border-2 border-black bg-white p-6 sm:p-10 shadow-[16px_16px_0px_0px_rgba(0,0,0,1)]">
+                <div className="border-2 border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sm:p-10 sm:shadow-[16px_16px_0px_0px_rgba(0,0,0,1)]">
 
                     {/* Top Row: SDK Size Comparison */}
-                    <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-12 mb-16 border-b-2 border-black border-dashed pb-12">
+                    <div className="mb-12 grid grid-cols-1 gap-10 border-b-2 border-black border-dashed pb-10 lg:mb-16 lg:grid-cols-[1.5fr_1fr] lg:gap-12 lg:pb-12">
 
                         {/* Chart Area */}
                         <div className="flex flex-col h-full">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center mb-6 border-b-2 border-black pb-2">
-                                <h3 className="text-lg font-black uppercase tracking-tight">Npm bundle size (BundlePhobia)</h3>
+                            <div className="mb-5 flex flex-col gap-3 border-b-2 border-black pb-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:pb-2">
+                                <h3 className="text-base font-black uppercase tracking-tight sm:text-lg">Npm bundle size (BundlePhobia)</h3>
                                 <div className="flex flex-wrap gap-4">
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-[#1e3a5f] border-2 border-black" aria-hidden />
@@ -126,7 +169,7 @@ export const PerformanceMetrics: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="flex-grow min-h-[280px] relative border-2 border-black bg-slate-50 p-4">
+                            <div className="relative min-h-[240px] flex-grow border-2 border-black bg-slate-50 p-2 sm:min-h-[280px] sm:p-4">
                                 {isVisible && (
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart
@@ -172,12 +215,12 @@ export const PerformanceMetrics: React.FC = () => {
                                                     return total != null ? `Total minified: ${total} kB` : '';
                                                 }}
                                             />
-                                            <Bar dataKey="gzipKb" stackId="bp" radius={[0, 0, 0, 0]}>
+                                            <Bar dataKey="gzipKb" stackId="bp" radius={[0, 0, 0, 0]} isAnimationActive={false}>
                                                 {bundleCompareRows.map((row) => (
                                                     <Cell key={`g-${row.key}`} fill={row.gzipFill} />
                                                 ))}
                                             </Bar>
-                                            <Bar dataKey="minifiedAboveGzipKb" stackId="bp" radius={[2, 2, 0, 0]}>
+                                            <Bar dataKey="minifiedAboveGzipKb" stackId="bp" radius={[2, 2, 0, 0]} isAnimationActive={false}>
                                                 {bundleCompareRows.map((row) => (
                                                     <Cell key={`m-${row.key}`} fill={row.minExtraFill} />
                                                 ))}
@@ -206,7 +249,7 @@ export const PerformanceMetrics: React.FC = () => {
                         </div>
 
                         {/* Comparative Stats (Side Panel) — Rejourney first (smaller), Sentry second */}
-                        <div className="lg:border-l-2 lg:border-black lg:border-dashed lg:pl-12 flex flex-col justify-center space-y-10">
+                        <div className="flex flex-col justify-center space-y-8 lg:border-l-2 lg:border-dashed lg:border-black lg:pl-12">
                             <div>
                                 <p className="text-[10px] font-black uppercase tracking-widest text-[#5dadec] mb-2">
                                     {rejourneyRow.shortLabel}
@@ -270,13 +313,40 @@ export const PerformanceMetrics: React.FC = () => {
 
 
                     {/* Performance Metrics Table */}
-                    <div className="mt-12">
-                        <div className="border-b-2 border-black pb-2 mb-6">
+                    <div className="mt-10 sm:mt-12">
+                        <div className="mb-5 border-b-2 border-black pb-3 sm:mb-6 sm:pb-2">
                             <h3 className="text-lg font-black uppercase tracking-tight">Performance Metrics</h3>
-                            <p className="text-[10px] font-mono text-gray-500 uppercase">iPhone 15 Pro; iOS 18; Expo SDK 54; RN New Architecture. Running on <a href="https://merchcampus.com" target="_blank" rel="noopener noreferrer" className="underline">Merch App</a>. Production build.</p>
+                            <p className="mt-1 text-[10px] font-mono uppercase leading-relaxed text-gray-500">iPhone 15 Pro; iOS 18; Expo SDK 54; React Native New Architecture. Running on <a href="https://merchcampus.com" target="_blank" rel="noopener noreferrer" className="underline">Merch App</a>. Production build.</p>
                         </div>
 
-                        <div className="border-2 border-black bg-white overflow-x-auto">
+                        <div className="grid gap-3 md:hidden">
+                            {performanceMetricRows.map((row) => (
+                                <article key={row.metric} className="border-2 border-black bg-[#f8fafc] p-3 shadow-neo-sm">
+                                    <div className="mb-3 flex items-start justify-between gap-3 border-b-2 border-black pb-2">
+                                        <h4 className="text-xs font-black uppercase leading-tight">{row.metric}</h4>
+                                        <span className={`shrink-0 text-[10px] font-black uppercase ${row.threadClassName}`}>
+                                            {row.thread}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2 font-mono text-[10px] font-black uppercase">
+                                        <div className="border-2 border-black bg-white p-2">
+                                            <p className="text-gray-500">Avg</p>
+                                            <p className="mt-1 text-sm text-black">{row.average}</p>
+                                        </div>
+                                        <div className="border-2 border-black bg-white p-2">
+                                            <p className="text-gray-500">Max</p>
+                                            <p className="mt-1 text-sm text-black">{row.max}</p>
+                                        </div>
+                                        <div className="border-2 border-black bg-white p-2">
+                                            <p className="text-gray-500">Min</p>
+                                            <p className="mt-1 text-sm text-black">{row.min}</p>
+                                        </div>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+
+                        <div className="hidden overflow-x-auto border-2 border-black bg-white md:block">
                             <table className="w-full min-w-[720px] border-collapse">
                                 <thead>
                                     <tr className="bg-black text-white">
@@ -288,41 +358,15 @@ export const PerformanceMetrics: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr className="border-b-2 border-black hover:bg-slate-50 transition-colors">
-                                        <td className="py-3 px-4 text-xs font-black uppercase border-r-2 border-black font-bold">Main: UIKit + Metal Capture</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">12.4</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">28.2</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">8.1</td>
-                                        <td className="py-3 px-4 text-xs font-bold text-center text-red-600">Main</td>
-                                    </tr>
-                                    <tr className="border-b-2 border-black hover:bg-slate-50 transition-colors">
-                                        <td className="py-3 px-4 text-xs font-black uppercase border-r-2 border-black">BG: Async Image Processing</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">42.5</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">88.0</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">32.4</td>
-                                        <td className="py-3 px-4 text-xs font-bold text-center text-green-600">Background</td>
-                                    </tr>
-                                    <tr className="border-b-2 border-black hover:bg-slate-50 transition-colors">
-                                        <td className="py-3 px-4 text-xs font-black uppercase border-r-2 border-black">BG: Tar+Gzip Compression</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">14.2</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">32.5</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">9.6</td>
-                                        <td className="py-3 px-4 text-xs font-bold text-center text-green-600">Background</td>
-                                    </tr>
-                                    <tr className="border-b-2 border-black hover:bg-slate-50 transition-colors">
-                                        <td className="py-3 px-4 text-xs font-black uppercase border-r-2 border-black">BG: Upload Handshake</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">0.8</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">2.4</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">0.3</td>
-                                        <td className="py-3 px-4 text-xs font-bold text-center text-green-600">Background</td>
-                                    </tr>
-                                    <tr className="hover:bg-slate-50 transition-colors">
-                                        <td className="py-3 px-4 text-xs font-black uppercase border-r-2 border-black font-bold">Total Main Thread Impact</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">12.4</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">28.2</td>
-                                        <td className="py-3 px-4 text-xs font-mono font-bold text-right border-r-2 border-black">8.1</td>
-                                        <td className="py-3 px-4 text-xs font-bold text-center text-red-600">Main</td>
-                                    </tr>
+                                    {performanceMetricRows.map((row, index) => (
+                                        <tr key={row.metric} className={`${index < performanceMetricRows.length - 1 ? 'border-b-2 border-black' : ''} transition-colors hover:bg-slate-50`}>
+                                            <td className="border-r-2 border-black px-4 py-3 text-xs font-black uppercase">{row.metric}</td>
+                                            <td className="border-r-2 border-black px-4 py-3 text-right font-mono text-xs font-bold">{row.average}</td>
+                                            <td className="border-r-2 border-black px-4 py-3 text-right font-mono text-xs font-bold">{row.max}</td>
+                                            <td className="border-r-2 border-black px-4 py-3 text-right font-mono text-xs font-bold">{row.min}</td>
+                                            <td className={`px-4 py-3 text-center text-xs font-bold ${row.threadClassName}`}>{row.thread}</td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>

@@ -11,8 +11,8 @@ import { MarkdownContent } from "~/shared/docs/MarkdownContent";
 import { extractTOCFromMarkdown } from "~/shared/lib/markdownTOC";
 
 export const meta: Route.MetaFunction = ({ location }) => {
-    const title = "React Native Documentation - Rejourney";
-    const description = "Rejourney React Native SDK: Open-source session replay, crash monitoring, and mobile observability. Get started in 3 lines of code.";
+    const title = "Mobile SDK Documentation - Rejourney";
+    const description = "Rejourney documentation for React Native and native Swift iOS SDKs, plus self-hosting and architecture guides.";
     const domain = "https://rejourney.co";
     const canonicalUrl = `${domain}${location.pathname}`;
 

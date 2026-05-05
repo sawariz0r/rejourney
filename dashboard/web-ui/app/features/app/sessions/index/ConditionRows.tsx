@@ -31,7 +31,7 @@ function Chip({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`appearance-none bg-slate-100 hover:bg-slate-200 transition-colors rounded-lg pl-3 pr-7 py-1.5 text-xs font-semibold text-slate-800 cursor-pointer outline-none focus:ring-2 focus:ring-[#5dadec]/40 ${className}`}
+        className={`appearance-none border-2 border-black bg-white pl-3 pr-7 py-1.5 text-xs font-black text-black shadow-neo-sm cursor-pointer outline-none transition-colors hover:bg-[#ecfeff] focus:ring-2 focus:ring-black ${className}`}
       >
         {placeholder && <option value="">{placeholder}</option>}
         {options.map((o) => (
@@ -54,7 +54,7 @@ function NumInput({
       type="number" min={min} value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className={`${width} bg-slate-100 hover:bg-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-[#5dadec]/40 text-center`}
+      className={`${width} border-2 border-black bg-white px-2 py-1.5 text-center text-xs font-black text-black outline-none transition-colors hover:bg-[#ecfeff] focus:ring-2 focus:ring-black`}
     />
   );
 }
@@ -71,15 +71,15 @@ const COUNT_OPS = [
 // ── Row shell ─────────────────────────────────────────────────────────────────
 
 const TYPE_COLORS: Record<string, { icon: React.ReactNode; bg: string; text: string; border: string }> = {
-  issue:      { icon: <AlertOctagon className="w-4 h-4" />, bg: 'bg-slate-800', text: 'text-white', border: 'border-slate-700' },
-  date:       { icon: <Calendar className="w-4 h-4" />,     bg: 'bg-sky-500',   text: 'text-white', border: 'border-sky-400' },
-  screen:     { icon: <LayoutGrid className="w-4 h-4" />,   bg: 'bg-violet-500',text: 'text-white', border: 'border-violet-400' },
-  event:      { icon: <Zap className="w-4 h-4" />,          bg: 'bg-indigo-500',text: 'text-white', border: 'border-indigo-400' },
-  metadata:   { icon: <Tag className="w-4 h-4" />,          bg: 'bg-emerald-500',text: 'text-white', border: 'border-emerald-400' },
-  lifecycle:  { icon: <Users className="w-4 h-4" />,        bg: 'bg-amber-500', text: 'text-white', border: 'border-amber-400' },
-  platform:   { icon: <Smartphone className="w-4 h-4" />,   bg: 'bg-cyan-500',  text: 'text-white', border: 'border-cyan-400' },
-  journey:    { icon: <Route className="w-4 h-4" />,        bg: 'bg-teal-500',  text: 'text-white', border: 'border-teal-400' },
-  conversion: { icon: <Tag className="w-4 h-4" />,          bg: 'bg-pink-500',  text: 'text-white', border: 'border-pink-400' },
+  issue:      { icon: <AlertOctagon className="w-4 h-4" />, bg: 'bg-black', text: 'text-white', border: 'border-black' },
+  date:       { icon: <Calendar className="w-4 h-4" />,     bg: 'bg-[#67e8f9]',   text: 'text-black', border: 'border-black' },
+  screen:     { icon: <LayoutGrid className="w-4 h-4" />,   bg: 'bg-[#c4b5fd]',text: 'text-black', border: 'border-black' },
+  event:      { icon: <Zap className="w-4 h-4" />,          bg: 'bg-[#dbeafe]',text: 'text-black', border: 'border-black' },
+  metadata:   { icon: <Tag className="w-4 h-4" />,          bg: 'bg-[#86efac]',text: 'text-black', border: 'border-black' },
+  lifecycle:  { icon: <Users className="w-4 h-4" />,        bg: 'bg-[#f9a8d4]', text: 'text-black', border: 'border-black' },
+  platform:   { icon: <Smartphone className="w-4 h-4" />,   bg: 'bg-[#67e8f9]',  text: 'text-black', border: 'border-black' },
+  journey:    { icon: <Route className="w-4 h-4" />,        bg: 'bg-[#86efac]',  text: 'text-black', border: 'border-black' },
+  conversion: { icon: <Tag className="w-4 h-4" />,          bg: 'bg-[#f9a8d4]',  text: 'text-black', border: 'border-black' },
 };
 
 export function ConditionRowShell({
@@ -90,16 +90,16 @@ export function ConditionRowShell({
   const c = TYPE_COLORS[type] ?? TYPE_COLORS.issue;
   const meta = CONDITION_TYPE_META[type as keyof typeof CONDITION_TYPE_META];
   return (
-    <div className="flex flex-col gap-2 px-3 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm">
+    <div className="flex flex-col gap-2 border-2 border-black bg-white px-3 py-2.5 shadow-neo-sm">
       {/* Row 1: type label + remove */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 shrink-0">
-          <div className={`${c.bg} ${c.text} p-1.5 rounded-lg shrink-0`}>{c.icon}</div>
-          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{meta?.label ?? type}</span>
+          <div className={`${c.bg} ${c.text} shrink-0 border border-black p-1.5`}>{c.icon}</div>
+          <span className="text-[10px] font-black text-slate-600 uppercase">{meta?.label ?? type}</span>
         </div>
         <button
           onClick={onRemove}
-          className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0"
+          className="shrink-0 border border-transparent p-1.5 text-slate-500 transition-colors hover:border-black hover:bg-[#fecaca] hover:text-black"
           title="Remove rule"
         >
           <X className="w-4 h-4" />
@@ -142,10 +142,10 @@ const TIME_OPTS = [
 export function DateRow({ cond, onChange, onRemove }: { cond: DateCondition; onChange: (c: DateCondition) => void; onRemove: () => void }) {
   return (
     <ConditionRowShell type="date" onRemove={onRemove}>
-      <div className="flex rounded-lg overflow-hidden border border-slate-200 text-xs font-semibold">
+      <div className="flex overflow-hidden border-2 border-black text-xs font-black shadow-neo-sm">
         {(['range', 'exact'] as const).map((m) => (
           <button key={m} onClick={() => onChange({ ...cond, mode: m })}
-            className={`px-3 py-1.5 transition-colors ${cond.mode === m ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
+            className={`px-3 py-1.5 transition-colors ${cond.mode === m ? 'bg-[#67e8f9] text-black' : 'bg-white text-slate-700 hover:bg-[#ecfeff]'}`}>
             {m === 'range' ? 'Range' : 'Exact date'}
           </button>
         ))}
@@ -155,7 +155,7 @@ export function DateRow({ cond, onChange, onRemove }: { cond: DateCondition; onC
       )}
       {cond.mode === 'exact' && (
         <input type="date" value={cond.date ?? ''} onChange={(e) => onChange({ ...cond, date: e.target.value })}
-          className="bg-slate-100 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none" />
+          className="border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black outline-none" />
       )}
     </ConditionRowShell>
   );
@@ -215,7 +215,7 @@ export function EventRow({ cond, onChange, onRemove, filters, loading }: {
           )}
           {cond.eventPropKey && (
             <input type="text" value={cond.eventPropValue ?? ''} onChange={(e) => onChange({ ...cond, eventPropValue: e.target.value || undefined })}
-              placeholder="value" className="bg-slate-100 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none w-24" />
+              placeholder="value" className="w-24 border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black outline-none" />
           )}
         </>
       )}
@@ -241,7 +241,7 @@ export function MetadataRow({ cond, onChange, onRemove, filters, loading }: {
             <Chip value={cond.metaValue ?? ''} onChange={(v) => onChange({ ...cond, metaValue: v || undefined })} options={[{ value: '', label: 'any value' }, ...valOpts]} />
           ) : (
             <input type="text" value={cond.metaValue ?? ''} onChange={(e) => onChange({ ...cond, metaValue: e.target.value || undefined })}
-              placeholder="value" className="bg-slate-100 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none w-28" />
+              placeholder="value" className="w-28 border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black outline-none" />
           )}
         </>
       )}
@@ -252,10 +252,10 @@ export function MetadataRow({ cond, onChange, onRemove, filters, loading }: {
 export function LifecycleRow({ cond, onChange, onRemove }: { cond: LifecycleCondition; onChange: (c: LifecycleCondition) => void; onRemove: () => void }) {
   return (
     <ConditionRowShell type="lifecycle" onRemove={onRemove}>
-      <div className="flex rounded-lg overflow-hidden border border-amber-200 text-xs font-semibold">
+      <div className="flex overflow-hidden border-2 border-black text-xs font-black shadow-neo-sm">
         {(['early_user', 'returning_user'] as const).map((p) => (
           <button key={p} onClick={() => onChange({ ...cond, preset: p, returnedCountOp: undefined, returnedCountValue: undefined })}
-            className={`px-3 py-1.5 transition-colors ${cond.preset === p ? 'bg-amber-500 text-white' : 'text-amber-700 hover:bg-amber-50'}`}>
+            className={`px-3 py-1.5 transition-colors ${cond.preset === p ? 'bg-[#67e8f9] text-black' : 'bg-white text-slate-700 hover:bg-[#ecfeff]/60'}`}>
             {p === 'early_user' ? '🌱 Early user' : '🔄 Returning'}
           </button>
         ))}
@@ -284,10 +284,10 @@ export function LifecycleRow({ cond, onChange, onRemove }: { cond: LifecycleCond
 export function PlatformRow({ cond, onChange, onRemove }: { cond: PlatformCondition; onChange: (c: PlatformCondition) => void; onRemove: () => void }) {
   return (
     <ConditionRowShell type="platform" onRemove={onRemove}>
-      <div className="flex rounded-lg overflow-hidden border border-cyan-200 text-xs font-semibold">
+      <div className="flex overflow-hidden border-2 border-black text-xs font-black shadow-neo-sm">
         {(['ios', 'android'] as const).map((p) => (
           <button key={p} onClick={() => onChange({ ...cond, platform: p })}
-            className={`px-3 py-1.5 transition-colors uppercase ${cond.platform === p ? 'bg-cyan-500 text-white' : 'text-cyan-700 hover:bg-cyan-50'}`}>
+            className={`px-3 py-1.5 transition-colors uppercase ${cond.platform === p ? 'bg-[#67e8f9] text-black' : 'bg-white text-slate-700 hover:bg-[#67e8f9]/50'}`}>
             {p === 'ios' ? '🍎 iOS' : '🤖 Android'}
           </button>
         ))}
@@ -311,11 +311,11 @@ export function JourneyRow({ cond, onChange, onRemove, filters, loading }: {
             <React.Fragment key={idx}>
               <div className="flex items-center gap-1">
                 <select value={step} onChange={(e) => updateStep(idx, e.target.value)}
-                  className="appearance-none bg-teal-50 border border-teal-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-teal-800 outline-none cursor-pointer hover:bg-teal-100 transition-colors">
+                  className="appearance-none border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black outline-none cursor-pointer hover:bg-[#ecfeff] transition-colors">
                   <option value="">Pick screen…</option>
                   {screenOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
-                <button onClick={() => removeStep(idx)} className="p-1 text-teal-300 hover:text-red-400 hover:bg-red-50 rounded transition-colors" title="Remove step">
+                <button onClick={() => removeStep(idx)} className="border border-transparent p-1 text-slate-500 transition-colors hover:border-black hover:bg-[#fecaca] hover:text-black" title="Remove step">
                   <X className="w-3 h-3" />
                 </button>
               </div>
@@ -323,7 +323,7 @@ export function JourneyRow({ cond, onChange, onRemove, filters, loading }: {
             </React.Fragment>
           ))}
           <button onClick={() => onChange({ ...cond, steps: [...cond.steps, ''] })}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-teal-300 text-teal-600 text-xs font-semibold hover:bg-teal-50 transition-colors">
+            className="flex items-center gap-1 border-2 border-dashed border-black bg-white px-2.5 py-1.5 text-xs font-black text-black transition-colors hover:bg-[#ecfeff]">
             <Plus className="w-3 h-3" /> Add step
           </button>
         </div>
@@ -335,10 +335,10 @@ export function JourneyRow({ cond, onChange, onRemove, filters, loading }: {
 export function ConversionRow({ cond, onChange, onRemove }: { cond: ConversionCondition; onChange: (c: ConversionCondition) => void; onRemove: () => void }) {
   return (
     <ConditionRowShell type="conversion" onRemove={onRemove}>
-      <div className="flex rounded-lg overflow-hidden border border-pink-200 text-xs font-semibold">
+      <div className="flex overflow-hidden border-2 border-black text-xs font-black shadow-neo-sm">
         {(['checkout_bounced', 'checkout_success'] as const).map((p) => (
           <button key={p} onClick={() => onChange({ ...cond, preset: p })}
-            className={`px-3 py-1.5 transition-colors ${cond.preset === p ? 'bg-pink-500 text-white' : 'text-pink-700 hover:bg-pink-50'}`}>
+            className={`px-3 py-1.5 transition-colors ${cond.preset === p ? 'bg-[#f9a8d4] text-black' : 'bg-white text-slate-700 hover:bg-[#f9a8d4]/50'}`}>
             {p === 'checkout_bounced' ? '↩ Dropped off' : '✓ Completed'}
           </button>
         ))}

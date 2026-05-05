@@ -20,16 +20,15 @@ export const NeoButton: React.FC<NeoButtonProps> = ({
     disabled,
     ...props
 }) => {
-    // Softened UI: Thinner borders, softer shadows
-    const baseStyles = "inline-flex items-center justify-center font-bold uppercase tracking-wide transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border border-transparent focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 rounded-lg";
+    const baseStyles = "inline-flex items-center justify-center font-black uppercase transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 border-2 border-black shadow-neo-sm focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 focus:ring-offset-[#f8fafc] rounded-none";
 
     const variants = {
-        primary: "bg-slate-900 text-white hover:bg-slate-800 shadow-sm active:scale-95",
-        secondary: "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-sm active:scale-95",
-        danger: "bg-rose-500 text-white hover:bg-rose-600 shadow-sm active:scale-95",
-        success: "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm active:scale-95",
-        warning: "bg-amber-400 text-slate-900 hover:bg-amber-500 shadow-sm active:scale-95",
-        ghost: "bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 shadow-none active:scale-95"
+        primary: "bg-black text-white hover:-translate-y-0.5 hover:shadow-neo active:translate-y-0 active:shadow-none",
+        secondary: "bg-white text-black hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo active:translate-y-0 active:shadow-none",
+        danger: "bg-[#fb7185] text-black hover:-translate-y-0.5 hover:bg-[#fecaca] hover:shadow-neo active:translate-y-0 active:shadow-none",
+        success: "bg-[#86efac] text-black hover:-translate-y-0.5 hover:bg-[#4ade80] hover:shadow-neo active:translate-y-0 active:shadow-none",
+        warning: "bg-[#f9a8d4] text-black hover:-translate-y-0.5 hover:bg-[#f472b6] hover:shadow-neo active:translate-y-0 active:shadow-none",
+        ghost: "border-transparent bg-transparent text-black shadow-none hover:border-black hover:bg-[#ecfeff] hover:shadow-neo-sm active:shadow-none"
     };
 
     const sizes = {

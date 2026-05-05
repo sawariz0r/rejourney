@@ -160,11 +160,11 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
           title="Error Root Cause"
           subtitle="Deep runtime error analysis"
           icon={<Bug className="h-5 w-5" />}
-          iconColor="bg-amber-50"
+          iconColor="bg-rose-50"
         />
         <div className="mx-auto w-full max-w-[960px] px-6 pt-8">
           <NeoCard variant="flat" className="p-8 text-center">
-            <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-amber-500" />
+            <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-rose-500" />
             <p className="text-lg font-semibold text-slate-900">{fetchError || 'Error not found.'}</p>
             <NeoButton variant="primary" className="mt-5" onClick={() => navigate(`${pathPrefix}/stability/errors`)}>
               Back to Errors
@@ -181,7 +181,7 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
         title="Error Root Cause"
         subtitle="Trace exception origins, component context, and replay evidence"
         icon={<Bug className="h-5 w-5" />}
-        iconColor="bg-amber-50"
+        iconColor="bg-rose-50"
       >
         <NeoButton
           variant="secondary"
@@ -235,7 +235,7 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
             <NeoCard variant="flat" disablePadding className="overflow-hidden">
               <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <Code className="h-4 w-4 text-amber-500" />
+                  <Code className="h-4 w-4 text-rose-500" />
                   Error Stack Trace
                 </h3>
                 <div className="flex items-center gap-2">
@@ -269,12 +269,12 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
               )}
             </NeoCard>
 
-            <NeoCard variant="flat" className="border-amber-200 bg-amber-50 p-4">
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
+            <NeoCard variant="flat" className="border-rose-200 bg-rose-50 p-4">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-rose-700">
                 <Sparkles size={14} />
                 Root Cause Playbook
               </p>
-              <div className="mt-3 space-y-2 text-xs leading-relaxed text-amber-700/90">
+              <div className="mt-3 space-y-2 text-xs leading-relaxed text-rose-700/90">
                 <p>1. Start at the first app frame in the stack and map it to the active screen/component.</p>
                 <p>2. Validate app version and device environment to confirm blast radius.</p>
                 <p>3. Replay this session and verify the exact user path that leads into the failing code.</p>

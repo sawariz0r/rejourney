@@ -129,7 +129,7 @@ const dedupeEvidenceRows = (rows: SankeyEvidenceSession[], limit = 18): SankeyEv
 
 const getReplayHealthBadgeClass = (health: TransitionReplayOption['health']): string => {
     if (health === 'problematic') return 'border-rose-200 bg-rose-50 text-rose-700';
-    if (health === 'degraded') return 'border-amber-200 bg-amber-50 text-amber-700';
+    if (health === 'degraded') return 'border-rose-200 bg-rose-50 text-rose-700';
     return 'border-emerald-200 bg-emerald-50 text-emerald-700';
 };
 
@@ -658,7 +658,7 @@ export const Journeys: React.FC = () => {
 
             <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6">
                 {!selectedProject?.id && (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900">
                         Select a project to load journey analytics.
                     </div>
                 )}
@@ -670,7 +670,7 @@ export const Journeys: React.FC = () => {
                 )}
 
                 {!isLoading && partialError && (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
                         {partialError}
                     </div>
                 )}

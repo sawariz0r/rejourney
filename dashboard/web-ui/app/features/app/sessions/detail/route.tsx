@@ -21,7 +21,6 @@ import {
     SkipForward,
     RotateCcw,
     Layers,
-    Image as ImageIcon,
     Move,
     Maximize2,
     RefreshCw,
@@ -204,7 +203,7 @@ const EVENT_COLORS = {
     pinch: '#3b82f6',
     pan: '#3b82f6',
     rotation: '#ec4899',
-    appBackground: '#f59e0b',
+    appBackground: '#f9a8d4',
     appForeground: '#10b981',
     sessionStart: '#06b6d4',
     navigation: '#8b5cf6',
@@ -375,13 +374,13 @@ const getFaultConsoleSummary = (event: SessionEvent): string => {
 const getFaultBadgeStyles = (marker: 'CRASH' | 'ANR' | 'ERROR'): string => {
     if (marker === 'CRASH') return 'bg-red-100 text-red-700 border-red-300';
     if (marker === 'ANR') return 'bg-violet-100 text-violet-700 border-violet-300';
-    return 'bg-orange-100 text-orange-700 border-orange-300';
+    return 'bg-pink-100 text-pink-700 border-pink-300';
 };
 
 const getFaultTerminalClass = (marker: 'CRASH' | 'ANR' | 'ERROR'): string => {
     if (marker === 'CRASH') return 'text-red-300';
     if (marker === 'ANR') return 'text-violet-300';
-    return 'text-orange-300';
+    return 'text-pink-300';
 };
 
 const buildFaultEventDedupKey = (event: SessionEvent): string | null => {
@@ -538,13 +537,13 @@ const isFeedbackType = (type: string): boolean =>
 
 const getLogBadgeStyles = (level: string): string => {
     if (level === 'error') return 'bg-red-50 text-red-700 border-red-200';
-    if (level === 'warn' || level === 'warning') return 'bg-amber-50 text-amber-700 border-amber-200';
+    if (level === 'warn' || level === 'warning') return 'bg-pink-50 text-pink-700 border-pink-200';
     return 'bg-blue-50 text-blue-700 border-blue-200';
 };
 
 const getTerminalLevelClass = (level: string): string => {
     if (level === 'error') return 'text-red-300';
-    if (level === 'warn' || level === 'warning') return 'text-amber-300';
+    if (level === 'warn' || level === 'warning') return 'text-pink-300';
     return 'text-emerald-300';
 };
 
@@ -552,24 +551,24 @@ type InsightLevel = 'good' | 'warning' | 'critical' | 'neutral';
 
 const INSIGHT_LEVEL_STYLES: Record<InsightLevel, { badge: string; value: string; bar: string }> = {
     good: {
-        badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-        value: 'text-emerald-700',
-        bar: 'bg-emerald-500',
+        badge: 'border-black bg-[#86efac] text-black',
+        value: 'text-black',
+        bar: 'bg-[#86efac]',
     },
     warning: {
-        badge: 'border-amber-200 bg-amber-50 text-amber-700',
-        value: 'text-amber-700',
-        bar: 'bg-amber-500',
+        badge: 'border-black bg-[#f9a8d4] text-black',
+        value: 'text-black',
+        bar: 'bg-[#f9a8d4]',
     },
     critical: {
-        badge: 'border-red-200 bg-red-50 text-red-700',
-        value: 'text-red-700',
-        bar: 'bg-red-500',
+        badge: 'border-black bg-[#fecaca] text-black',
+        value: 'text-black',
+        bar: 'bg-[#fb7185]',
     },
     neutral: {
-        badge: 'border-slate-200 bg-slate-100 text-slate-600',
+        badge: 'border-black bg-white text-black',
         value: 'text-slate-800',
-        bar: 'bg-slate-500',
+        bar: 'bg-black',
     },
 };
 
@@ -619,7 +618,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
     // Replay player state
     const [isPlaying, setIsPlaying] = useState(false);
-    const [playbackRate, setPlaybackRate] = useState(1.5);
+    const [playbackRate, setPlaybackRate] = useState(2);
     const [showSpeedMenu, setShowSpeedMenu] = useState(false);
     const [showTouchOverlay, setShowTouchOverlay] = useState(true);
     const [touchEvents, setTouchEvents] = useState<OverlayTouchEvent[]>([]);
@@ -2265,7 +2264,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
             <>
                 {parts.map((part, i) =>
                     part.toLowerCase() === normalizedSearch ? (
-                        <mark key={i} className="bg-yellow-200 text-slate-900 px-0.5 rounded-sm">{part}</mark>
+                        <mark key={i} className="bg-[#f9a8d4] text-slate-900 px-0.5 rounded-sm">{part}</mark>
                     ) : (
                         part
                     )
@@ -2401,47 +2400,47 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     };
 
     return (
-        <div className="min-h-screen bg-transparent">
-            <div className="border-b border-slate-200 bg-white md:sticky md:top-0 md:z-40">
-                <div className="mx-auto flex w-full max-w-[1920px] flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex min-w-0 items-start gap-3">
+        <div className="replay-workbench-page min-h-screen bg-[#f8fafc]">
+            <div className="replay-workbench-header border-b-2 border-black bg-[#f8fafc] md:sticky md:top-0 md:z-40">
+                <div className="mx-auto flex w-full max-w-[1920px] flex-col gap-3 px-3 py-3 sm:px-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex w-full min-w-0 flex-1 items-start gap-3">
                         <button
                             onClick={handleBackClick}
-                            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+                            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
                             aria-label="Back to sessions"
                         >
                             <ArrowLeft className="h-4 w-4" />
                         </button>
 
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                                <h1 className="truncate text-sm font-semibold uppercase tracking-wide text-black sm:text-base md:text-lg">Replay Workbench</h1>
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                    <span className="rounded-md border border-sky-200 bg-[#5dadec]/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide text-black md:text-[10px]">
+                                <h1 className="w-full truncate text-sm font-black uppercase text-black sm:w-auto sm:text-base md:text-lg">Replay Workbench</h1>
+                                <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto">
+                                    <span className="border-2 border-black bg-[#67e8f9] px-2 py-0.5 font-mono text-[9px] font-black uppercase text-black shadow-neo-sm md:text-[10px]">
                                         {platform.toUpperCase()}
                                     </span>
                                     {appVersion && (
-                                        <span className="rounded-md border border-slate-200 bg-[#f4f4f5] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide font-mono text-black md:text-[10px]">
+                                        <span className="border-2 border-black bg-[#f9a8d4] px-2 py-0.5 font-mono text-[9px] font-black uppercase text-black shadow-neo-sm md:text-[10px]">
                                             v{appVersion}
                                         </span>
                                     )}
-                                    <span className="max-w-[120px] truncate rounded-md border border-slate-200 bg-[#f4f4f5] px-2 py-0.5 font-mono text-[9px] font-semibold text-black md:max-w-full md:text-[10px]">
+                                    <span className="max-w-[140px] truncate border-2 border-black bg-white px-2 py-0.5 font-mono text-[9px] font-bold text-black shadow-neo-sm sm:max-w-[220px] md:max-w-full md:text-[10px]">
                                         {(id || '').slice(0, 20)}
                                     </span>
                                 </div>
-                                <div className="flex flex-wrap items-center gap-1.5">
+                                <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto">
                                 {canCopyReplayUserId ? (
                                     <button
                                         type="button"
                                         onClick={copyReplayUserId}
-                                        className="inline-flex min-w-0 items-center gap-1 rounded-md border border-slate-200 bg-[#f4f4f5] px-2 py-0.5 text-left transition hover:bg-white"
+                                        className="inline-flex max-w-full min-w-0 items-center gap-1 border-2 border-black bg-white px-2 py-0.5 text-left shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
                                         title={`${replayUserIdLabel} — click to copy`}
                                         aria-label={`Copy user ID: ${replayUserIdLabel}`}
                                     >
-                                        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-600 md:text-[10px]">
+                                        <span className="text-[9px] font-black uppercase text-slate-600 md:text-[10px]">
                                             UID
                                         </span>
-                                        <span className="font-mono text-[9px] font-semibold text-black md:text-[10px]">{replayUserIdShown}</span>
+                                        <span className="min-w-0 truncate font-mono text-[9px] font-semibold text-black md:text-[10px]">{replayUserIdShown}</span>
                                         <span className="shrink-0 text-slate-500" aria-hidden>
                                             {userIdCopied ? (
                                                 <Check className="h-3 w-3 text-emerald-600" strokeWidth={2.25} />
@@ -2452,30 +2451,30 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                     </button>
                                 ) : (
                                     <span
-                                        className="inline-flex min-w-0 items-center gap-1 rounded-md border border-slate-200 bg-[#f4f4f5] px-2 py-0.5"
+                                        className="inline-flex max-w-full min-w-0 items-center gap-1 border-2 border-black bg-white px-2 py-0.5 shadow-neo-sm"
                                         title={replayUserIdLabel}
                                     >
-                                        <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-600 md:text-[10px]">
+                                        <span className="text-[9px] font-black uppercase text-slate-600 md:text-[10px]">
                                             UID
                                         </span>
-                                        <span className="font-mono text-[9px] font-semibold text-black md:text-[10px]">{replayUserIdShown}</span>
+                                        <span className="min-w-0 truncate font-mono text-[9px] font-semibold text-black md:text-[10px]">{replayUserIdShown}</span>
                                     </span>
                                 )}
                                 </div>
                             </div>
 
-                            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-600 md:text-[11px]">
-                                <div className="flex items-center gap-1.5">
+                            <div className="mt-1.5 flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 overflow-hidden text-[10px] text-slate-600 md:text-[11px]">
+                                <div className="flex min-w-0 max-w-full items-center gap-1.5">
                                     <Clock className="h-3.5 w-3.5" />
-                                    <span>{new Date(startTime).toLocaleString()}</span>
+                                    <span className="min-w-0 truncate">{new Date(startTime).toLocaleString()}</span>
                                 </div>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex min-w-0 max-w-full items-center gap-1.5">
                                     <Smartphone className="h-3.5 w-3.5" />
-                                    <span>{deviceModel}</span>
+                                    <span className="min-w-0 truncate">{deviceModel}</span>
                                 </div>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex min-w-0 max-w-full items-center gap-1.5">
                                     <MapPin className="h-3.5 w-3.5" />
-                                    <span className="truncate">{sessionLocationWithFlag}</span>
+                                    <span className="min-w-0 truncate">{sessionLocationWithFlag}</span>
                                 </div>
                                 <span className="font-mono font-semibold text-slate-700">
                                     {durationMinutes}m {durationSecs.toString().padStart(2, '0')}s
@@ -2484,14 +2483,14 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
                         <button
                             onClick={() => previousSessionId && navigate(`${pathPrefix}/sessions/${previousSessionId}`)}
                             onMouseDown={(event) => event.preventDefault()}
                             disabled={!previousSessionId}
-                            className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold shadow-sm transition ${previousSessionId
-                                ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                                : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                            className={`flex h-9 min-w-0 items-center justify-center gap-1.5 border-2 border-black px-3 text-xs font-black uppercase shadow-neo-sm transition-all ${previousSessionId
+                                ? 'bg-white text-black hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
+                                : 'cursor-not-allowed bg-slate-100 text-slate-400'
                                 }`}
                         >
                             <ChevronLeft className="h-3.5 w-3.5" />
@@ -2501,40 +2500,45 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                             onClick={() => nextSessionId && navigate(`${pathPrefix}/sessions/${nextSessionId}`)}
                             onMouseDown={(event) => event.preventDefault()}
                             disabled={!nextSessionId}
-                            className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold shadow-sm transition ${nextSessionId
-                                ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                                : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                            className={`flex h-9 min-w-0 items-center justify-center gap-1.5 border-2 border-black px-3 text-xs font-black uppercase shadow-neo-sm transition-all ${nextSessionId
+                                ? 'bg-white text-black hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
+                                : 'cursor-not-allowed bg-slate-100 text-slate-400'
                                 }`}
                         >
                             Next
                             <ChevronRight className="h-3.5 w-3.5" />
                         </button>
-                        <span className={`rounded-lg border px-3 py-1 text-xs font-bold ${sessionRiskStyle.badge}`}>
+                        <span className={`border-2 border-black px-3 py-1 text-center text-xs font-black uppercase shadow-neo-sm ${sessionRiskStyle.badge}`}>
                             {sessionRiskLabel}
                         </span>
                     </div>
                 </div>
             </div>
 
-            <div className="mx-auto flex w-full max-w-[1920px] flex-col gap-4 px-3 py-3 sm:px-4 sm:py-4">
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-                    <section className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm xl:col-span-7">
-                        <div className="border-b border-slate-200 bg-slate-950 px-4 py-3 text-white">
+            <div className="replay-workbench-main mx-auto flex w-full max-w-[1920px] flex-col gap-4 px-3 py-3 sm:px-4 sm:py-4">
+                <div className="replay-workbench-grid grid grid-cols-1 gap-4 xl:grid-cols-12">
+                    <section className="replay-theater-section flex min-w-0 max-w-full flex-col overflow-hidden border border-black bg-white shadow-neo-sm xl:col-span-7">
+                        <div className="border-b border-black bg-white px-3 py-2.5 text-black sm:px-4">
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div>
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Replay Theater</p>
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center border border-black bg-[#67e8f9]">
+                                        <Monitor className="h-3.5 w-3.5" />
+                                    </span>
+                                    <p className="truncate text-[11px] font-black uppercase text-black">Replay Theater</p>
                                 </div>
-                                <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-200 md:text-[10px]">
+                                <div className="dashboard-mobile-scroll flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto text-[9px] font-black uppercase text-slate-700 sm:flex-wrap sm:overflow-visible md:text-[10px]">
                                     {secondaryDataLoading ? (
-                                        <span className="rounded border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-cyan-100">
+                                        <span className="border border-black bg-[#ecfeff] px-2 py-1 text-black">
                                             Syncing
                                         </span>
                                     ) : null}
-                                    <span className="rounded border border-white/20 bg-white/10 px-2 py-1">
-                                        {displayedFrameCount} FR
+                                    <span className="border border-black bg-[#67e8f9] px-2 py-1 text-black">
+                                        {screenshotFrames.length > 0
+                                            ? `Frame ${Math.min(currentFrameIndex + 1, screenshotFrames.length)}/${screenshotFrames.length}`
+                                            : `${displayedFrameCount} FR`}
                                     </span>
-                                    <span className="rounded border border-white/20 bg-white/10 px-2 py-1">{allTimelineEvents.length} EV</span>
-                                    <span className="rounded border border-white/20 bg-white/10 px-2 py-1">
+                                    <span className="border border-black bg-[#f8fafc] px-2 py-1">{allTimelineEvents.length} EV</span>
+                                    <span className="border border-black bg-[#f8fafc] px-2 py-1">
                                         {visualReplayPreparing
                                             ? 'Preparing'
                                             : playbackMode === 'screenshots'
@@ -2545,10 +2549,10 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                             </div>
                         </div>
 
-                        <div className="relative border-b border-slate-200 bg-slate-50 px-3 py-4 sm:px-6 sm:py-6">
-                            <div className="mx-auto flex w-full max-w-[420px] items-center justify-center">
+                        <div className="replay-theater-stage relative border-b border-black bg-white px-3 py-5 sm:px-5 sm:py-7">
+                            <div className="mx-auto flex w-full max-w-[360px] items-center justify-center">
                                 {(isReplayExpired || replayUnavailableReason || !hasRecording) ? (
-                                    <div className="flex aspect-[9/18.5] w-full max-w-[320px] flex-col items-center justify-center border-2 border-dashed border-black bg-[#f4f4f5] p-6 text-center">
+                                    <div className="replay-device-placeholder flex aspect-[9/18.5] w-full max-w-[320px] flex-col items-center justify-center border-2 border-dashed border-black bg-white p-6 text-center shadow-neo-sm">
                                         <VideoOff className="h-10 w-10 text-slate-400" />
                                         <p className="mt-3 text-sm font-bold text-slate-900">Replay Not Available</p>
                                         {replayUnavailableReason === 'deleted' ? (
@@ -2566,21 +2570,16 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                         )}
                                     </div>
                                 ) : (
-                                    <div className="relative">
-                                        <div className="absolute -top-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
-                                            <ImageIcon className="h-3 w-3" />
-                                            <span>Frame {Math.min(currentFrameIndex + 1, screenshotFrames.length)}/{screenshotFrames.length}</span>
-                                        </div>
-
-                                        <div className="relative w-[320px] max-w-[78vw] rounded-[2.8rem] border border-slate-700 bg-slate-950 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.25)]">
-                                            <div className="rounded-[2.3rem] bg-slate-900 p-1.5">
+                                    <div className="relative flex w-full justify-center">
+                                        <div className="replay-device-frame relative overflow-hidden rounded-[2rem] border border-slate-950 bg-[#070b14] p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.18)]">
+                                            <div className="rounded-[1.75rem] bg-slate-900 p-1">
                                                 <div
-                                                    className="relative overflow-hidden rounded-[2rem] bg-slate-900"
+                                                    className="relative overflow-hidden rounded-[1.45rem] bg-slate-900"
                                                     style={{ aspectRatio: `${deviceWidth} / ${deviceHeight}` }}
                                                 >
                                                     {visualReplayPreparing && (
                                                         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/80 px-6 text-center text-slate-100">
-                                                            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/80 bg-emerald-500/15 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-200 shadow-[0_0_20px_rgba(34,197,94,0.45)] animate-pulse">
+                                                            <span className="inline-flex items-center gap-2 border-2 border-black bg-[#86efac] px-3 py-1 text-[11px] font-black uppercase text-black shadow-neo-sm animate-pulse">
                                                                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" aria-hidden />
                                                                 Live
                                                             </span>
@@ -2590,7 +2589,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                                 Timeline, logs, and network are ready. Frames appear here as soon as processing finishes.
                                                             </p>
                                                             {replayPreparationProgressPercent !== null ? (
-                                                                <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
+                                                            <p className="mt-3 text-[11px] font-black uppercase text-[#67e8f9]">
                                                                     {replayPreparationProgressPercent}% complete
                                                                 </p>
                                                             ) : null}
@@ -2598,11 +2597,11 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     )}
 
                                                     {platform === 'android' ? (
-                                                        <div className="pointer-events-none absolute left-1/2 top-3 z-20 h-4 w-4 -translate-x-1/2 rounded-full bg-slate-900" />
+                                                        <div className="pointer-events-none absolute left-1/2 top-2.5 z-20 h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-slate-900" />
                                                     ) : (
-                                                        <div className="pointer-events-none absolute left-1/2 top-2 z-20 flex h-6 w-20 -translate-x-1/2 items-center justify-center rounded-full bg-slate-900">
-                                                            <div className="mr-2 h-2 w-2 rounded-full bg-slate-700" />
-                                                            <div className="h-3 w-3 rounded-full border border-slate-700 bg-slate-800" />
+                                                        <div className="pointer-events-none absolute left-1/2 top-2 z-20 flex h-5 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-slate-900">
+                                                            <div className="mr-1.5 h-1.5 w-1.5 rounded-full bg-slate-700" />
+                                                            <div className="h-2.5 w-2.5 rounded-full border border-slate-700 bg-slate-800" />
                                                         </div>
                                                     )}
 
@@ -2646,17 +2645,17 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
                         {playbackMode === 'screenshots' ? (
                             <>
-                                <div className="border-b border-slate-200 bg-white px-3 py-3 sm:px-6 sm:py-4">
+                                <div className="border-b-2 border-black bg-white px-3 py-3 sm:px-6 sm:py-4">
                                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                         {/* Primary Controls */}
-                                        <div className="flex items-center justify-center gap-2 sm:justify-start">
+                                        <div className="replay-controls-primary flex items-center justify-center gap-2 sm:justify-start">
                                             <button
                                                 onClick={restart}
                                                 onMouseDown={(event) => event.preventDefault()}
                                                 disabled={playbackDisabled}
                                                 className={`flex h-10 w-10 items-center justify-center border-2 transition ${playbackDisabled
-                                                    ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                                                    : 'border-black bg-white text-slate-700 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                    ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
+                                                    : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                     }`}
                                                 title="Restart"
                                             >
@@ -2667,8 +2666,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 onMouseDown={(event) => event.preventDefault()}
                                                 disabled={playbackDisabled}
                                                 className={`flex h-10 w-10 items-center justify-center border-2 transition ${playbackDisabled
-                                                    ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                                                    : 'border-black bg-white text-slate-700 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                    ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
+                                                    : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                     }`}
                                                 title="Back 5s"
                                             >
@@ -2678,11 +2677,11 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 onClick={togglePlayPause}
                                                 onMouseDown={(event) => event.preventDefault()}
                                                 disabled={playbackDisabled}
-                                                className={`flex h-12 w-12 items-center justify-center rounded-full border text-white shadow-sm transition ${playbackDisabled
-                                                    ? 'cursor-not-allowed border-slate-300 bg-slate-300 text-slate-200'
+                                                className={`flex h-12 w-12 items-center justify-center border-2 border-black text-black shadow-neo-sm transition-all ${playbackDisabled
+                                                    ? 'cursor-not-allowed bg-slate-300 text-slate-200'
                                                     : isPlaying
-                                                        ? 'border-amber-300 bg-amber-500 hover:bg-amber-600'
-                                                        : 'border-cyan-500 bg-cyan-600 hover:bg-cyan-700'
+                                                        ? 'bg-[#f9a8d4] hover:-translate-y-0.5 hover:shadow-neo'
+                                                        : 'bg-[#67e8f9] hover:-translate-y-0.5 hover:shadow-neo'
                                                     }`}
                                                 title={isPlaying ? 'Pause' : 'Play'}
                                             >
@@ -2693,8 +2692,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 onMouseDown={(event) => event.preventDefault()}
                                                 disabled={playbackDisabled}
                                                 className={`flex h-10 w-10 items-center justify-center border-2 transition ${playbackDisabled
-                                                    ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                                                    : 'border-black bg-white text-slate-700 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                    ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
+                                                    : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                     }`}
                                                 title="Forward 5s"
                                             >
@@ -2703,8 +2702,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                         </div>
 
                                         {/* Secondary Controls */}
-                                        <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
-                                            <span className="inline-flex items-center rounded-lg border border-slate-200 bg-[#f4f4f5] px-3 py-2 font-mono text-xs font-semibold text-black">
+                                        <div className="replay-controls-secondary flex flex-wrap items-center justify-center gap-2 sm:justify-end">
+                                            <span className="inline-flex items-center border-2 border-black bg-[#f8fafc] px-3 py-2 font-mono text-xs font-black text-black shadow-neo-sm">
                                                 <span ref={progressTimeRef}>{formatPlaybackTime(currentPlaybackTime)}</span> / {formatPlaybackTime(effectiveDuration)}
                                             </span>
 
@@ -2712,8 +2711,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 onClick={() => setShowTouchOverlay(!showTouchOverlay)}
                                                 onMouseDown={(event) => event.preventDefault()}
                                                 className={`flex h-10 items-center gap-1.5 border-2 px-3 text-xs font-bold uppercase transition ${showTouchOverlay
-                                                    ? 'border-[#5dadec] bg-[#5dadec] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                                                    : 'border-black bg-white text-slate-700 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                    ? 'border-black bg-[#67e8f9] text-black shadow-neo-sm'
+                                                    : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                     }`}
                                             >
                                                 <Hand className="h-3.5 w-3.5" />
@@ -2724,7 +2723,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 <button
                                                     onClick={() => setShowSpeedMenu(!showSpeedMenu)}
                                                     onMouseDown={(event) => event.preventDefault()}
-                                                    className="flex h-10 items-center border-2 border-black bg-white px-4 font-mono text-xs font-bold text-slate-700 transition hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                                                    className="flex h-10 items-center border-2 border-black bg-white px-4 font-mono text-xs font-black text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
                                                 >
                                                     {playbackRate}x
                                                 </button>
@@ -2732,7 +2731,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 {showSpeedMenu && (
                                                     <>
                                                         <div className="fixed inset-0 z-40" onClick={() => setShowSpeedMenu(false)} />
-                                                        <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[92px] overflow-hidden border-2 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:bottom-auto sm:top-full sm:mt-2">
+                                                        <div className="absolute right-0 top-full z-50 mt-2 min-w-[92px] overflow-hidden border-2 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                                                             {[0.5, 1, 1.5, 2, 4].map((rate) => (
                                                                 <button
                                                                     key={rate}
@@ -2742,8 +2741,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                                     }}
                                                                     onMouseDown={(event) => event.preventDefault()}
                                                                     className={`block w-full border-b border-gray-200 px-3 py-2 text-left text-xs font-semibold last:border-b-0 ${playbackRate === rate
-                                                                        ? 'bg-[#5dadec]/10 text-black font-bold'
-                                                                        : 'text-black hover:bg-[#f4f4f5]'
+                                                                        ? 'bg-[#67e8f9] text-black font-black'
+                                                                        : 'text-black hover:bg-[#ecfeff]'
                                                                         }`}
                                                                 >
                                                                     {rate}x
@@ -2757,14 +2756,14 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                     </div>
                                 </div>
 
-                                <div className="bg-[#f4f4f5] px-3 py-3 sm:px-6">
+                                <div className="bg-[#f8fafc] px-3 py-3 sm:px-6">
                                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                                        <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wide text-black">
-                                            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-500" />Touches</span>
-                                            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />API</span>
-                                            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" />Issues</span>
+                                        <div className="flex items-center gap-4 text-[10px] font-black uppercase text-black">
+                                            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 border border-black bg-[#67e8f9]" />Touches</span>
+                                            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 border border-black bg-[#86efac]" />API</span>
+                                            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 border border-black bg-[#fb7185]" />Issues</span>
                                         </div>
-                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                                        <span className="text-[10px] font-bold uppercase text-slate-600">
                                             Drag timeline or click markers to seek
                                         </span>
                                     </div>
@@ -2846,11 +2845,11 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                         onMouseDown={handleProgressMouseDown}
                                         onTouchStart={handleProgressTouchStart}
                                     >
-                                        <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 bg-gray-200 border border-black" />
+                                        <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 bg-white border-2 border-black" />
                                         <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 overflow-hidden">
                                             <div
                                                 ref={progressFillRef}
-                                                className="h-full w-full origin-left bg-[#5dadec] will-change-transform"
+                                                className="h-full w-full origin-left bg-[#67e8f9] will-change-transform"
                                                 style={{ transform: `scaleX(${progressPercent / 100})` }}
                                             />
                                         </div>
@@ -2908,7 +2907,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
                                         <div
                                             ref={progressThumbRef}
-                                            className={`absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-black bg-[#5dadec] shadow transition-transform ${isDragging ? 'scale-110' : 'group-hover:scale-105'
+                                            className={`absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 border-2 border-black bg-[#67e8f9] shadow transition-transform ${isDragging ? 'scale-110' : 'group-hover:scale-105'
                                                 }`}
                                             style={{ left: `${progressPercent}%`, willChange: 'left' }}
                                         />
@@ -2919,32 +2918,32 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                     </section>
 
 
-                    <section className="flex min-h-[400px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm xl:col-span-5 xl:min-h-[580px]">
-                        <div className="flex shrink-0 overflow-x-auto border-b border-slate-200 bg-white no-scrollbar">
+                    <section className="replay-side-panel flex min-h-[400px] flex-col overflow-hidden border-2 border-black bg-white shadow-neo xl:col-span-5 xl:min-h-[580px]">
+                        <div className="replay-workbench-tabs dashboard-mobile-scroll flex shrink-0 overflow-x-auto border-b-2 border-black bg-[#f8fafc] no-scrollbar">
                             <button
                                 onClick={() => setActiveWorkbenchTab('timeline')}
-                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-bold transition ${activeWorkbenchTab === 'timeline' ? 'border-black bg-white text-black font-mono font-bold' : 'border-transparent text-gray-500 hover:text-black font-mono hover:bg-gray-50'}`}
+                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'timeline' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
                             >
                                 <ListFilter className="h-4 w-4" />
                                 Timeline
                             </button>
                             <button
                                 onClick={() => setActiveWorkbenchTab('console')}
-                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-bold transition ${activeWorkbenchTab === 'console' ? 'border-black bg-white text-black font-mono font-bold' : 'border-transparent text-gray-500 hover:text-black font-mono hover:bg-gray-50'}`}
+                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'console' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
                             >
                                 <Terminal className="h-4 w-4" />
                                 Console
                             </button>
                             <button
                                 onClick={() => setActiveWorkbenchTab('inspector')}
-                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-bold transition ${activeWorkbenchTab === 'inspector' ? 'border-black bg-white text-black font-mono font-bold' : 'border-transparent text-gray-500 hover:text-black font-mono hover:bg-gray-50'}`}
+                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'inspector' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
                             >
                                 <Code className="h-4 w-4" />
                                 DOM
                             </button>
                             <button
                                 onClick={() => setActiveWorkbenchTab('metadata')}
-                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-bold transition ${activeWorkbenchTab === 'metadata' ? 'border-black bg-white text-black font-mono font-bold' : 'border-transparent text-gray-500 hover:text-black font-mono hover:bg-gray-50'}`}
+                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'metadata' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
                             >
                                 <Database className="h-4 w-4" />
                                 Metadata
@@ -2953,21 +2952,21 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                         <div className="relative flex min-h-0 flex-1 flex-col bg-white">
                             {activeWorkbenchTab === 'timeline' && (
                                 <div className="absolute inset-0 flex flex-col">
-                                    <div className="border-b-2 border-black bg-white px-4 py-3">
-                                        <div className="flex items-center justify-between gap-2">
+                                    <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-3">
+                                        <div className="replay-panel-header flex items-center justify-between gap-2">
                                             <div>
-                                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Activity Stream</p>
+                                                <p className="text-[10px] font-black uppercase text-slate-600">Activity Stream</p>
                                                 <h3 className="text-sm font-bold text-slate-900">All actions, logs, and failures in one timeline</h3>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="replay-panel-actions flex items-center gap-2">
                                                 <button
                                                     onClick={copyTimelineEvents}
                                                     disabled={allTimelineEvents.length === 0}
                                                     className={`flex h-8 items-center gap-1.5 border-2 px-2 text-[11px] font-semibold transition ${allTimelineEvents.length === 0
-                                                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                                                        ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
                                                         : timelineCopied
-                                                            ? 'border-emerald-500 bg-emerald-600 text-white'
-                                                            : 'border-black bg-white text-slate-700 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                            ? 'border-black bg-[#86efac] text-black'
+                                                            : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                         }`}
                                                     title={allTimelineEvents.length > 0 ? 'Copy all timeline events' : 'No events available'}
                                                 >
@@ -2978,8 +2977,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     onClick={downloadTimelineEvents}
                                                     disabled={allTimelineEvents.length === 0}
                                                     className={`flex h-8 items-center gap-1.5 border-2 px-2 text-[11px] font-semibold transition ${allTimelineEvents.length === 0
-                                                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                                                        : 'border-black bg-white text-slate-700 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                        ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
+                                                        : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                         }`}
                                                     title={allTimelineEvents.length > 0 ? 'Download all timeline events' : 'No events available'}
                                                 >
@@ -3041,7 +3040,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                         ) : (
                                             <>
                                                 {visibleActivityWindow.isWindowed && (
-                                                    <div className="sticky top-0 z-10 border-b border-slate-200 bg-cyan-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
+                                                    <div className="sticky top-0 z-10 border-b-2 border-black bg-[#67e8f9] px-3 py-2 text-[11px] font-black text-black">
                                                         Showing events {visibleActivityWindow.startIndex + 1}-{visibleActivityWindow.endIndex} of {filteredActivity.length.toLocaleString()} near playback. Search or filter to narrow the stream.
                                                     </div>
                                                 )}
@@ -3081,9 +3080,9 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                         key={`${event.timestamp}-${index}`}
                                                         data-activity-index={index}
                                                         onClick={() => handleSeekToTime(seekTime)}
-                                                        className={`block w-full border-b border-slate-100 px-3 py-2 text-left transition ${isHighlighted
-                                                            ? 'bg-[#5dadec]/10 border-l-2 border-[#5dadec]'
-                                                            : 'hover:bg-gray-100'
+                                                        className={`block w-full border-b border-black/10 px-3 py-2 text-left transition ${isHighlighted
+                                                            ? 'border-l-4 border-black bg-[#ecfeff]'
+                                                            : 'hover:bg-[#f8fafc]'
                                                             }`}
                                                     >
                                                         <div className="flex items-start gap-2.5">
@@ -3106,7 +3105,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                                         {logLevel}
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-slate-200" style={{ backgroundColor: color }}>
+                                                                    <span className="inline-flex h-4 w-4 items-center justify-center border border-black" style={{ backgroundColor: color }}>
                                                                         <Icon className="h-2.5 w-2.5 text-white" />
                                                                     </span>
                                                                 )}
@@ -3115,7 +3114,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                             <div className="min-w-0 flex-1">
                                                                 <div className="flex items-center justify-between gap-2">
                                                                     <p className="truncate text-[11px] font-semibold text-slate-800">{title}</p>
-                                                                    <span className="shrink-0 bg-[#f4f4f5] border border-gray-300 px-1 py-0.5 font-mono text-[10px] font-bold text-black">
+                                                                    <span className="shrink-0 border border-black bg-white px-1 py-0.5 font-mono text-[10px] font-bold text-black">
                                                                         {timeStr}
                                                                     </span>
                                                                 </div>
@@ -3124,11 +3123,11 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                                 </p>
                                                                 {typeof event.properties?.duration === 'number' && event.properties.duration > 0 && (
                                                                     <span
-                                                                        className={`mt-1 inline-flex rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold ${event.properties.duration > 1000
-                                                                            ? 'bg-red-100 text-red-700'
+                                                                        className={`mt-1 inline-flex border border-black px-1.5 py-0.5 font-mono text-[10px] font-bold ${event.properties.duration > 1000
+                                                                            ? 'bg-[#fecaca] text-black'
                                                                             : event.properties.duration > 500
-                                                                                ? 'bg-amber-100 text-amber-700'
-                                                                                : 'bg-[#f4f4f5] text-black border border-gray-300'
+                                                                                ? 'bg-[#f9a8d4] text-black'
+                                                                                : 'bg-white text-black'
                                                                             }`}
                                                                     >
                                                                         {event.properties.duration} ms
@@ -3146,15 +3145,15 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                             )}
                             {activeWorkbenchTab === 'console' && (
                                 <div className="absolute inset-0 flex flex-col bg-slate-950">
-                                    <div className="border-b border-slate-700 px-4 py-3">
-                                        <div className="flex items-center justify-between gap-3">
+                                    <div className="border-b-2 border-black px-4 py-3">
+                                        <div className="replay-panel-header flex items-center justify-between gap-3">
                                             <div className="min-w-0">
-                                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Runtime Console</p>
+                                                <p className="text-[10px] font-black uppercase text-[#67e8f9]">Runtime Console</p>
                                                 <h3 className="truncate text-sm font-bold text-white">
                                                     {revealAllLogs ? 'Displaying all session logs' : 'Logs synced to playback timestamp'}
                                                 </h3>
                                             </div>
-                                            <div className="flex shrink-0 items-center gap-1.5">
+                                            <div className="replay-panel-actions flex shrink-0 items-center gap-1.5">
                                                 <span className="flex h-7 items-center rounded border border-slate-700 bg-slate-900 px-1.5 font-mono text-[10px] text-slate-300">
                                                     {terminalVisibleRows.length}/{terminalLogRows.length}
                                                 </span>
@@ -3221,22 +3220,22 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                 </div>
                             )}
                             {activeWorkbenchTab === 'inspector' && (
-                                <div className="absolute inset-0 flex flex-col bg-[#f4f4f5]">
-                                    <div className="border-b-2 border-black bg-[#f4f4f5] px-4 py-3">
-                                        <div className="flex items-center justify-between gap-2">
+                                <div className="absolute inset-0 flex flex-col bg-[#f8fafc]">
+                                    <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-3">
+                                        <div className="replay-panel-header flex items-center justify-between gap-2">
                                             <div>
-                                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">View Inspector</p>
+                                                <p className="text-[10px] font-black uppercase text-slate-600">View Inspector</p>
                                                 <h3 className="text-sm font-bold text-slate-900">Hierarchy synced with playback</h3>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="replay-panel-actions flex items-center gap-2">
                                                 <button
                                                     onClick={copyDOMHierarchy}
                                                     disabled={hierarchySnapshots.length === 0}
                                                     className={`flex h-8 items-center gap-1.5 border-2 px-2 text-[11px] font-semibold transition ${hierarchySnapshots.length === 0
-                                                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                                                        ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
                                                         : domCopied
-                                                            ? 'border-emerald-500 bg-emerald-600 text-white'
-                                                            : 'border-black bg-white text-black hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                            ? 'border-black bg-[#86efac] text-black'
+                                                            : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                         }`}
                                                     title={hierarchySnapshots.length > 0 ? 'Copy current hierarchy JSON' : 'No hierarchy data'}
                                                 >
@@ -3247,8 +3246,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     onClick={downloadDOMHierarchy}
                                                     disabled={hierarchySnapshots.length === 0}
                                                     className={`flex h-8 items-center gap-1.5 border-2 px-2 text-[11px] font-semibold transition ${hierarchySnapshots.length === 0
-                                                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                                                        : 'border-black bg-white text-black hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                        ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
+                                                        : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                         }`}
                                                     title={hierarchySnapshots.length > 0 ? 'Download current hierarchy as JSON' : 'No hierarchy data'}
                                                 >
@@ -3270,7 +3269,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 className="h-full"
                                             />
                                         ) : (
-                                            <div className="flex h-full flex-col items-center justify-center bg-[#f4f4f5] px-5 text-center text-slate-500">
+                                            <div className="flex h-full flex-col items-center justify-center bg-[#f8fafc] px-5 text-center text-slate-500">
                                                 <Layers className="h-10 w-10 text-slate-300" />
                                                 <p className="mt-2 text-sm font-semibold text-slate-800">Hierarchy unavailable</p>
                                                 <p className="mt-1 text-xs leading-5">
@@ -3283,22 +3282,22 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                 </div>
                             )}
                             {activeWorkbenchTab === 'metadata' && (
-                                <div className="absolute inset-0 flex flex-col bg-[#f4f4f5] overflow-auto">
-                                    <div className="border-b-2 border-black bg-[#f4f4f5] px-4 py-3 sticky top-0 z-10">
-                                        <div className="flex items-center justify-between gap-2">
+                                <div className="absolute inset-0 flex flex-col bg-[#f8fafc] overflow-auto">
+                                    <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-3 sticky top-0 z-10">
+                                        <div className="replay-panel-header flex items-center justify-between gap-2">
                                             <div>
-                                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Session Metadata</p>
+                                                <p className="text-[10px] font-black uppercase text-slate-600">Session Metadata</p>
                                                 <h3 className="text-sm font-bold text-slate-900">Custom properties</h3>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="replay-panel-actions flex items-center gap-2">
                                                 <button
                                                     onClick={copyMetadata}
                                                     disabled={!hasMetadata}
                                                     className={`flex h-8 items-center gap-1.5 border-2 px-2 text-[11px] font-semibold transition ${!hasMetadata
-                                                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                                                        ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
                                                         : metadataCopied
-                                                            ? 'border-emerald-500 bg-emerald-600 text-white'
-                                                            : 'border-black bg-white text-black hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                            ? 'border-black bg-[#86efac] text-black'
+                                                            : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                         }`}
                                                     title={hasMetadata ? 'Copy metadata JSON' : 'No metadata'}
                                                 >
@@ -3309,8 +3308,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     onClick={downloadMetadata}
                                                     disabled={!hasMetadata}
                                                     className={`flex h-8 items-center gap-1.5 border-2 px-2 text-[11px] font-semibold transition ${!hasMetadata
-                                                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                                                        : 'border-black bg-white text-black hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                        ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
+                                                        : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                         }`}
                                                     title={hasMetadata ? 'Download metadata JSON' : 'No metadata'}
                                                 >
@@ -3332,7 +3331,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                         ) : (
                                             <div className="overflow-hidden border-2 border-black bg-white">
                                                 <table className="w-full text-left text-sm text-slate-600">
-                                                    <thead className="bg-[#f4f4f5] text-xs font-semibold uppercase tracking-wider text-black font-mono">
+                                                    <thead className="bg-[#ecfeff] text-xs font-black uppercase text-black">
                                                         <tr>
                                                             <th className="px-4 py-3 border-b-2 border-black">Key</th>
                                                             <th className="px-4 py-3 border-b-2 border-black">Value</th>
@@ -3340,7 +3339,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-200">
                                                         {Object.entries((fullSession as any).metadata).map(([key, value]) => (
-                                                            <tr key={key} className="hover:bg-[#f4f4f5] transition-colors">
+                                                            <tr key={key} className="hover:bg-[#f8fafc] transition-colors">
                                                                 <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-900">
                                                                     {key}
                                                                 </td>

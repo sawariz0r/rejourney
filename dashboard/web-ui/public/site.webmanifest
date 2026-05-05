@@ -1,7 +1,7 @@
 {
   "name": "Rejourney",
   "short_name": "Rejourney",
-  "description": "Open Source React Native Sentry Alternative",
+  "description": "Open Source Mobile App Analytics and Observability",
   "icons": [
     {
       "src": "/favicon.ico",

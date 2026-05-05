@@ -1,51 +1,42 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
+import { MarkExpo, MarkReactNative, MarkSwift } from './PlatformMarks';
 
 export const TrustBanners: React.FC = () => {
     return (
-        <section className="w-full px-4 sm:px-6 lg:px-8 pb-20 sm:pb-24 bg-white">
-            <div className="max-w-7xl mx-auto">
-                <div className="flex flex-col sm:flex-row gap-8 sm:gap-12 items-center justify-center border-t-2 border-black/5 pt-8">
-                    <div className="flex items-center gap-4 group">
-                        <div className="w-12 h-12 rounded-full border-2 border-black overflow-hidden bg-white flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:translate-x-1 group-hover:translate-y-1 group-hover:shadow-none transition-all">
-                            <img
-                                src="/Flag_of_Germany.svg"
-                                alt="Hosted in Germany"
-                                className="w-full h-full object-cover"
-                                title="Hosted in Germany"
-                            />
-                        </div>
-                        <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-[#5dadec] mb-0.5">Privacy First</p>
-                            <span className="text-sm font-black uppercase text-gray-700">Hosted in Germany</span>
-                        </div>
-                    </div>
-
-                    {/* GDPR Compliance Feature */}
-                    <div className="flex items-center gap-4 group">
-                        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-500 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:translate-x-1 group-hover:translate-y-1 group-hover:shadow-none transition-all">
-                            <Check size={24} className="text-white stroke-[4]" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-green-600 mb-0.5">Compliant</p>
-                            <span className="text-sm font-black uppercase text-gray-700">
-                                GDPR Ready
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 group">
-                        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group-hover:translate-x-1 group-hover:translate-y-1 group-hover:shadow-none transition-all p-2">
-                            <img src="/rejourneyIcon-removebg-preview.png" alt="Lightweight Logo" className="w-full h-full object-contain" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-[#5dadec] mb-0.5">Engineering</p>
-                            <span className="text-sm font-black uppercase text-gray-700">
-                                Ultra Lightweight
-                            </span>
-                        </div>
-                    </div>
-                </div>
+        <section
+            aria-label="Trust and supported platforms"
+            className="relative w-full overflow-hidden border-b-2 border-black bg-[#5dadec] px-4 py-5 text-black sm:px-6 lg:px-8"
+        >
+            <div
+                className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(#000_1.5px,transparent_1.5px)] [background-size:18px_18px]"
+                aria-hidden
+            />
+            <div className="relative mx-auto grid max-w-7xl grid-cols-2 gap-2 min-[440px]:grid-cols-3 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3">
+                <span className="inline-flex h-11 min-w-0 items-center justify-center gap-2 border-2 border-black bg-white px-2 font-mono text-[10px] font-black uppercase tracking-wider shadow-neo-sm sm:h-12 sm:px-3 sm:tracking-widest">
+                    <img src="/Flag_of_Germany.svg" alt="" role="presentation" className="h-6 w-6 border border-black object-cover" />
+                    Germany
+                </span>
+                <span className="inline-flex h-11 min-w-0 items-center justify-center gap-2 border-2 border-black bg-[#86efac] px-2 font-mono text-[10px] font-black uppercase tracking-wider shadow-neo-sm sm:h-12 sm:px-3 sm:tracking-widest">
+                    <ShieldCheck size={16} strokeWidth={3} />
+                    GDPR
+                </span>
+                <span className="inline-flex h-11 min-w-0 items-center justify-center gap-2 border-2 border-black bg-white px-2 font-mono text-[10px] font-black uppercase tracking-wider shadow-neo-sm sm:h-12 sm:px-3 sm:tracking-widest">
+                    <img src="/rejourneyIcon-removebg-preview.png" alt="" role="presentation" className="h-6 w-6 object-contain" />
+                    13.2 kB
+                </span>
+                <span className="inline-flex h-11 min-w-0 items-center justify-center gap-2 border-2 border-black bg-white px-2 font-mono text-[10px] font-black uppercase tracking-wider shadow-neo-sm sm:h-12 sm:px-3 sm:tracking-widest">
+                    <MarkExpo className="h-5 w-5" />
+                    Expo
+                </span>
+                <span className="inline-flex h-11 min-w-0 items-center justify-center gap-2 border-2 border-black bg-white px-2 font-mono text-[10px] font-black uppercase tracking-wider shadow-neo-sm sm:h-12 sm:px-3 sm:tracking-widest">
+                    <MarkReactNative className="h-5 w-5 text-[#2563eb]" />
+                    <span className="truncate">React Native</span>
+                </span>
+                <span className="inline-flex h-11 min-w-0 items-center justify-center gap-2 border-2 border-black bg-white px-2 font-mono text-[10px] font-black uppercase tracking-wider shadow-neo-sm sm:h-12 sm:px-3 sm:tracking-widest">
+                    <MarkSwift className="h-5 w-5 text-[#f97316]" />
+                    Swift
+                </span>
             </div>
         </section>
     );

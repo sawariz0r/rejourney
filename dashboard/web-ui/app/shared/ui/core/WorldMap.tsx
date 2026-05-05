@@ -126,7 +126,7 @@ export const WorldMap: React.FC<WorldMapProps> = ({ locations, className }) => {
                         <span className="text-[10px] font-mono">&gt; 100 Sessions</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full border border-amber-400 bg-amber-400/40"></div>
+                        <div className="w-3 h-3 rounded-full border border-pink-400 bg-pink-400/40"></div>
                         <span className="text-[10px] font-mono">20 - 100 Sessions</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -145,7 +145,7 @@ export const WorldMap: React.FC<WorldMapProps> = ({ locations, className }) => {
                     const relativeSize = (loc.count / maxCount) * 20;
                     const size = 6 + relativeSize;
 
-                    // Color logic: Red (High), Yellow (Medium), Green (Low)
+                    // Color logic: Red (High), Orange (Medium), Green (Low)
                     // Style: Semi-transparent fill with solid border
                     let markerClass = 'bg-emerald-500/40 border-emerald-500'; // Green
                     let shadowColor = 'rgba(16, 185, 129, 0.4)';
@@ -154,8 +154,8 @@ export const WorldMap: React.FC<WorldMapProps> = ({ locations, className }) => {
                         markerClass = 'bg-rose-600/40 border-rose-600'; // Red
                         shadowColor = 'rgba(225, 29, 72, 0.4)';
                     } else if (loc.count > 20) {
-                        markerClass = 'bg-amber-400/40 border-amber-400'; // Yellow
-                        shadowColor = 'rgba(251, 191, 36, 0.4)';
+                        markerClass = 'bg-pink-400/40 border-pink-400'; // Orange
+                        shadowColor = 'rgba(249, 168, 212, 0.4)';
                     }
 
                     return (

@@ -248,8 +248,62 @@ jobs:
           echo "Published Version: $PUBLISHED_VERSION"
           
           if [ "$CURRENT_VERSION" != "$PUBLISHED_VERSION" ]; then
-             echo "🚀 Publishing version $CURRENT_VERSION to NPM..."
+             echo "Publishing version $CURRENT_VERSION to NPM..."
              npm publish --access public
           else
-             echo "✅ Version $CURRENT_VERSION is already published. Skipping."
+             echo "Version $CURRENT_VERSION is already published. Skipping."
           fi
+
+  # ------------------------------------------------------------------
+  # TAG REACT NATIVE RELEASE ON VERSION BUMP
+  # Creates react-native/vX.Y.Z tag + GitHub release when
+  # packages/react-native/package.json version changes on main.
+  # Runs after publish-sdk so the tag only appears if npm publish succeeded.
+  # ------------------------------------------------------------------
+  release-rn-tag:
+    needs: [publish-sdk]
+    if: success() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if package.json version changed
+        id: version_check
+        run: |
+          VERSION="$(jq -r .version packages/react-native/package.json)"
+          PREV_VERSION="$(git show HEAD~1:packages/react-native/package.json | jq -r .version)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Current: $VERSION  Previous: $PREV_VERSION"
+
+          if [ "$VERSION" != "$PREV_VERSION" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push React Native release tag
+        if: steps.version_check.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.version_check.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="react-native/v${VERSION}"
+
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists — bump packages/react-native/package.json version to create a new release."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          gh release create "$TAG" \
+            --title "React Native SDK v${VERSION}" \
+            --notes "Published to npm as \`@rejourneyco/react-native@${VERSION}\`." \
+            --verify-tag

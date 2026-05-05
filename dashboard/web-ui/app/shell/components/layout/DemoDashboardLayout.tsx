@@ -51,20 +51,19 @@ export const DemoDashboardLayout: React.FC = () => {
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Demo Banner */}
-                <div className="z-10 flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-white" style={{ background: 'linear-gradient(90deg, #3f7cae 0%, #5dade2 55%, #7fc0ea 100%)' }}>
+                <div className="z-10 flex flex-wrap items-center justify-between gap-2 border-b-2 border-black bg-[#67e8f9] px-4 py-2 text-black shadow-[0_2px_0_0_rgba(0,0,0,1)]">
                     <div className="flex min-w-0 items-center gap-2">
-                        <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                        <span className="text-sm font-medium">
+                        <div className="w-2 h-2 border border-black bg-[#86efac] animate-pulse" />
+                        <span className="text-sm font-black uppercase">
                             You're viewing a demo with sample data.
-                            <Link to="/" className="underline ml-1 font-bold hover:opacity-80">
-                                Exit demo →
+                            <Link to="/" className="ml-1 underline decoration-2 underline-offset-2 hover:opacity-80">
+                                Exit demo
                             </Link>
                         </span>
                     </div>
                     <Link
                         to="/login"
-                        className="rounded bg-white px-3 py-1 text-xs font-semibold transition-colors hover:bg-slate-100"
-                        style={{ color: '#334155' }}
+                        className="border-2 border-black bg-white px-3 py-1 text-xs font-black uppercase text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:shadow-neo"
                     >
                         Sign Up
                     </Link>
@@ -74,7 +73,7 @@ export const DemoDashboardLayout: React.FC = () => {
                 <TopBar currentProject={selectedProject} />
 
                 {/* Page Content */}
-                <div className="flex-1 overflow-y-auto dashboard-content">
+                <div className="dashboard-content flex-1 overflow-y-auto overflow-x-hidden pb-10 pt-0">
                     <Outlet />
                 </div>
             </div>

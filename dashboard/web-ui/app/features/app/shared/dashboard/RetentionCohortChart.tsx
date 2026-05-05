@@ -169,8 +169,8 @@ export const RetentionCohortChart: React.FC<RetentionCohortChartProps> = ({ dail
         if (weekIdx === 0) return 'bg-slate-800 text-white'; // Week 0 always dark
         if (pct >= 50) return 'bg-emerald-500 text-white';
         if (pct >= 35) return 'bg-emerald-300 text-black';
-        if (pct >= 20) return 'bg-yellow-400 text-black';
-        if (pct >= 10) return 'bg-orange-400 text-black';
+        if (pct >= 20) return 'bg-sky-400 text-black';
+        if (pct >= 10) return 'bg-pink-400 text-black';
         return 'bg-rose-500 text-white';
     };
 

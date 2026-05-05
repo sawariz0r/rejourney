@@ -20,6 +20,323 @@ export interface Article {
     content: ReactNode;
 }
 
+// --- Content: Swift Package Open Beta ---
+
+const SWIFT_PACKAGE_BETA_ARTICLE_URL = "https://rejourney.co/engineering/2026-05-05/swift-package-open-beta";
+
+const swiftPackageBetaArticleSchema = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: "Rejourney Swift Package Is Now in Open Beta",
+    description:
+        "A technical look at the native Swift Package beta, how it inherits the battle-tested React Native replay engine, and where the architecture intentionally diverges.",
+    url: SWIFT_PACKAGE_BETA_ARTICLE_URL,
+    keywords: [
+        "Swift Package Manager",
+        "iOS session replay",
+        "native iOS SDK",
+        "React Native session replay",
+        "mobile observability",
+        "URLProtocol interception",
+        "Swift concurrency",
+        "Rejourney iOS SDK",
+    ],
+    author: {
+        "@type": "Person",
+        name: "Mohammad Rashid",
+        url: "https://www.linkedin.com/in/mohammad-rashid7337/",
+        github: "https://github.com/Mohammad-R-Rashid",
+    },
+    datePublished: "2026-05-05",
+    dateModified: "2026-05-05",
+    publisher: {
+        "@type": "Organization",
+        name: "Rejourney",
+        logo: {
+            "@type": "ImageObject",
+            url: "https://rejourney.co/rejourneyIcon-removebg-preview.png",
+        },
+    },
+    mainEntityOfPage: {
+        "@type": "WebPage",
+        "@id": SWIFT_PACKAGE_BETA_ARTICLE_URL,
+    },
+};
+
+const SwiftPackageBetaArticleContent = () => (
+    <div className="space-y-6 text-lg font-medium leading-relaxed">
+        <p>
+            Today we are opening the beta for the native <strong>Rejourney Swift Package</strong>.
+            This is not a greenfield recorder and it is not a thin wrapper around our React Native
+            module. It is a SwiftPM-native iOS SDK built from the same production recorder that has
+            been exercised inside our heavily used React Native package: the same replay lifecycle,
+            the same ingest protocol, the same on-device privacy posture, and the same bias toward
+            refusing work when the host app needs the frame budget more than we do.
+        </p>
+        <p>
+            The short version: React Native gave us distribution pressure and failure data; SwiftPM
+            gave us a cleaner boundary. The beta exists because the native core has crossed the point
+            where Swift-first apps should not need a JavaScript bridge, a CocoaPods podspec, or a React
+            Native install just to get pixel replay, network telemetry, ANR detection, and session
+            lifecycle semantics.
+        </p>
+
+        <div className="my-10 border-2 border-black bg-white overflow-hidden">
+            <div className="bg-black text-white px-5 py-3 font-mono text-[11px] font-black uppercase tracking-widest">
+                Package Boundary
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3">
+                <div className="border-t-2 md:border-t-0 md:border-r-2 border-black p-5 bg-slate-50">
+                    <div className="font-mono text-[10px] font-black uppercase text-gray-500 mb-2">Consumer surface</div>
+                    <div className="text-2xl font-black leading-none">SwiftPM</div>
+                    <div className="text-xs uppercase font-bold text-gray-500 mt-2">Import Rejourney</div>
+                </div>
+                <div className="border-t-2 md:border-t-0 md:border-r-2 border-black p-5 bg-white">
+                    <div className="font-mono text-[10px] font-black uppercase text-gray-500 mb-2">Platform floor</div>
+                    <div className="text-2xl font-black leading-none">iOS 15.1</div>
+                    <div className="text-xs uppercase font-bold text-gray-500 mt-2">Swift tools 5.9</div>
+                </div>
+                <div className="border-t-2 md:border-t-0 border-black p-5 bg-slate-50">
+                    <div className="font-mono text-[10px] font-black uppercase text-gray-500 mb-2">Native dependency</div>
+                    <div className="text-2xl font-black leading-none">libz</div>
+                    <div className="text-xs uppercase font-bold text-gray-500 mt-2">No JS runtime path</div>
+                </div>
+            </div>
+        </div>
+
+        <div className="my-12">
+            <div className="mb-6">
+                <span className="font-mono text-xs font-black uppercase tracking-widest text-gray-500 mb-2 block">
+                    01 // LINEAGE
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-4">
+                    What We Reused From React Native
+                </h2>
+            </div>
+            <p>
+                Our React Native package is where the recorder became boring in the best sense. It
+                forced the native iOS and Android engines to survive real app startup races, navigation
+                churn, background/foreground rollover, custom URLSession stacks, offline uploads, and
+                aggressively animated screens. The Swift Package keeps that native core model.
+            </p>
+            <p className="mt-4">
+                The reusable unit was never the JavaScript API. The reusable unit was the native capture
+                pipeline: <strong>DeviceRegistrar</strong> establishes identity and upload credentials,
+                <strong>ReplayOrchestrator</strong> owns the session state machine, <strong>VisualCapture</strong>
+                and <strong>ViewHierarchyScanner</strong> produce time-aligned artifacts, and
+                <strong>SegmentDispatcher</strong> ships compressed payloads into the same production ingest
+                routes used by React Native.
+            </p>
+            <div className="border-2 border-black bg-white overflow-hidden mt-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 divide-y-2 md:divide-y-0 md:divide-x-2 divide-black bg-black text-white">
+                    <div className="font-mono text-[10px] font-black uppercase tracking-widest py-3 px-4 sm:px-5">
+                        React Native package
+                    </div>
+                    <div className="font-mono text-[10px] font-black uppercase tracking-widest py-3 px-4 sm:px-5">
+                        Swift package beta
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 divide-y-2 md:divide-y-0 md:divide-x-2 divide-black">
+                    <div className="p-5 bg-slate-50">
+                        <p className="text-base m-0">
+                            JS/TS facade, React Navigation helpers, Expo Router hooks, TurboModule/old-arch
+                            bridge entry points, native iOS and Android implementations.
+                        </p>
+                    </div>
+                    <div className="p-5 bg-white">
+                        <p className="text-base m-0">
+                            Public Swift API, SwiftPM product boundary, native iOS implementation only,
+                            no JavaScript event bridge and no React lifecycle dependency.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div className="my-12">
+            <div className="mb-6">
+                <span className="font-mono text-xs font-black uppercase tracking-widest text-gray-500 mb-2 block">
+                    02 // ENTRYPOINT
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-4">
+                    The API Is Smaller Because the Runtime Is Smaller
+                </h2>
+            </div>
+            <p>
+                React Native needs to coordinate with a JS runtime that may not be ready when the native
+                app delegate starts. It also needs optional navigation peers, bridge availability checks,
+                and defensive no-op behavior when the host app has a partial install. Native Swift apps
+                have a much cleaner contract: configure once, then start and stop from the app lifecycle
+                you already own.
+            </p>
+            <div className="bg-slate-50 border-2 border-black p-6 my-6">
+                <div className="font-mono text-xs font-black uppercase text-gray-500 mb-4">
+                    Public shape, not full implementation
+                </div>
+                <pre className="text-xs sm:text-sm font-mono overflow-x-auto text-blue-800">
+                    {`Rejourney.configure(publicKey: "pk_live_...")
+let result = await Rejourney.start()
+Rejourney.trackScreen("Checkout")`}
+                </pre>
+            </div>
+            <p>
+                Internally, the public enum is <code>@MainActor</code>. That is intentional. The caller-facing
+                boundary is serialized through UIKit-safe execution, while encode, compression, retry, and
+                telemetry work immediately leave the main actor through queues owned by the recorder. The
+                package therefore has a Swift-native API without pretending UIKit capture can be made
+                actor-agnostic.
+            </p>
+        </div>
+
+        <div className="my-12">
+            <div className="mb-6">
+                <span className="font-mono text-xs font-black uppercase tracking-widest text-gray-500 mb-2 block">
+                    03 // ARCHITECTURE
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-4">
+                    Where the Architectures Diverge
+                </h2>
+            </div>
+            <p>
+                The React Native SDK is a cross-runtime integration layer. The Swift Package is a native
+                library. That difference sounds obvious until you trace where state is allowed to live.
+                In React Native, some state is naturally expressed in TypeScript: session options,
+                navigation screen names, optional auto-tracking setup, and bridge resolution. In the Swift
+                Package, those decisions move into native memory and native lifecycle code.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                <div className="border-2 border-black bg-slate-50 p-5">
+                    <div className="font-mono text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">
+                        React Native integration
+                    </div>
+                    <ul className="list-disc pl-5 space-y-2 text-base">
+                        <li>JS configuration normalizes options before native start.</li>
+                        <li>Navigation tracking can be inferred from React Navigation or Expo Router.</li>
+                        <li>The bridge must tolerate old architecture, new architecture, and optional peers.</li>
+                        <li>Native upload and replay code is hidden behind a module resolver.</li>
+                    </ul>
+                </div>
+                <div className="border-2 border-black bg-white p-5">
+                    <div className="font-mono text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">
+                        SwiftPM integration
+                    </div>
+                    <ul className="list-disc pl-5 space-y-2 text-base">
+                        <li>Options are typed as Swift value objects and applied directly to the controller.</li>
+                        <li>Screen names are explicit unless a host app wires its own navigation callbacks.</li>
+                        <li>There is no bridge queue, TurboModule registration, or JS availability problem.</li>
+                        <li>The package product links directly to the native recorder and privacy manifest.</li>
+                    </ul>
+                </div>
+            </div>
+            <p className="mt-6">
+                That last point matters operationally. SwiftPM resolves a tagged repository product, not an
+                npm tarball that later delegates to CocoaPods. The package target points at
+                <code>packages/ios/Sources/Rejourney</code>, processes <code>PrivacyInfo.xcprivacy</code>,
+                and links <code>z</code> for compression. The beta is therefore versioned and validated as
+                an iOS library, not as a subdirectory side effect of the React Native release.
+            </p>
+        </div>
+
+        <div className="my-12">
+            <div className="mb-6">
+                <span className="font-mono text-xs font-black uppercase tracking-widest text-gray-500 mb-2 block">
+                    04 // PIPELINE
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-4">
+                    The Recorder Still Has the Same Hard Parts
+                </h2>
+            </div>
+            <p>
+                We did not relax the recorder just because the package is easier to install. The pipeline
+                still has to balance four clocks: UIKit's main-thread rendering clock, our screenshot cadence,
+                hierarchy/event timelines, and the backend ingest lifecycle. If any one clock becomes the
+                source of truth for too long, replay quality drops or app performance suffers.
+            </p>
+            <div className="border-2 border-black bg-white overflow-hidden mt-8">
+                {[
+                    ["Identity", "Keychain-backed device fingerprint, hardware profile, upload credential handshake."],
+                    ["Capture", "Main-thread visual read, strict capture interval, redaction registration, background encoding."],
+                    ["Structure", "Periodic hierarchy snapshots, interaction capture, stability and responsiveness signals."],
+                    ["Transport", "Frame bundles, hierarchy payloads, event batches, retry queue, circuit breaker, shutdown drain."],
+                    ["Finalize", "Lifecycle version, close anchor, background duration, SDK telemetry, durable session end call."],
+                ].map(([title, summary], index) => (
+                    <div key={title} className="border-t-2 first:border-t-0 border-black p-5">
+                        <div className="font-mono text-xs font-black uppercase text-gray-500 mb-2">
+                            {String(index + 1).padStart(2, "0")} - {title}
+                        </div>
+                        <p className="text-base text-gray-600 font-medium leading-relaxed m-0">
+                            {summary}
+                        </p>
+                    </div>
+                ))}
+            </div>
+            <p className="mt-6">
+                Network tracking also moves closer to iOS primitives. The Swift Package uses
+                <code>URLProtocol</code> registration plus configuration swizzling to observe sessions
+                created by common networking stacks, while the dispatcher's own ephemeral session strips
+                that protocol back out. That prevents the SDK from intercepting its own uploads, which is
+                the kind of bug that looks harmless in development and very expensive under real traffic.
+            </p>
+        </div>
+
+        <div className="my-12">
+            <div className="mb-6">
+                <span className="font-mono text-xs font-black uppercase tracking-widest text-gray-500 mb-2 block">
+                    05 // RELEASE MODEL
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-4">
+                    Why Open Beta Instead of General Availability
+                </h2>
+            </div>
+            <p>
+                The core recorder is not beta-quality. The distribution surface is what we want more signal
+                on: SwiftPM resolution across real Xcode projects, app-extension edge cases, privacy manifest
+                behavior, enterprise CI cache behavior, and how teams want to model explicit screen tracking
+                in SwiftUI, UIKit, and mixed apps.
+            </p>
+            <p className="mt-4">
+                Versioning is intentionally independent from the React Native package. Native iOS releases use
+                plain semver tags such as <code>v0.2.0</code>, while React Native can keep its own package and
+                tag cadence. A CI check keeps <code>packages/ios/VERSION</code> and
+                <code>RejourneySDKInfo.version</code> aligned before a tag is created.
+            </p>
+            <div className="bg-black text-white p-6 my-8">
+                <div className="font-mono text-[11px] font-black uppercase tracking-widest text-gray-400 mb-3">
+                    Beta contract
+                </div>
+                <p className="text-base text-gray-200 m-0">
+                    The ingest protocol, privacy defaults, and session lifecycle semantics are production
+                    compatible. The surface area we expect to refine is packaging ergonomics, SwiftUI helpers,
+                    and native-first instrumentation affordances around screens, metadata, and consent.
+                </p>
+            </div>
+        </div>
+
+        <div className="my-12">
+            <div className="mb-6">
+                <span className="font-mono text-xs font-black uppercase tracking-widest text-gray-500 mb-2 block">
+                    06 // WHAT'S NEXT
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-4">
+                    The Direction From Here
+                </h2>
+            </div>
+            <p>
+                The Swift Package lets us treat native iOS as a first-class integration target instead of a
+                platform implementation detail behind React Native. The important part is that we got there
+                without forking the product model: sessions, artifacts, replay timelines, upload credentials,
+                sampling, observe-only mode, and backend finalization still speak the same protocol.
+            </p>
+            <p className="mt-4">
+                That is the architectural line we want to keep: different host runtimes, shared replay
+                semantics. React Native will continue to drive cross-platform ergonomics. SwiftPM will let us
+                go deeper on iOS-specific correctness, performance, and privacy. The beta is the point where
+                those two tracks stop blocking each other.
+            </p>
+        </div>
+    </div>
+);
+
 // --- Content: Scaling Rejourney Architecture ---
 
 const SCALING_ARTICLE_URL = "https://rejourney.co/engineering/2026-04-23/rejourney-1-3-million-session-replays";
@@ -947,6 +1264,24 @@ if (now - _lastScanTime >= 1.0) {
 // --- Articles Export ---
 
 export const ARTICLES: Article[] = [
+    {
+        id: "swift-package-open-beta",
+        title: "Rejourney Swift Package Is Now in Open Beta",
+        subtitle: "How our native iOS beta inherits the battle-tested React Native recorder while removing the bridge, npm, and CocoaPods assumptions.",
+        seoKeywords:
+            "Rejourney Swift Package, SwiftPM session replay, native iOS SDK, React Native session replay architecture, iOS observability, URLProtocol network tracking, mobile replay SDK",
+        date: "May 05, 2026",
+        urlDate: "2026-05-05",
+        readTime: "8 min read",
+        author: {
+            name: "Mohammad Rashid",
+            url: "https://www.linkedin.com/in/mohammad-rashid7337/",
+            github: "https://github.com/Mohammad-R-Rashid",
+        },
+        image: "https://rejourney.co/assets/engineering/swift-package-open-beta.png",
+        schema: swiftPackageBetaArticleSchema,
+        content: <SwiftPackageBetaArticleContent />,
+    },
     {
         id: "rejourney-1-3-million-session-replays",
         title: "Rejourney Hits 1.3 Million Session Replays in 3 Months",

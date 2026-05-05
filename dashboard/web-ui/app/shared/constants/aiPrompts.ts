@@ -1,11 +1,17 @@
 /**
  * Unified AI Integration Prompts
- * 
+ *
  * This file contains all AI prompts used throughout the application.
  * All copy buttons should reference these constants to ensure consistency.
  */
 
-export const AI_INTEGRATION_PROMPT = `Integrate Rejourney session replay into this React Native app based on the official documentation below.
+export const AI_INTEGRATION_PROMPT = `FIRST: Detect whether this project is a Swift (native iOS) app or a React Native app by checking imports and file types. Then follow ONLY the matching section below.
+
+==========================================================
+IF REACT NATIVE — follow this section:
+==========================================================
+
+Integrate Rejourney session replay into this React Native app based on the official documentation below.
 
 INSTALLATION:
 npm install @rejourneyco/react-native
@@ -108,4 +114,168 @@ Once the integration is successfully implemented:
 3. Analyze the user's code and suggest 3-5 specific examples of:
    - Events with properties that would be valuable to track (e.g., 'checkout_completed' with { total: amount, items: count })
    - Metadata that would help filter sessions (e.g., subscription_tier, user_role, app_theme)
+   Base your suggestions on the actual business logic you see in the user's code.
+
+==========================================================
+IF SWIFT (native iOS) — follow this section:
+==========================================================
+
+Integrate Rejourney session replay into this native Swift iOS app based on the official documentation below.
+
+INSTALLATION:
+Add the Rejourney Swift package in Xcode via File → Add Package Dependencies and enter:
+  https://github.com/rejourneyco/rejourney
+Or add to Package.swift:
+  .package(url: "https://github.com/rejourneyco/rejourney", from: "0.1.0")
+Requires iOS 15.1 or later.
+
+SETUP — add to your @main App struct (SwiftUI):
+import SwiftUI
+import Rejourney
+
+@main
+struct MyApp: App {
+    @MainActor
+    init() {
+        Rejourney.configure(publicKey: "PUBLIC_KEY_HERE")
+        Task { await Rejourney.start() }
+    }
+    var body: some Scene {
+        WindowGroup { ContentView() }
+    }
+}
+
+If using UIApplicationDelegate, call configure in application(_:didFinishLaunchingWithOptions:):
+import UIKit
+import Rejourney
+
+@main
+class AppDelegate: UIResponder, UIApplicationDelegate {
+    @MainActor
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        Rejourney.configure(publicKey: "PUBLIC_KEY_HERE")
+        Task { await Rejourney.start() }
+        return true
+    }
+}
+
+SCREEN TRACKING RULES (implement the appropriate one):
+1. FOR SWIFTUI — call trackScreen in .onAppear on each view:
+   struct MyView: View {
+       var body: some View {
+           List { /* ... */ }
+               .onAppear { Rejourney.trackScreen("Screen Name") }
+       }
+   }
+2. FOR UIKIT — call trackScreen inside viewDidAppear:
+   override func viewDidAppear(_ animated: Bool) {
+       super.viewDidAppear(animated)
+       Rejourney.trackScreen("Screen Name")
+   }
+3. FOR NAVIGATIONSTACK — observe the path and track on change:
+   @State private var path = NavigationPath()
+   NavigationStack(path: $path) { ContentView() }
+       .onChange(of: path) { Rejourney.trackScreen(currentScreenName(from: path)) }
+
+USER IDENTITY (hook this up immediately using a non-PII ID like a UUID):
+import Rejourney
+// After login:
+Rejourney.identify("user_abc123")
+// On logout:
+Rejourney.clearIdentity()
+
+CUSTOM EVENTS — track actions that happened (timestamped, can occur multiple times per session):
+
+API: Rejourney.logEvent(_ name: String, properties: [String: RejourneyMetadataValue] = [:])
+
+// Simple event (name only)
+Rejourney.logEvent("signup_completed")
+
+// Event with properties — attach context to each occurrence
+Rejourney.logEvent("button_tapped", properties: ["buttonName": "signup", "screen": "onboarding"])
+Rejourney.logEvent("purchase_completed", properties: ["plan": "pro", "amount": 29.99, "currency": "USD"])
+Rejourney.logEvent("onboarding_step", properties: ["step": 3, "stepName": "profile_setup", "skipped": false])
+Rejourney.logEvent("feature_used", properties: ["feature": "dark_mode", "enabled": true])
+Rejourney.logEvent("payment_failed", properties: ["errorCode": "card_declined", "retryCount": 2])
+
+RejourneyMetadataValue accepts Swift literals directly — String, Double, Int, and Bool. No wrapping needed.
+
+Rules for events:
+- Use snake_case for event names (e.g. 'button_tapped' not 'Button Tapped')
+- Property values should be simple types: strings, numbers, booleans (no nested objects)
+- Focus on actions that matter for debugging or analytics — don't log every tap
+- Events appear as markers on the replay timeline AND are filterable in the session archive
+- You can filter by event name, by property key, by property key+value, and by event count
+
+METADATA — describe who the user is / what state they're in (session-level, one value per key):
+
+API: Rejourney.setMetadata(_ key: String, _ value: RejourneyMetadataValue)
+API: Rejourney.setMetadata(_ properties: [String: RejourneyMetadataValue])
+
+// Single property
+Rejourney.setMetadata("plan", "premium")
+
+// Multiple properties at once
+Rejourney.setMetadata([
+    "role": "admin",
+    "segment": "enterprise",
+    "ab_variant": "checkout_v2"
+])
+
+Rules for metadata:
+- Use for traits: plan, role, team, A/B variant, locale, etc.
+- NOT for actions — use logEvent for those
+- Capped at 100 properties per session
+- Setting the same key again overwrites the previous value
+
+WHEN TO USE EVENTS VS METADATA:
+- "User purchased a plan" → Rejourney.logEvent("purchase_completed", properties: ["plan": "pro"])
+- "User is on the pro plan" → Rejourney.setMetadata("plan", "pro")
+- "User tapped signup" → Rejourney.logEvent("button_tapped", properties: ["buttonName": "signup"])
+- "User is an admin" → Rejourney.setMetadata("role", "admin")
+Rule of thumb: If it describes SOMETHING THAT HAPPENED, use logEvent. If it describes WHO THE USER IS, use setMetadata.
+
+PRIVACY MASKING (for sensitive UIKit views):
+import UIKit
+import Rejourney
+// Mask a view — appears as a solid rectangle in replays
+Rejourney.mask(balanceLabel)
+// Remove masking if needed
+Rejourney.unmask(balanceLabel)
+For SwiftUI views, get the underlying UIView via a UIViewRepresentable wrapper or introspect.
+
+STOPPING RECORDING (e.g. on consent withdrawal):
+await Rejourney.stop()
+Rejourney.clearIdentity()
+
+GOOD PRACTICES:
+- Never track PII (emails, names, passwords) via logEvent or setMetadata
+- Use internal IDs or UUIDs for identify()
+- Call configure() before start() — options cannot be changed after start() is called
+
+IMPORTANT:
+- Replace PUBLIC_KEY_HERE with the actual key from the Rejourney dashboard. Not a secret.
+- Recording starts as soon as start() resolves.
+- Remind the user to put their project key in the configure call.
+- Remind the user it is up to them to ensure privacy and consent beyond this simple integration.
+
+POST-INTEGRATION STEPS:
+Once the integration is successfully implemented:
+1. Inform the user that the Rejourney integration is now complete and active.
+2. Proactively ask the user if they would like to enrich their session data with custom events and metadata.
+3. Analyze the user's code and suggest 3-5 specific examples of:
+   - Events with properties that would be valuable to track (e.g., 'checkout_completed' with properties: ["total": amount, "items": count])
+   - Metadata that would help filter sessions (e.g., subscription_tier, user_role, app_theme)
    Base your suggestions on the actual business logic you see in the user's code.`;
+
+type ProjectForPrompt = {
+  publicKey?: string;
+  platforms?: string[];
+  bundleId?: string;
+  packageName?: string;
+} | null;
+
+export function buildProjectAIIntegrationPrompt(project: ProjectForPrompt): string {
+  const key = project?.publicKey ?? 'YOUR_PUBLIC_KEY';
+  return AI_INTEGRATION_PROMPT.replace(/PUBLIC_KEY_HERE/g, key);
+}

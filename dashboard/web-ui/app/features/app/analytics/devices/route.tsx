@@ -394,7 +394,7 @@ export const Devices: React.FC = () => {
 
             <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6">
                 {!selectedProject?.id && (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900">
                         Select a project to load device analytics.
                     </div>
                 )}
@@ -406,7 +406,7 @@ export const Devices: React.FC = () => {
                 )}
 
                 {!isLoading && partialError && (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
                         {partialError}
                     </div>
                 )}
@@ -432,7 +432,7 @@ export const Devices: React.FC = () => {
                                             <XAxis type="number" tick={{ fontSize: 11 }} />
                                             <YAxis dataKey="device" type="category" width={180} tick={{ fontSize: 11 }} />
                                             <Tooltip />
-                                            <Bar dataKey="impactScore" name="Impact score" fill="#6366f1" radius={[4, 4, 4, 4]} />
+                                            <Bar dataKey="impactScore" name="Impact score" fill="#6366f1" radius={[4, 4, 4, 4]} isAnimationActive={false} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -452,9 +452,9 @@ export const Devices: React.FC = () => {
                                             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                                             <Tooltip />
                                             <Legend />
-                                            <Bar yAxisId="left" dataKey="sessions" name="Sessions" fill="#93c5fd" radius={[4, 4, 0, 0]} />
-                                            <Line yAxisId="right" type="monotone" dataKey="failureRate" name="Failure Rate %" stroke="#dc2626" strokeWidth={2} />
-                                            <Line yAxisId="right" type="monotone" dataKey="deltaVsOverall" name="Delta vs Overall (pts)" stroke="#7c3aed" strokeWidth={2} />
+                                            <Bar yAxisId="left" dataKey="sessions" name="Sessions" fill="#93c5fd" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                                            <Line yAxisId="right" type="monotone" dataKey="failureRate" name="Failure Rate %" stroke="#dc2626" strokeWidth={2} isAnimationActive={false} />
+                                            <Line yAxisId="right" type="monotone" dataKey="deltaVsOverall" name="Delta vs Overall (pts)" stroke="#7c3aed" strokeWidth={2} isAnimationActive={false} />
                                         </ComposedChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -490,7 +490,7 @@ export const Devices: React.FC = () => {
                                                     <td className="py-3 pr-4 text-right text-slate-700">{row.anrs}</td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{row.errors}</td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{row.rageTaps}</td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.incidentRatePer100 >= 18 ? 'text-rose-700' : row.incidentRatePer100 >= 10 ? 'text-amber-700' : 'text-slate-700'}`}>
+                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.incidentRatePer100 >= 18 ? 'text-rose-700' : row.incidentRatePer100 >= 10 ? 'text-rose-700' : 'text-slate-700'}`}>
                                                         {row.incidentRatePer100.toFixed(1)}
                                                     </td>
                                                     <td className="py-3 pr-4 text-right font-semibold text-slate-700">{row.impactScore.toFixed(1)}</td>
@@ -551,7 +551,7 @@ export const Devices: React.FC = () => {
                                             <div className="font-medium text-slate-900">{topDevice.model}</div>
                                             <div className="flex items-center justify-between text-xs">
                                                 <span>{formatCompact(topDevice.count)} sessions</span>
-                                                <span className="font-semibold text-amber-700">
+                                                <span className="font-semibold text-rose-700">
                                                     {topDevice.incidentRatePer100.toFixed(1)} incidents /100
                                                 </span>
                                             </div>
@@ -585,17 +585,17 @@ export const Devices: React.FC = () => {
                                                 <tr key={row.version} className="hover:bg-[#f4f4f5]">
                                                     <td className="py-3 pr-4 font-medium text-slate-900">v{row.version}</td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(row.count)}</td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.failureRate >= 25 ? 'text-rose-700' : row.failureRate >= 15 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.failureRate >= 25 ? 'text-rose-700' : row.failureRate >= 15 ? 'text-rose-700' : 'text-emerald-700'}`}>
                                                         {row.failureRate.toFixed(1)}%
                                                     </td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.deltaVsOverall >= 2 ? 'text-rose-700' : row.deltaVsOverall > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.deltaVsOverall >= 2 ? 'text-rose-700' : row.deltaVsOverall > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
                                                         {row.deltaVsOverall >= 0 ? '+' : ''}{row.deltaVsOverall.toFixed(1)} pts
                                                     </td>
                                                     <td className="py-3 pr-4 text-center">
                                                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${row.riskBand === 'critical'
                                                             ? 'bg-rose-100 text-rose-700'
                                                             : row.riskBand === 'watch'
-                                                                ? 'bg-amber-100 text-amber-700'
+                                                                ? 'bg-rose-100 text-rose-700'
                                                                 : 'bg-emerald-100 text-emerald-700'
                                                             }`}>
                                                             {row.riskBand}
@@ -611,7 +611,7 @@ export const Devices: React.FC = () => {
                             <div className="dashboard-surface p-5">
                                 <div className="mb-4 flex items-center justify-between">
                                     <h2 className="text-lg font-semibold uppercase tracking-wide text-black">OS Cohort Risk</h2>
-                                    <Cpu className="h-5 w-5 text-amber-600" />
+                                    <Cpu className="h-5 w-5 text-rose-600" />
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full min-w-[640px] text-left text-sm">
@@ -628,7 +628,7 @@ export const Devices: React.FC = () => {
                                                 <tr key={row.version} className="hover:bg-[#f4f4f5]">
                                                     <td className="py-3 pr-4 font-medium text-slate-900">{row.version}</td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(row.count)}</td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.incidentRatePer100 >= 18 ? 'text-rose-700' : row.incidentRatePer100 >= 10 ? 'text-amber-700' : 'text-slate-700'}`}>
+                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.incidentRatePer100 >= 18 ? 'text-rose-700' : row.incidentRatePer100 >= 10 ? 'text-rose-700' : 'text-slate-700'}`}>
                                                         {row.incidentRatePer100.toFixed(1)}
                                                     </td>
                                                     <td className="py-3 pr-4 text-right font-semibold text-slate-700">{row.impactScore.toFixed(1)}</td>
@@ -700,14 +700,14 @@ export const Devices: React.FC = () => {
                                                             <td className="py-3 pr-4 font-medium text-slate-900">{network.networkType.toUpperCase()}</td>
                                                             <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(network.sessions)}</td>
                                                             <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(network.apiCalls)}</td>
-                                                            <td className={`py-3 pr-4 text-right font-semibold ${network.apiErrorRate > 3 ? 'text-rose-700' : network.apiErrorRate > 1.5 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                                            <td className={`py-3 pr-4 text-right font-semibold ${network.apiErrorRate > 3 ? 'text-rose-700' : network.apiErrorRate > 1.5 ? 'text-rose-700' : 'text-emerald-700'}`}>
                                                                 {network.apiErrorRate.toFixed(2)}%
                                                             </td>
-                                                            <td className={`py-3 pr-4 text-right font-semibold ${network.avgLatencyMs > 800 ? 'text-rose-700' : network.avgLatencyMs > 450 ? 'text-amber-700' : 'text-slate-700'}`}>
+                                                            <td className={`py-3 pr-4 text-right font-semibold ${network.avgLatencyMs > 800 ? 'text-rose-700' : network.avgLatencyMs > 450 ? 'text-rose-700' : 'text-slate-700'}`}>
                                                                 {network.avgLatencyMs} ms
                                                             </td>
                                                             <td className="py-3 pr-4 text-center">
-                                                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${critical ? 'bg-rose-100 text-rose-700' : watch ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${critical ? 'bg-rose-100 text-rose-700' : watch ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                                                     {critical ? 'critical' : watch ? 'watch' : 'healthy'}
                                                                 </span>
                                                             </td>
@@ -727,7 +727,7 @@ export const Devices: React.FC = () => {
                             <section className="dashboard-surface p-5">
                                 <div className="mb-4 flex items-center justify-between">
                                     <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Device-Version Compatibility Hotspots</h2>
-                                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                    <AlertTriangle className="h-5 w-5 text-rose-600" />
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full min-w-[860px] text-left text-sm">
@@ -747,7 +747,7 @@ export const Devices: React.FC = () => {
                                                     <td className="py-3 pr-4 font-medium text-slate-900">{cell.device}</td>
                                                     <td className="py-3 pr-4 text-slate-700">v{cell.version}</td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(cell.sessions)}</td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${cell.issueRate >= 0.05 ? 'text-rose-700' : cell.issueRate >= 0.02 ? 'text-amber-700' : 'text-slate-700'}`}>
+                                                    <td className={`py-3 pr-4 text-right font-semibold ${cell.issueRate >= 0.05 ? 'text-rose-700' : cell.issueRate >= 0.02 ? 'text-rose-700' : 'text-slate-700'}`}>
                                                         {(cell.issueRate * 100).toFixed(1)}%
                                                     </td>
                                                     <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(cell.totalIssues)}</td>

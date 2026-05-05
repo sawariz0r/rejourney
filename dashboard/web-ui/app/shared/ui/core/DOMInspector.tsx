@@ -83,7 +83,7 @@ const getViewTypeColor = (node: ViewNode): string => {
   if (type.includes('button') || type.includes('touchable') || node.interactive) return 'text-blue-500';
   if (type.includes('text') || type.includes('label')) return 'text-emerald-500';
   if (type.includes('image')) return 'text-purple-500';
-  if (type.includes('scroll') || type.includes('flatlist')) return 'text-amber-500';
+  if (type.includes('scroll') || type.includes('flatlist')) return 'text-pink-500';
   if (type.includes('input')) return 'text-pink-500';
   if (node.masked) return 'text-red-500';
   return 'text-slate-500';
@@ -386,7 +386,7 @@ export const DOMInspector: React.FC<DOMInspectorProps> = ({
       )}
 
       {/* Main content */}
-      <div className="flex-1 min-h-0 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden md:flex-row">
         {/* View area */}
         <div className="flex-1 min-w-0 overflow-auto">
           {viewMode === 'wireframe' ? (
@@ -409,7 +409,7 @@ export const DOMInspector: React.FC<DOMInspectorProps> = ({
 
         {/* Property Inspector Panel */}
         {selectedNode && (
-          <div className="w-72 max-w-[40%] border-l border-slate-200 bg-slate-50 flex-shrink-0 overflow-y-auto">
+          <div className="max-h-[42%] w-full flex-shrink-0 overflow-y-auto border-t border-slate-200 bg-slate-50 md:max-h-none md:w-72 md:max-w-[40%] md:border-l md:border-t-0">
             <div className="p-3 border-b border-slate-200 bg-white sticky top-0">
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-xs text-slate-900 uppercase tracking-wide">
@@ -489,7 +489,7 @@ export const DOMInspector: React.FC<DOMInspectorProps> = ({
                   <PropertyRow
                     label="Alpha"
                     value={selectedNode.alpha.toFixed(2)}
-                    valueColor={selectedNode.alpha < 1 ? 'text-amber-600' : undefined}
+                    valueColor={selectedNode.alpha < 1 ? 'text-pink-600' : undefined}
                   />
                 )}
                 {selectedNode.bg && (

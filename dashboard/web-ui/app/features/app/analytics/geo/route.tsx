@@ -126,15 +126,15 @@ const LATENCY_STYLE: Record<LatencyTier, MarkerStyle> = {
         face: 'happy',
     },
     good: {
-        fill: 'rgba(234, 179, 8, 0.92)',
-        solid: 'rgba(202, 138, 4, 1)',
-        ring: 'rgba(234, 179, 8, 0.5)',
+        fill: 'rgba(93, 173, 236, 0.92)',
+        solid: 'rgba(37, 99, 235, 1)',
+        ring: 'rgba(93, 173, 236, 0.5)',
         face: 'neutral',
     },
     degraded: {
-        fill: 'rgba(249, 115, 22, 0.92)',
-        solid: 'rgba(194, 65, 12, 1)',
-        ring: 'rgba(249, 115, 22, 0.52)',
+        fill: 'rgba(249, 168, 212, 0.92)',
+        solid: 'rgba(190, 24, 93, 1)',
+        ring: 'rgba(249, 168, 212, 0.52)',
         face: 'neutral',
     },
     critical: {
@@ -539,7 +539,7 @@ export const Geo: React.FC = () => {
                             )}
                         </MapGL>
                         {loadError && (
-                            <div className="absolute left-4 top-4 z-20 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 shadow-sm">
+                            <div className="absolute left-4 top-4 z-20 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-900 shadow-sm">
                                 {loadError}
                             </div>
                         )}

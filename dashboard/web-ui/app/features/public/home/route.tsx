@@ -16,12 +16,12 @@ import { EmbeddedDemoWindow } from "~/features/public/home/components/EmbeddedDe
 import { PerformanceMetrics } from "~/features/public/home/components/PerformanceMetrics";
 
 export const meta: Route.MetaFunction = () => [
-    { title: "Rejourney: Open Source React Native Sentry Alternative" },
+    { title: "Rejourney: Open Source Mobile App Analytics & Observability" },
     {
         name: "description",
-        content: "Rejourney is the lightweight, open-source Sentry alternative for React Native. Get native crash monitoring, performant session replay, and heatmaps with a zero-dependency SDK.",
+        content: "Rejourney is a lightweight, open-source analytics and observability stack for mobile apps. Get session replay, crash reporting, journeys, and heatmaps with a light SDK.",
     },
-    { property: "og:title", content: "Rejourney: Lightweight Mobile-First Sentry Alternative" },
+    { property: "og:title", content: "Rejourney: Lightweight Mobile App Analytics & Observability" },
     { property: "og:url", content: "https://rejourney.co/" },
     { name: "robots", content: "index, follow" },
     { tagName: "link", rel: "canonical", href: "https://rejourney.co/" },
@@ -31,7 +31,7 @@ export default function LandingPage() {
     return (
         <div className="min-h-screen w-full bg-background text-foreground overflow-x-hidden">
             <Header />
-            <main aria-label="Rejourney - Open Source Mobile Session Replay" className="w-full">
+            <main aria-label="Rejourney - Open Source Mobile App Analytics" className="w-full">
                 <Hero />
                 <TrustBanners />
                 <EmbeddedDemoWindow />

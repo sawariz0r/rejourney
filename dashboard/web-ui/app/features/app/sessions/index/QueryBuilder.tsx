@@ -44,8 +44,8 @@ const ADD_MENU: { type: ConditionType; label: string; desc: string; icon: React.
 
 const BG: Record<ConditionType, string> = {
   screen: 'bg-violet-50 text-violet-700', journey: 'bg-teal-50 text-teal-700',
-  issue: 'bg-slate-100 text-slate-700', event: 'bg-indigo-50 text-indigo-700',
-  lifecycle: 'bg-amber-50 text-amber-700', date: 'bg-sky-50 text-sky-700',
+  issue: 'bg-[#f4f4f5] text-black', event: 'bg-[#dbeafe] text-black',
+  lifecycle: 'bg-pink-50 text-pink-700', date: 'bg-sky-50 text-sky-700',
   metadata: 'bg-emerald-50 text-emerald-700', platform: 'bg-cyan-50 text-cyan-700',
   conversion: 'bg-pink-50 text-pink-700',
 };
@@ -62,19 +62,19 @@ function AddRuleMenu({ onAdd, presentTypes }: { onAdd: (t: ConditionType) => voi
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-slate-300 bg-white text-xs font-semibold text-slate-500 hover:border-[#5dadec] hover:text-[#5dadec] transition-colors">
+        className="flex items-center gap-1.5 border-2 border-dashed border-black bg-white px-3 py-1.5 text-xs font-black text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo">
         <Plus className="w-3.5 h-3.5" /> Add rule <ChevronDown className="w-3 h-3" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1.5 z-50 bg-white border border-slate-200 rounded-2xl shadow-2xl w-72 overflow-hidden">
+        <div className="absolute left-0 top-full mt-1.5 z-50 w-72 overflow-hidden border-2 border-black bg-white shadow-neo">
           <div className="p-1.5">
             {ADD_MENU.map((item) => {
               const used = presentTypes.has(item.type) && item.type !== 'screen' && item.type !== 'event';
               return (
                 <button key={item.type} disabled={used}
                   onClick={() => { if (!used) { onAdd(item.type); setOpen(false); } }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${used ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`}>
-                  <div className={`p-2 rounded-lg ${BG[item.type]}`}>{item.icon}</div>
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${used ? 'opacity-30 cursor-not-allowed' : 'hover:bg-[#ecfeff] cursor-pointer'}`}>
+                  <div className={`border border-black p-2 ${BG[item.type]}`}>{item.icon}</div>
                   <div>
                     <div className="text-sm font-semibold text-slate-800">{item.label}</div>
                     <div className="text-[11px] text-slate-400">{item.desc}</div>
@@ -145,22 +145,22 @@ function GroupCard({ group, groupIndex, totalGroups, onChange, onRemove, filters
   }
 
   return (
-    <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60">
+    <div className="border-2 border-black bg-[#f8fafc] shadow-neo-sm">
       {/* Group header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-slate-100">
+      <div className="flex items-center justify-between border-b-2 border-black bg-white px-4 py-2.5">
         <div className="flex items-center gap-2">
           <GitMerge className="w-3.5 h-3.5 text-slate-400" />
-          <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+          <span className="text-[11px] font-black text-slate-600 uppercase">
             {totalGroups > 1 ? `Group ${groupIndex + 1}` : 'Rules'}
           </span>
           {totalGroups > 1 && (
-            <span className="text-[10px] bg-violet-100 text-violet-600 font-bold px-1.5 py-0.5 rounded">
+            <span className="border border-black bg-[#c4b5fd] px-1.5 py-0.5 text-[10px] font-black text-black">
               AND within group
             </span>
           )}
         </div>
         {totalGroups > 1 && (
-          <button onClick={onRemove} className="p-1 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="Remove group">
+          <button onClick={onRemove} className="border border-transparent p-1 text-slate-500 transition-colors hover:border-black hover:bg-[#fecaca] hover:text-black" title="Remove group">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         )}
@@ -183,9 +183,9 @@ function GroupCard({ group, groupIndex, totalGroups, onChange, onRemove, filters
             <ConditionRow cond={cond} onChange={(u) => updateCond(cond.id, u)} onRemove={() => removeCond(cond.id)} filters={filters} loading={loading} />
             {idx < group.conditions.length - 1 && (
               <div className="flex items-center gap-2 px-4">
-                <div className="flex-1 h-px bg-slate-200" />
-                <span className="text-[10px] font-black text-slate-400 bg-white border border-slate-200 rounded px-2 py-0.5">AND</span>
-                <div className="flex-1 h-px bg-slate-200" />
+                <div className="h-0.5 flex-1 bg-black/20" />
+                <span className="border border-black bg-white px-2 py-0.5 text-[10px] font-black text-black">AND</span>
+                <div className="h-0.5 flex-1 bg-black/20" />
               </div>
             )}
           </React.Fragment>
@@ -249,12 +249,12 @@ export function QueryBuilder({ groups, onGroupsChange, onClearQueries, available
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm sm:p-3">
+      <div className="border-2 border-black bg-white p-2.5 shadow-neo-sm sm:p-3">
         <div className="flex flex-col gap-2">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
               <div>
-                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-600">
+                <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-600">
                   <Search className="h-3.5 w-3.5" />
                   AI query builder
                 </div>
@@ -262,14 +262,14 @@ export function QueryBuilder({ groups, onGroupsChange, onClearQueries, available
                   This is an AI query builder that uses this project’s screens, pages, events, metadata, and setup.
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              <div className="flex flex-wrap gap-1.5 text-[10px] font-black uppercase text-slate-600">
                 {isLoadingFilters ? (
-                  <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">Loading project context</span>
+                  <span className="border border-black bg-[#f8fafc] px-2 py-1">Loading project context</span>
                 ) : (
                   <>
-                    <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">{availableFilters.screens.length} screens/pages</span>
-                    <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">{availableFilters.events.length} events</span>
-                    <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">{Object.keys(availableFilters.metadata).length} metadata keys</span>
+                    <span className="border border-black bg-[#f8fafc] px-2 py-1">{availableFilters.screens.length} screens/pages</span>
+                    <span className="border border-black bg-[#f8fafc] px-2 py-1">{availableFilters.events.length} events</span>
+                    <span className="border border-black bg-[#f8fafc] px-2 py-1">{Object.keys(availableFilters.metadata).length} metadata keys</span>
                   </>
                 )}
               </div>
@@ -290,12 +290,12 @@ export function QueryBuilder({ groups, onGroupsChange, onClearQueries, available
                 maxLength={500}
                 rows={1}
                 placeholder="Example: returning Android users who opened Checkout and then exited in the last 7 days"
-                className="min-h-[44px] flex-1 resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 placeholder:text-slate-400"
+                className="min-h-[44px] flex-1 resize-none border-2 border-black bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:ring-2 focus:ring-black placeholder:text-slate-500"
               />
               <button
                 onClick={() => void handleBuildQuery()}
                 disabled={!projectId || !trimmedPrompt || isBuilding}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-40"
+                className="inline-flex items-center justify-center gap-2 border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase text-white shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-40"
               >
                 {isBuilding ? <Loader className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 Generate
@@ -305,7 +305,7 @@ export function QueryBuilder({ groups, onGroupsChange, onClearQueries, available
               <div className="flex justify-end">
                 <button
                   onClick={clearQueries}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                  className="inline-flex items-center gap-1.5 border-2 border-black bg-white px-2.5 py-1.5 text-[10px] font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#fecaca] hover:shadow-neo"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Clear query
@@ -313,13 +313,13 @@ export function QueryBuilder({ groups, onGroupsChange, onClearQueries, available
               </div>
             )}
             {builderError && (
-              <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+              <div className="flex items-start gap-2 border-2 border-black bg-[#fecaca] px-3 py-2 text-xs font-bold text-black">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{builderError}</span>
               </div>
             )}
             {builderExplanation && !builderError && (
-              <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+              <div className="flex items-start gap-2 border-2 border-black bg-[#86efac] px-3 py-2 text-xs font-bold text-black">
                 <CheckCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{builderExplanation}</span>
               </div>
@@ -340,11 +340,11 @@ export function QueryBuilder({ groups, onGroupsChange, onClearQueries, available
             />
             {idx < groups.length - 1 && (
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-violet-200" />
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-100 border border-violet-200">
-                  <span className="text-[11px] font-black text-violet-600 uppercase tracking-wider">OR</span>
+                <div className="h-0.5 flex-1 bg-black/20" />
+                <div className="flex items-center gap-1.5 border-2 border-black bg-[#c4b5fd] px-3 py-1 shadow-neo-sm">
+                  <span className="text-[11px] font-black text-black uppercase">OR</span>
                 </div>
-                <div className="flex-1 h-px bg-violet-200" />
+                <div className="h-0.5 flex-1 bg-black/20" />
               </div>
             )}
           </React.Fragment>
@@ -353,18 +353,18 @@ export function QueryBuilder({ groups, onGroupsChange, onClearQueries, available
 
       {/* Add OR group */}
       <button onClick={addGroup}
-        className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl border-2 border-dashed border-violet-200 text-violet-600 text-xs font-bold hover:bg-violet-50 hover:border-violet-300 transition-all sm:w-auto sm:py-2">
+        className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-black bg-white px-3 py-3 text-xs font-black text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo sm:w-auto sm:py-2">
         <Plus className="w-4 h-4" /> Add OR group
         <span className="text-[10px] font-semibold text-violet-400 ml-1">(match ANY group)</span>
       </button>
 
       {/* Summary */}
       {totalConditions > 0 && (
-        <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100">
+        <div className="flex items-start gap-2 border-2 border-black bg-[#f8fafc] px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-neo-sm">
           <CheckCircle className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
           <span className="font-medium">{summary}</span>
           {groups.length > 1 && (
-            <span className="ml-auto shrink-0 text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 font-semibold">
+            <span className="ml-auto shrink-0 border border-black bg-[#f9a8d4] px-1.5 py-0.5 text-[10px] font-black text-black">
               multi-group approx.
             </span>
           )}

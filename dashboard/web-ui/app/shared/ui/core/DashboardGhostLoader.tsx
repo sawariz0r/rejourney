@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '~/shared/lib/cn';
 
 export type DashboardGhostLoaderVariant =
-  | 'overview'
+  | 'general'
   | 'analytics'
   | 'list'
   | 'map'
@@ -26,7 +26,7 @@ const GhostBlock: React.FC<{ className?: string }> = ({ className }) => (
 const GhostSurface: React.FC<{ className?: string; children: React.ReactNode }> = ({ className, children }) => (
   <div
     className={cn(
-      'dashboard-card-surface border-slate-200/80 bg-white/85 p-5 shadow-[0_14px_34px_rgba(148,163,184,0.12)] backdrop-blur-[2px]',
+      'dashboard-card-surface bg-white/90 p-5',
       className,
     )}
   >
@@ -35,7 +35,7 @@ const GhostSurface: React.FC<{ className?: string; children: React.ReactNode }> 
 );
 
 const DashboardHeaderGhost: React.FC<{ actionCount?: number }> = ({ actionCount = 2 }) => (
-  <div className="sticky top-0 z-30 border-b border-slate-200/80 bg-[rgba(248,250,252,0.92)] backdrop-blur-sm">
+  <div className="sticky top-0 z-30 border-b-2 border-black bg-[#f8fafc]">
     <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-4 px-6 py-4 md:flex-row md:items-center md:justify-between">
       <div className="flex min-w-0 flex-wrap items-center gap-4">
         <GhostBlock className="h-12 w-12 rounded-none" />
@@ -54,15 +54,129 @@ const DashboardHeaderGhost: React.FC<{ actionCount?: number }> = ({ actionCount 
 );
 
 const SettingsHeaderGhost: React.FC = () => (
-  <div className="sticky top-0 z-50 border-b border-slate-200/80 bg-[rgba(248,250,252,0.94)] backdrop-blur-sm">
+  <div className="sticky top-0 z-50 border-b-2 border-black bg-[#f8fafc]">
     <div className="flex flex-col gap-4 px-6 py-4 md:flex-row md:items-center md:justify-between">
       <div className="flex flex-1 items-center gap-6">
         <GhostBlock className="h-8 w-40 rounded-none" />
-        <div className="hidden h-8 w-px bg-slate-200 md:block" />
+        <div className="hidden h-8 w-0.5 bg-black md:block" />
         <GhostBlock className="hidden h-3 w-52 rounded-none md:block" />
       </div>
       <GhostBlock className="h-9 w-28 rounded-none" />
     </div>
+  </div>
+);
+
+const GeneralPageHeaderGhost: React.FC = () => (
+  <div className="w-full border-b-2 border-black bg-[#f8fafc]">
+    <div className="mx-auto grid w-full max-w-[1800px] gap-x-4 gap-y-3 px-4 py-4 sm:px-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+      <div className="flex min-w-0 flex-wrap items-start gap-3 sm:gap-4">
+        <GhostBlock className="mt-0.5 h-11 w-11 shrink-0 rounded-xl" />
+        <div className="min-w-0 flex-1 space-y-2" style={{ minWidth: 'min(100%, 13rem)' }}>
+          <GhostBlock className="h-7 w-44 max-w-[65vw] rounded-none" />
+        </div>
+      </div>
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:gap-3 xl:justify-end">
+        <GhostBlock className="h-10 w-full max-w-[min(100%,20rem)] rounded-none sm:w-56" />
+      </div>
+    </div>
+  </div>
+);
+
+const GeneralGhostBody: React.FC = () => (
+  <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <GhostSurface key={`momentum-${index}`} className="px-4 py-3">
+          <GhostBlock className="h-3 w-28 rounded-none" />
+          <GhostBlock className="mt-3 h-8 w-20 rounded-none" />
+          <GhostBlock className="mt-2 h-3 w-32 rounded-none" />
+        </GhostSurface>
+      ))}
+    </div>
+
+    {Array.from({ length: 2 }).map((_, rowIndex) => (
+      <div key={`ga4-row-${rowIndex}`} className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((__, cardIndex) => (
+          <GhostSurface key={`ga4-${rowIndex}-${cardIndex}`} className="min-h-[280px]">
+            <GhostBlock className="h-5 w-48 max-w-[85%] rounded-none" />
+            <GhostBlock className="mt-4 h-36 w-full rounded-none" />
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <GhostBlock className="h-14 rounded-none" />
+              <GhostBlock className="h-14 rounded-none" />
+            </div>
+          </GhostSurface>
+        ))}
+      </div>
+    ))}
+
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      {Array.from({ length: 2 }).map((_, index) => (
+        <GhostSurface key={`ga4-wide-${index}`} className="min-h-[260px]">
+          <GhostBlock className="h-5 w-40 max-w-[80%] rounded-none" />
+          <GhostBlock className="mt-4 h-44 w-full rounded-none" />
+          <div className="mt-4 flex flex-wrap gap-3">
+            <GhostBlock className="h-3 w-16 rounded-none" />
+            <GhostBlock className="h-3 w-20 rounded-none" />
+            <GhostBlock className="h-3 w-14 rounded-none" />
+          </div>
+        </GhostSurface>
+      ))}
+    </div>
+
+    <section className="space-y-3">
+      <GhostBlock className="h-7 w-36 rounded-none" />
+      <GhostSurface className="overflow-hidden p-0">
+        <div className="divide-y divide-slate-100">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={`issue-${index}`} className="flex flex-col gap-3 px-5 py-3.5 md:flex-row md:items-center">
+              <GhostBlock className="h-6 w-24 rounded-none" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <GhostBlock className="h-4 w-3/4 max-w-md rounded-none" />
+                <GhostBlock className="h-3 w-full max-w-lg rounded-none" />
+              </div>
+              <GhostBlock className="hidden h-10 w-28 rounded-none md:block" />
+            </div>
+          ))}
+        </div>
+      </GhostSurface>
+    </section>
+
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <GhostBlock className="h-7 w-28 rounded-none" />
+        <GhostBlock className="h-6 w-20 rounded-none" />
+      </div>
+      <div className="flex gap-3 overflow-hidden pb-1">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <GhostSurface key={`top-user-${index}`} className="h-[200px] min-w-[300px] shrink-0 p-4">
+            <div className="flex gap-3">
+              <GhostBlock className="h-9 w-9 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <GhostBlock className="h-4 w-full rounded-none" />
+                <GhostBlock className="h-3 w-2/3 rounded-none" />
+              </div>
+            </div>
+            <GhostBlock className="mt-4 h-24 w-full rounded-xl" />
+          </GhostSurface>
+        ))}
+      </div>
+    </section>
+
+    <section className="space-y-3">
+      <div className="space-y-2">
+        <GhostBlock className="h-7 w-52 rounded-none" />
+        <GhostBlock className="h-3 w-full max-w-xl rounded-none" />
+      </div>
+      <div className="flex gap-3 overflow-hidden pb-1">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <GhostSurface key={`rec-${index}`} className="h-[220px] min-w-[280px] shrink-0 p-4">
+            <GhostBlock className="h-5 w-32 rounded-none" />
+            <GhostBlock className="mt-3 h-3 w-full rounded-none" />
+            <GhostBlock className="mt-4 h-28 w-full rounded-none" />
+          </GhostSurface>
+        ))}
+      </div>
+    </section>
   </div>
 );
 
@@ -251,6 +365,15 @@ const AlertsGhostBody: React.FC = () => (
 );
 
 export const DashboardGhostLoader: React.FC<DashboardGhostLoaderProps> = ({ variant = 'analytics' }) => {
+  if (variant === 'general') {
+    return (
+      <div className="min-h-screen bg-transparent pb-12 font-sans text-black">
+        <GeneralPageHeaderGhost />
+        <GeneralGhostBody />
+      </div>
+    );
+  }
+
   if (variant === 'settings') {
     return (
       <div className="min-h-screen bg-white font-sans text-black">
@@ -290,7 +413,7 @@ export const DashboardGhostLoader: React.FC<DashboardGhostLoaderProps> = ({ vari
   return (
     <div className="min-h-screen bg-transparent font-sans text-black">
       <DashboardHeaderGhost />
-      <AnalyticsGhostBody kpiCount={variant === 'overview' ? 6 : 4} />
+      <AnalyticsGhostBody kpiCount={4} />
     </div>
   );
 };

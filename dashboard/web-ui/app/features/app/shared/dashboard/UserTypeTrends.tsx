@@ -169,7 +169,7 @@ export const UserTypeTrends: React.FC<UserTypeTrendsProps> = ({ className }) => 
                     <span className="w-3 h-3 bg-blue-500 border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"></span> EXPLORERS
                 </span>
                 <span className="flex items-center gap-2 text-xs font-bold font-mono">
-                    <span className="w-3 h-3 bg-amber-400 border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"></span> CASUALS
+                    <span className="w-3 h-3 bg-rose-400 border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"></span> CASUALS
                 </span>
                 <span className="flex items-center gap-2 text-xs font-bold font-mono">
                     <span className="w-3 h-3 bg-red-500 border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"></span> BOUNCERS
@@ -233,10 +233,10 @@ export const UserTypeTrends: React.FC<UserTypeTrendsProps> = ({ className }) => 
                             />
                         ))}
 
-                        <Area type="monotone" dataKey="bouncers" stackId="1" stroke="#ef4444" fill="#ef4444" name="Bouncers (<10s)" />
-                        <Area type="monotone" dataKey="casuals" stackId="1" stroke="#fbbf24" fill="#fbbf24" name="Casuals (10-60s)" />
-                        <Area type="monotone" dataKey="explorers" stackId="1" stroke="#3b82f6" fill="#3b82f6" name="Explorers (Active)" />
-                        <Area type="monotone" dataKey="loyalists" stackId="1" stroke="#10b981" fill="#10b981" name="Loyalists (>3m)" />
+                        <Area type="monotone" dataKey="bouncers" stackId="1" stroke="#ef4444" fill="#ef4444" name="Bouncers (<10s)" isAnimationActive={false} />
+                        <Area type="monotone" dataKey="casuals" stackId="1" stroke="#f9a8d4" fill="#f9a8d4" name="Casuals (10-60s)" isAnimationActive={false} />
+                        <Area type="monotone" dataKey="explorers" stackId="1" stroke="#3b82f6" fill="#3b82f6" name="Explorers (Active)" isAnimationActive={false} />
+                        <Area type="monotone" dataKey="loyalists" stackId="1" stroke="#10b981" fill="#10b981" name="Loyalists (>3m)" isAnimationActive={false} />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>

@@ -266,7 +266,7 @@ const getStatusCodeBadgeClass = (value: string | null | undefined): string => {
 
     const statusCode = parseStatusCode(value);
     if (statusCode !== null && statusCode >= 500) return 'border-rose-200 bg-rose-50 text-rose-700';
-    if (statusCode !== null && statusCode >= 400) return 'border-amber-200 bg-amber-50 text-amber-700';
+    if (statusCode !== null && statusCode >= 400) return 'border-rose-200 bg-rose-50 text-rose-700';
     return 'border-slate-200 bg-slate-50 text-slate-600';
 };
 
@@ -313,19 +313,19 @@ const serializeExcludedEndpointTerms = (terms: string[]): string => terms.join('
 
 const getFailRateToneClass = (failRate: number): string => {
     if (failRate >= 5) return 'text-rose-700';
-    if (failRate >= 2) return 'text-amber-700';
+    if (failRate >= 2) return 'text-rose-700';
     return 'text-emerald-700';
 };
 
 const getLatencyToneClass = (latencyMs: number): string => {
-    if (latencyMs >= 1000) return 'text-amber-800';
-    if (latencyMs >= 500) return 'text-amber-700';
+    if (latencyMs >= 1000) return 'text-rose-800';
+    if (latencyMs >= 500) return 'text-rose-700';
     return 'text-slate-700';
 };
 
 const getRiskBadgeClass = (riskScore: number): string => {
     if (riskScore >= 80) return 'border-rose-300 bg-rose-50 text-rose-700';
-    if (riskScore >= 50) return 'border-amber-300 bg-amber-50 text-amber-700';
+    if (riskScore >= 50) return 'border-rose-300 bg-rose-50 text-rose-700';
     return 'border-emerald-300 bg-emerald-50 text-emerald-700';
 };
 
@@ -996,7 +996,7 @@ export const ApiAnalytics: React.FC = () => {
 
             <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6">
                 {!selectedProject?.id && (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900">
                         Select a project to load API insights.
                     </div>
                 )}
@@ -1041,9 +1041,9 @@ export const ApiAnalytics: React.FC = () => {
                                                     label={buildReleaseLineLabel(marker.version, index)}
                                                 />
                                             ))}
-                                            <Area yAxisId="left" type="monotone" dataKey="sessions" name="Sessions" stroke="#2563eb" fill="#bfdbfe" fillOpacity={0.45} />
-                                            <Line yAxisId="left" type="monotone" dataKey="errorCount" name="Errors" stroke="#dc2626" strokeWidth={2} dot={false} />
-                                            <Line yAxisId="right" type="monotone" dataKey="avgApiResponseMs" name="Avg API ms" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                                            <Area yAxisId="left" type="monotone" dataKey="sessions" name="Sessions" stroke="#2563eb" fill="#bfdbfe" fillOpacity={0.45} isAnimationActive={false} />
+                                            <Line yAxisId="left" type="monotone" dataKey="errorCount" name="Errors" stroke="#dc2626" strokeWidth={2} dot={false} isAnimationActive={false} />
+                                            <Line yAxisId="right" type="monotone" dataKey="avgApiResponseMs" name="Avg API ms" stroke="#f9a8d4" strokeWidth={2} dot={false} isAnimationActive={false} />
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -1220,7 +1220,7 @@ export const ApiAnalytics: React.FC = () => {
                                         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
                                             <div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                                                    <span className="h-2 w-2 rounded-full bg-rose-400" />
                                                     <h3 className="text-sm font-bold font-mono uppercase text-black">Slowest Endpoints</h3>
                                                 </div>
                                                 <p className="mt-1 text-xs text-slate-500">Peak {slowEndpointRows[0] ? `${slowEndpointRows[0].avgLatencyMs} ms` : 'N/A'}</p>
@@ -1408,8 +1408,8 @@ export const ApiAnalytics: React.FC = () => {
                                                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                                                 <Tooltip />
                                                 <Legend />
-                                                <Bar yAxisId="right" dataKey="totalApiCalls" name="Total Calls" fill="#93c5fd" radius={[4, 4, 0, 0]} />
-                                                <Line yAxisId="left" type="monotone" dataKey="callsPerSession" name="Calls / Session" stroke="#2563eb" strokeWidth={2} />
+                                                <Bar yAxisId="right" dataKey="totalApiCalls" name="Total Calls" fill="#93c5fd" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                                                <Line yAxisId="left" type="monotone" dataKey="callsPerSession" name="Calls / Session" stroke="#2563eb" strokeWidth={2} isAnimationActive={false} />
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -1443,7 +1443,7 @@ export const ApiAnalytics: React.FC = () => {
                                                         );
                                                     }}
                                                 />
-                                                <Scatter data={networkCorrelationData} fill="#2563eb" />
+                                                <Scatter data={networkCorrelationData} fill="#2563eb" isAnimationActive={false} />
                                             </ScatterChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -1467,7 +1467,7 @@ export const ApiAnalytics: React.FC = () => {
                                                 <XAxis type="number" hide />
                                                 <YAxis dataKey="region" type="category" width={120} tick={{ fontSize: 11 }} />
                                                 <Tooltip formatter={(value: number | string | undefined) => [`${Math.round(Number(value || 0))} ms`, 'Latency']} />
-                                                <Bar dataKey="latencyMs" fill="#ef4444" radius={[4, 4, 4, 4]} />
+                                                <Bar dataKey="latencyMs" fill="#ef4444" radius={[4, 4, 4, 4]} isAnimationActive={false} />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -1487,8 +1487,8 @@ export const ApiAnalytics: React.FC = () => {
                                                 <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
                                                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} domain={[80, 100]} />
                                                 <Tooltip />
-                                                <Bar yAxisId="left" dataKey="latencyMs" name="Latency (ms)" fill="#60a5fa" radius={[4, 4, 0, 0]} />
-                                                <Line yAxisId="right" type="monotone" dataKey="successRate" name="Success %" stroke="#16a34a" strokeWidth={2} dot={false} />
+                                                <Bar yAxisId="left" dataKey="latencyMs" name="Latency (ms)" fill="#60a5fa" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                                                <Line yAxisId="right" type="monotone" dataKey="successRate" name="Success %" stroke="#16a34a" strokeWidth={2} dot={false} isAnimationActive={false} />
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -1508,8 +1508,8 @@ export const ApiAnalytics: React.FC = () => {
                                                 <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
                                                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                                                 <Tooltip />
-                                                <Bar yAxisId="left" dataKey="latencyMs" name="Latency (ms)" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                                                <Line yAxisId="right" type="monotone" dataKey="failRate" name="Fail %" stroke="#dc2626" strokeWidth={2} dot={false} />
+                                                <Bar yAxisId="left" dataKey="latencyMs" name="Latency (ms)" fill="#94a3b8" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                                                <Line yAxisId="right" type="monotone" dataKey="failRate" name="Fail %" stroke="#dc2626" strokeWidth={2} dot={false} isAnimationActive={false} />
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     </div>

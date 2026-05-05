@@ -15,21 +15,20 @@ export const NeoBadge: React.FC<NeoBadgeProps> = ({
     size = 'md',
     onClick
 }) => {
-    // Softened UI: Subtle borders, lighter backgrounds
-    const baseStyles = "inline-flex items-center font-semibold border rounded-md tracking-tight shadow-sm";
+    const baseStyles = "inline-flex items-center border-2 border-black font-black uppercase shadow-neo-sm rounded-none";
 
     const variants = {
-        neutral: "bg-slate-50 border-slate-200 text-slate-700",
-        success: "bg-emerald-50 border-emerald-200 text-emerald-700",
-        warning: "bg-amber-50 border-amber-200 text-amber-700",
-        danger: "bg-rose-50 border-rose-200 text-rose-700",
-        info: "bg-cyan-50 border-cyan-200 text-cyan-700",
-        anr: "bg-purple-50 border-purple-200 text-purple-700",
-        rage: "bg-pink-50 border-pink-200 text-pink-700",
-        dead_tap: "bg-gray-50 border-gray-200 text-gray-700",
-        slow_start: "bg-orange-50 border-orange-200 text-orange-700",
-        slow_api: "bg-indigo-50 border-indigo-200 text-indigo-700",
-        low_exp: "bg-blue-50 border-blue-200 text-blue-700"
+        neutral: "bg-white text-black",
+        success: "bg-[#86efac] text-black",
+        warning: "bg-[#f9a8d4] text-black",
+        danger: "bg-[#fb7185] text-black",
+        info: "bg-[#67e8f9] text-black",
+        anr: "bg-[#c4b5fd] text-black",
+        rage: "bg-[#f9a8d4] text-black",
+        dead_tap: "bg-[#f4f4f5] text-black",
+        slow_start: "bg-[#f9a8d4] text-black",
+        slow_api: "bg-[#dbeafe] text-black",
+        low_exp: "bg-[#5dadec] text-black"
     };
 
     const sizes = {

@@ -13,6 +13,7 @@ const markdownDocs = getAllDocs();
 const selfhostedDocs = markdownDocs.filter(doc => doc.category === 'Self-Hosting');
 const devDocs = markdownDocs.filter(doc => doc.category === 'Development');
 const archDocs = markdownDocs.filter(doc => doc.category === 'Architecture');
+const swiftDocs = markdownDocs.filter(doc => doc.category === 'Swift (iOS)');
 
 const NAVIGATION: NavCategory[] = [
     {
@@ -33,6 +34,24 @@ const NAVIGATION: NavCategory[] = [
             }
         ]
     },
+    ...(swiftDocs.length > 0 ? [{
+        category: "Swift (iOS)",
+        sections: [
+            {
+                title: "Getting Started",
+                links: [
+                    { label: "Overview", href: "/docs/swift/overview", isRoute: true },
+                    { label: "Installation", href: "/docs/swift/overview#installation", isRoute: false },
+                    { label: "Swift Setup", href: "/docs/swift/overview#swift-setup", isRoute: false },
+                    { label: "Screen Tracking", href: "/docs/swift/overview#screen-tracking", isRoute: false },
+                    { label: "User Identification", href: "/docs/swift/overview#user-identification", isRoute: false },
+                    { label: "Custom Events", href: "/docs/swift/overview#custom-events", isRoute: false },
+                    { label: "Metadata", href: "/docs/swift/overview#metadata", isRoute: false },
+                    { label: "Privacy Controls", href: "/docs/swift/overview#privacy-controls", isRoute: false },
+                ]
+            }
+        ]
+    }] : []),
     // Add Self-Hosting category if there are selfhosted docs
     ...(selfhostedDocs.length > 0 ? [{
         category: "Self-Hosting",
@@ -79,7 +98,7 @@ const NAVIGATION: NavCategory[] = [
 
 export function DocsSidebar({ className }: { className?: string }) {
     const location = useLocation();
-    const [expandedCategories, setExpandedCategories] = useState<string[]>(["React Native", "Self-Hosting", "Development", "Architecture"]);
+    const [expandedCategories, setExpandedCategories] = useState<string[]>(["React Native", "Swift (iOS)", "Self-Hosting", "Development", "Architecture"]);
     const [activeHash, setActiveHash] = useState<string>("");
 
     // Scroll Spy implementation
@@ -172,7 +191,8 @@ export function DocsSidebar({ className }: { className?: string }) {
     };
 
     return (
-        <aside className={cn("w-64 flex-shrink-0 border-r-2 border-black h-[calc(100vh-64px)] overflow-y-auto sticky top-[64px] hidden md:block bg-[#f4f4f5]", className)}>
+        <aside className={cn("w-64 flex-shrink-0 border-r-2 border-black hidden md:block bg-[#f4f4f5] self-stretch", className)}>
+            <div className="sticky top-[64px]">
             <div className="p-6">
                 {NAVIGATION.map((cat) => (
                     <div key={cat.category} className="mb-6 last:mb-0">
@@ -256,6 +276,7 @@ export function DocsSidebar({ className }: { className?: string }) {
                         )}
                     </div>
                 ))}
+            </div>
             </div>
         </aside>
     );

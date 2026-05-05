@@ -1,139 +1,193 @@
 /**
  * Embedded Demo Window
  *
- * A macOS-style window that embeds the full demo experience
- * directly on the landing page via iframe, loaded on user request.
+ * A neo-brutalist workbench frame that embeds the full demo experience
+ * directly on the landing page.
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { ExternalLink, Maximize2, Play } from 'lucide-react';
+import { Maximize2, MousePointerClick } from 'lucide-react';
+
+const HEADING_CURSOR_FOLLOW_PAD_PX = 16;
 
 export const EmbeddedDemoWindow: React.FC = () => {
+    const sectionRef = useRef<HTMLElement>(null);
+    const headingInteractiveZoneRef = useRef<HTMLDivElement>(null);
     const [shouldLoadDemo, setShouldLoadDemo] = useState(false);
+    const [followingPointer, setFollowingPointer] = useState(false);
+    const [followPos, setFollowPos] = useState({ x: 0, y: 0 });
+
+    useEffect(() => {
+        const section = sectionRef.current;
+        if (!section || shouldLoadDemo) return;
+
+        let hasScrolled = window.scrollY > 80;
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (hasScrolled && entry.isIntersecting) {
+                    setShouldLoadDemo(true);
+                    observer.disconnect();
+                    window.removeEventListener('scroll', handleScroll);
+                }
+            },
+            { threshold: 0.08 }
+        );
+
+        const handleScroll = () => {
+            hasScrolled = true;
+            const rect = section.getBoundingClientRect();
+            if (rect.top < window.innerHeight && rect.bottom > 0) {
+                setShouldLoadDemo(true);
+                observer.disconnect();
+                window.removeEventListener('scroll', handleScroll);
+            }
+        };
+
+        observer.observe(section);
+        window.addEventListener('scroll', handleScroll, { passive: true });
+
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('scroll', handleScroll);
+        };
+    }, [shouldLoadDemo]);
+
+    const updateFollowCoords = useCallback((clientX: number, clientY: number) => {
+        const zone = headingInteractiveZoneRef.current;
+        if (!zone) return;
+        const r = zone.getBoundingClientRect();
+        const xmin = HEADING_CURSOR_FOLLOW_PAD_PX;
+        const ymin = HEADING_CURSOR_FOLLOW_PAD_PX;
+        const xmax = Math.max(xmin + 8, r.width - HEADING_CURSOR_FOLLOW_PAD_PX);
+        const ymax = Math.max(ymin + 8, r.height - HEADING_CURSOR_FOLLOW_PAD_PX);
+        setFollowPos({
+            x: Math.min(xmax, Math.max(xmin, clientX - r.left)),
+            y: Math.min(ymax, Math.max(ymin, clientY - r.top)),
+        });
+    }, []);
+
+    const onHeadingZoneEnter = useCallback(
+        (e: React.MouseEvent) => {
+            setFollowingPointer(true);
+            updateFollowCoords(e.clientX, e.clientY);
+        },
+        [updateFollowCoords],
+    );
+
+    const onHeadingZoneMove = useCallback(
+        (e: React.MouseEvent) => {
+            updateFollowCoords(e.clientX, e.clientY);
+        },
+        [updateFollowCoords],
+    );
+
+    const onHeadingZoneLeave = useCallback(() => {
+        setFollowingPointer(false);
+    }, []);
 
     return (
         <section
+            ref={sectionRef}
             aria-label="Interactive Demo"
-            className="w-full px-4 sm:px-6 lg:px-8 py-24 sm:py-32 border-t-2 border-black bg-slate-50"
+            className="w-full border-t-2 border-black bg-[#f8fafc] px-3 pb-14 pt-16 sm:px-4 sm:pb-20 sm:pt-24 lg:px-6 lg:pt-28"
         >
             {/* Embed must be >1280px wide (after borders) or Tailwind `xl:` breakpoints won't apply inside the iframe. */}
-            <div className="max-w-[min(100%,1600px)] mx-auto">
-                {/* Section Header */}
-                <div className="mb-16 border-b-2 border-black pb-8 text-left">
-                    <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black uppercase tracking-tighter mb-4 leading-none">
-                        Live Demo
-                    </h2>
-                    <p className="text-lg font-mono text-gray-500 uppercase tracking-widest mt-4">
-                        Experience the dashboard in action
-                    </p>
+            <div className="mx-auto mb-7 max-w-7xl sm:mb-10">
+                <div
+                    ref={headingInteractiveZoneRef}
+                    role="presentation"
+                    className={`relative w-full px-3 py-10 sm:py-14 lg:py-16 ${followingPointer ? 'cursor-none' : ''}`}
+                    onMouseEnter={onHeadingZoneEnter}
+                    onMouseLeave={onHeadingZoneLeave}
+                    onMouseMove={onHeadingZoneMove}
+                >
+                    <div className="relative z-[1] mx-auto inline-block max-w-2xl px-2 pb-2 pt-1 sm:px-3">
+                        <h2 className="relative pl-11 text-3xl font-black uppercase leading-[0.92] tracking-tight text-black sm:pl-14 sm:text-5xl lg:pl-16 lg:text-6xl">
+                            Walk the product.
+                        </h2>
+                    </div>
+                    <div className="pointer-events-none absolute inset-0 isolate z-[2] overflow-visible" aria-hidden>
+                        <MousePointerClick
+                            className="walk-product-heading-cursor h-8 w-8 sm:h-11 sm:w-11 lg:h-12 lg:w-12"
+                            strokeWidth={2.5}
+                            aria-hidden
+                            style={
+                                followingPointer
+                                    ? {
+                                          animation: 'none',
+                                          left: `${followPos.x}px`,
+                                          top: `${followPos.y}px`,
+                                          transform: 'translate(-4px, -4px)',
+                                      }
+                                    : undefined
+                            }
+                        />
+                    </div>
                 </div>
+            </div>
 
-                {/* Window Frame */}
+            <div className="mx-auto max-w-[min(100%,1720px)]">
                 <div className="relative">
-                    {/* Background offset for depth effect */}
-                    <div className="absolute -inset-2 sm:-inset-3 bg-gray-100 border-2 border-black z-0 hidden lg:block"></div>
+                    <div className="absolute -inset-2 hidden rotate-[-0.35deg] border-2 border-black bg-[#5dadec] lg:block" />
+                    <div className="absolute -inset-2 hidden translate-x-2 translate-y-2 border-2 border-black bg-[#fef08a] lg:block" />
 
-                    {/* Main Window */}
-                    <div className="relative z-10 bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-                        {/* Title Bar */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black bg-gray-50 px-3 py-2 sm:px-4 sm:py-3">
-                            {/* Traffic Lights */}
-                            <div className="flex min-w-0 items-center gap-3">
-                                <div className="flex gap-2">
-                                    <div className="w-3 h-3 rounded-full border border-black bg-red-400 transition-transform hover:scale-110"></div>
-                                    <div className="w-3 h-3 rounded-full border border-black bg-yellow-400 transition-transform hover:scale-110"></div>
-                                    <div className="w-3 h-3 rounded-full border border-black bg-green-400 transition-transform hover:scale-110"></div>
+                    <div className="relative z-10 overflow-hidden border-2 border-black bg-white shadow-[7px_7px_0px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black bg-white px-3 py-3 sm:gap-3 sm:px-4">
+                            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                                <div className="flex shrink-0 gap-1.5 sm:gap-2">
+                                    <div className="h-3 w-3 border-2 border-black bg-[#ef4444]" />
+                                    <div className="h-3 w-3 border-2 border-black bg-[#fef08a]" />
+                                    <div className="h-3 w-3 border-2 border-black bg-[#86efac]" />
                                 </div>
-
-                                {/* URL Bar */}
-                                <div className="ml-3 hidden min-w-0 items-center rounded border border-gray-300 bg-white px-3 py-1 md:flex">
-                                    <span className="truncate text-xs font-mono text-gray-600 sm:text-sm">
-                                        rejourney.co/demo
+                                <div className="min-w-0 border-2 border-black bg-[#f8fafc] px-3 py-1">
+                                    <span className="truncate font-mono text-[10px] font-black uppercase tracking-widest text-black sm:text-xs">
+                                        Live dashboard demo
                                     </span>
                                 </div>
                             </div>
 
-                            {/* Actions */}
-                            <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+                            <div className="flex w-full items-center justify-end gap-2 min-[460px]:w-auto">
                                 <Link
                                     to="/demo"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-mono font-bold text-gray-700 hover:bg-gray-200 border border-gray-300 rounded transition-colors"
+                                    className="inline-flex w-full items-center justify-center gap-2 border-2 border-black bg-[#fef08a] px-3 py-2 font-mono text-[10px] font-black uppercase tracking-widest text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-neo min-[460px]:w-auto"
                                     title="Open in new tab"
                                 >
-                                    <Maximize2 size={14} />
-                                    <span className="hidden sm:inline">Fullscreen</span>
+                                    <Maximize2 size={14} strokeWidth={3} />
+                                    Fullscreen
                                 </Link>
                             </div>
                         </div>
 
-                        {/* Demo Content */}
-                        <div className="relative bg-gray-100">
+                        <div className="relative bg-white">
                             {shouldLoadDemo ? (
                                 <iframe
                                     src="/demo"
-                                    className="w-full border-0 h-[560px] sm:h-[640px] md:h-[min(78vh,880px)] md:min-h-[680px] md:max-h-[880px]"
+                                    className="h-[min(68vh,560px)] min-h-[420px] w-full border-0 bg-white sm:h-[700px] lg:h-[min(82vh,920px)] lg:min-h-[760px]"
                                     title="Rejourney Dashboard Demo"
                                     loading="eager"
                                     tabIndex={-1}
                                 />
                             ) : (
-                                <div className="py-14 flex flex-col items-center justify-center gap-8 bg-white">
-                                    {/* Decorative grid background */}
-                                    <div
-                                        className="absolute inset-0 opacity-[0.04] pointer-events-none"
-                                        style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 0)', backgroundSize: '24px 24px' }}
-                                    />
-
-                                    {/* Preview mockup */}
-                                    <div className="relative z-10 flex flex-col items-center gap-6 px-4 text-center">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-2 h-2 rounded-full bg-red-400 border border-black" />
-                                            <div className="w-2 h-2 rounded-full bg-yellow-400 border border-black" />
-                                            <div className="w-2 h-2 rounded-full bg-green-400 border border-black" />
+                                <div className="flex h-[min(68vh,560px)] min-h-[420px] items-center justify-center bg-white sm:h-[700px] lg:h-[min(82vh,920px)] lg:min-h-[760px]">
+                                    <div className="relative h-32 w-32 border-2 border-black bg-white shadow-neo sm:h-40 sm:w-40">
+                                        <div className="absolute -left-6 top-6 h-12 w-12 rotate-[-8deg] border-2 border-black bg-[#5dadec] shadow-neo-sm sm:-left-8 sm:top-7 sm:h-14 sm:w-14" />
+                                        <div className="absolute -right-6 top-10 h-10 w-10 rotate-[7deg] border-2 border-black bg-[#fef08a] shadow-neo-sm sm:-right-8 sm:top-12 sm:h-12 sm:w-12" />
+                                        <div className="absolute bottom-5 left-1/2 flex h-20 w-20 -translate-x-1/2 items-center justify-center border-2 border-black bg-white shadow-neo-sm sm:bottom-6 sm:h-24 sm:w-24">
+                                            <img
+                                                src="/rejourneyIcon-removebg-preview.png"
+                                                alt=""
+                                                role="presentation"
+                                                className="h-12 w-12 object-contain sm:h-14 sm:w-14"
+                                            />
                                         </div>
-
-                                        <div className="space-y-2">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#5dadec]">
-                                                Interactive Demo
-                                            </p>
-                                            <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter text-black">
-                                                See it in action
-                                            </h3>
-
-                                        </div>
-
-                                        {/* Launch button */}
-                                        <button
-                                            onClick={() => setShouldLoadDemo(true)}
-                                            className="group relative flex items-center gap-3 border-2 border-black bg-black text-white px-8 py-4 text-sm font-black uppercase tracking-widest hover:bg-[#5dadec] hover:text-black hover:border-black transition-all duration-200 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.2)] hover:shadow-[6px_6px_0px_0px_rgba(93,173,236,0.4)] hover:-translate-y-0.5"
-                                        >
-                                            <Play size={16} className="fill-current" />
-                                            Launch Demo
-                                        </button>
-
-                                        <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">
-                                            No sign-up required
-                                        </p>
                                     </div>
                                 </div>
                             )}
                         </div>
-                    </div>
-                </div>
-
-                {/* CTA below the window */}
-                <div className="mt-6 sm:mt-8 text-center">
-                    <div className="flex flex-wrap justify-center gap-3">
-                        <Link
-                            to="/demo"
-                            className="inline-flex items-center gap-2 border-2 border-black bg-white text-black px-5 sm:px-6 py-3 text-sm font-black uppercase tracking-widest hover:bg-gray-50 hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
-                        >
-                            <ExternalLink size={16} />
-                            Open Fullscreen
-                        </Link>
                     </div>
                 </div>
             </div>

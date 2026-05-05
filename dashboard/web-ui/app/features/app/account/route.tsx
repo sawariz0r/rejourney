@@ -143,7 +143,7 @@ export const AccountSettings: React.FC = () => {
                   {user.emailVerified ? (
                     <CheckCircle className="w-4 h-4 text-emerald-500" />
                   ) : (
-                    <AlertCircle className="w-4 h-4 text-amber-500" />
+                    <AlertCircle className="w-4 h-4 text-rose-500" />
                   )}
                   <span className="text-[10px] font-semibold uppercase tracking-widest">Verification</span>
                 </div>
@@ -207,7 +207,7 @@ export const AccountSettings: React.FC = () => {
                     <div className="h-4 bg-slate-100 border border-slate-900 overflow-hidden relative">
                       <div
                         className={`absolute top-0 left-0 bottom-0 transition-all ${freeTierStatus.percentUsed >= 100 ? 'bg-red-500' :
-                          freeTierStatus.percentUsed >= 80 ? 'bg-amber-400' : 'bg-emerald-500'
+                          freeTierStatus.percentUsed >= 80 ? 'bg-rose-400' : 'bg-emerald-500'
                           }`}
                         style={{ width: `${Math.min(freeTierStatus.percentUsed, 100)}%` }}
                       />
@@ -220,12 +220,12 @@ export const AccountSettings: React.FC = () => {
 
                   {/* Info text based on status */}
                   {freeTierStatus.isExhausted ? (
-                    <div className="bg-amber-50 border border-amber-200 p-3 space-y-2">
+                    <div className="bg-rose-50 border border-rose-200 p-3 space-y-2">
                       <div className="flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-amber-600" />
-                        <span className="text-xs font-bold text-amber-800">Free tier exhausted</span>
+                        <CreditCard className="w-4 h-4 text-rose-600" />
+                        <span className="text-xs font-bold text-rose-800">Free tier exhausted</span>
                       </div>
-                      <p className="text-[11px] text-amber-700">
+                      <p className="text-[11px] text-rose-700">
                         Usage is now billed per team. Visit <a href={`${pathPrefix}/billing`} className="underline font-bold">Billing</a> to view your team's usage and upgrade your plan.
                       </p>
                     </div>

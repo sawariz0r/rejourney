@@ -580,11 +580,11 @@ export const BillingSettings: React.FC = () => {
     >
       {/* Scheduled Downgrade Alert */}
       {(teamPlan?.scheduledPriceId || teamPlan?.cancelAtPeriodEnd) && (
-        <div className="p-4 bg-amber-50 border-4 border-amber-500 flex items-center gap-4 mb-6">
-          <Info className="w-6 h-6 text-amber-600 shrink-0" />
+        <div className="p-4 bg-rose-50 border-4 border-rose-500 flex items-center gap-4 mb-6">
+          <Info className="w-6 h-6 text-rose-600 shrink-0" />
           <div className="flex-1">
-            <div className="font-semibold text-amber-900 uppercase tracking-wide text-sm">Scheduled Plan Change</div>
-            <div className="text-sm font-bold text-amber-800">
+            <div className="font-semibold text-rose-900 uppercase tracking-wide text-sm">Scheduled Plan Change</div>
+            <div className="text-sm font-bold text-rose-800">
               {teamPlan.cancelAtPeriodEnd
                 ? 'Your subscription will be canceled at the end of your current billing period. You\'ll continue to have access to your current plan features until then.'
                 : 'Your plan change is scheduled for the end of your current billing period. You\'ll keep your current plan features until then.'}
@@ -608,7 +608,7 @@ export const BillingSettings: React.FC = () => {
       )}
 
       {/* Current Plan & Usage Overview */}
-      <NeoCard className={`p-6 border-b-[6px] ${isAtLimit ? 'border-rose-600 bg-rose-50' : isNearLimit ? 'border-amber-500 bg-amber-50' : 'border-emerald-500 bg-emerald-50'}`}>
+      <NeoCard className={`p-6 border-b-[6px] ${isAtLimit ? 'border-rose-600 bg-rose-50' : isNearLimit ? 'border-rose-500 bg-rose-50' : 'border-emerald-500 bg-emerald-50'}`}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Usage Bar */}
           <div className="lg:col-span-2 space-y-4">
@@ -642,13 +642,13 @@ export const BillingSettings: React.FC = () => {
             <div className="space-y-2">
               <div className="w-full bg-white h-4 border-2 border-slate-900 overflow-hidden shadow-inner">
                 <div
-                  className={`h-full transition-all duration-500 ${isAtLimit ? 'bg-rose-500' : isNearLimit ? 'bg-amber-500' : 'bg-emerald-500'
+                  className={`h-full transition-all duration-500 ${isAtLimit ? 'bg-rose-500' : isNearLimit ? 'bg-rose-500' : 'bg-emerald-500'
                     }`}
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>
               <div className="flex items-center justify-between">
-                <span className={`text-xs font-semibold uppercase ${isAtLimit ? 'text-rose-600' : isNearLimit ? 'text-amber-600' : 'text-emerald-600'}`}>
+                <span className={`text-xs font-semibold uppercase ${isAtLimit ? 'text-rose-600' : isNearLimit ? 'text-rose-600' : 'text-emerald-600'}`}>
                   {usagePercent}% used
                 </span>
                 <span className="text-xs font-bold text-slate-500">
@@ -667,9 +667,9 @@ export const BillingSettings: React.FC = () => {
               </div>
             )}
             {isNearLimit && !isAtLimit && (
-              <div className="flex items-center gap-3 p-3 bg-amber-100 border-2 border-amber-500">
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
-                <span className="text-sm font-semibold text-amber-800">
+              <div className="flex items-center gap-3 p-3 bg-rose-100 border-2 border-rose-500">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                <span className="text-sm font-semibold text-rose-800">
                   Approaching limit. Consider upgrading to avoid recording interruption.
                 </span>
               </div>
@@ -686,12 +686,12 @@ export const BillingSettings: React.FC = () => {
               {teamPlan?.priceCents ? `$${(teamPlan.priceCents / 100).toFixed(0)}/mo` : 'Free'}
             </span>
             {(teamPlan?.scheduledPriceId || teamPlan?.cancelAtPeriodEnd) && (
-              <div className="mt-3 pt-3 border-t-2 border-amber-500 w-full">
+              <div className="mt-3 pt-3 border-t-2 border-rose-500 w-full">
                 <div className="flex items-center gap-2 justify-center mb-1">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span className="text-[10px] font-semibold uppercase text-amber-600 tracking-widest">Scheduled Change</span>
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  <span className="text-[10px] font-semibold uppercase text-rose-600 tracking-widest">Scheduled Change</span>
                 </div>
-                <span className="text-xs font-bold text-amber-800">
+                <span className="text-xs font-bold text-rose-800">
                   {teamPlan.cancelAtPeriodEnd
                     ? 'Canceling at period end'
                     : 'Downgrade scheduled'}
@@ -787,8 +787,8 @@ export const BillingSettings: React.FC = () => {
                       <span className="text-sm font-semibold text-emerald-700 uppercase">Current Plan</span>
                     </div>
                   ) : isScheduledPlan ? (
-                    <div className="py-3 text-center border-2 border-amber-500 bg-amber-100">
-                      <span className="text-sm font-semibold text-amber-700 uppercase">Already Scheduled</span>
+                    <div className="py-3 text-center border-2 border-rose-500 bg-rose-100">
+                      <span className="text-sm font-semibold text-rose-700 uppercase">Already Scheduled</span>
                     </div>
                   ) : isBillingAdmin ? (
                     <NeoButton
@@ -939,7 +939,7 @@ export const BillingSettings: React.FC = () => {
                     <div className="text-slate-400 font-semibold text-xl">→</div>
                     <div className={`text-center p-4 border-2 flex-1 ${planChangeModal.preview.changeType === 'upgrade' || planChangeModal.preview.changeType === 'new'
                       ? 'bg-emerald-50 border-emerald-600'
-                      : 'bg-amber-50 border-amber-600'
+                      : 'bg-rose-50 border-rose-600'
                       }`}>
                       <div className="text-xs font-bold text-slate-500 uppercase mb-1">New Plan</div>
                       <div className="text-lg font-semibold">{planChangeModal.preview.newPlan.displayName}</div>
@@ -961,7 +961,7 @@ export const BillingSettings: React.FC = () => {
                         </span>
                         <span className={`font-semibold ${planChangeModal.preview.changeType === 'upgrade' || planChangeModal.preview.changeType === 'new'
                           ? 'text-emerald-600'
-                          : 'text-amber-600'
+                          : 'text-rose-600'
                           }`}>
                           {planChangeModal.preview.newPlan.sessionLimit.toLocaleString()}
                         </span>
@@ -978,7 +978,7 @@ export const BillingSettings: React.FC = () => {
                         </span>
                         <span className={`font-semibold ${planChangeModal.preview.changeType === 'upgrade' || planChangeModal.preview.changeType === 'new'
                           ? 'text-emerald-600'
-                          : 'text-amber-600'
+                          : 'text-rose-600'
                           }`}>
                           {planChangeModal.preview.newPlan.videoRetentionLabel}
                         </span>

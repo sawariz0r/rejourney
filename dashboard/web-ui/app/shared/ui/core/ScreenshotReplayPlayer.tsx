@@ -872,7 +872,7 @@ export const ScreenshotReplayPlayer = forwardRef<
             return (
               <div
                 key={`e-${i}`}
-                className={`absolute w-1.5 h-1.5 rounded-full transition-all hover:scale-[2.5] z-10 cursor-pointer ${isIssue ? 'bg-red-500' : isFrustration ? 'bg-orange-500' : isTouch ? 'bg-blue-400' : 'bg-slate-400'
+                className={`absolute w-1.5 h-1.5 rounded-full transition-all hover:scale-[2.5] z-10 cursor-pointer ${isIssue ? 'bg-red-500' : isFrustration ? 'bg-pink-500' : isTouch ? 'bg-blue-400' : 'bg-slate-400'
                   }`}
                 style={{
                   left: `${percent}%`,

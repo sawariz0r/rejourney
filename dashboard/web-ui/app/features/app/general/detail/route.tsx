@@ -129,7 +129,7 @@ export const IssueDetail: React.FC = () => {
 
     const getIssueTypeColor = (type: string) => {
         switch (type) {
-            case 'error': return 'bg-amber-500';
+            case 'error': return 'bg-rose-500';
             case 'crash': return 'bg-red-500';
             case 'anr': return 'bg-purple-500';
             case 'rage_tap': return 'bg-pink-500';
@@ -196,7 +196,7 @@ export const IssueDetail: React.FC = () => {
                         )
                     }
                     iconClassName={
-                        issue.issueType === 'error' ? 'text-amber-500' :
+                        issue.issueType === 'error' ? 'text-rose-500' :
                             issue.issueType === 'crash' ? 'text-red-500' :
                                 issue.issueType === 'anr' ? 'text-purple-500' :
                                     issue.issueType === 'rage_tap' ? 'text-pink-500' :
@@ -205,7 +205,7 @@ export const IssueDetail: React.FC = () => {
                 />
 
                 {partialError && (
-                    <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div className="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900">
                         {partialError}
                     </div>
                 )}
@@ -275,8 +275,8 @@ export const IssueDetail: React.FC = () => {
                                 {issue.sampleStackTrace || "No stack trace available for this issue."}
                             </div>
 
-                            <div className={`mt-4 p-4 border-2 text-sm font-bold flex items-start gap-3 ${issue.issueType === 'crash' ? 'bg-amber-50 border-amber-200 text-amber-900' :
-                                issue.issueType === 'error' ? 'bg-amber-50 border-amber-200 text-amber-900' :
+                            <div className={`mt-4 p-4 border-2 text-sm font-bold flex items-start gap-3 ${issue.issueType === 'crash' ? 'bg-rose-50 border-rose-200 text-rose-900' :
+                                issue.issueType === 'error' ? 'bg-rose-50 border-rose-200 text-rose-900' :
                                     'bg-purple-50 border-purple-200 text-purple-900'
                                 }`}>
                                 <AlertOctagon className="w-5 h-5 shrink-0 mt-0.5" />

@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    Activity,
+    BookOpen,
     ChevronLeft,
     ChevronRight,
     Check,
     Copy,
+    ExternalLink,
+    Info,
     MessageSquareWarning,
     User,
 } from 'lucide-react';
@@ -41,6 +43,7 @@ import { useSharedAnalyticsTimeRange } from '~/shared/hooks/useSharedAnalyticsTi
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { MiniSessionCard } from '~/shared/ui/core/MiniSessionCard';
+import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
 import { Issue, RecordingSession } from '~/shared/types';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 
@@ -176,12 +179,12 @@ function buildIssueSparkline(dailyEvents?: Record<string, number>): number[] {
 }
 
 const ISSUE_TYPE_COLOR: Record<Issue['issueType'], string> = {
-    error: '#f59e0b',
+    error: '#f9a8d4',
     crash: '#ef4444',
     anr: '#8b5cf6',
     rage_tap: '#ec4899',
     api_latency: '#6366f1',
-    ux_friction: '#f97316',
+    ux_friction: '#f9a8d4',
     performance: '#06b6d4',
 };
 
@@ -215,10 +218,10 @@ interface TopUserRecommendation {
 }
 
 const RECOMMENDED_SESSION_PRIORITY_STYLES: Record<RecommendedSession['priority'], string> = {
-    critical: 'border-rose-200 bg-rose-50 text-rose-700',
-    high: 'border-amber-200 bg-amber-50 text-amber-700',
-    watch: 'border-sky-200 bg-sky-50 text-sky-700',
-    baseline: 'border-slate-200 bg-slate-50 text-slate-700',
+    critical: 'bg-rose-50 text-rose-700',
+    high: 'bg-pink-50 text-pink-700',
+    watch: 'bg-sky-50 text-sky-700',
+    baseline: 'bg-slate-50 text-slate-700',
 };
 
 const ANONYMOUS_NICKNAME_STYLES = [
@@ -238,7 +241,7 @@ const ANONYMOUS_NICKNAME_STYLES = [
 
 const TOP_USER_ICON_STYLES = [
     'border-rose-200 bg-rose-100 text-rose-700',
-    'border-amber-200 bg-amber-100 text-amber-700',
+    'border-pink-200 bg-pink-100 text-pink-700',
     'border-emerald-200 bg-emerald-100 text-emerald-700',
     'border-cyan-200 bg-cyan-100 text-cyan-700',
     'border-blue-200 bg-blue-100 text-blue-700',
@@ -637,9 +640,9 @@ const IssueSparkline: React.FC<{ dailyEvents?: Record<string, number>; color: st
 };
 
 const EmptyStateCard: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => (
-                                <div className="rounded-2xl border border-dashed border-slate-200 bg-white/50 px-6 py-10 text-center">
-        <p className="text-sm font-semibold text-slate-700">{title}</p>
-        <p className="mt-2 text-xs text-slate-500 max-w-sm mx-auto">{subtitle}</p>
+    <div className="border-2 border-dashed border-black bg-[#f8fafc] px-6 py-10 text-center shadow-neo-sm">
+        <p className="text-sm font-black uppercase text-black">{title}</p>
+        <p className="mx-auto mt-2 max-w-sm text-xs font-semibold text-slate-600">{subtitle}</p>
     </div>
 );
 
@@ -648,13 +651,17 @@ const GA4Card: React.FC<{
     action?: React.ReactNode;
     children: React.ReactNode;
     className?: string;
-}> = ({ title, action, children, className = '' }) => (
-    <div className={`dashboard-card-surface flex h-full min-w-0 flex-col overflow-hidden p-4 sm:p-5 ${className}`}>
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-            <h3 className="min-w-0 break-words text-base font-semibold uppercase tracking-wide text-black">{title}</h3>
-            {action ? <div className="flex flex-wrap items-center gap-1.5">{action}</div> : null}
+    accentClassName?: string;
+}> = ({ title, action, children, className = '', accentClassName = 'bg-[#67e8f9]' }) => (
+    <div className={`flex h-full min-w-0 flex-col border-2 border-black bg-white shadow-neo transition-all hover:-translate-y-0.5 hover:shadow-neo-lg ${className}`}>
+        <div className={`h-2 border-b-2 border-black ${accentClassName}`} />
+        <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2 border-b-2 border-black pb-3">
+                <h3 className="min-w-0 break-words text-sm font-black uppercase text-black">{title}</h3>
+                {action ? <div className="flex flex-wrap items-center gap-1.5">{action}</div> : null}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
         </div>
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
     </div>
 );
 
@@ -688,12 +695,12 @@ type EngagementMixChartRow = {
 
 const ENGAGEMENT_SEGMENTS: Array<{ key: EngagementSegmentKey; label: string; color: string }> = [
     { key: 'bouncers', label: 'Bouncers', color: '#ef4444' },
-    { key: 'casuals', label: 'Casuals', color: '#f59e0b' },
+    { key: 'casuals', label: 'Casuals', color: '#f9a8d4' },
     { key: 'explorers', label: 'Explorers', color: '#3b82f6' },
     { key: 'loyalists', label: 'Loyalists', color: '#10b981' },
 ];
 
-const COUNTRY_LINE_COLORS = ['#1a73e8', '#e8710a', '#1e8e3e', '#d93025', '#9334e6', '#0f766e'];
+const COUNTRY_LINE_COLORS = ['#1a73e8', '#5dadec', '#1e8e3e', '#f9a8d4', '#9334e6', '#0f766e'];
 
 type MomentumCard = {
     label: string;
@@ -702,6 +709,8 @@ type MomentumCard = {
     positiveIsGood: boolean;
     deltaValue: number | null;
 };
+
+const RETRO_CARD_ACCENTS = ['#67e8f9', '#86efac', '#f9a8d4', '#c4b5fd'];
 
 export const GeneralOverview: React.FC = () => {
     const { selectedProject } = useSessionData();
@@ -723,6 +732,8 @@ export const GeneralOverview: React.FC = () => {
     const [retentionCohortRows, setRetentionCohortRows] = useState<RetentionCohortRow[]>([]);
     const [topIssuesPage, setTopIssuesPage] = useState(0);
     const [copiedTopUserKey, setCopiedTopUserKey] = useState<string | null>(null);
+    const [copiedPublicKey, setCopiedPublicKey] = useState(false);
+    const [copiedDocsPrompt, setCopiedDocsPrompt] = useState(false);
 
     const TOP_ISSUES_PAGE_SIZE = 5;
 
@@ -907,7 +918,7 @@ export const GeneralOverview: React.FC = () => {
         return Object.keys(versionChartData[0]).filter((key) => key !== 'dateKey');
     }, [versionChartData]);
 
-    const versionColors = ['#1a73e8', '#e8710a', '#d93025', '#1e8e3e', '#9334e6', '#0f766e'];
+    const versionColors = ['#1a73e8', '#5dadec', '#f9a8d4', '#1e8e3e', '#9334e6', '#0f766e'];
 
     const topCountries = useMemo(() => {
         if (!geoSummary?.countries?.length) return [];
@@ -1320,6 +1331,28 @@ export const GeneralOverview: React.FC = () => {
         }
     }, []);
 
+    const handleCopyProjectKey = useCallback(async () => {
+        if (!selectedProject?.publicKey) return;
+        try {
+            await navigator.clipboard.writeText(selectedProject.publicKey);
+            setCopiedPublicKey(true);
+            window.setTimeout(() => setCopiedPublicKey(false), 1600);
+        } catch (error) {
+            console.error('Failed to copy project public key:', error);
+        }
+    }, [selectedProject?.publicKey]);
+
+    const handleCopyIntegrationPrompt = useCallback(async () => {
+        try {
+            const prompt = buildProjectAIIntegrationPrompt(selectedProject);
+            await navigator.clipboard.writeText(prompt);
+            setCopiedDocsPrompt(true);
+            window.setTimeout(() => setCopiedDocsPrompt(false), 1600);
+        } catch (error) {
+            console.error('Failed to copy AI integration prompt:', error);
+        }
+    }, [selectedProject]);
+
     const anonymousNicknameStyleMap = useMemo(() => {
         const styleMap: Record<string, string> = {};
         let paletteIndex = 0;
@@ -1346,11 +1379,11 @@ export const GeneralOverview: React.FC = () => {
     }, [trendChartData, overviewObs, deepMetrics, engagementTrends, geoSummary, issues.length]);
 
     if (isLoading && selectedProject?.id) {
-        return <DashboardGhostLoader variant="overview" />;
+        return <DashboardGhostLoader variant="general" />;
     }
 
     return (
-        <div className="min-h-screen bg-transparent font-sans text-slate-900 pb-12">
+        <div className="min-h-screen bg-[#f8fafc] bg-[linear-gradient(90deg,rgba(0,0,0,0.045)_1px,transparent_1px),linear-gradient(rgba(0,0,0,0.045)_1px,transparent_1px)] bg-[length:28px_28px] pb-12 font-sans text-slate-900">
             <DashboardPageHeader
                 title="General"
                 icon={<MessageSquareWarning className="w-6 h-6" />}
@@ -1361,72 +1394,121 @@ export const GeneralOverview: React.FC = () => {
                 </div>
             </DashboardPageHeader>
 
-            <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6">
+            <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-6 sm:px-6">
                 {!selectedProject?.id && (
-                    <div className="border-2 border-black bg-amber-50 p-5 shadow-neo-sm rounded-none text-sm font-black uppercase tracking-widest text-amber-900">
+                    <div className="border-2 border-black bg-[#f9a8d4] p-5 text-sm font-black uppercase text-black shadow-neo">
                         Select a project to view general diagnostics.
                     </div>
                 )}
 
                 {!isLoading && partialError && (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <div className="border-2 border-black bg-[#f9a8d4] p-4 text-sm font-bold text-black shadow-neo-sm">
                         {partialError}
                     </div>
                 )}
 
                 {!isLoading && selectedProject?.id && !hasData && (
-                    <div className="dashboard-card-strong p-6 text-sm font-black uppercase tracking-widest text-red-600 bg-red-50 border-2 border-black rounded-none shadow-neo-sm">
-                        No general analytics available for this filter yet.
+                    <div className="overflow-hidden border-2 border-black bg-white shadow-neo-lg">
+                        <div className="border-b-2 border-black bg-[#86efac] px-5 py-4 sm:px-6">
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] font-black uppercase text-black">
+                                <Info className="h-4 w-4 shrink-0" aria-hidden />
+                                New project setup
+                            </div>
+                            <h3 className="mt-2 text-xl font-black uppercase text-black">No analytics yet - connect your app first</h3>
+                            <p className="mt-2 max-w-3xl text-sm font-semibold text-slate-700">
+                                Once your first build sends data, this General dashboard will populate automatically.
+                                Use these shortcuts to finish setup for either React Native or Swift.
+                            </p>
+                        </div>
+
+                        <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+                            <button
+                                type="button"
+                                onClick={handleCopyProjectKey}
+                                disabled={!selectedProject.publicKey}
+                                className="flex items-center justify-center gap-2 border-2 border-black bg-[#86efac] px-4 py-3 text-xs font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#4ade80] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <Copy className="h-4 w-4" />
+                                {copiedPublicKey ? 'Public key copied' : 'Copy public key'}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleCopyIntegrationPrompt}
+                                className="flex items-center justify-center gap-2 border-2 border-black bg-[#60a5fa] px-4 py-3 text-xs font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#3b82f6] hover:shadow-neo"
+                            >
+                                <BookOpen className="h-4 w-4" />
+                                {copiedDocsPrompt ? 'AI prompt copied' : 'Copy AI docs prompt'}
+                            </button>
+
+                            <a
+                                href="/docs/reactnative/overview"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center justify-center gap-2 border-2 border-black bg-[#f9a8d4] px-4 py-3 text-xs font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#f472b6] hover:shadow-neo"
+                            >
+                                <ExternalLink className="h-4 w-4" />
+                                View React Native docs
+                            </a>
+
+                            <a
+                                href="/docs/swift/overview"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center justify-center gap-2 border-2 border-black bg-[#c4b5fd] px-4 py-3 text-xs font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#a78bfa] hover:shadow-neo"
+                            >
+                                <ExternalLink className="h-4 w-4" />
+                                View Swift docs
+                            </a>
+                        </div>
                     </div>
                 )}
 
                 {!isLoading && hasData && (
                     <>
                         {momentumCards.length > 0 && (
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                                {momentumCards.map((card) => {
-                                    const deltaClass = card.deltaValue === null || card.deltaValue === 0
-                                        ? 'text-slate-500'
-                                        : (card.positiveIsGood ? card.deltaValue > 0 : card.deltaValue < 0)
-                                            ? 'text-emerald-600'
-                                            : 'text-rose-600';
+                            <section>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                    {momentumCards.map((card, index) => {
+                                        const deltaClass = card.deltaValue === null || card.deltaValue === 0
+                                            ? 'text-slate-600'
+                                            : (card.positiveIsGood ? card.deltaValue > 0 : card.deltaValue < 0)
+                                                ? 'text-emerald-700'
+                                                : 'text-rose-700';
 
-                                    return (
-                                        <div key={card.label} className="dashboard-surface min-w-0 bg-white px-4 py-3 border-2 border-black shadow-neo-sm hover:-translate-y-1 hover:shadow-neo transition-all rounded-none">
-                                            <div className="break-words text-[10px] font-black uppercase tracking-widest text-slate-600">{card.label}</div>
-                                            <div className="mt-2 break-words text-2xl font-black tracking-tight text-black sm:text-3xl">{card.value}</div>
-                                            <div className={`mt-1 text-xs font-bold ${deltaClass}`}>
-                                                {card.delta}
-                                            </div>
-                                            {trendComparison && (
-                                                <div className="mt-0.5 text-[10px] text-slate-400">
-                                                    vs previous {trendComparison.windowSize}-point window
+                                        return (
+                                            <div key={card.label} className="min-w-0 border-2 border-black bg-white p-4 shadow-neo transition-all hover:-translate-y-1 hover:shadow-neo-lg">
+                                                <div className="mb-3 h-2 border-2 border-black" style={{ backgroundColor: RETRO_CARD_ACCENTS[index % RETRO_CARD_ACCENTS.length] }} />
+                                                <div className="break-words text-[10px] font-black uppercase text-slate-700">{card.label}</div>
+                                                <div className="mt-2 break-words text-3xl font-black text-black sm:text-4xl">{card.value}</div>
+                                                <div className={`mt-2 inline-flex border-2 border-black bg-white px-2 py-1 text-xs font-black uppercase shadow-neo-sm ${deltaClass}`}>
+                                                    {card.delta}
                                                 </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
                         )}
 
-                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-                            <GA4Card title="User activity over time">
+                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                            <GA4Card title="User activity over time" className="xl:col-span-5" accentClassName="bg-[#67e8f9]">
                                 <div className="mb-4 grid grid-cols-2 gap-3 text-left">
                                     <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">LATEST DAU</span>
-                                        <div className="text-3xl font-black text-black tracking-tight">{formatCompact(activitySummary.latestDau)}</div>
+                                        <span className="text-[9px] font-black uppercase text-slate-500">LATEST DAU</span>
+                                        <div className="text-3xl font-black text-black">{formatCompact(activitySummary.latestDau)}</div>
                                     </div>
                                     <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">AVG DAU</span>
-                                        <div className="text-2xl font-black text-slate-700 tracking-tight">{formatCompact(activitySummary.avgDau)}</div>
+                                        <span className="text-[9px] font-black uppercase text-slate-500">AVG DAU</span>
+                                        <div className="text-2xl font-black text-slate-700">{formatCompact(activitySummary.avgDau)}</div>
                                     </div>
                                     <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">PEAK MAU</span>
-                                        <div className="text-2xl font-black text-slate-700 tracking-tight">{formatCompact(activitySummary.peakMau)}</div>
+                                        <span className="text-[9px] font-black uppercase text-slate-500">PEAK MAU</span>
+                                        <div className="text-2xl font-black text-slate-700">{formatCompact(activitySummary.peakMau)}</div>
                                     </div>
                                     <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">LATEST SESSIONS</span>
-                                        <div className="text-2xl font-black text-slate-700 tracking-tight">{formatCompact(activitySummary.latestSessions)}</div>
+                                        <span className="text-[9px] font-black uppercase text-slate-500">LATEST SESSIONS</span>
+                                        <div className="text-2xl font-black text-slate-700">{formatCompact(activitySummary.latestSessions)}</div>
                                     </div>
                                 </div>
                                 <div className="h-[130px]">
@@ -1435,18 +1517,18 @@ export const GeneralOverview: React.FC = () => {
                                             <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                             <YAxis tick={{ fontSize: 10 }} />
                                             <Tooltip labelFormatter={(value) => formatDateLabel(String(value))} />
-                                            <Line type="monotone" dataKey="sessions" stroke="#f59e0b" strokeWidth={1.75} dot={false} name="Sessions" />
-                                            <Line type="monotone" dataKey="dau" stroke="#1a73e8" strokeWidth={2} dot={false} name="DAU" />
-                                            <Line type="monotone" dataKey="mau" stroke="#34a853" strokeWidth={1.5} dot={false} name="MAU" />
+                                            <Line type="monotone" dataKey="sessions" stroke="#f9a8d4" strokeWidth={1.75} dot={false} name="Sessions" isAnimationActive={false} />
+                                            <Line type="monotone" dataKey="dau" stroke="#1a73e8" strokeWidth={2} dot={false} name="DAU" isAnimationActive={false} />
+                                            <Line type="monotone" dataKey="mau" stroke="#34a853" strokeWidth={1.5} dot={false} name="MAU" isAnimationActive={false} />
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
                             </GA4Card>
 
-                            <GA4Card title="Active users snapshot">
+                            <GA4Card title="Active users snapshot" className="xl:col-span-3" accentClassName="bg-[#86efac]">
                                 <div className="mt-1 text-center">
-                                    <div className="text-4xl font-black text-black tracking-tighter">{formatCompact(activitySummary.latestDau)}</div>
-                                    <div className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500">LATEST DAILY ACTIVE USERS</div>
+                                    <div className="text-4xl font-black text-black">{formatCompact(activitySummary.latestDau)}</div>
+                                    <div className="mt-2 text-[10px] font-black uppercase text-slate-500">LATEST DAILY ACTIVE USERS</div>
                                     <div className="mt-1 text-[11px] font-bold text-slate-500">Estimated {formatCompact(activeUsersPerMinute)} users/min</div>
                                 </div>
 
@@ -1459,13 +1541,13 @@ export const GeneralOverview: React.FC = () => {
                                                 labelFormatter={(value) => formatDateLabel(String(value))}
                                                 formatter={(value: number | undefined) => [formatCompact(value ?? 0), 'DAU']}
                                             />
-                                            <Area type="monotone" dataKey="dau" stroke="#1a73e8" fill="#dbeafe" strokeWidth={2} />
+                                            <Area type="monotone" dataKey="dau" stroke="#1a73e8" fill="#dbeafe" strokeWidth={2} isAnimationActive={false} />
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
 
                                 <div className="mt-3 border-t border-slate-100 pt-3">
-                                    <div className="mb-2 flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                    <div className="mb-2 flex justify-between text-[10px] font-black uppercase text-slate-400">
                                         <span>TOP COUNTRIES</span>
                                         <span>SESSIONS</span>
                                     </div>
@@ -1480,13 +1562,13 @@ export const GeneralOverview: React.FC = () => {
                                 </div>
 
                                 <div className="mt-3 text-right">
-                                    <Link to={`${pathPrefix}/analytics/geo`} className="text-[10px] font-black uppercase tracking-widest text-[#5dadec] hover:text-black transition-colors">
+                                    <Link to={`${pathPrefix}/analytics/geo`} className="text-[10px] font-black uppercase text-[#2563eb] transition-colors hover:text-black">
                                         View geographic activity →
                                     </Link>
                                 </div>
                             </GA4Card>
 
-                            <GA4Card title="Active users by app version">
+                            <GA4Card title="Active users by app version" className="xl:col-span-4" accentClassName="bg-[#c4b5fd]">
                                 <div className="h-[180px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <LineChart data={versionChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -1502,6 +1584,7 @@ export const GeneralOverview: React.FC = () => {
                                                     strokeWidth={2}
                                                     dot={false}
                                                     name={version}
+                                                    isAnimationActive={false}
                                                 />
                                             ))}
                                         </LineChart>
@@ -1522,35 +1605,35 @@ export const GeneralOverview: React.FC = () => {
                                 )}
 
                                 <div className="mt-2 text-right">
-                                    <Link to={`${pathPrefix}/analytics/devices`} className="text-[10px] font-black uppercase tracking-widest text-[#5dadec] hover:text-black transition-colors">
+                                    <Link to={`${pathPrefix}/analytics/devices`} className="text-[10px] font-black uppercase text-[#2563eb] transition-colors hover:text-black">
                                         View app versions →
                                     </Link>
                                 </div>
                             </GA4Card>
 
-                            <GA4Card title="User engagement mix">
+                            <GA4Card title="User engagement mix" className="xl:col-span-12" accentClassName="bg-[#67e8f9]">
                                 <div className="mb-4 grid grid-cols-2 gap-3 text-left">
                                     <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Latest tracked users</span>
-                                        <div className="text-3xl font-black text-black tracking-tight">
+                                        <span className="text-[9px] font-black uppercase text-slate-500">Latest tracked users</span>
+                                        <div className="text-3xl font-black text-black">
                                             {latestEngagementMix ? formatCompact(latestEngagementMix.total) : '0'}
                                         </div>
                                     </div>
                                     <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Engaged share</span>
-                                        <div className="text-2xl font-black text-slate-700 tracking-tight">
+                                        <span className="text-[9px] font-black uppercase text-slate-500">Engaged share</span>
+                                        <div className="text-2xl font-black text-slate-700">
                                             {latestEngagementMix ? `${latestEngagementMix.engagedShare.toFixed(1)}%` : 'N/A'}
                                         </div>
                                     </div>
                                     <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Loyalists</span>
-                                        <div className="text-2xl font-black text-slate-700 tracking-tight">
+                                        <span className="text-[9px] font-black uppercase text-slate-500">Loyalists</span>
+                                        <div className="text-2xl font-black text-slate-700">
                                             {latestEngagementMix ? formatCompact(latestEngagementMix.loyalists) : '0'}
                                         </div>
                                     </div>
                                     <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Bouncers</span>
-                                        <div className="text-2xl font-black text-slate-700 tracking-tight">
+                                        <span className="text-[9px] font-black uppercase text-slate-500">Bouncers</span>
+                                        <div className="text-2xl font-black text-slate-700">
                                             {latestEngagementMix ? formatCompact(latestEngagementMix.bouncers) : '0'}
                                         </div>
                                     </div>
@@ -1580,6 +1663,7 @@ export const GeneralOverview: React.FC = () => {
                                                             fillOpacity={0.95}
                                                             dot={false}
                                                             name={segment.label}
+                                                            isAnimationActive={false}
                                                         />
                                                     ))}
                                                 </AreaChart>
@@ -1596,7 +1680,7 @@ export const GeneralOverview: React.FC = () => {
                                         </div>
 
                                         <div className="mt-2 text-right">
-                                            <Link to={`${pathPrefix}/analytics/journeys`} className="text-[10px] font-black uppercase tracking-widest text-[#5dadec] hover:text-black transition-colors">
+                                            <Link to={`${pathPrefix}/analytics/journeys`} className="text-[10px] font-black uppercase text-[#2563eb] transition-colors hover:text-black">
                                                 View journey analytics →
                                             </Link>
                                         </div>
@@ -1609,8 +1693,8 @@ export const GeneralOverview: React.FC = () => {
                             </GA4Card>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-                            <GA4Card title="App stability overview">
+                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                            <GA4Card title="App stability overview" className="xl:col-span-4" accentClassName="bg-[#f9a8d4]">
                                 <div className="-mx-1 overflow-x-auto px-1">
                                     <table className="mt-1 min-w-[360px] w-full text-xs">
                                         <thead>
@@ -1651,14 +1735,14 @@ export const GeneralOverview: React.FC = () => {
                                 </div>
                             </GA4Card>
 
-                            <GA4Card title="Average engagement time per active user">
+                            <GA4Card title="Average engagement time per active user" className="xl:col-span-4" accentClassName="bg-[#67e8f9]">
                                 <div className="mb-4 flex flex-wrap items-baseline gap-x-6 gap-y-3">
                                     <div>
-                                        <div className="text-3xl font-black text-black tracking-tight">{avgEngagementTime}</div>
+                                        <div className="text-3xl font-black text-black">{avgEngagementTime}</div>
                                     </div>
                                     <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Engaged user share</span>
-                                        <div className="text-2xl font-black text-slate-700 tracking-tight">
+                                        <span className="text-[9px] font-black uppercase text-slate-500">Engaged user share</span>
+                                        <div className="text-2xl font-black text-slate-700">
                                             {engagedUserShare === null ? 'N/A' : `${engagedUserShare.toFixed(1)}%`}
                                         </div>
                                     </div>
@@ -1672,13 +1756,13 @@ export const GeneralOverview: React.FC = () => {
                                                 labelFormatter={(value) => formatDateLabel(String(value))}
                                                 formatter={(value: number | undefined) => [formatDuration(value ?? 0), 'Avg engagement']}
                                             />
-                                            <Line type="monotone" dataKey="engagementTime" stroke="#1a73e8" strokeWidth={2} dot={false} />
+                                            <Line type="monotone" dataKey="engagementTime" stroke="#1a73e8" strokeWidth={2} dot={false} isAnimationActive={false} />
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
                             </GA4Card>
 
-                            <GA4Card title="User retention">
+                            <GA4Card title="User retention" className="xl:col-span-4" accentClassName="bg-[#86efac]">
                                 <div className="h-[180px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={retentionChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -1689,7 +1773,7 @@ export const GeneralOverview: React.FC = () => {
                                                 labelFormatter={(value) => formatDateLabel(String(value))}
                                                 formatter={(value: number | undefined) => [`${value ?? 0}%`, 'DAU/MAU stickiness']}
                                             />
-                                            <Bar dataKey="retention" fill="#1a73e8" radius={[2, 2, 0, 0]} />
+                                            <Bar dataKey="retention" fill="#1a73e8" radius={[2, 2, 0, 0]} isAnimationActive={false} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -1698,7 +1782,7 @@ export const GeneralOverview: React.FC = () => {
                                 </div>
                             </GA4Card>
 
-                            <GA4Card title="Retention cohorts">
+                            <GA4Card title="Retention cohorts" className="xl:col-span-12" accentClassName="bg-[#c4b5fd]">
                                 <div className="mb-2 text-[10px] text-slate-400">
                                     Weekly user retention by first active week (Week 0 to Week 5)
                                 </div>
@@ -1724,7 +1808,7 @@ export const GeneralOverview: React.FC = () => {
                                                     {row.retention.map((value, weekIdx) => (
                                                         <td key={`${row.weekStartKey}-${weekIdx}`} className="px-1 py-1">
                                                             <div
-                                                                className="flex h-8 min-w-[62px] items-center justify-center rounded-md text-[10px] font-semibold"
+                                                                className="flex h-8 min-w-[62px] items-center justify-center border border-black text-[10px] font-bold"
                                                                 style={getCohortCellStyle(value, weekIdx)}
                                                             >
                                                                 {value === null ? '—' : `${value.toFixed(1)}%`}
@@ -1749,8 +1833,8 @@ export const GeneralOverview: React.FC = () => {
                             </GA4Card>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                            <GA4Card title="Custom Events">
+                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                            <GA4Card title="Custom Events" className="xl:col-span-5" accentClassName="bg-[#f9a8d4]">
                                 {customEvents.length > 0 ? (
                                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                                         {customEvents.map((event) => {
@@ -1764,8 +1848,8 @@ export const GeneralOverview: React.FC = () => {
                                                         <span className="truncate text-slate-700" title={event.name}>{event.name}</span>
                                                         <span className="font-semibold text-slate-900">{formatCompact(event.count)}</span>
                                                     </div>
-                                                    <div className="h-1.5 rounded bg-slate-100">
-                                                        <div className="h-1.5 rounded bg-blue-500" style={{ width: `${width}%` }} />
+                                                    <div className="h-2 border border-black bg-white">
+                                                        <div className="h-full bg-[#5dadec]" style={{ width: `${width}%` }} />
                                                     </div>
                                                 </div>
                                             );
@@ -1778,7 +1862,7 @@ export const GeneralOverview: React.FC = () => {
                                 )}
                             </GA4Card>
 
-                            <GA4Card title="Regional user reach">
+                            <GA4Card title="Regional user reach" className="xl:col-span-7" accentClassName="bg-[#c4b5fd]">
                                 {countryUsersByRegion.countryKeys.length > 0 ? (
                                     <>
                                         <div className="h-[220px]">
@@ -1800,6 +1884,7 @@ export const GeneralOverview: React.FC = () => {
                                                             strokeWidth={2}
                                                             dot={false}
                                                             name={country}
+                                                            isAnimationActive={false}
                                                         />
                                                     ))}
                                                 </LineChart>
@@ -1823,9 +1908,9 @@ export const GeneralOverview: React.FC = () => {
                             </GA4Card>
                         </div>
 
-                        <section className="space-y-3">
+                        <section className="space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
-                                <h2 className="text-lg font-semibold tracking-tight text-black">Top Issues</h2>
+                                <h2 className="border-2 border-black bg-[#fb7185] px-4 py-2 text-lg font-black uppercase text-black shadow-neo-sm">Top Issues</h2>
                                 <div className="flex flex-wrap items-center gap-2">
                                     {topIssuesTotalPages > 1 && (
                                         <div className="flex items-center gap-1">
@@ -1833,7 +1918,7 @@ export const GeneralOverview: React.FC = () => {
                                                 type="button"
                                                 onClick={() => setTopIssuesPage((prev) => Math.max(0, prev - 1))}
                                                 disabled={topIssuesPage === 0}
-                                                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40"
+                                                className="inline-flex h-8 w-8 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:bg-[#f4f4f5] hover:shadow-neo disabled:pointer-events-none disabled:opacity-40"
                                                 aria-label="Previous issues page"
                                             >
                                                 <ChevronLeft className="h-4 w-4" />
@@ -1842,17 +1927,17 @@ export const GeneralOverview: React.FC = () => {
                                                 type="button"
                                                 onClick={() => setTopIssuesPage((prev) => Math.min(topIssuesTotalPages - 1, prev + 1))}
                                                 disabled={topIssuesPage >= topIssuesTotalPages - 1}
-                                                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40"
+                                                className="inline-flex h-8 w-8 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:bg-[#f4f4f5] hover:shadow-neo disabled:pointer-events-none disabled:opacity-40"
                                                 aria-label="Next issues page"
                                             >
                                                 <ChevronRight className="h-4 w-4" />
                                             </button>
                                         </div>
                                     )}
-                                    <NeoBadge variant="neutral" size="sm" className="shadow-none border-slate-200">
+                                    <NeoBadge variant="neutral" size="sm" className="rounded-none border-black bg-white text-black shadow-neo-sm">
                                         Page {sortedIssues.length === 0 ? '0/0' : `${topIssuesPage + 1}/${topIssuesTotalPages}`}
                                     </NeoBadge>
-                                    <NeoBadge variant="neutral" size="sm" className="shadow-none border-slate-200">
+                                    <NeoBadge variant="neutral" size="sm" className="rounded-none border-black bg-white text-black shadow-neo-sm">
                                         {sortedIssues.length} total
                                     </NeoBadge>
                                 </div>
@@ -1864,21 +1949,21 @@ export const GeneralOverview: React.FC = () => {
                                     subtitle="Issue groups appear here as they are detected."
                                 />
                             ) : (
-                                <div className="dashboard-card-surface overflow-hidden">
-                                    <div className="divide-y divide-slate-100">
+                                <div className="overflow-hidden border-2 border-black bg-white shadow-neo">
+                                    <div className="divide-y-2 divide-black">
                                         {topIssues.map((issue) => {
                                             const issueColor = ISSUE_TYPE_COLOR[issue.issueType] || '#64748b';
                                             return (
                                                 <div
                                                     key={issue.id}
-                                                    className="flex flex-col gap-3 px-5 py-3.5 transition-colors hover:bg-[#f4f4f5] md:flex-row md:items-center"
+                                                    className="flex flex-col gap-3 px-5 py-3.5 transition-colors hover:bg-[#f8fafc] md:flex-row md:items-center"
                                                 >
-                                                    <NeoBadge variant={ISSUE_TYPE_BADGE_VARIANT[issue.issueType] || 'neutral'} size="sm">
+                                                    <NeoBadge variant={ISSUE_TYPE_BADGE_VARIANT[issue.issueType] || 'neutral'} size="sm" className="rounded-none border-black font-black uppercase shadow-neo-sm">
                                                         {issue.issueType.replace('_', ' ')}
                                                     </NeoBadge>
 
                                                     <div className="min-w-0 flex-1">
-                                                        <div className="truncate text-sm font-semibold uppercase tracking-wide text-black">
+                                                        <div className="truncate text-sm font-black uppercase text-black">
                                                             {issue.title}
                                                         </div>
                                                         <div className="truncate text-[11px] text-slate-500 mt-0.5">
@@ -1892,15 +1977,15 @@ export const GeneralOverview: React.FC = () => {
 
                                                     <div className="hidden shrink-0 items-center gap-4 text-right sm:flex">
                                                         <div>
-                                                            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Events</div>
+                                                            <div className="text-[10px] font-bold uppercase text-slate-400">Events</div>
                                                             <div className="text-sm font-black text-slate-900">{formatCompact(issue.eventCount)}</div>
                                                         </div>
                                                         <div>
-                                                            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Users</div>
+                                                            <div className="text-[10px] font-bold uppercase text-slate-400">Users</div>
                                                             <div className="text-sm font-black text-slate-900">{formatCompact(issue.userCount)}</div>
                                                         </div>
                                                         <div>
-                                                            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Last</div>
+                                                            <div className="text-[10px] font-bold uppercase text-slate-400">Last</div>
                                                             <div className="text-xs font-bold text-slate-700">{formatLastSeen(issue.lastSeen)}</div>
                                                         </div>
                                                     </div>
@@ -1908,14 +1993,14 @@ export const GeneralOverview: React.FC = () => {
                                                     <div className="flex w-full flex-wrap items-center gap-2 shrink-0 md:w-auto">
                                                         <Link
                                                             to={`${pathPrefix}/general/${issue.id}`}
-                                                            className="rounded-md border border-slate-300 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 hover:border-slate-900 hover:text-slate-900 transition-colors"
+                                                            className="border-2 border-black bg-white px-2.5 py-1 text-[10px] font-black uppercase text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
                                                         >
                                                             View
                                                         </Link>
                                                         {issue.sampleSessionId && (
                                                             <Link
                                                                 to={`${pathPrefix}/sessions/${issue.sampleSessionId}`}
-                                                                className="rounded-md border border-sky-300 bg-sky-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-700 hover:border-sky-500 transition-colors"
+                                                                className="border-2 border-black bg-[#67e8f9] px-2.5 py-1 text-[10px] font-black uppercase text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:bg-[#22d3ee] hover:shadow-neo"
                                                             >
                                                                 Replay
                                                             </Link>
@@ -1929,18 +2014,18 @@ export const GeneralOverview: React.FC = () => {
                             )}
                         </section>
 
-                        <section className="space-y-3">
+                        <section className="space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
-                                    <h2 className="text-lg font-semibold tracking-tight text-black">Top Users</h2>
+                                    <h2 className="border-2 border-black bg-[#86efac] px-4 py-2 text-lg font-black uppercase text-black shadow-neo-sm">Top Users</h2>
                                 </div>
-                                <NeoBadge variant="info" size="sm" className="shadow-none border-sky-200">
+                                <NeoBadge variant="info" size="sm" className="rounded-none border-black bg-white text-black shadow-neo-sm">
                                     {isHeavyLoading ? '…' : `${topUsers.length}/20 users`}
                                 </NeoBadge>
                             </div>
 
                             {isHeavyLoading ? (
-                                <div className="h-[180px] animate-pulse rounded-xl bg-slate-100" />
+                                <div className="h-[180px] animate-pulse border-2 border-black bg-white shadow-neo" />
                             ) : topUsers.length === 0 ? (
                                 <EmptyStateCard
                                     title="No top users yet"
@@ -1948,10 +2033,10 @@ export const GeneralOverview: React.FC = () => {
                                 />
                             ) : (
                                 <div className="relative">
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-12 bg-gradient-to-l from-white via-white/80 to-transparent sm:block" />
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-12 bg-gradient-to-l from-[#f8fafc] via-[#f8fafc]/80 to-transparent sm:block" />
                                     <div className="overflow-x-auto pb-3">
                                         <div className="flex min-w-full snap-x snap-mandatory gap-3 pl-1 pr-2 sm:min-w-max sm:pl-3 sm:pr-4">
-                                            {topUsers.map((user) => {
+                                            {topUsers.map((user, index) => {
                                         const session = user.latestSession;
                                         const firstSession = user.firstSession;
                                         const displayName = truncateUserLabel(user.displayName);
@@ -1968,8 +2053,9 @@ export const GeneralOverview: React.FC = () => {
                                         return (
                                             <article
                                                 key={user.userKey}
-                                                className="group min-w-[320px] w-[calc(100vw-4rem)] max-w-[420px] snap-start rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-3 shadow-sm transition-all hover:shadow-md sm:w-[360px] lg:w-[400px]"
+                                                className="group min-w-[320px] w-[calc(100vw-4rem)] max-w-[420px] snap-start border-2 border-black bg-white p-3 shadow-neo transition-all hover:-translate-y-1 hover:shadow-neo-lg sm:w-[360px] lg:w-[400px]"
                                             >
+                                                <div className="mb-3 h-2 border-2 border-black" style={{ backgroundColor: RETRO_CARD_ACCENTS[index % RETRO_CARD_ACCENTS.length] }} />
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-2">
@@ -1979,7 +2065,7 @@ export const GeneralOverview: React.FC = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleCopyTopUser(user.copyValue, user.userKey)}
-                                                                className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-left font-mono text-[11px] font-semibold text-slate-800 transition-colors hover:border-slate-400 hover:bg-slate-50"
+                                                                className="inline-flex min-w-0 max-w-full items-center gap-1.5 border-2 border-black bg-white px-2 py-1 text-left font-mono text-[11px] font-black text-slate-900 shadow-neo-sm transition hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
                                                                 title={`Copy ${user.displayName}`}
                                                                 aria-label={`Copy ${user.displayName}`}
                                                             >
@@ -1994,7 +2080,7 @@ export const GeneralOverview: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => navigate(`${pathPrefix}/sessions/${session.id}`)}
-                                                        className="inline-flex items-center gap-1.5 rounded-lg border-2 border-black bg-black px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-white shadow-[2px_2px_0px_0px_rgba(15,23,42,0.18)] transition-all hover:-translate-y-px hover:bg-slate-800 hover:shadow-[4px_4px_0px_0px_rgba(15,23,42,0.18)] active:translate-y-0 active:shadow-[2px_2px_0px_0px_rgba(15,23,42,0.18)]"
+                                                        className="inline-flex items-center gap-1.5 border-2 border-black bg-black px-3 py-2 text-[10px] font-black uppercase text-white shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-neo active:translate-y-0"
                                                     >
                                                         Open latest
                                                         <ChevronRight size={13} className="shrink-0" />
@@ -2003,53 +2089,53 @@ export const GeneralOverview: React.FC = () => {
 
                                                 <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[11px] text-slate-600">
                                                     <div>
-                                                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Country</div>
+                                                        <div className="text-[10px] font-semibold uppercase text-slate-400">Country</div>
                                                         <div className="mt-0.5 flex items-center gap-2 truncate font-semibold text-slate-800" title={geoDisplay.fullLabel}>
                                                             <span className="text-base leading-none">{geoDisplay.flagEmoji}</span>
                                                             <span className="truncate">{geoDisplay.fullLabel}</span>
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total Sessions</div>
+                                                        <div className="text-[10px] font-semibold uppercase text-slate-400">Total Sessions</div>
                                                         <div className="mt-0.5 font-semibold text-slate-800">{user.replayCount.toLocaleString()}</div>
                                                     </div>
                                                     <div>
-                                                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">First Appeared</div>
+                                                        <div className="text-[10px] font-semibold uppercase text-slate-400">First Appeared</div>
                                                         <div className="mt-0.5 font-semibold text-slate-800">
                                                             {new Date(user.userFirstSeenAt ?? firstSession.startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Last Appeared</div>
+                                                        <div className="text-[10px] font-semibold uppercase text-slate-400">Last Appeared</div>
                                                         <div className="mt-0.5 font-semibold text-slate-800">
                                                             {new Date(session.startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total Time</div>
+                                                        <div className="text-[10px] font-semibold uppercase text-slate-400">Total Time</div>
                                                         <div className="mt-0.5 font-semibold text-slate-800">{formatDuration(user.totalDurationSeconds)}</div>
                                                     </div>
                                                     <div>
-                                                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Latest Device</div>
+                                                        <div className="text-[10px] font-semibold uppercase text-slate-400">Latest Device</div>
                                                         <div className="mt-0.5 truncate font-semibold text-slate-800" title={deviceLabel}>
                                                             {deviceLabel}
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="mt-3 flex flex-col gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-2.5 sm:flex-row sm:items-start sm:justify-between">
+                                                <div className="mt-3 flex flex-col gap-3 border-t-2 border-black pt-3 sm:flex-row sm:items-start sm:justify-between">
                                                     <div className="min-w-0 flex-1">
-                                                        <div className="truncate text-[10px] font-black uppercase tracking-widest text-[#5dadec]" title={deviceLabel}>
+                                                        <div className="truncate text-[10px] font-black uppercase text-[#2563eb]" title={deviceLabel}>
                                                             {deviceLabel}
                                                         </div>
                                                         <div className="mt-1 text-[10px] text-slate-500">
                                                             First seen {formatLastSeen(user.userFirstSeenAt ?? firstSession.startedAt)} and last seen {formatLastSeen(session.startedAt)}
                                                         </div>
                                                         <div className="mt-1.5 flex min-w-0 flex-wrap gap-1.5">
-                                                            <span className="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-600">
+                                                            <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-700">
                                                                 {platformLabel}
                                                             </span>
-                                                            <span className="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                                            <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
                                                                 {versionLabel}
                                                             </span>
                                                         </div>
@@ -2081,21 +2167,21 @@ export const GeneralOverview: React.FC = () => {
                             )}
                         </section>
 
-                        <section className="space-y-3">
+                        <section className="space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
-                                    <h2 className="text-lg font-semibold tracking-tight text-black">Recommended Sessions</h2>
-                                    <p className="mt-0.5 text-xs text-slate-500">
+                                    <h2 className="border-2 border-black bg-[#67e8f9] px-4 py-2 text-lg font-black uppercase text-black shadow-neo-sm">Recommended Sessions</h2>
+                                    <p className="mt-2 text-xs font-semibold text-slate-600">
                                         Mixed user segments: new, returning, anonymous, platform-specific, and risk-heavy journeys.
                                     </p>
                                 </div>
-                                <NeoBadge variant="neutral" size="sm" className="shadow-none border-slate-200">
+                                <NeoBadge variant="neutral" size="sm" className="rounded-none border-black bg-white text-black shadow-neo-sm">
                                     {isHeavyLoading ? '…' : `${recommendedSessions.length} picks`}
                                 </NeoBadge>
                             </div>
 
                             {isHeavyLoading ? (
-                                <div className="h-[200px] animate-pulse rounded-xl bg-slate-100" />
+                                <div className="h-[200px] animate-pulse border-2 border-black bg-white shadow-neo" />
                             ) : recommendedSessions.length === 0 ? (
                                 <EmptyStateCard
                                     title="No recommended sessions"
@@ -2103,10 +2189,10 @@ export const GeneralOverview: React.FC = () => {
                                 />
                             ) : (
                                 <div className="relative">
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-12 bg-gradient-to-l from-white via-white/80 to-transparent sm:block" />
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-12 bg-gradient-to-l from-[#f8fafc] via-[#f8fafc]/80 to-transparent sm:block" />
                                     <div className="overflow-x-auto pb-3">
                                         <div className="flex min-w-full snap-x snap-mandatory gap-3 pl-1 pr-2 sm:min-w-max sm:pl-3 sm:pr-4">
-                                            {recommendedSessions.map((rec) => {
+                                            {recommendedSessions.map((rec, index) => {
                                                 const anonymousNickname = getAnonymousNickname(rec.session);
                                                 const nicknameStyle = anonymousNickname
                                                     ? (anonymousNicknameStyleMap[anonymousNickname] || getAnonymousNicknameStyle(anonymousNickname))
@@ -2116,29 +2202,30 @@ export const GeneralOverview: React.FC = () => {
                                                 return (
                                                     <article
                                                         key={rec.session.id}
-                                                        className="group min-w-[280px] w-[calc(100vw-4rem)] max-w-[360px] snap-start rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-3 shadow-sm transition-all hover:shadow-md sm:w-[320px] lg:w-[360px]"
+                                                        className="group min-w-[280px] w-[calc(100vw-4rem)] max-w-[360px] snap-start border-2 border-black bg-white p-3 shadow-neo transition-all hover:-translate-y-1 hover:shadow-neo-lg sm:w-[320px] lg:w-[360px]"
                                                     >
+                                                        <div className="mb-3 h-2 border-2 border-black" style={{ backgroundColor: RETRO_CARD_ACCENTS[(index + 1) % RETRO_CARD_ACCENTS.length] }} />
                                                         <div className="flex flex-wrap items-start justify-between gap-2">
                                                             <div className="min-w-0">
                                                                 <span
-                                                                    className={`inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${RECOMMENDED_SESSION_PRIORITY_STYLES[rec.priority]}`}
+                                                                    className={`inline-flex items-center border-2 border-black px-2 py-1 text-[10px] font-black uppercase shadow-neo-sm ${RECOMMENDED_SESSION_PRIORITY_STYLES[rec.priority]}`}
                                                                 >
                                                                     {rec.category}
                                                                 </span>
                                                                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                                                     {anonymousNickname ? (
                                                                         <span
-                                                                            className={`inline-flex max-w-[200px] items-center truncate rounded-md border px-2 py-0.5 text-[10px] font-semibold ${nicknameStyle}`}
+                                                                            className={`inline-flex max-w-[200px] items-center truncate border px-2 py-0.5 text-[10px] font-bold ${nicknameStyle}`}
                                                                             title={anonymousNickname}
                                                                         >
                                                                             {anonymousNickname}
                                                                         </span>
                                                                     ) : (
-                                                                        <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                                                                        <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
                                                                             {audienceLabel}
                                                                         </span>
                                                                     )}
-                                                                    <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                                                                    <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
                                                                         {rec.session.platform.toUpperCase()}
                                                                     </span>
                                                                 </div>
@@ -2147,7 +2234,7 @@ export const GeneralOverview: React.FC = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => navigate(`${pathPrefix}/sessions/${rec.session.id}`)}
-                                                                className="inline-flex items-center gap-1.5 rounded-lg border-2 border-black bg-black px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-white shadow-[2px_2px_0px_0px_rgba(15,23,42,0.18)] transition-all hover:-translate-y-px hover:bg-slate-800 hover:shadow-[4px_4px_0px_0px_rgba(15,23,42,0.18)] active:translate-y-0 active:shadow-[2px_2px_0px_0px_rgba(15,23,42,0.18)]"
+                                                                className="inline-flex items-center gap-1.5 border-2 border-black bg-black px-3 py-2 text-[10px] font-black uppercase text-white shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-neo active:translate-y-0"
                                                             >
                                                                 Open
                                                                 <ChevronRight size={13} className="shrink-0" />
@@ -2159,23 +2246,23 @@ export const GeneralOverview: React.FC = () => {
                                                         </p>
 
                                                         <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-3">
-                                                            <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                                                                <div className="text-slate-400">Duration</div>
+                                                            <div className="border border-black bg-[#f8fafc] px-2 py-1.5">
+                                                                <div className="font-bold text-slate-500">Duration</div>
                                                                 <div className="font-semibold text-slate-700">{formatDuration(rec.session.durationSeconds || 0)}</div>
                                                             </div>
-                                                            <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                                                                <div className="text-slate-400">Signals</div>
-                                                                <div className="font-black text-black text-xl tracking-tight">{issueSignalsForSession(rec.session)}</div>
+                                                            <div className="border border-black bg-[#f8fafc] px-2 py-1.5">
+                                                                <div className="font-bold text-slate-500">Signals</div>
+                                                                <div className="font-black text-black text-xl">{issueSignalsForSession(rec.session)}</div>
                                                             </div>
-                                                            <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                                                                <div className="text-slate-400">Last Seen</div>
-                                                                <div className="font-black text-black text-xl tracking-tight">{formatLastSeen(rec.session.startedAt)}</div>
+                                                            <div className="border border-black bg-[#f8fafc] px-2 py-1.5">
+                                                                <div className="font-bold text-slate-500">Last Seen</div>
+                                                                <div className="font-black text-black text-xl">{formatLastSeen(rec.session.startedAt)}</div>
                                                             </div>
                                                         </div>
 
-                                                        <div className="mt-3 flex flex-col gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-2.5 sm:flex-row sm:items-start sm:justify-between">
+                                                        <div className="mt-3 flex flex-col gap-3 border-t-2 border-black pt-3 sm:flex-row sm:items-start sm:justify-between">
                                                             <div className="min-w-0 flex-1">
-                                                                <div className="truncate text-[10px] font-black uppercase tracking-widest text-[#5dadec] hover:underline">
+                                                                <div className="truncate text-[10px] font-black uppercase text-[#2563eb] hover:underline">
                                                                     {rec.session.deviceModel || 'Unknown device'}
                                                                 </div>
                                                                 <div className="text-[10px] text-slate-500">
@@ -2183,16 +2270,16 @@ export const GeneralOverview: React.FC = () => {
                                                                 </div>
                                                                 <div className="mt-1.5 flex min-w-0 flex-wrap gap-1.5">
                                                                     {rec.session.appVersion && (
-                                                                        <span className="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                                                        <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
                                                                             v{rec.session.appVersion}
                                                                         </span>
                                                                     )}
                                                                     {rec.session.networkType && (
-                                                                        <span className="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                                                        <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
                                                                             {rec.session.networkType}
                                                                         </span>
                                                                     )}
-                                                                    <span className="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-600">
+                                                                    <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-700">
                                                                         {rec.session.platform}
                                                                     </span>
                                                                 </div>

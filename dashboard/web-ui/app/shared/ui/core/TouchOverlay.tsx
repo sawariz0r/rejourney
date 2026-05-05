@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useId, useMemo } from 'react';
 
 export interface TouchPoint {
   x: number;
@@ -17,227 +17,619 @@ export interface TouchEvent {
   velocity?: { x: number; y: number };
   maxForce?: number;
   touchCount?: number;
+  frustrationKind?: string;
+}
+
+export interface NetworkOverlayEvent {
+  id: string;
+  timestamp: number;
+  method?: string;
+  statusCode?: number;
+  success?: boolean;
+  duration?: number;
+  urlPath?: string;
 }
 
 interface TouchOverlayProps {
   events: TouchEvent[];
+  networkEvents?: NetworkOverlayEvent[];
   deviceWidth: number;
   deviceHeight: number;
   currentTime: number; // in milliseconds (absolute)
   visibleWindowMs?: number;
 }
 
-interface RenderedTouch {
-  id: string;
-  eventId: string;
-  x: number;
-  y: number;
-  gestureType: string;
-  opacity: number;
-  age: number;
-  isDeadTap: boolean;
-  isRageTap: boolean;
-  isScroll: boolean;
-  isPan: boolean;
+type GestureKind =
+  | 'tap'
+  | 'longPress'
+  | 'deadTap'
+  | 'rageTap'
+  | 'scroll'
+  | 'swipe'
+  | 'pan'
+  | 'pinch'
+  | 'rotate'
+  | 'unknown';
+
+interface GestureStyle {
+  accent: string;
+  soft: string;
+  faint: string;
+  light: string;
+  shadow: string;
 }
 
-/** A connected trail of pan/scroll points for SVG rendering */
-interface GestureTrail {
-  points: { x: number; y: number; opacity: number; age: number }[];
-  newestOpacity: number;
+interface TimedPoint {
+  x: number;
+  y: number;
+  timestamp: number;
+  force?: number;
 }
+
+interface RenderedPress {
+  id: string;
+  x: number;
+  y: number;
+  kind: GestureKind;
+  opacity: number;
+  progress: number;
+  age: number;
+  force: number;
+  rotate: number;
+}
+
+interface MovementSeed extends TimedPoint {
+  eventId: string;
+  kind: GestureKind;
+  targetKey: string;
+}
+
+interface MovementGroup {
+  id: string;
+  kind: GestureKind;
+  targetKey: string;
+  points: MovementSeed[];
+}
+
+interface MotionTrail {
+  id: string;
+  kind: GestureKind;
+  points: TimedPoint[];
+  head: TimedPoint;
+  tail: TimedPoint;
+  opacity: number;
+  progress: number;
+  distance: number;
+  dx: number;
+  dy: number;
+  strokeWidth: number;
+}
+
+interface RenderedNetwork {
+  id: string;
+  opacity: number;
+  progress: number;
+  color: string;
+  trackColor: string;
+  lane: number;
+  isSettling: boolean;
+}
+
+const GESTURE_STYLES: Record<GestureKind, GestureStyle> = {
+  tap: {
+    accent: '#06b6d4',
+    soft: 'rgba(6, 182, 212, 0.28)',
+    faint: 'rgba(6, 182, 212, 0.14)',
+    light: '#a5f3fc',
+    shadow: 'rgba(8, 145, 178, 0.34)',
+  },
+  longPress: {
+    accent: '#0ea5e9',
+    soft: 'rgba(14, 165, 233, 0.3)',
+    faint: 'rgba(14, 165, 233, 0.14)',
+    light: '#bae6fd',
+    shadow: 'rgba(2, 132, 199, 0.32)',
+  },
+  deadTap: {
+    accent: '#94a3b8',
+    soft: 'rgba(148, 163, 184, 0.22)',
+    faint: 'rgba(15, 23, 42, 0.12)',
+    light: '#e2e8f0',
+    shadow: 'rgba(15, 23, 42, 0.22)',
+  },
+  rageTap: {
+    accent: '#f43f5e',
+    soft: 'rgba(244, 63, 94, 0.32)',
+    faint: 'rgba(244, 63, 94, 0.16)',
+    light: '#fecdd3',
+    shadow: 'rgba(190, 18, 60, 0.36)',
+  },
+  scroll: {
+    accent: '#f9a8d4',
+    soft: 'rgba(249, 168, 212, 0.28)',
+    faint: 'rgba(249, 168, 212, 0.13)',
+    light: '#f9a8d4',
+    shadow: 'rgba(190, 24, 93, 0.32)',
+  },
+  swipe: {
+    accent: '#10b981',
+    soft: 'rgba(16, 185, 129, 0.28)',
+    faint: 'rgba(16, 185, 129, 0.13)',
+    light: '#a7f3d0',
+    shadow: 'rgba(5, 150, 105, 0.32)',
+  },
+  pan: {
+    accent: '#8b5cf6',
+    soft: 'rgba(139, 92, 246, 0.3)',
+    faint: 'rgba(139, 92, 246, 0.14)',
+    light: '#ddd6fe',
+    shadow: 'rgba(109, 40, 217, 0.34)',
+  },
+  pinch: {
+    accent: '#14b8a6',
+    soft: 'rgba(20, 184, 166, 0.28)',
+    faint: 'rgba(20, 184, 166, 0.13)',
+    light: '#99f6e4',
+    shadow: 'rgba(13, 148, 136, 0.3)',
+  },
+  rotate: {
+    accent: '#ec4899',
+    soft: 'rgba(236, 72, 153, 0.28)',
+    faint: 'rgba(236, 72, 153, 0.13)',
+    light: '#fbcfe8',
+    shadow: 'rgba(219, 39, 119, 0.32)',
+  },
+  unknown: {
+    accent: '#64748b',
+    soft: 'rgba(100, 116, 139, 0.24)',
+    faint: 'rgba(100, 116, 139, 0.12)',
+    light: '#cbd5e1',
+    shadow: 'rgba(51, 65, 85, 0.24)',
+  },
+};
+
+const MOTION_KINDS = new Set<GestureKind>(['scroll', 'swipe', 'pan', 'pinch', 'rotate']);
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const hashString = (value: string): number => {
+  let hash = 0;
+  for (let index = 0; index < value.length; index++) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash);
+};
+
+const normalizeGestureKind = (gestureType: string, frustrationKind?: string): GestureKind => {
+  const normalized = `${gestureType || ''} ${frustrationKind || ''}`.toLowerCase();
+  if (normalized.includes('dead')) return 'deadTap';
+  if (normalized.includes('rage')) return 'rageTap';
+  if (normalized.includes('pinch') || normalized.includes('zoom')) return 'pinch';
+  if (normalized.includes('rotat')) return 'rotate';
+  if (normalized.includes('scroll')) return 'scroll';
+  if (normalized.includes('swipe') || normalized.includes('fling')) return 'swipe';
+  if (normalized.includes('pan') || normalized.includes('drag')) return 'pan';
+  if (normalized.includes('long')) return 'longPress';
+  if (normalized.includes('tap') || normalized.includes('click') || normalized.includes('press')) return 'tap';
+  return 'unknown';
+};
+
+const dominantMovementKind = (points: MovementSeed[]): GestureKind => {
+  if (points.some((point) => point.kind === 'pinch')) return 'pinch';
+  if (points.some((point) => point.kind === 'rotate')) return 'rotate';
+  if (points.some((point) => point.kind === 'swipe')) return 'swipe';
+  if (points.some((point) => point.kind === 'scroll')) return 'scroll';
+  if (points.some((point) => point.kind === 'pan')) return 'pan';
+  return points[0]?.kind || 'unknown';
+};
+
+const normalizedPointsForEvent = (
+  event: TouchEvent,
+  deviceWidth: number,
+  deviceHeight: number
+): TimedPoint[] => {
+  return event.touches
+    .map((touch) => {
+      const x = isFiniteNumber(touch.x) ? touch.x : 0;
+      const y = isFiniteNumber(touch.y) ? touch.y : 0;
+      return {
+        x: clamp(x, 0, deviceWidth),
+        y: clamp(y, 0, deviceHeight),
+        timestamp: isFiniteNumber(touch.timestamp) ? touch.timestamp : event.timestamp,
+        force: touch.force,
+      };
+    })
+    .filter((touch) => touch.x >= 0 && touch.y >= 0 && touch.x <= deviceWidth && touch.y <= deviceHeight)
+    .sort((a, b) => a.timestamp - b.timestamp);
+};
+
+const buildSmoothPath = (points: TimedPoint[]): string => {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+  const parts = [`M ${points[0].x} ${points[0].y}`];
+  for (let index = 1; index < points.length; index++) {
+    const current = points[index];
+    if (index < points.length - 1) {
+      const next = points[index + 1];
+      parts.push(`Q ${current.x} ${current.y} ${(current.x + next.x) / 2} ${(current.y + next.y) / 2}`);
+    } else {
+      parts.push(`L ${current.x} ${current.y}`);
+    }
+  }
+  return parts.join(' ');
+};
+
+const interpolatePoint = (points: TimedPoint[], timestamp: number): TimedPoint | null => {
+  if (points.length === 0) return null;
+  if (timestamp <= points[0].timestamp) return points[0];
+  const last = points[points.length - 1];
+  if (timestamp >= last.timestamp) return last;
+
+  for (let index = 1; index < points.length; index++) {
+    const previous = points[index - 1];
+    const next = points[index];
+    if (timestamp <= next.timestamp) {
+      const span = Math.max(1, next.timestamp - previous.timestamp);
+      const progress = clamp((timestamp - previous.timestamp) / span, 0, 1);
+      return {
+        x: previous.x + (next.x - previous.x) * progress,
+        y: previous.y + (next.y - previous.y) * progress,
+        timestamp,
+        force: next.force ?? previous.force,
+      };
+    }
+  }
+
+  return last;
+};
+
+const movementTrailWindow = (kind: GestureKind, visibleWindowMs: number): number => {
+  if (kind === 'swipe') return Math.max(520, visibleWindowMs * 0.78);
+  if (kind === 'scroll') return Math.max(720, visibleWindowMs * 0.95);
+  if (kind === 'pan') return Math.max(900, visibleWindowMs * 1.1);
+  return Math.max(760, visibleWindowMs);
+};
+
+const arrowPoints = (trail: MotionTrail): string => {
+  const length = Math.max(1, Math.hypot(trail.dx, trail.dy));
+  const ux = trail.dx / length;
+  const uy = trail.dy / length;
+  const px = -uy;
+  const py = ux;
+  const size = trail.kind === 'swipe' ? 18 : 13;
+  const wing = size * 0.54;
+  const x1 = trail.head.x;
+  const y1 = trail.head.y;
+  const x2 = x1 - ux * size + px * wing;
+  const y2 = y1 - uy * size + py * wing;
+  const x3 = x1 - ux * size - px * wing;
+  const y3 = y1 - uy * size - py * wing;
+  return `${x1},${y1} ${x2},${y2} ${x3},${y3}`;
+};
 
 export const TouchOverlay: React.FC<TouchOverlayProps> = ({
   events,
+  networkEvents = [],
   deviceWidth,
   deviceHeight,
   currentTime,
-  visibleWindowMs = 600,
+  visibleWindowMs = 850,
 }) => {
-  const trailWindowMs = 600; // Longer window for trails so the line is visible
+  const rawOverlayId = useId();
+  const overlayId = useMemo(() => rawOverlayId.replace(/:/g, ''), [rawOverlayId]);
+  const trailFilterId = `${overlayId}-trail-glow`;
 
-  const { renderedTouches, gestureTrails } = useMemo(() => {
-    const active: RenderedTouch[] = [];
-    // Collect movement points sorted by time for trail rendering
-    const movementPoints: { x: number; y: number; timestamp: number; opacity: number; age: number; targetLabel?: string }[] = [];
+  const { renderedPresses, motionTrails, renderedNetwork } = useMemo(() => {
+    const presses: RenderedPress[] = [];
+    const movementSeeds: MovementSeed[] = [];
 
     events.forEach((event) => {
-      const eventAge = currentTime - event.timestamp;
-      if (eventAge < 0) return;
+      const points = normalizedPointsForEvent(event, deviceWidth, deviceHeight);
+      if (points.length === 0) return;
 
-      const gestureType = (event.gestureType || 'tap').toLowerCase();
-      const isDeadTap = (event as any).frustrationKind === 'dead_tap' || gestureType === 'dead_tap';
-      const isRageTap = (event as any).frustrationKind === 'rage_tap' || gestureType === 'rage_tap';
-      const isScroll = gestureType.includes('scroll');
-      const isPan = gestureType.includes('pan') || gestureType.includes('drag');
+      const kind = normalizeGestureKind(event.gestureType, event.frustrationKind);
+      const targetKey = (event.targetLabel || 'surface').toLowerCase();
 
-      // Use longer fade for movement trails, normal for discrete events
-      const isMovement = isScroll || isPan;
-      const fadeTime = isMovement ? trailWindowMs : visibleWindowMs;
-
-      if (eventAge > fadeTime) return;
-      const opacity = Math.max(0, 1 - (eventAge / fadeTime));
-
-      if (isMovement) {
-        // Collect movement points for trail rendering instead of individual dots
-        event.touches.forEach((touch) => {
-          movementPoints.push({
-            x: touch.x,
-            y: touch.y,
-            timestamp: event.timestamp,
-            opacity,
-            age: eventAge,
-            targetLabel: event.targetLabel,
-          });
-        });
-      } else {
-        event.touches.forEach((touch, idx) => {
-          active.push({
-            id: `${event.id}-${idx}`,
+      if (MOTION_KINDS.has(kind)) {
+        points.forEach((point) => {
+          movementSeeds.push({
+            ...point,
             eventId: event.id,
-            x: touch.x,
-            y: touch.y,
-            gestureType,
-            opacity,
-            age: eventAge,
-            isDeadTap,
-            isRageTap,
-            isScroll: false,
-            isPan: false,
+            kind,
+            targetKey,
           });
         });
+        return;
       }
+
+      const windowMs = kind === 'longPress'
+        ? Math.max(1200, event.duration || 0)
+        : kind === 'rageTap'
+          ? 920
+          : kind === 'deadTap'
+            ? 900
+            : visibleWindowMs;
+
+      points.forEach((point, index) => {
+        const age = currentTime - point.timestamp;
+        if (age < -40 || age > windowMs) return;
+
+        const seed = hashString(`${event.id}-${index}`);
+        const progress = clamp(age / windowMs, 0, 1);
+        presses.push({
+          id: `${event.id}-${index}`,
+          x: point.x,
+          y: point.y,
+          kind,
+          age,
+          progress,
+          force: clamp((point.force || event.maxForce || 0.35) + 0.35, 0.35, 1),
+          opacity: kind === 'longPress'
+            ? clamp(1 - progress * 0.55, 0, 1)
+            : clamp(1 - progress, 0, 1),
+          rotate: (seed % 18) - 9,
+        });
+      });
     });
 
-    // Build connected trails from movement points
-    // Group points that are close in time (<250ms gap) into continuous trails
-    movementPoints.sort((a, b) => a.timestamp - b.timestamp);
-    const trails: GestureTrail[] = [];
-    let currentTrail: GestureTrail | null = null;
+    movementSeeds.sort((a, b) => a.timestamp - b.timestamp);
 
-    for (const pt of movementPoints) {
-      if (!currentTrail || (pt.timestamp - (currentTrail.points[currentTrail.points.length - 1] as any).timestamp) > 250) {
-        // Start a new trail if gap too large
-        currentTrail = { points: [], newestOpacity: 0 };
-        trails.push(currentTrail);
+    const movementGroups: MovementGroup[] = [];
+    let currentGroup: MovementGroup | null = null;
+
+    movementSeeds.forEach((point) => {
+      const previous = currentGroup?.points[currentGroup.points.length - 1];
+      const gap = previous ? point.timestamp - previous.timestamp : Infinity;
+      const sameTarget = !previous || point.targetKey === previous.targetKey;
+      const canContinue = currentGroup && gap <= 340 && sameTarget;
+
+      if (!canContinue) {
+        currentGroup = {
+          id: `motion-${point.eventId}-${point.timestamp}`,
+          kind: point.kind,
+          targetKey: point.targetKey,
+          points: [],
+        };
+        movementGroups.push(currentGroup);
       }
-      currentTrail.points.push({ ...pt, timestamp: pt.timestamp } as any);
-      currentTrail.newestOpacity = Math.max(currentTrail.newestOpacity, pt.opacity);
-    }
+
+      const group = currentGroup;
+      if (!group) return;
+      group.points.push(point);
+      group.kind = dominantMovementKind(group.points);
+    });
+
+    const trails: MotionTrail[] = [];
+    movementGroups.forEach((group, groupIndex) => {
+      if (group.points.length === 0) return;
+
+      const firstPoint = group.points[0];
+      const lastPoint = group.points[group.points.length - 1];
+      const endTime = lastPoint.timestamp;
+      const afterglowMs = group.kind === 'scroll' ? 720 : group.kind === 'swipe' ? 520 : 820;
+
+      if (currentTime < firstPoint.timestamp - 50 || currentTime > endTime + afterglowMs) return;
+
+      const activeTime = Math.min(currentTime, endTime);
+      const head = interpolatePoint(group.points, activeTime) || lastPoint;
+      const trailWindow = movementTrailWindow(group.kind, visibleWindowMs);
+      const windowStart = activeTime - trailWindow;
+      const trailPoints: TimedPoint[] = group.points.filter((point) => point.timestamp >= windowStart && point.timestamp <= activeTime);
+      const previousPoint = group.points.find((point, index) => {
+        const next = group.points[index + 1];
+        return point.timestamp < windowStart && (!next || next.timestamp >= windowStart);
+      });
+
+      if (previousPoint) {
+        trailPoints.unshift(previousPoint);
+      }
+
+      const lastTrailPoint = trailPoints[trailPoints.length - 1];
+      if (!lastTrailPoint || Math.abs(lastTrailPoint.x - head.x) > 0.5 || Math.abs(lastTrailPoint.y - head.y) > 0.5) {
+        trailPoints.push(head);
+      }
+
+      if (trailPoints.length === 0) {
+        trailPoints.push(head);
+      }
+
+      const tail = trailPoints[0];
+      const dx = head.x - tail.x;
+      const dy = head.y - tail.y;
+      const distance = Math.hypot(dx, dy);
+      const fadeOut = currentTime <= endTime ? 1 : clamp(1 - (currentTime - endTime) / afterglowMs, 0, 1);
+      const fadeIn = clamp((currentTime - firstPoint.timestamp) / 120, 0, 1);
+
+      trails.push({
+        id: `${group.id}-${groupIndex}`,
+        kind: group.kind,
+        points: trailPoints,
+        head,
+        tail,
+        opacity: fadeOut * fadeIn,
+        progress: clamp((activeTime - firstPoint.timestamp) / Math.max(1, endTime - firstPoint.timestamp), 0, 1),
+        distance,
+        dx,
+        dy,
+        strokeWidth: group.kind === 'scroll' ? 6 : group.kind === 'swipe' ? 5 : 4.5,
+      });
+    });
+
+    const network = networkEvents
+      .map((event, index) => {
+        const duration = clamp(event.duration || 620, 160, 2400);
+        const age = currentTime - event.timestamp;
+        const settleMs = event.success === false ? 900 : 620;
+        if (age < -40 || age > duration + settleMs) return null;
+
+        const isSettling = age > duration;
+        const progress = isSettling ? 1 : clamp(age / duration, 0, 1);
+        const settleOpacity = isSettling ? clamp(1 - (age - duration) / settleMs, 0, 1) : 1;
+        const color = isSettling
+          ? event.success === false
+            ? '#ef4444'
+            : '#10b981'
+          : '#38bdf8';
+
+        return {
+          id: event.id || `network-${event.timestamp}-${index}`,
+          opacity: settleOpacity,
+          progress,
+          color,
+          trackColor: event.success === false ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.22)',
+          lane: index,
+          isSettling,
+        } satisfies RenderedNetwork;
+      })
+      .filter((event): event is RenderedNetwork => event !== null)
+      .slice(-4)
+      .map((event, index) => ({ ...event, lane: index }));
 
     return {
-      renderedTouches: active.sort((a, b) => a.age - b.age),
-      gestureTrails: trails.filter(t => t.points.length >= 1),
+      renderedPresses: presses.sort((a, b) => a.age - b.age),
+      motionTrails: trails,
+      renderedNetwork: network,
     };
-  }, [events, currentTime, visibleWindowMs, trailWindowMs]);
+  }, [currentTime, deviceHeight, deviceWidth, events, networkEvents, visibleWindowMs]);
 
-  if (renderedTouches.length === 0 && gestureTrails.length === 0) return null;
+  if (renderedPresses.length === 0 && motionTrails.length === 0 && renderedNetwork.length === 0) {
+    return null;
+  }
 
   return (
     <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden rounded-[2.5rem]">
       <style>{`
-        @keyframes shockwave {
-          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.8; border-width: 4px; }
-          100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; border-width: 1px; }
+        @keyframes replay-fingertip-breathe {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); }
+          50% { transform: translate(-50%, -50%) scale(0.92); }
         }
-        @keyframes pulse-glow {
-          0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 20px rgba(99, 102, 241, 0.6); }
-          50% { transform: translate(-50%, -50%) scale(1.1); box-shadow: 0 0 35px rgba(99, 102, 241, 0.9); }
+        @keyframes replay-network-bead {
+          0% { transform: translateX(-2px) scale(0.8); opacity: 0.35; }
+          45% { opacity: 1; }
+          100% { transform: translateX(8px) scale(1); opacity: 0.35; }
         }
       `}</style>
 
-      {/* Gesture trails rendered as SVG paths */}
-      {gestureTrails.length > 0 && (
-        <svg className="absolute inset-0 w-full h-full" viewBox={`0 0 ${deviceWidth} ${deviceHeight}`} preserveAspectRatio="none">
+      {motionTrails.length > 0 && (
+        <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${deviceWidth} ${deviceHeight}`} preserveAspectRatio="none">
           <defs>
-            <filter id="trail-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
+            <filter id={trailFilterId} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3.5" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
-          </defs>
-          {gestureTrails.map((trail, trailIdx) => {
-            if (trail.points.length === 1) {
-              // Single point — render as a small circle
-              const pt = trail.points[0];
+            {motionTrails.map((trail) => {
+              const style = GESTURE_STYLES[trail.kind];
               return (
-                <circle
-                  key={`trail-${trailIdx}`}
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={5}
-                  fill="rgba(99, 102, 241, 0.7)"
-                  opacity={pt.opacity * 0.8}
-                  filter="url(#trail-glow)"
-                />
+                <linearGradient
+                  key={`${trail.id}-gradient`}
+                  id={`${overlayId}-${trail.id}-gradient`}
+                  gradientUnits="userSpaceOnUse"
+                  x1={trail.tail.x}
+                  y1={trail.tail.y}
+                  x2={trail.head.x}
+                  y2={trail.head.y}
+                >
+                  <stop offset="0%" stopColor={style.accent} stopOpacity="0" />
+                  <stop offset="58%" stopColor={style.accent} stopOpacity="0.42" />
+                  <stop offset="100%" stopColor={style.light} stopOpacity="0.96" />
+                </linearGradient>
               );
-            }
+            })}
+          </defs>
 
-            // Build a smooth path through the points
-            const pathParts: string[] = [];
-            pathParts.push(`M ${trail.points[0].x} ${trail.points[0].y}`);
-
-            for (let i = 1; i < trail.points.length; i++) {
-              const prev = trail.points[i - 1];
-              const curr = trail.points[i];
-              // Use quadratic bezier for smooth curves through midpoints
-              if (i < trail.points.length - 1) {
-                const next = trail.points[i + 1];
-                const cpX = curr.x;
-                const cpY = curr.y;
-                const endX = (curr.x + next.x) / 2;
-                const endY = (curr.y + next.y) / 2;
-                pathParts.push(`Q ${cpX} ${cpY} ${endX} ${endY}`);
-              } else {
-                pathParts.push(`L ${curr.x} ${curr.y}`);
-              }
-            }
-
-            const pathD = pathParts.join(' ');
-            const newestPt = trail.points[trail.points.length - 1];
-            const oldestPt = trail.points[0];
+          {motionTrails.map((trail) => {
+            const style = GESTURE_STYLES[trail.kind];
+            const pathD = buildSmoothPath(trail.points);
+            const gradientId = `${overlayId}-${trail.id}-gradient`;
+            const needsArrow = (trail.kind === 'swipe' || trail.kind === 'pan') && trail.distance > 18;
+            const isScroll = trail.kind === 'scroll';
+            const isPan = trail.kind === 'pan';
 
             return (
-              <React.Fragment key={`trail-${trailIdx}`}>
-                {/* Trail stroke — fading from old to new */}
+              <React.Fragment key={trail.id}>
                 <path
                   d={pathD}
                   fill="none"
-                  stroke="rgba(99, 102, 241, 0.6)"
-                  strokeWidth={4}
+                  stroke={style.shadow}
+                  strokeWidth={trail.strokeWidth + 8}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  opacity={trail.newestOpacity * 0.7}
-                  filter="url(#trail-glow)"
+                  opacity={trail.opacity * 0.34}
+                  filter={`url(#${trailFilterId})`}
                 />
-                {/* Brighter thin inner line */}
+                {isScroll && (
+                  <>
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke={style.faint}
+                      strokeWidth={trail.strokeWidth + 18}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray="2 18"
+                      opacity={trail.opacity * 0.5}
+                    />
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke={style.soft}
+                      strokeWidth={trail.strokeWidth + 7}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray="16 12"
+                      opacity={trail.opacity * 0.42}
+                    />
+                  </>
+                )}
                 <path
                   d={pathD}
                   fill="none"
-                  stroke="rgba(165, 180, 252, 0.9)"
-                  strokeWidth={2}
+                  stroke={`url(#${gradientId})`}
+                  strokeWidth={trail.strokeWidth}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  opacity={trail.newestOpacity * 0.9}
+                  opacity={trail.opacity}
+                  filter={`url(#${trailFilterId})`}
                 />
-                {/* Head dot at newest position */}
-                <circle
-                  cx={newestPt.x}
-                  cy={newestPt.y}
-                  r={6}
-                  fill="rgba(99, 102, 241, 0.9)"
-                  opacity={newestPt.opacity}
-                  filter="url(#trail-glow)"
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={style.light}
+                  strokeWidth={Math.max(1.5, trail.strokeWidth * 0.38)}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={trail.opacity * 0.76}
                 />
-                {/* Faded tail dot at oldest position */}
+                {needsArrow && (
+                  <polygon
+                    points={arrowPoints(trail)}
+                    fill={style.light}
+                    opacity={trail.opacity * (trail.kind === 'swipe' ? 0.96 : 0.76)}
+                    filter={`url(#${trailFilterId})`}
+                  />
+                )}
                 <circle
-                  cx={oldestPt.x}
-                  cy={oldestPt.y}
-                  r={3}
-                  fill="rgba(99, 102, 241, 0.5)"
-                  opacity={oldestPt.opacity * 0.4}
+                  cx={trail.head.x}
+                  cy={trail.head.y}
+                  r={isScroll ? 7.2 : isPan ? 8.2 : 6.6}
+                  fill={style.accent}
+                  opacity={trail.opacity * 0.92}
+                  filter={`url(#${trailFilterId})`}
+                />
+                <circle
+                  cx={trail.head.x}
+                  cy={trail.head.y}
+                  r={isPan ? 3.4 : 2.7}
+                  fill="rgba(255,255,255,0.9)"
+                  opacity={trail.opacity * 0.92}
                 />
               </React.Fragment>
             );
@@ -245,79 +637,165 @@ export const TouchOverlay: React.FC<TouchOverlayProps> = ({
         </svg>
       )}
 
-      {/* Discrete touch events (taps, rage taps, dead taps) */}
-      {renderedTouches.map((touch) => {
-        const xPercent = (touch.x / deviceWidth) * 100;
-        const yPercent = (touch.y / deviceHeight) * 100;
+      {renderedPresses.map((press) => {
+        const style = GESTURE_STYLES[press.kind];
+        const xPercent = (press.x / deviceWidth) * 100;
+        const yPercent = (press.y / deviceHeight) * 100;
+        const rippleScale = 0.65 + press.progress * (press.kind === 'rageTap' ? 2.4 : 1.55);
+        const coreScale = press.kind === 'longPress'
+          ? 0.92 + Math.sin(press.progress * Math.PI) * 0.08
+          : 1 - press.progress * 0.18;
+        const coreSize = press.kind === 'rageTap' ? 24 : press.kind === 'deadTap' ? 23 : 20 + press.force * 4;
 
-        if (touch.isRageTap) {
+        if (press.kind === 'deadTap') {
           return (
-            <React.Fragment key={touch.id}>
-              {/* Shockwave Layer */}
+            <div key={press.id}>
               <div
-                className="absolute rounded-full border-rose-500/50"
+                className="absolute rounded-full border-2 backdrop-blur-[1px]"
                 style={{
                   left: `${xPercent}%`,
                   top: `${yPercent}%`,
-                  width: '60px',
-                  height: '60px',
-                  animation: 'shockwave 0.6s ease-out infinite',
+                  width: 34,
+                  height: 34,
+                  borderColor: style.accent,
+                  backgroundColor: style.faint,
+                  opacity: press.opacity * 0.82,
+                  transform: `translate(-50%, -50%) scale(${0.95 + press.progress * 0.2})`,
+                  boxShadow: `0 8px 22px ${style.shadow}`,
                 }}
               />
-              {/* Inner Core */}
               <div
-                className="absolute rounded-full bg-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.8)]"
+                className="absolute h-[2px] w-7 rounded-full"
                 style={{
                   left: `${xPercent}%`,
                   top: `${yPercent}%`,
-                  width: '24px',
-                  height: '24px',
-                  transform: 'translate(-50%, -50%)',
-                  opacity: touch.opacity,
+                  backgroundColor: style.light,
+                  opacity: press.opacity * 0.78,
+                  transform: 'translate(-50%, -50%) rotate(45deg)',
                 }}
               />
-            </React.Fragment>
+              <div
+                className="absolute h-[2px] w-7 rounded-full"
+                style={{
+                  left: `${xPercent}%`,
+                  top: `${yPercent}%`,
+                  backgroundColor: style.light,
+                  opacity: press.opacity * 0.78,
+                  transform: 'translate(-50%, -50%) rotate(-45deg)',
+                }}
+              />
+            </div>
           );
         }
 
-        if (touch.isDeadTap) {
-          return (
+        return (
+          <div key={press.id}>
             <div
-              key={touch.id}
-              className="absolute rounded-full border-2 border-stone-400/50 bg-stone-400/15 backdrop-blur-[1px]"
+              className="absolute rounded-full border"
               style={{
                 left: `${xPercent}%`,
                 top: `${yPercent}%`,
-                width: '32px',
-                height: '32px',
-                transform: 'translate(-50%, -50%)',
-                opacity: touch.opacity,
+                width: press.kind === 'rageTap' ? 58 : press.kind === 'longPress' ? 54 : 46,
+                height: press.kind === 'rageTap' ? 58 : press.kind === 'longPress' ? 54 : 46,
+                borderColor: style.light,
+                backgroundColor: style.faint,
+                opacity: (1 - press.progress) * (press.kind === 'rageTap' ? 0.78 : 0.48),
+                transform: `translate(-50%, -50%) scale(${rippleScale})`,
+                boxShadow: `0 0 24px ${style.shadow}`,
               }}
             />
-          );
-        }
-
-        // Standard Tap - Glowing Orb
-        return (
-          <div
-            key={touch.id}
-            className="absolute rounded-full bg-indigo-500"
-            style={{
-              left: `${xPercent}%`,
-              top: `${yPercent}%`,
-              width: '22px',
-              height: '22px',
-              transform: 'translate(-50%, -50%)',
-              opacity: touch.opacity,
-              animation: touch.age < 100 ? 'pulse-glow 0.4s ease-out' : 'none',
-              boxShadow: `
-                0 0 15px rgba(99, 102, 241, 0.7),
-                inset 0 0 8px rgba(255, 255, 255, 0.5)
-              `,
-            }}
-          />
+            {press.kind === 'rageTap' && (
+              <div
+                className="absolute rounded-full border-2"
+                style={{
+                  left: `${xPercent}%`,
+                  top: `${yPercent}%`,
+                  width: 42,
+                  height: 42,
+                  borderColor: style.accent,
+                  opacity: Math.max(0, 0.74 - press.progress * 0.45),
+                  transform: `translate(-50%, -50%) scale(${1 + press.progress * 0.65})`,
+                }}
+              />
+            )}
+            <div
+              className="absolute rounded-full blur-[5px]"
+              style={{
+                left: `${xPercent}%`,
+                top: `${yPercent}%`,
+                width: coreSize + 10,
+                height: coreSize + 8,
+                backgroundColor: style.shadow,
+                opacity: press.opacity * 0.65,
+                transform: `translate(-50%, -42%) scale(${coreScale})`,
+              }}
+            />
+            <div
+              className="absolute rounded-full border border-white/60"
+              style={{
+                left: `${xPercent}%`,
+                top: `${yPercent}%`,
+                width: coreSize,
+                height: coreSize * 0.88,
+                background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.98), ${style.light} 26%, ${style.accent} 72%)`,
+                opacity: press.opacity,
+                transform: `translate(-50%, -50%) rotate(${press.rotate}deg) scale(${coreScale})`,
+                boxShadow: `0 10px 24px ${style.shadow}, inset 0 -3px 6px rgba(15,23,42,0.2)`,
+                animation: press.kind === 'longPress' ? 'replay-fingertip-breathe 0.9s ease-in-out infinite' : undefined,
+              }}
+            />
+          </div>
         );
       })}
+
+      {renderedNetwork.length > 0 && (
+        <div className="absolute right-2 top-12 z-20 flex flex-col items-end gap-1.5">
+          {renderedNetwork.map((network) => (
+            <div
+              key={network.id}
+              className="relative h-6 w-[58px] overflow-hidden rounded-full border bg-slate-950/62 shadow-lg backdrop-blur-md"
+              style={{
+                borderColor: network.color,
+                opacity: network.opacity,
+                transform: `translateY(${network.lane * 1.5}px) scale(${network.isSettling ? 0.98 : 1})`,
+                boxShadow: `0 8px 22px ${network.trackColor}`,
+              }}
+            >
+              <span
+                className="absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full"
+                style={{
+                  backgroundColor: network.color,
+                  boxShadow: `0 0 14px ${network.color}`,
+                  opacity: network.isSettling ? 0.9 : 0.72,
+                }}
+              />
+              <span
+                className="absolute right-2 top-1/2 h-1.5 w-8 -translate-y-1/2 overflow-hidden rounded-full bg-white/15"
+              >
+                <span
+                  className="block h-full rounded-full"
+                  style={{
+                    width: `${Math.max(8, network.progress * 100)}%`,
+                    backgroundColor: network.color,
+                    opacity: 0.9,
+                  }}
+                />
+              </span>
+              {!network.isSettling && (
+                <span
+                  className="absolute top-1/2 h-2 w-2 -translate-y-1/2 rounded-full"
+                  style={{
+                    left: `${14 + network.progress * 30}px`,
+                    backgroundColor: network.color,
+                    boxShadow: `0 0 12px ${network.color}`,
+                    animation: 'replay-network-bead 0.65s ease-in-out infinite',
+                  }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

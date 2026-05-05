@@ -38,21 +38,25 @@
 
     /* Dashboard surface tokens */
     --dashboard-canvas: #f8fafc;
-    --dashboard-canvas-soft: #f1f5f9;
+    --dashboard-canvas-soft: #f8fafc;
     --dashboard-surface: #ffffff;
     --dashboard-surface-muted: #f8fafc;
-    --dashboard-border: #dbe4ef;
-    --dashboard-border-strong: #c7d3e1;
-    --dashboard-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-    --dashboard-shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
-    --dashboard-shadow-lg: 0 14px 34px rgba(15, 23, 42, 0.12);
+    --dashboard-border: #000000;
+    --dashboard-border-strong: #000000;
+    --dashboard-shadow-sm: 2px 2px 0 rgba(0, 0, 0, 1);
+    --dashboard-shadow-md: 4px 4px 0 rgba(0, 0, 0, 1);
+    --dashboard-shadow-lg: 8px 8px 0 rgba(0, 0, 0, 1);
     --dashboard-text-strong: #0f172a;
     --dashboard-text-body: #334155;
     --dashboard-text-muted: #64748b;
     --dashboard-brand: #5dadec;
-    --dashboard-brand-strong: #448ab9;
+    --dashboard-brand-strong: #2563eb;
+    --dashboard-accent-rose: #f9a8d4;
+    --dashboard-accent-cyan: #67e8f9;
+    --dashboard-accent-pink: #f9a8d4;
+    --dashboard-accent-green: #86efac;
     --dashboard-success: #059669;
-    --dashboard-warning: #d97706;
+    --dashboard-warning: #be185d;
     --dashboard-danger: #dc2626;
   }
 
@@ -673,6 +677,65 @@
     }
   }
 
+  /* Embedded demo heading — cursor traces a rectangle around the title, then settles on the left */
+  @keyframes walk-product-heading-cursor {
+    0%,
+    100% {
+      left: 0%;
+      top: 50%;
+      transform: translate(0%, -50%);
+    }
+
+    8% {
+      left: 0%;
+      top: 0%;
+      transform: translate(0%, 0%);
+    }
+
+    30% {
+      left: 100%;
+      top: 0%;
+      transform: translate(-100%, 0%);
+    }
+
+    52% {
+      left: 100%;
+      top: 100%;
+      transform: translate(-100%, -100%);
+    }
+
+    74% {
+      left: 0%;
+      top: 100%;
+      transform: translate(0%, -100%);
+    }
+
+    90% {
+      left: 0%;
+      top: 50%;
+      transform: translate(0%, -50%);
+    }
+  }
+
+  .walk-product-heading-cursor {
+    position: absolute;
+    pointer-events: none;
+    filter: drop-shadow(0 0 4px rgb(248 250 252));
+    will-change: left, top, transform;
+    animation: walk-product-heading-cursor 4.8s cubic-bezier(0.45, 0.02, 0.24, 1) infinite;
+    animation-delay: 0.4s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .walk-product-heading-cursor {
+      animation: none;
+      left: 0%;
+      top: 50%;
+      transform: translate(0%, -50%);
+      filter: none;
+    }
+  }
+
   .animate-fade-in-up {
     animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
@@ -748,8 +811,8 @@
   }
 
   .hero-kinetic-word-error::before {
-    color: rgba(251, 146, 60, 0.95);
-    text-shadow: 0 0 0.2em rgba(251, 146, 60, 0.4);
+    color: rgba(249, 168, 212, 0.95);
+    text-shadow: 0 0 0.2em rgba(249, 168, 212, 0.4);
     animation: error-layer-top 0.95s cubic-bezier(0.14, 0.95, 0.22, 1) both,
       error-layer-top-loop 1.25s steps(1, end) infinite;
     animation-delay: 0.54s, 1.49s;
@@ -841,7 +904,11 @@
 
 .dashboard-content {
   background-color: var(--dashboard-canvas) !important;
-  background-image: none !important;
+  background-image:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.045) 1px, transparent 1px),
+    linear-gradient(rgba(0, 0, 0, 0.045) 1px, transparent 1px) !important;
+  background-size: 28px 28px !important;
+  overflow-x: hidden;
 }
 
 /* Keep inner dashboard route wrappers from introducing conflicting page backgrounds. */
@@ -850,40 +917,40 @@
   background-image: none !important;
 }
 
-/* Tier 1 — Sidebar: calm navigation rail, visually separated from content */
+/* Tier 1 — Sidebar: retro dashboard rail, visually separated from content */
 .dashboard-sidebar {
-  border-right: 1px solid var(--dashboard-border-strong);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  border-right: 2px solid var(--dashboard-border-strong);
+  background: #f8fafc !important;
   color: var(--dashboard-text-strong) !important;
-  box-shadow: var(--dashboard-shadow-sm);
+  box-shadow: 2px 0 0 rgba(0, 0, 0, 1);
 }
 
 .dashboard-sidebar a {
   transition: all 0.2s ease;
 }
 
-/* Tier 1 — TopBar: white anchor bar */
+/* Tier 1 — TopBar: cool anchor bar */
 .dashboard-topbar {
-  border-bottom: 1px solid var(--dashboard-border-strong) !important;
-  background: rgba(255, 255, 255, 0.96) !important;
-  backdrop-filter: blur(8px);
+  border-bottom: 2px solid var(--dashboard-border-strong) !important;
+  background: #f8fafc !important;
+  backdrop-filter: none;
 }
 
-/* Tier 2 — Standard card surface: soft neo shadow, not full black */
+/* Tier 2 — Standard card surface */
 /* Use this for most content cards, chart containers, panels */
 .dashboard-card-surface {
   background: var(--dashboard-surface);
-  border: 1px solid var(--dashboard-border);
-  border-radius: 14px;
-  box-shadow: var(--dashboard-shadow-sm);
+  border: 2px solid var(--dashboard-border);
+  border-radius: 0;
+  box-shadow: var(--dashboard-shadow-md);
   min-width: 0;
 }
 
 /* Tier 2 — Strong card: full neo treatment for KPI cards, primary CTAs */
 .dashboard-card-strong {
   background: var(--dashboard-surface);
-  border: 1px solid color-mix(in oklab, var(--dashboard-brand) 48%, white);
-  border-radius: 16px;
+  border: 2px solid var(--dashboard-border);
+  border-radius: 0;
   box-shadow: var(--dashboard-shadow-md);
   min-width: 0;
 }
@@ -891,18 +958,23 @@
 /* Tier 3 — Inner surface: subtle background for nested panels */
 .dashboard-inner-surface {
   background: var(--dashboard-surface-muted);
-  border: 1px solid var(--dashboard-border);
-  border-radius: 12px;
+  border: 2px solid var(--dashboard-border);
+  border-radius: 0;
+  box-shadow: var(--dashboard-shadow-sm);
   min-width: 0;
 }
 
 .dashboard-surface {
+  background: var(--dashboard-surface);
+  border: 2px solid var(--dashboard-border);
+  border-radius: 0;
+  box-shadow: var(--dashboard-shadow-sm);
   min-width: 0;
 }
 
-/* Sessions replay archive — thead band tinted with dashboard brand (reads vs white rows) */
+/* Sessions replay archive — thead band tinted (reads vs white rows) */
 .sessions-archive-table-header-bg {
-  background-color: #f3f4f6;
+  background-color: #dbeafe;
 }
 
 /* Logo-aligned blue accents for a lightweight premium feel */
@@ -923,28 +995,29 @@
 }
 
 .dashboard-modern [class*="bg-blue-50"] {
-  background-color: #edf7ff !important;
+  background-color: #ecfeff !important;
 }
 
 .dashboard-modern [class*="border-blue-200"] {
-  border-color: #cde6f8 !important;
+  border-color: var(--dashboard-border) !important;
 }
 
 .dashboard-modern [class*="border-blue-300"] {
-  border-color: #b8dcf7 !important;
+  border-color: var(--dashboard-border) !important;
 }
 
 .dashboard-modern .dashboard-surface {
   background: var(--dashboard-surface);
-  border: 1px solid var(--dashboard-border);
-  border-radius: 14px;
+  border: 2px solid var(--dashboard-border);
+  border-radius: 0;
   box-shadow: var(--dashboard-shadow-sm);
 }
 
 .dashboard-modern .dashboard-section {
   background: var(--dashboard-surface-muted);
-  border: 1px solid color-mix(in oklab, var(--dashboard-border) 80%, white);
-  border-radius: 16px;
+  border: 2px solid var(--dashboard-border);
+  border-radius: 0;
+  box-shadow: var(--dashboard-shadow-sm);
 }
 
 .dashboard-modern .dashboard-meta {
@@ -953,43 +1026,206 @@
 }
 
 .dashboard-modern .dashboard-nav-item {
-  border: 1px solid transparent;
-  border-radius: 10px;
-  color: var(--dashboard-text-body);
+  border-radius: 0;
   transition: all 0.18s ease;
 }
 
 .dashboard-modern .dashboard-nav-item:hover {
-  background: #ffffff;
+  background: #ecfeff;
   color: var(--dashboard-text-strong);
-  border-color: var(--dashboard-border);
 }
 
 .dashboard-modern .dashboard-nav-item-active {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  border-color: color-mix(in oklab, var(--dashboard-brand) 45%, white);
-  color: var(--dashboard-text-strong);
-  box-shadow: 0 0 0 1px rgba(93, 173, 236, 0.18), var(--dashboard-shadow-sm);
+  background: #000000;
+  border-color: #000000;
+  color: #ffffff;
+  box-shadow: var(--dashboard-shadow-sm);
 }
 
 .dashboard-modern .dashboard-pill {
-  border: 1px solid var(--dashboard-border);
-  border-radius: 9999px;
+  border: 2px solid var(--dashboard-border);
+  border-radius: 0;
   background: #ffffff;
   color: var(--dashboard-text-body);
+  box-shadow: var(--dashboard-shadow-sm);
 }
 
 .dashboard-modern .dashboard-tab {
-  border: 1px solid var(--dashboard-border);
+  border: 2px solid var(--dashboard-border);
   border-bottom: none;
-  border-top-left-radius: 10px;
-  border-top-right-radius: 10px;
+  border-radius: 0;
 }
 
 .dashboard-modern .dashboard-tab-active {
   background: #ffffff;
-  border-color: color-mix(in oklab, var(--dashboard-brand) 35%, white);
+  border-color: var(--dashboard-border);
   box-shadow: inset 0 2px 0 0 var(--dashboard-brand);
+}
+
+.dashboard-modern select,
+.dashboard-modern input:not([type="checkbox"]):not([type="radio"]),
+.dashboard-modern textarea {
+  border-radius: 0;
+}
+
+.dashboard-modern .recharts-responsive-container {
+  min-width: 0;
+}
+
+.dashboard-mobile-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.replay-device-frame {
+  width: min(300px, 74vw);
+  max-width: 100%;
+}
+
+.clarity-consent-banner {
+  width: min(20rem, calc(100vw - 3rem));
+}
+
+@media (min-width: 640px) {
+  .clarity-consent-banner {
+    width: min(28rem, calc(100vw - 2rem));
+  }
+}
+
+@media (max-width: 767px) {
+  .dashboard-content {
+    background-size: 22px 22px !important;
+  }
+
+  .dashboard-modern .shadow-neo,
+  .dashboard-modern .shadow-neo-lg {
+    box-shadow: 4px 4px 0 rgba(0, 0, 0, 1);
+  }
+
+  .dashboard-modern .shadow-neo-sm {
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 1);
+  }
+
+  .dashboard-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 45;
+  }
+
+  .dashboard-modern .dashboard-card-surface,
+  .dashboard-modern .dashboard-card-strong,
+  .dashboard-modern .dashboard-inner-surface,
+  .dashboard-modern .dashboard-surface,
+  .dashboard-modern .dashboard-section {
+    box-shadow: var(--dashboard-shadow-sm);
+  }
+
+  .dashboard-modern table {
+    white-space: nowrap;
+  }
+
+  .dashboard-content .mx-auto[class*="px-6"],
+  .dashboard-content [class*=" px-6"],
+  .dashboard-content [class^="px-6"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .dashboard-content .mx-auto[class*="py-6"],
+  .dashboard-content [class*=" py-6"],
+  .dashboard-content [class^="py-6"] {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .dashboard-modern pre,
+  .dashboard-modern code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .replay-workbench-header {
+    position: relative !important;
+    top: auto !important;
+  }
+
+  .replay-workbench-main {
+    max-width: 100% !important;
+    padding: 0.5rem !important;
+  }
+
+  .replay-workbench-grid {
+    gap: 0.75rem !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .replay-theater-section,
+  .replay-side-panel {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-shadow: var(--dashboard-shadow-sm);
+  }
+
+  .replay-theater-stage {
+    padding: 1rem 0.75rem !important;
+  }
+
+  .replay-device-frame {
+    width: min(230px, 62vw);
+  }
+
+  .replay-device-placeholder {
+    max-width: min(230px, 62vw) !important;
+  }
+
+  .replay-controls-primary {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, auto));
+    justify-content: center;
+  }
+
+  .replay-controls-secondary {
+    width: 100%;
+    justify-content: center !important;
+  }
+
+  .replay-controls-secondary > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .replay-side-panel {
+    min-height: min(72dvh, 560px) !important;
+  }
+
+  .replay-panel-header {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .replay-panel-actions {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.125rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .replay-device-frame {
+    width: min(210px, 58vw);
+  }
+
+  .replay-device-placeholder {
+    max-width: min(210px, 58vw) !important;
+  }
+
+  .replay-workbench-tabs button {
+    min-width: 5.75rem !important;
+    padding-left: 0.625rem !important;
+    padding-right: 0.625rem !important;
+    font-size: 0.7rem !important;
+  }
 }
 
 @keyframes dashboard-ghost-shimmer {

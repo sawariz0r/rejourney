@@ -27,7 +27,7 @@ const compactNumber = new Intl.NumberFormat('en-US', { notation: 'compact', maxi
 function healthBadgeClasses(level: WarehouseProject['healthLevel']): string {
     if (level === 'excellent') return 'border-emerald-300 bg-emerald-50 text-emerald-700';
     if (level === 'good') return 'border-sky-300 bg-sky-50 text-sky-700';
-    if (level === 'fair') return 'border-amber-300 bg-amber-50 text-amber-700';
+    if (level === 'fair') return 'border-rose-300 bg-rose-50 text-rose-700';
     return 'border-rose-300 bg-rose-50 text-rose-700';
 }
 

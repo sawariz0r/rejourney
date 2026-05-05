@@ -578,7 +578,7 @@ export const TeamSettings: React.FC = () => {
                   Checking billing status...
                 </p>
               ) : hasActiveSubscription ? (
-                <div className="p-3 border border-amber-300 bg-amber-50 text-amber-900 text-xs font-bold">
+                <div className="p-3 border border-rose-300 bg-rose-50 text-rose-900 text-xs font-bold">
                   Active subscription detected. Deletion will immediately downgrade this team to free tier and cancel the subscription to prevent next-cycle auto charges.
                 </div>
               ) : null}
@@ -714,7 +714,7 @@ export const TeamSettings: React.FC = () => {
           </div>
 
           {hasActiveSubscription && (
-            <label className="flex items-start gap-3 p-3 border border-amber-300 bg-amber-50 rounded-md cursor-pointer">
+            <label className="flex items-start gap-3 p-3 border border-rose-300 bg-rose-50 rounded-md cursor-pointer">
               <input
                 type="checkbox"
                 checked={acknowledgeBillingDowngrade}
@@ -724,7 +724,7 @@ export const TeamSettings: React.FC = () => {
                 }}
                 className="mt-1"
               />
-              <span className="text-sm font-bold text-amber-900">
+              <span className="text-sm font-bold text-rose-900">
                 I understand this team has an active subscription and deleting it will trigger an immediate downgrade to free tier to prevent next billing-cycle charges.
               </span>
             </label>

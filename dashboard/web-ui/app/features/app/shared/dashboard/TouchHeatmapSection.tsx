@@ -109,21 +109,21 @@ function drawTouchHeatmap(
         if (t < 0.015) return [0, 0, 0, 0];
         if (t < 0.2) {
             const s = (t - 0.015) / 0.185;
-            const a = Math.round(120 + s * 75);
-            return [Math.round(28 + s * 38), Math.round(140 + s * 80), Math.round(210 - s * 95), a];
+            const a = Math.round(110 + s * 75);
+            return [Math.round(34 + s * 69), Math.round(211 + s * 21), Math.round(238 + s * 11), a];
         }
         if (t < 0.45) {
             const s = (t - 0.2) / 0.25;
-            const a = Math.round(200 + s * 40);
-            return [Math.round(66 + s * 185), Math.round(220 - s * 20), Math.round(115 - s * 95), a];
+            const a = Math.round(190 + s * 35);
+            return [Math.round(103 + s * 93), Math.round(232 - s * 51), Math.round(249 + s * 4), a];
         }
         if (t < 0.75) {
             const s = (t - 0.45) / 0.3;
-            const a = Math.round(235 + s * 15);
-            return [255, Math.round(200 - s * 120), Math.round(20 + s * 10), a];
+            const a = Math.round(225 + s * 20);
+            return [Math.round(196 + s * 53), Math.round(181 - s * 13), Math.round(253 - s * 41), a];
         }
         const s = (t - 0.75) / 0.25;
-        return [255, Math.round(80 - s * 45), Math.round(20 + s * 35), 255];
+        return [Math.round(249 + s * 2), Math.round(168 - s * 55), Math.round(212 - s * 79), 255];
     };
 
     for (let y = 0; y < h; y++) {
@@ -467,82 +467,92 @@ const HeatmapPreview: React.FC<{
     );
 
     const widthClass = tile ? (compact ? 'w-[148px]' : 'w-[184px]') : `mx-auto w-full ${compact ? 'max-w-[310px]' : 'max-w-[360px]'}`;
-    const frameClass = tile
-        ? 'rounded-[24px] border border-slate-700 bg-slate-900 p-2 shadow-lg'
-        : 'rounded-[32px] border border-slate-700 bg-slate-900 p-3 shadow-2xl';
-    const screenClass = tile
-        ? 'relative aspect-[9/19] overflow-hidden rounded-[18px] bg-slate-800'
-        : 'relative aspect-[9/19] overflow-hidden rounded-[24px] bg-slate-800';
+    const frameClass = 'rounded-[28px] border-2 border-black bg-black p-3 shadow-neo';
+    const screenClass = 'relative aspect-[9/19] overflow-hidden rounded-[24px] bg-slate-800';
+    const tileScreenClass =
+        'relative aspect-[9/19] overflow-hidden rounded-2xl border-2 border-black bg-slate-800 shadow-neo-sm';
+
+    const previewInner = (
+        <>
+            {blobUrl ? (
+                <img
+                    src={blobUrl}
+                    alt={screen.name}
+                    className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${imageLoaded ? 'opacity-95' : 'opacity-0'}`}
+                    onLoad={() => {
+                        heatmapDebug('Screenshot image element loaded successfully', {
+                            screenName: screen.name,
+                            blobUrl,
+                        });
+                        setImageLoaded(true);
+                    }}
+                    onError={(event) => {
+                        console.error(`${TOUCH_HEATMAP_DEBUG_PREFIX} Screenshot image element failed to render`, {
+                            screenName: screen.name,
+                            blobUrl,
+                            currentSrc: event.currentTarget.currentSrc,
+                        });
+                        setLoadError('Failed to load image');
+                    }}
+                />
+            ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#111827] p-4 text-center">
+                    <MousePointer2 className="mb-2 h-8 w-8 text-[#67e8f9]" />
+                    <p className="text-xs font-black uppercase text-slate-200">{screen.name}</p>
+                    {!loadError && downloadProgress > 0 && downloadProgress < 100 && (
+                        <p className="mt-2 text-[11px] text-slate-400">Loading screenshot {downloadProgress}%</p>
+                    )}
+                    {loadError && <p className="mt-2 text-[11px] text-rose-300">{loadError}</p>}
+                </div>
+            )}
+
+            {(screen.touchHotspots?.length || 0) > 0 && (
+                <canvas
+                    ref={canvasRef}
+                    className="pointer-events-none absolute inset-0 h-full w-full"
+                    style={{ mixBlendMode: 'normal', opacity: 0.96 }}
+                />
+            )}
+
+            <div className="pointer-events-none absolute inset-0">
+                {topDots.map((hotspot, index) => {
+                    const size = 10 + (hotspot.intensity * 14);
+                    return (
+                        <span
+                            key={`dot-${index}-${hotspot.x}-${hotspot.y}`}
+                            className={`absolute rounded-full border border-white/50 ${hotspot.isRageTap ? 'bg-rose-500/60' : 'bg-cyan-400/55'}`}
+                            style={{
+                                left: `${hotspot.x * 100}%`,
+                                top: `${hotspot.y * 100}%`,
+                                width: `${size}px`,
+                                height: `${size}px`,
+                                transform: 'translate(-50%, -50%)',
+                            }}
+                        />
+                    );
+                })}
+            </div>
+        </>
+    );
 
     return (
         <div className={`${widthClass} shrink-0`}>
-            <div className={frameClass}>
-                <div ref={containerRef} className={screenClass}>
-                    {blobUrl ? (
-                        <img
-                            src={blobUrl}
-                            alt={screen.name}
-                            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${imageLoaded ? 'opacity-95' : 'opacity-0'}`}
-                            onLoad={() => {
-                                heatmapDebug('Screenshot image element loaded successfully', {
-                                    screenName: screen.name,
-                                    blobUrl,
-                                });
-                                setImageLoaded(true);
-                            }}
-                            onError={(event) => {
-                                console.error(`${TOUCH_HEATMAP_DEBUG_PREFIX} Screenshot image element failed to render`, {
-                                    screenName: screen.name,
-                                    blobUrl,
-                                    currentSrc: event.currentTarget.currentSrc,
-                                });
-                                setLoadError('Failed to load image');
-                            }}
-                        />
-                    ) : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-slate-700 to-slate-900 p-4 text-center">
-                            <MousePointer2 className="mb-2 h-8 w-8 text-slate-400" />
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">{screen.name}</p>
-                            {!loadError && downloadProgress > 0 && downloadProgress < 100 && (
-                                <p className="mt-2 text-[11px] text-slate-400">Loading screenshot {downloadProgress}%</p>
-                            )}
-                            {loadError && <p className="mt-2 text-[11px] text-rose-300">{loadError}</p>}
-                        </div>
-                    )}
-
-                    {(screen.touchHotspots?.length || 0) > 0 && (
-                        <canvas
-                            ref={canvasRef}
-                            className="pointer-events-none absolute inset-0 h-full w-full"
-                            style={{ mixBlendMode: 'normal', opacity: 0.96 }}
-                        />
-                    )}
-
-                    <div className="pointer-events-none absolute inset-0">
-                        {topDots.map((hotspot, index) => {
-                            const size = 10 + (hotspot.intensity * 14);
-                            return (
-                                <span
-                                    key={`dot-${index}-${hotspot.x}-${hotspot.y}`}
-                                    className={`absolute rounded-full border border-white/50 ${hotspot.isRageTap ? 'bg-rose-500/60' : 'bg-emerald-400/55'}`}
-                                    style={{
-                                        left: `${hotspot.x * 100}%`,
-                                        top: `${hotspot.y * 100}%`,
-                                        width: `${size}px`,
-                                        height: `${size}px`,
-                                        transform: 'translate(-50%, -50%)',
-                                    }}
-                                />
-                            );
-                        })}
+            {tile ? (
+                <div ref={containerRef} className={tileScreenClass}>
+                    {previewInner}
+                </div>
+            ) : (
+                <div className={frameClass}>
+                    <div ref={containerRef} className={screenClass}>
+                        {previewInner}
                     </div>
                 </div>
-            </div>
+            )}
 
             {showLegend && (
-                <div className="mt-3 flex items-center justify-between text-[11px] font-medium text-slate-500">
+                <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-600">
                     <span>Low intensity</span>
-                    <div className="mx-2 h-1.5 flex-1 rounded-full bg-gradient-to-r from-emerald-400 via-amber-400 to-rose-500" />
+                    <div className="mx-2 h-1.5 flex-1 border border-black bg-gradient-to-r from-[#67e8f9] via-[#c4b5fd] to-[#f472b6]" />
                     <span>High intensity</span>
                 </div>
             )}
@@ -557,9 +567,9 @@ const HeatmapTile: React.FC<{
     compact?: boolean;
     detailLabel?: string;
 }> = ({ screen, visitsLabel, incidentLabel, compact = false, detailLabel }) => (
-    <article className={`dashboard-surface shrink-0 border-2 border-black bg-white p-3 shadow-neo-sm ${compact ? 'w-[178px]' : 'w-[220px]'}`}>
-        <div className="mb-2 min-h-[46px]">
-            <h3 className="truncate text-sm font-black uppercase tracking-wide text-black" title={screen.name}>
+    <article className={`shrink-0 border border-black bg-white p-3 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo ${compact ? 'w-full sm:w-[178px]' : 'w-full sm:w-[230px]'}`}>
+        <div className="mb-2 min-h-[46px] border-b border-black/80 pb-2">
+            <h3 className="truncate text-sm font-black uppercase text-black" title={screen.name}>
                 {screen.name}
             </h3>
             {detailLabel ? (
@@ -571,8 +581,8 @@ const HeatmapTile: React.FC<{
         <HeatmapPreview screen={screen} compact={compact} tile showLegend={false} />
         {(visitsLabel || incidentLabel) ? (
             <div className="mt-2 flex items-center justify-between gap-2 text-[11px] font-mono">
-                {visitsLabel ? <span className="truncate text-slate-500">{visitsLabel}</span> : <span />}
-                {incidentLabel ? <span className="shrink-0 font-black text-rose-600">{incidentLabel}</span> : null}
+                {visitsLabel ? <span className="truncate border border-black bg-[#ecfeff] px-1.5 py-0.5 font-bold text-black">{visitsLabel}</span> : <span />}
+                {incidentLabel ? <span className="shrink-0 border border-black bg-[#fce7f3] px-1.5 py-0.5 font-black text-black">{incidentLabel}</span> : null}
             </div>
         ) : null}
     </article>
@@ -959,17 +969,17 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
 
     if (!selectedProject?.id && !isDemoMode) {
         return (
-            <section className={`dashboard-surface p-6 shadow-sm ${className}`.trim()}>
-                <p className="text-sm text-slate-500">Select a project to view touch heatmaps.</p>
+            <section className={`border-2 border-black bg-white p-6 shadow-neo ${className}`.trim()}>
+                <p className="text-sm font-semibold text-slate-600">Select a project to view touch heatmaps.</p>
             </section>
         );
     }
 
     if (isLoading) {
         return (
-            <section className={`dashboard-surface p-6 shadow-sm ${className}`.trim()}>
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                    <MousePointer2 className="h-4 w-4 animate-pulse text-blue-600" />
+            <section className={`border-2 border-black bg-white p-6 shadow-neo ${className}`.trim()}>
+                <div className="flex items-center gap-3 text-sm font-black uppercase text-black">
+                    <MousePointer2 className="h-4 w-4 animate-pulse text-black" />
                     Building interaction heatmaps...
                 </div>
                 <div className="mt-4 h-72 animate-pulse dashboard-inner-surface" />
@@ -979,13 +989,13 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
 
     if (!sortedScreens.length) {
         return (
-            <section className={`dashboard-surface p-6 shadow-sm ${className}`.trim()}>
-                <div className={`flex flex-col items-center justify-center border-2 border-dashed border-black bg-[#f4f4f5] text-center ${compact ? 'min-h-[180px]' : 'min-h-[220px]'}`}>
-                    <MousePointer2 className="mb-3 h-10 w-10 text-slate-300" />
-                    <p className="text-sm font-semibold text-slate-500">No touch heatmap data available yet</p>
-                    <p className="mt-1 text-xs text-slate-400">Heatmaps populate after users interact with tracked screens.</p>
+            <section className={`border-2 border-black bg-white p-6 shadow-neo ${className}`.trim()}>
+                <div className={`flex flex-col items-center justify-center border-2 border-dashed border-black bg-[#ecfeff] text-center ${compact ? 'min-h-[180px]' : 'min-h-[220px]'}`}>
+                    <MousePointer2 className="mb-3 h-10 w-10 text-black" />
+                    <p className="text-sm font-black uppercase text-black">No touch heatmap data available yet</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-600">Heatmaps populate after users interact with tracked screens.</p>
                     {partialError && (
-                        <p className="mt-3 text-xs font-medium text-amber-700">{partialError}</p>
+                        <p className="mt-3 text-xs font-medium text-rose-700">{partialError}</p>
                     )}
                 </div>
             </section>
@@ -993,23 +1003,27 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
     }
 
     return (
-        <section className={`dashboard-surface shadow-sm ${className}`.trim()}>
-            <div className={`overflow-y-auto ${compact ? 'max-h-[70vh] space-y-7 p-4' : 'max-h-[calc(100vh-220px)] space-y-9 p-5'}`}>
+        <section className={`border-2 border-black bg-white shadow-neo ${className}`.trim()}>
+            <div className={`overflow-y-auto ${compact ? 'max-h-[70vh] space-y-7 p-4' : 'max-h-[calc(100vh-220px)] space-y-8 p-4 sm:p-5'}`}>
                 {versionGroups.map((version, versionIndex) => (
-                    <div key={`${version.appVersion}-${versionIndex}`} className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className="border-t-2 border-dashed border-black/70 flex-1" />
-                            <div className="shrink-0 border-2 border-black bg-white px-3 py-1 text-xs font-black uppercase tracking-wide text-black">
+                    <div key={`${version.appVersion}-${versionIndex}`} className="border border-black bg-[#ecfeff] p-3">
+                        <div className="mb-3 flex flex-wrap items-center justify-start gap-3 border-b border-black/80 bg-[#c4b5fd] px-3 py-2 sm:justify-between">
+                            <div className="shrink-0 text-xs font-black uppercase text-black">
                                 VERSION: {version.appVersion}
                             </div>
-                            <div className="border-t-2 border-dashed border-black/70 flex-1" />
+                            <div className="shrink-0 border border-black bg-white px-2 py-1 text-[11px] font-black uppercase text-black">
+                                {version.sessions.toLocaleString()} sessions
+                            </div>
                         </div>
-                        <div className="overflow-x-auto pb-2">
-                            <div className="flex min-w-max gap-4">
+                        <div className="dashboard-mobile-scroll overflow-x-auto pb-2">
+                            <div className="grid grid-cols-1 gap-4 sm:flex sm:min-w-max">
                                 {version.screens.map((screen) => (
                                     <HeatmapTile
                                         key={`${version.appVersion}-${screen.name}`}
                                         screen={screen}
+                                        visitsLabel={`${screen.visits.toLocaleString()} visits`}
+                                        incidentLabel={`${screen.incidentRatePer100.toFixed(1)} /100`}
+                                        detailLabel={`${screen.touches.toLocaleString()} touches`}
                                         compact={compact}
                                     />
                                 ))}

@@ -140,7 +140,7 @@ export const ErrorsList: React.FC = () => {
         title="Errors Database"
         subtitle="Unified collection of all exceptions and runtime failures"
         icon={<Bug className="h-5 w-5" />}
-        iconColor="bg-amber-50"
+        iconColor="bg-rose-50"
       >
         <TimeFilter value={timeRange} onChange={setTimeRange} />
       </DashboardPageHeader>
@@ -156,7 +156,7 @@ export const ErrorsList: React.FC = () => {
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search error names, messages or screens..."
-                  className="w-full rounded-md border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+                  className="w-full rounded-md border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
                 />
               </div>
               <NeoButton variant="secondary" size="sm" leftIcon={<Filter size={14} />}>
@@ -166,7 +166,7 @@ export const ErrorsList: React.FC = () => {
             <div className="flex items-center text-sm font-medium text-slate-500 gap-4">
                <span>{filteredGroups.length} Issues</span>
                <span className="hidden md:inline">|</span>
-               <span className="hidden md:inline text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+               <span className="hidden md:inline text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
                   {formatCompact(filteredGroups.reduce((acc, g) => acc + g.count, 0))} Total Events
                </span>
             </div>
@@ -205,14 +205,14 @@ export const ErrorsList: React.FC = () => {
                 <div
                   key={group.fingerprint}
                   id={`error-group-\${group.fingerprint}`}
-                  className={`transition-colors \${isExpanded ? 'bg-amber-50/20' : 'hover:bg-slate-50'}`}
+                  className={`transition-colors \${isExpanded ? 'bg-rose-50/20' : 'hover:bg-slate-50'}`}
                 >
                   <div
                     className="group/row flex cursor-pointer items-center gap-4 px-4 py-3"
                     onClick={() => setExpandedGroup(isExpanded ? null : group.fingerprint)}
                   >
                     <div className="flex w-6 shrink-0 justify-center">
-                      <div className={`h-2.5 w-2.5 rounded-full \${isExpanded ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-slate-300 group-hover/row:bg-amber-400'} transition-all`} />
+                      <div className={`h-2.5 w-2.5 rounded-full \${isExpanded ? 'bg-rose-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-slate-300 group-hover/row:bg-rose-400'} transition-all`} />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -243,7 +243,7 @@ export const ErrorsList: React.FC = () => {
                     </div>
 
                     <div className="w-16 text-right">
-                      <span className="inline-block px-2 py-0.5 rounded text-xs font-mono font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-mono font-medium bg-rose-100 text-rose-800 border border-rose-200">
                         {formatCompact(group.count)}
                       </span>
                     </div>
@@ -257,7 +257,7 @@ export const ErrorsList: React.FC = () => {
                     <div className="flex w-8 shrink-0 justify-end">
                       <div
                         className={`flex h-6 w-6 items-center justify-center rounded text-slate-400 transition \${
-                          isExpanded ? 'rotate-180 text-amber-600 bg-amber-100' : 'group-hover/row:bg-slate-200 group-hover/row:text-slate-600'
+                          isExpanded ? 'rotate-180 text-rose-600 bg-rose-100' : 'group-hover/row:bg-slate-200 group-hover/row:text-slate-600'
                         }`}
                       >
                         <ChevronDown size={14} />
@@ -273,7 +273,7 @@ export const ErrorsList: React.FC = () => {
                            <NeoCard variant="flat" disablePadding className="overflow-hidden border border-slate-200 bg-white">
                               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5 bg-slate-50">
                                 <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-700">
-                                  <Code size={14} className="text-amber-500" />
+                                  <Code size={14} className="text-rose-500" />
                                   Stack Trace Analysis
                                 </h4>
                                 <div className="flex items-center gap-1.5">
@@ -301,7 +301,7 @@ export const ErrorsList: React.FC = () => {
                               </div>
 
                               {group.sampleError.stack ? (
-                                <div className="max-h-[400px] overflow-auto bg-[#0d1117] p-4 font-mono text-[11px] leading-relaxed text-slate-300 selection:bg-amber-900 overflow-x-auto">
+                                <div className="max-h-[400px] overflow-auto bg-[#0d1117] p-4 font-mono text-[11px] leading-relaxed text-slate-300 selection:bg-rose-900 overflow-x-auto">
                                   {group.sampleError.stack}
                                 </div>
                               ) : (
@@ -324,18 +324,18 @@ export const ErrorsList: React.FC = () => {
                         </div>
 
                         <div className="lg:col-span-1 flex flex-col gap-4">
-                           <NeoCard variant="flat" className="p-4 bg-amber-50/50 border-amber-200 shadow-sm">
-                              <h4 className="text-xs font-bold uppercase tracking-widest text-amber-800 mb-3 flex items-center gap-2">
-                                <Play size={14} className="text-amber-600 fill-current" />
+                           <NeoCard variant="flat" className="p-4 bg-rose-50/50 border-rose-200 shadow-sm">
+                              <h4 className="text-xs font-bold uppercase tracking-widest text-rose-800 mb-3 flex items-center gap-2">
+                                <Play size={14} className="text-rose-600 fill-current" />
                                 Session Replay
                               </h4>
-                              <p className="text-xs text-amber-700/80 mb-4 leading-relaxed">
+                              <p className="text-xs text-rose-700/80 mb-4 leading-relaxed">
                                 Watch the exact user journey leading up to this exception to understand the steps to reproduce.
                               </p>
                               {group.sampleError.sessionId ? (
                                 <NeoButton 
                                   variant="primary" 
-                                  className="w-full justify-center bg-amber-500 hover:bg-amber-600 focus:ring-amber-500 text-white border-0 py-2 shadow-sm"
+                                  className="w-full justify-center bg-rose-500 hover:bg-rose-600 focus:ring-rose-500 text-white border-0 py-2 shadow-sm"
                                   onClick={(e) => {
                                       e.stopPropagation();
                                       navigate(`\${pathPrefix}/sessions/\${group.sampleError.sessionId}`);

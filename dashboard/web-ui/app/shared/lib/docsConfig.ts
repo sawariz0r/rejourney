@@ -17,8 +17,13 @@ export interface DocMetadata {
 export const DOCS_MAP: Record<string, { file: string; title: string; category?: string }> = {
     'reactnative/overview': {
         file: 'react-native/getting-started.md',
-        title: 'React Native SDK Documentation',
+        title: 'React Native SDK',
         category: 'React Native'
+    },
+    'swift/overview': {
+        file: 'ios/getting-started.md',
+        title: 'Swift iOS SDK',
+        category: 'Swift (iOS)'
     },
     'community/contributing': {
         file: 'community/contributing.md',

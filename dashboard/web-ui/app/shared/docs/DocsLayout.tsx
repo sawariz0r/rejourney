@@ -12,7 +12,7 @@ export function DocsLayout({ children, sidebar, toc }: DocsLayoutProps) {
     return (
         <div className="min-h-screen bg-white flex flex-col font-sans">
             <Header />
-            <div className="flex flex-1 w-full mx-auto border-t border-gray-200">
+            <div className="flex flex-1 min-h-[calc(100vh-64px)] w-full mx-auto border-t border-gray-200">
                 {sidebar}
 
                 <main className="flex-1 min-w-0 bg-white">

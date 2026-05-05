@@ -16,28 +16,28 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
     children
 }) => {
     const isLightIconBackground = /-(50|100|200)\b/.test(iconColor) || iconColor.includes('white');
-    const iconToneClass = iconColor.includes('sky-50')
-        ? 'text-sky-600'
+    const iconToneClass = iconColor.includes('black')
+        ? 'text-white'
         : isLightIconBackground
-            ? 'text-slate-800'
-            : 'text-white';
+            ? 'text-black'
+            : 'text-black';
 
     return (
-        <div className="bg-white border-b border-slate-200 w-full">
-            <div className="mx-auto grid w-full max-w-[1800px] gap-x-4 gap-y-3 px-4 py-4 sm:px-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+        <div className="w-full border-b-2 border-black bg-[#f8fafc]">
+            <div className="mx-auto grid w-full max-w-[1800px] gap-x-4 gap-y-2 px-3 py-2.5 sm:px-6 sm:py-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
                 <div className="flex min-w-0 flex-wrap items-start gap-3 sm:gap-4">
                     {icon && (
-                        <div className={`mt-0.5 shrink-0 rounded-xl border border-slate-200 p-2.5 shadow-sm ${iconColor} ${iconToneClass}`}>
+                        <div className={`mt-0.5 shrink-0 border-2 border-black p-2.5 shadow-neo-sm ${iconColor} ${iconToneClass}`}>
                             {icon}
                         </div>
                     )}
                     <div className="min-w-0 flex-1" style={{ minWidth: 'min(100%, 13rem)' }}>
-                        <h1 className="text-xl font-semibold uppercase tracking-wide leading-tight text-black sm:text-2xl">
+                        <h1 className="text-xl font-black uppercase leading-tight text-black sm:text-2xl">
                             {title}
                         </h1>
                         {subtitle && (
                             <div className="mt-1.5 flex min-w-0 items-start gap-2 opacity-80">
-                                <p className="max-w-3xl text-xs font-medium leading-5 text-slate-500 sm:text-sm">
+                                <p className="max-w-3xl text-xs font-semibold leading-5 text-slate-600 sm:text-sm">
                                     {subtitle}
                                 </p>
                             </div>

@@ -557,7 +557,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                         : 'Rejourney is completely disabled. The SDK will not initialize, and no data will be collected or sent from the device.'}
                     </p>
                     {!rejourneyEnabled && (
-                      <div className="bg-amber-50 text-amber-800 text-[10px] font-bold uppercase p-2 border border-amber-200 inline-flex items-center gap-1 tracking-wide">
+                      <div className="bg-rose-50 text-rose-800 text-[10px] font-bold uppercase p-2 border border-rose-200 inline-flex items-center gap-1 tracking-wide">
                         <Info className="w-3 h-3" /> Observability minutes will not be counted.
                       </div>
                     )}
@@ -593,7 +593,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                         : 'Observe Only Mode is active. Recording is disabled. Replays will not be captured, but each session is observed for analytics and issues.'}
                     </p>
                     {!recordingEnabled && (
-                      <div className="bg-amber-50 text-amber-800 text-[10px] font-bold uppercase p-2 border border-amber-200 inline-flex items-center gap-1 tracking-wide">
+                      <div className="bg-rose-50 text-rose-800 text-[10px] font-bold uppercase p-2 border border-rose-200 inline-flex items-center gap-1 tracking-wide">
                         <Info className="w-3 h-3" /> Replays unavailable.
                       </div>
                     )}
@@ -865,7 +865,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
               <p className="text-slate-600 text-sm font-medium">
                 This will create a new API key with full access scopes for the <strong>{project.name}</strong> project.
               </p>
-              <div className="bg-amber-50 text-amber-800 p-3 rounded-md border border-amber-200 text-xs flex gap-2 font-bold">
+              <div className="bg-rose-50 text-rose-800 p-3 rounded-md border border-rose-200 text-xs flex gap-2 font-bold">
                 <Shield className="w-4 h-4 shrink-0" />
                 Usually you only need the Public Key for client-side recording. Secret API keys are for backend administrative access.
               </div>

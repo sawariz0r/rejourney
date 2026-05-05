@@ -314,7 +314,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
             return isHovered ? 'rgba(244, 63, 94, 0.78)' : 'rgba(244, 63, 94, 0.38)';
         }
         if (link.data.apiErrorRate > 10) {
-            return isHovered ? 'rgba(245, 158, 11, 0.84)' : 'rgba(245, 158, 11, 0.36)';
+            return isHovered ? 'rgba(249, 168, 212, 0.84)' : 'rgba(249, 168, 212, 0.36)';
         }
         return isHovered ? 'rgba(37, 99, 235, 0.72)' : 'rgba(37, 99, 235, 0.24)';
     };

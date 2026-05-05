@@ -1,107 +1,88 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router';
-import { Terminal, UserPlus, Check } from 'lucide-react';
-import { DocsCodeBlock } from '~/shared/docs/DocsCodeBlock';
-import { AI_INTEGRATION_PROMPT } from '~/shared/constants/aiPrompts';
-
-const quickStartCode = `import { Rejourney } from '@rejourneyco/react-native';
-
-Rejourney.init('YOUR_PUBLIC_ID');
-Rejourney.start();
-// That's it!`;
+import { ArrowRight, Server, Terminal } from 'lucide-react';
 
 export const Hero: React.FC = () => {
-    const [copied, setCopied] = useState(false);
-    const [aiCopied, setAiCopied] = useState(false);
-
-    const handleCopy = async () => {
-        try {
-            await navigator.clipboard.writeText(quickStartCode);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        } catch (err) {
-            console.error('Failed to copy:', err);
-        }
-    };
-
-    const handleCopyAI = async () => {
-        try {
-            await navigator.clipboard.writeText(AI_INTEGRATION_PROMPT);
-            setAiCopied(true);
-            setTimeout(() => setAiCopied(false), 2000);
-        } catch (err) {
-            console.error('Failed to copy:', err);
-        }
-    };
-
     return (
-        <section aria-label="Hero section" className="w-full px-4 sm:px-6 lg:px-8 pt-20 pb-24 sm:pt-24 sm:pb-32 relative bg-white overflow-hidden">
-            {/* Background Accent */}
-            <div className="absolute top-0 right-0 w-1/3 h-full bg-slate-50 -skew-x-12 translate-x-1/2 pointer-events-none opacity-50"></div>
+        <section
+            aria-label="Hero section"
+            className="relative w-full overflow-hidden border-b-2 border-black bg-[#f8fafc] px-4 pb-12 pt-16 text-black sm:px-6 sm:pb-16 sm:pt-24 lg:px-8 lg:pb-20 lg:pt-24"
+        >
+            <div
+                className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(#000_1px,transparent_1px),linear-gradient(90deg,#000_1px,transparent_1px)] [background-size:32px_32px]"
+                aria-hidden
+            />
+            <div
+                className="pointer-events-none absolute -right-28 top-20 h-56 w-[34rem] rotate-[-8deg] border-2 border-black bg-[#5dadec] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
+                aria-hidden
+            />
+            <div
+                className="pointer-events-none absolute -left-20 bottom-10 h-40 w-80 rotate-[7deg] border-2 border-black bg-[#fef08a] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+                aria-hidden
+            />
 
-            <div className="max-w-7xl mx-auto relative z-10">
-                <div className="grid gap-12 lg:gap-16 lg:grid-cols-[1.2fr_1fr] items-center">
-                    <div className="space-y-8 sm:space-y-10 lg:space-y-12">
+            <div className="relative z-10 mx-auto max-w-7xl">
+                <div className="grid items-center gap-10 lg:grid-cols-[1fr_0.58fr] lg:gap-12">
+                    <div className="relative space-y-7">
+                        <div className="inline-flex rotate-[-1deg] items-center gap-2 border-2 border-black bg-green-100 px-3 py-1.5 font-mono text-[10px] font-black uppercase tracking-[0.18em] text-black shadow-neo-sm sm:text-xs">
+                            <Terminal size={14} strokeWidth={3} />
+                            Indie speed. Enterprise control.
+                        </div>
 
-                        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[0.95] tracking-tight uppercase animate-fade-in-up opacity-0">
-                            <span className="font-black text-black">Light SDK.</span> <br className="hidden sm:block" />
-                            <span data-text="Session replay." className="hero-kinetic-word font-semibold text-violet-600 tracking-[-0.01em] animate-replay-scan-in inline-block" style={{ animationDelay: '0.08s' }}>Session replay.</span> <br className="hidden sm:block" />
-                            <span data-text="ANALYTICS." className="hero-kinetic-word font-semibold text-sky-600 tracking-[-0.01em] animate-analytics-rise-in inline-block" style={{ animationDelay: '0.3s' }}>ANALYTICS.</span> <br className="hidden sm:block" />
-                            <span data-text="ERRORS." className="hero-kinetic-word hero-kinetic-word-error font-semibold text-amber-600 tracking-[-0.01em] animate-errors-jitter-in inline-block">ERRORS.</span> <br className="hidden sm:block" />
-                            <span data-text="Crashes." className="hero-kinetic-word hero-kinetic-word-crash font-semibold text-red-600 tracking-[-0.01em] animate-crash-drop-in inline-block origin-bottom-left whitespace-nowrap">Crashes.</span> <br className="hidden sm:block" />
+                        <h1 className="max-w-4xl text-black">
+                            <span
+                                className="block animate-fade-in-up text-4xl font-black uppercase leading-[0.88] tracking-tight opacity-0 min-[380px]:text-5xl sm:text-6xl md:text-7xl lg:text-8xl"
+                                style={{ animationDelay: '0.12s' }}
+                            >
+                                Creative analytics.
+                            </span>
+                            <span
+                                data-text="Light SDK."
+                                className="hero-kinetic-word animate-replay-scan-in mt-3 block font-mono text-3xl font-black uppercase leading-[0.92] tracking-[0.08em] text-[#5dadec] min-[380px]:text-4xl sm:mt-3 sm:text-5xl sm:tracking-[0.14em] md:text-6xl lg:mt-4 lg:text-7xl"
+                                style={{ animationDelay: '0.2s' }}
+                            >
+                                Light SDK.
+                            </span>
                         </h1>
-                        {/* Deployment Options */}
-                        <div className="pt-4">
-                            <div className="flex flex-col sm:flex-row flex-wrap gap-6 items-start sm:items-center">
-                                <Link to="/login" className="border-2 border-black bg-white text-black px-8 py-4 text-base font-black uppercase tracking-widest hover:bg-gray-50 hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center gap-2 animate-fade-in-up hover-lift hover-glow opacity-0" style={{ animationDelay: '0.4s' }}>
-                                    Get Started Free
-                                </Link>
-                                <Link to="/docs#self-hosting" className="group flex items-center gap-3 text-sm font-black uppercase tracking-widest hover:text-[#5dadec] transition-colors animate-fade-in-up opacity-0" style={{ animationDelay: '0.5s' }}>
-                                    <div className="p-2 border-2 border-black group-hover:border-[#5dadec] transition-colors">
-                                        <Terminal size={18} className="stroke-[3]" />
-                                    </div>
-                                    Self-Host Rejourney
-                                </Link>
-                            </div>
+
+                        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
+                            <Link
+                                to="/login"
+                                className="animate-fade-in-up inline-flex w-full items-center justify-center gap-3 border-2 border-black bg-black px-6 py-4 text-center text-sm font-black uppercase tracking-widest text-white shadow-[6px_6px_0px_0px_rgba(93,173,236,1)] opacity-0 transition-all hover:-translate-y-0.5 hover:bg-[#5dadec] hover:text-black hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sm:w-auto sm:px-8"
+                                style={{ animationDelay: '0.48s' }}
+                            >
+                                Get started free
+                                <ArrowRight size={18} strokeWidth={3} />
+                            </Link>
+                            <Link
+                                to="/docs#self-hosting"
+                                className="animate-fade-in-up group inline-flex w-full items-center justify-center gap-3 border-2 border-black bg-white px-6 py-4 text-sm font-black uppercase tracking-widest text-black shadow-neo opacity-0 transition-all hover:-translate-y-0.5 hover:bg-[#fef08a] hover:shadow-neo-lg sm:w-auto"
+                                style={{ animationDelay: '0.56s' }}
+                            >
+                                <Server size={18} strokeWidth={3} />
+                                Self-host Rejourney
+                            </Link>
                         </div>
                     </div>
 
-                    <div className="relative hidden lg:block animate-fade-in-right opacity-0">
-                        <div className="relative">
-                            {/* Floating Badge - Top Left */}
-                            <div className="absolute -top-6 -left-6 z-20">
-                                <div className="bg-[#5dadec] border-2 border-black px-4 py-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rotate-[-2deg] hover:rotate-0 transition-transform duration-300">
-                                    <span className="text-xs font-black uppercase tracking-wider text-black flex items-center gap-2">
-                                        Setup in 3 Lines
-                                    </span>
-                                </div>
-                            </div>
+                    <div className="relative hidden animate-fade-in-right opacity-0 lg:block" style={{ animationDelay: '0.2s' }}>
+                        <div className="relative mx-auto h-[360px] max-w-sm border-2 border-black bg-white shadow-[14px_14px_0px_0px_rgba(0,0,0,1)]">
+                            <div className="absolute left-7 top-7 h-24 w-24 rotate-[-8deg] border-2 border-black bg-[#5dadec] shadow-neo" />
+                            <div className="absolute right-8 top-16 h-20 w-20 rotate-[7deg] border-2 border-black bg-[#fef08a] shadow-neo" />
+                            <div className="absolute bottom-8 left-10 h-24 w-28 rotate-[4deg] border-2 border-black bg-[#f9a8d4] shadow-neo" />
+                            <div className="absolute bottom-14 right-10 h-28 w-24 rotate-[-5deg] border-2 border-black bg-[#86efac] shadow-neo" />
 
-                            {/* "Yes, really" Badge - Floating Right */}
-                            <div className="absolute -right-12 top-1/2 -translate-y-1/2 z-20 hidden xl:block">
-                                <div className="relative group">
-                                    <div className="absolute inset-0 bg-black translate-x-1 translate-y-1 group-hover:translate-x-2 group-hover:translate-y-2 transition-transform duration-300"></div>
-                                    <div className="relative bg-white border-2 border-black px-4 py-3 rotate-3 group-hover:rotate-0 transition-all duration-300">
-                                        <p className="text-[10px] font-black uppercase text-gray-500 leading-none mb-1">Wait, really?</p>
-                                        <p className="text-sm font-black uppercase text-black">Just 3 lines.</p>
-                                    </div>
-                                    {/* Connection Line */}
-                                    <div className="absolute top-1/2 -left-8 w-8 h-0.5 bg-black/20"></div>
-                                </div>
+                            <div className="absolute left-1/2 top-1/2 flex h-40 w-40 -translate-x-1/2 -translate-y-1/2 items-center justify-center border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                                <img
+                                    src="/rejourneyIcon-removebg-preview.png"
+                                    alt=""
+                                    role="presentation"
+                                    className="h-24 w-24 object-contain"
+                                />
                             </div>
-
-                            {/* Main Code Block */}
-                            <div className="hover-lift duration-500">
-                                <DocsCodeBlock code={quickStartCode} />
-                            </div>
-
-                            {/* Trust Badge - Bottom Right */}
-                            <div className="absolute -bottom-4 right-8 z-20">
-                                <div className="bg-[#34d399] border-2 border-black px-3 py-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1.5">
-                                    <Check size={12} className="text-black stroke-[3]" />
-                                    <span className="text-[10px] font-black uppercase text-black">Zero Config Required</span>
-                                </div>
-                            </div>
+                            <span className="absolute right-5 top-5 border-2 border-black bg-white px-3 py-1 font-mono text-[10px] font-black uppercase tracking-widest shadow-neo-sm">
+                                13.2 kB
+                            </span>
                         </div>
                     </div>
                 </div>

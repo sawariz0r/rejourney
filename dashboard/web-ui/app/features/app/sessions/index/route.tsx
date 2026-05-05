@@ -564,14 +564,14 @@ export const RecordingsList: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col font-sans text-slate-900 bg-transparent">
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] font-sans text-slate-900">
       {/* Main Header — scrolls away with page */}
-      <div className="bg-white shrink-0">
+      <div className="shrink-0">
         <DashboardPageHeader
-          title="Session Archive"
+          title="Replays"
           subtitle={selectedProjectId ? archiveCountLabel : 'Browse, filter & replay user sessions'}
           icon={<Layers className="w-6 h-6" />}
-          iconColor="bg-sky-50"
+          iconColor="bg-[#67e8f9]"
         >
           <button
             onClick={() => {
@@ -588,7 +588,7 @@ export const RecordingsList: React.FC = () => {
               params.append('sortDir', primarySortDir);
               window.location.href = `/api/sessions/export?${params.toString()}`;
             }}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+            className="inline-flex h-9 w-9 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
             title="Export CSV"
           >
             <Download className="w-4 h-4" />
@@ -596,36 +596,36 @@ export const RecordingsList: React.FC = () => {
         </DashboardPageHeader>
 
         {/* Search & Controls Row */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3 sm:px-6">
+        <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-3 sm:px-6">
           <div className="flex flex-col gap-2 max-w-[1800px] mx-auto sm:flex-row sm:items-center">
             <div className="relative flex-1 group min-w-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black transition-colors" />
               <input
                 type="text"
                 placeholder="SEARCH SESSION, USER, DEVICE..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm font-semibold uppercase text-slate-900 shadow-sm placeholder:text-gray-400 focus:border-[#5dadec] focus:outline-none"
+                className="w-full border-2 border-black bg-white py-2 pl-10 pr-4 text-sm font-black uppercase text-black shadow-neo-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-black"
               />
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={handleQueryButtonClick}
-                className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold uppercase shadow-sm transition-colors whitespace-nowrap sm:flex-initial ${showQueryBuilder || totalConditions > 0
-                  ? 'bg-[#5dadec]/10 border-[#5dadec] text-black'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                className={`relative flex flex-1 items-center justify-center gap-1.5 border-2 border-black px-3 py-2 text-xs font-black uppercase shadow-neo-sm transition-all whitespace-nowrap sm:flex-initial ${showQueryBuilder || totalConditions > 0
+                  ? 'bg-[#67e8f9] text-black'
+                  : 'bg-white text-black hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                   }`}
               >
                 <Filter className="w-3.5 h-3.5" />
                 Query
                 {totalConditions > 0 && (
-                  <span className="ml-1 rounded bg-slate-900 px-1.5 py-0.5 text-[9px] font-bold text-white leading-none">
+                  <span className="ml-1 border border-black bg-black px-1.5 py-0.5 text-[9px] font-black text-white leading-none">
                     {totalConditions}
                   </span>
                 )}
                 {!hasSeenQueryBuilderUpdateSticker && (
-                  <span className="absolute -right-2 -top-2 rotate-12 rounded bg-blue-500 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm ring-2 ring-white">
+                  <span className="absolute -right-2 -top-2 rotate-12 border-2 border-black bg-[#f9a8d4] px-1.5 py-0.5 text-[9px] font-black uppercase text-black shadow-neo-sm">
                     Update
                   </span>
                 )}
@@ -639,7 +639,7 @@ export const RecordingsList: React.FC = () => {
                   clearQueryGroups();
                   setShowQueryBuilder(false);
                 }}
-                className="flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[#ef4444] shadow-sm transition-colors hover:bg-red-100 font-bold uppercase text-[10px] sm:justify-start"
+                className="flex items-center justify-center gap-1 border-2 border-black bg-[#fecaca] px-2.5 py-2 text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo font-black uppercase text-[10px] sm:justify-start"
                 title="Clear all filters"
               >
                 <X className="w-3 h-3" /> Clear All
@@ -650,7 +650,7 @@ export const RecordingsList: React.FC = () => {
 
         {/* Query Builder Panel */}
         {showQueryBuilder && (
-          <div className="bg-white border-b border-slate-200 px-4 py-4 sm:px-6">
+          <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-4 sm:px-6">
             <div className="max-w-[1800px] mx-auto">
               <QueryBuilder
                 groups={queryGroups}
@@ -666,15 +666,15 @@ export const RecordingsList: React.FC = () => {
 
         {/* Compact summary bar when panel is closed but conditions are active */}
         {!showQueryBuilder && totalConditions > 0 && (
-          <div className="bg-white border-b border-slate-100 px-4 py-2 sm:px-6">
+          <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-2 sm:px-6">
             <div className="flex items-center gap-1.5 max-w-[1800px] mx-auto overflow-x-auto no-scrollbar">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">WHERE</span>
+              <span className="text-[9px] font-black text-slate-600 uppercase shrink-0">WHERE</span>
               {queryGroups.map((group, gi) => (
                 <React.Fragment key={group.id}>
                   {gi > 0 && <span className="text-[9px] font-black text-violet-400 shrink-0">OR</span>}
                   {group.conditions.map((cond, idx) => (
                     <React.Fragment key={cond.id}>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-700 shrink-0 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 border-2 border-black bg-white px-2 py-0.5 text-[10px] font-black text-black shadow-neo-sm shrink-0 whitespace-nowrap">
                         {getConditionShortLabel(cond)}
                         <X
                           className="w-2.5 h-2.5 cursor-pointer hover:text-red-500 transition-colors"
@@ -686,7 +686,7 @@ export const RecordingsList: React.FC = () => {
                   ))}
                 </React.Fragment>
               ))}
-              <button onClick={() => setShowQueryBuilder(true)} className="text-[10px] font-bold text-[#5dadec] hover:underline shrink-0 whitespace-nowrap">
+              <button onClick={() => setShowQueryBuilder(true)} className="border-2 border-black bg-[#67e8f9] px-2 py-0.5 text-[10px] font-black text-black shadow-neo-sm hover:-translate-y-0.5 hover:shadow-neo shrink-0 whitespace-nowrap">
                 Edit
               </button>
             </div>
@@ -698,14 +698,14 @@ export const RecordingsList: React.FC = () => {
       <div className="flex-1 w-full max-w-full px-4 sm:px-6 pt-4 pb-24">
         <div className="space-y-3 md:hidden">
           {paginatedSessions.length === 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-              <div className="mx-auto mb-4 inline-flex items-center justify-center rounded-full bg-slate-50 p-4">
-                <Smartphone className="w-8 h-8 text-slate-300" />
+            <div className="border-2 border-black bg-white p-8 text-center shadow-neo">
+              <div className="mx-auto mb-4 inline-flex items-center justify-center border-2 border-black bg-[#86efac] p-4 shadow-neo-sm">
+                <Smartphone className="w-8 h-8 text-black" />
               </div>
-              <h3 className="text-base font-semibold uppercase text-slate-900 mb-1">
+              <h3 className="text-base font-black uppercase text-black mb-1">
                 {selectedProjectId ? 'No Sessions Found' : 'No Project Selected'}
               </h3>
-              <p className="text-slate-500 text-sm">
+              <p className="text-slate-600 text-sm font-semibold">
                 {selectedProjectId
                   ? 'Adjust your filters or search query'
                   : 'Select or create a project to view replay data.'}
@@ -744,13 +744,13 @@ export const RecordingsList: React.FC = () => {
             return (
               <article
                 key={session.id}
-                className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${canNavigateToSession ? 'cursor-pointer' : ''}`}
+                className={`border-2 border-black bg-white p-4 shadow-neo-sm transition-all ${canNavigateToSession ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-neo' : ''}`}
                 onClick={() => canNavigateToSession && navigate(`${pathPrefix}/sessions/${session.id}`)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${!canNavigateToSession ? 'bg-slate-300' : hasIssues ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                      <span className={`h-2.5 w-2.5 shrink-0 border border-black ${!canNavigateToSession ? 'bg-slate-300' : hasIssues ? 'bg-[#fb7185]' : 'bg-[#86efac]'}`} />
                       <h3 className="truncate font-mono text-sm font-semibold text-slate-900" title={userId}>{userId}</h3>
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
@@ -765,28 +765,28 @@ export const RecordingsList: React.FC = () => {
                       if (canNavigateToSession) navigate(`${pathPrefix}/sessions/${session.id}`);
                     }}
                     disabled={!canNavigateToSession}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center border-2 border-black bg-[#67e8f9] text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-40"
                     title={canNavigateToSession ? 'Open Replay' : 'Replay unavailable'}
                   >
                     <Play size={15} className={canNavigateToSession ? 'fill-current' : ''} />
                   </button>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-2 text-center xs:grid-cols-3">
-                  <div className="rounded-lg bg-slate-50 px-2 py-2">
-                    <div className="text-[9px] font-bold uppercase text-slate-400">Duration</div>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
+                  <div className="border-2 border-black bg-[#f8fafc] px-2 py-2 shadow-neo-sm">
+                    <div className="text-[9px] font-black uppercase text-slate-600">Duration</div>
                     <div className="mt-1 font-mono text-[11px] font-semibold text-slate-900">
                       {isLiveIngest || (!canOpenReplay && isBackgroundProcessing)
                         ? 'Live'
                         : `${Math.floor(session.durationSeconds / 60)}:${String(session.durationSeconds % 60).padStart(2, '0')}`}
                     </div>
                   </div>
-                  <div className="rounded-lg bg-slate-50 px-2 py-2">
-                    <div className="text-[9px] font-bold uppercase text-slate-400">Screens</div>
+                  <div className="border-2 border-black bg-[#f8fafc] px-2 py-2 shadow-neo-sm">
+                    <div className="text-[9px] font-black uppercase text-slate-600">Screens</div>
                     <div className="mt-1 font-mono text-[11px] font-semibold text-slate-900">{screensCount}</div>
                   </div>
-                  <div className="col-span-2 rounded-lg bg-slate-50 px-2 py-2 xs:col-span-1">
-                    <div className="text-[9px] font-bold uppercase text-slate-400">Avg API</div>
+                  <div className="col-span-2 border-2 border-black bg-[#f8fafc] px-2 py-2 shadow-neo-sm sm:col-span-1">
+                    <div className="text-[9px] font-black uppercase text-slate-600">Avg API</div>
                     <div className="mt-1 font-mono text-[11px] font-semibold text-slate-900">{session.apiAvgResponseMs ? `${Math.round(session.apiAvgResponseMs)}ms` : '-'}</div>
                   </div>
                 </div>
@@ -794,7 +794,7 @@ export const RecordingsList: React.FC = () => {
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {session.isFirstSession && (
                     <span
-                      className="inline-flex items-center rounded-md border border-emerald-800 bg-emerald-950/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight text-emerald-900"
+                      className="inline-flex items-center border-2 border-black bg-[#86efac] px-2 py-0.5 text-[10px] font-black uppercase text-black shadow-neo-sm"
                       title="First recorded session for this visitor in this project"
                     >
                       NEW USER
@@ -814,7 +814,7 @@ export const RecordingsList: React.FC = () => {
           })}
 
           {filteredSessions.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="border-2 border-black bg-white p-3 shadow-neo-sm">
               <div className="text-center text-xs font-bold text-slate-500">
                 Showing <span className="text-slate-900">{startIndex}-{endIndex}</span> of{' '}
                 <span className="text-slate-900">{filteredSessions.length.toLocaleString()}</span> loaded
@@ -824,7 +824,7 @@ export const RecordingsList: React.FC = () => {
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="border-2 border-black bg-white p-2 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-30"
                   title="Previous page"
                 >
                   <ChevronLeft size={15} />
@@ -842,7 +842,7 @@ export const RecordingsList: React.FC = () => {
                     }
                   }}
                   disabled={(currentPage >= totalPages && !hasMore) || isLoadingMore}
-                  className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="border-2 border-black bg-white p-2 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-30"
                   title="Next page"
                 >
                   <ChevronRight size={15} />
@@ -853,7 +853,7 @@ export const RecordingsList: React.FC = () => {
                 <button
                   onClick={handleLoadMore}
                   disabled={isLoadingMore}
-                  className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold uppercase text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-3 inline-flex w-full items-center justify-center border-2 border-black bg-[#86efac] px-3 py-2 text-xs font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLoadingMore ? <Loader size={13} className="mr-2 animate-spin" /> : null}
                   Load More
@@ -864,34 +864,34 @@ export const RecordingsList: React.FC = () => {
         </div>
 
         <div className="hidden overflow-x-auto md:block">
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm w-full">
+        <div className="w-full overflow-hidden border-2 border-black bg-white shadow-neo">
           <table className="w-full table-fixed border-collapse">
             <thead>
-              <tr className="bg-[#f4f4f5] border-b border-slate-200">
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] w-10 py-2.5 pl-4 pr-2" />
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] text-left py-2.5 px-3 text-[11px] font-semibold font-mono text-black uppercase tracking-wider min-w-[140px]">User & Device</th>
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] hidden lg:table-cell text-left py-2.5 px-3 text-[11px] font-semibold font-mono text-black uppercase tracking-wider w-32"><SortableHeader label="Date" sortKey="date" /></th>
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] hidden lg:table-cell text-left py-2.5 px-3 text-[11px] font-semibold font-mono text-black uppercase tracking-wider w-36">Location</th>
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] hidden md:table-cell text-right py-2.5 px-3 text-[11px] font-semibold font-mono text-black uppercase tracking-wider w-28 min-w-[7rem]"><SortableHeader label="Duration" sortKey="duration" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] hidden lg:table-cell text-right py-2.5 px-3 text-[11px] font-semibold font-mono text-black uppercase tracking-wider w-16"><SortableHeader label="Screens" sortKey="screens" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] hidden xl:table-cell text-right py-2.5 px-3 text-[11px] font-semibold font-mono text-black uppercase tracking-wider w-20"><SortableHeader label="API Lat." sortKey="apiResponse" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] hidden xl:table-cell text-right py-2.5 px-3 text-[11px] font-semibold font-mono text-black uppercase tracking-wider w-20"><SortableHeader label="API Err" sortKey="apiError" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] text-right py-2.5 px-3 text-[11px] font-semibold font-mono text-black uppercase tracking-wider w-36"><SortableHeader label="Notes" sortKey="crashes" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] w-12 py-2.5 pl-2 pr-4" />
-                <th className="sticky top-0 z-40 bg-[#f4f4f5] w-12 py-2.5 pl-2 pr-6" />
+              <tr className="border-b-2 border-black bg-[#dbeafe]">
+                <th className="sticky top-0 z-40 bg-[#dbeafe] w-10 py-2.5 pl-4 pr-2" />
+                <th className="sticky top-0 z-40 bg-[#dbeafe] text-left py-2.5 px-3 text-[11px] font-black text-black uppercase min-w-[140px]">User & Device</th>
+                <th className="sticky top-0 z-40 bg-[#dbeafe] hidden lg:table-cell text-left py-2.5 px-3 text-[11px] font-black text-black uppercase w-32"><SortableHeader label="Date" sortKey="date" /></th>
+                <th className="sticky top-0 z-40 bg-[#dbeafe] hidden lg:table-cell text-left py-2.5 px-3 text-[11px] font-black text-black uppercase w-36">Location</th>
+                <th className="sticky top-0 z-40 bg-[#dbeafe] hidden md:table-cell text-right py-2.5 px-3 text-[11px] font-black text-black uppercase w-28 min-w-[7rem]"><SortableHeader label="Duration" sortKey="duration" align="right" /></th>
+                <th className="sticky top-0 z-40 bg-[#dbeafe] hidden lg:table-cell text-right py-2.5 px-3 text-[11px] font-black text-black uppercase w-16"><SortableHeader label="Screens" sortKey="screens" align="right" /></th>
+                <th className="sticky top-0 z-40 bg-[#dbeafe] hidden xl:table-cell text-right py-2.5 px-3 text-[11px] font-black text-black uppercase w-20"><SortableHeader label="API Lat." sortKey="apiResponse" align="right" /></th>
+                <th className="sticky top-0 z-40 bg-[#dbeafe] hidden xl:table-cell text-right py-2.5 px-3 text-[11px] font-black text-black uppercase w-20"><SortableHeader label="API Err" sortKey="apiError" align="right" /></th>
+                <th className="sticky top-0 z-40 bg-[#dbeafe] text-right py-2.5 px-3 text-[11px] font-black text-black uppercase w-36"><SortableHeader label="Notes" sortKey="crashes" align="right" /></th>
+                <th className="sticky top-0 z-40 bg-[#dbeafe] w-12 py-2.5 pl-2 pr-4" />
+                <th className="sticky top-0 z-40 bg-[#dbeafe] w-12 py-2.5 pl-2 pr-6" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y-2 divide-black/15">
             {paginatedSessions.length === 0 && (
               <tr>
                 <td colSpan={11} className="py-16 text-center">
-                  <div className="inline-flex items-center justify-center p-4 bg-slate-50 rounded-full mb-4">
-                    <Smartphone className="w-8 h-8 text-slate-300" />
+                  <div className="inline-flex items-center justify-center p-4 bg-[#86efac] border-2 border-black shadow-neo-sm mb-4">
+                    <Smartphone className="w-8 h-8 text-black" />
                   </div>
-                  <h3 className="text-lg font-semibold uppercase text-slate-900 mb-1">
+                  <h3 className="text-lg font-black uppercase text-black mb-1">
                     {selectedProjectId ? 'No Sessions Found' : 'No Project Selected'}
                   </h3>
-                  <p className="text-slate-500 text-sm">
+                  <p className="text-slate-600 text-sm font-semibold">
                     {selectedProjectId
                       ? 'Adjust your filters or search query'
                       : 'Select or create a project to view replay data.'}
@@ -951,12 +951,12 @@ export const RecordingsList: React.FC = () => {
               return (
                 <React.Fragment key={session.id}>
                 <tr
-                  className={`cursor-pointer transition-colors ${isExpanded ? 'bg-[#f4f4f5]' : isZebraEven ? 'bg-white hover:bg-gray-100' : 'bg-[#f4f4f5] hover:bg-gray-200'}`}
+                  className={`cursor-pointer transition-colors ${isExpanded ? 'bg-[#f8fafc]' : isZebraEven ? 'bg-white hover:bg-[#f8fafc]' : 'bg-[#f8fafc] hover:bg-[#ecfeff]/45'}`}
                   onClick={(e) => toggleExpand(e, session.id)}
                 >
                     {/* Visual Indicator */}
                     <td className="w-10 py-2.5 pl-4 pr-2 align-middle text-center">
-                      <div className={`w-2.5 h-2.5 rounded-sm mx-auto ${isReplayBlocked ? 'bg-slate-400 animate-pulse' : hasIssues ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                      <div className={`w-2.5 h-2.5 border border-black mx-auto ${isReplayBlocked ? 'bg-slate-400 animate-pulse' : hasIssues ? 'bg-[#fb7185]' : 'bg-[#86efac]'}`} />
                     </td>
 
                     {/* User & Device */}
@@ -979,7 +979,7 @@ export const RecordingsList: React.FC = () => {
                       </div>
                       <div className={`flex items-center gap-2 text-[10px] text-slate-600 uppercase font-medium tracking-tight mt-0.5 min-w-0 overflow-hidden ${isReplayBlocked ? 'opacity-50' : ''}`}>
                         <span className="truncate min-w-0">{session.deviceModel || 'Unknown Device'}</span>
-                        <span className="w-1 h-1 bg-slate-900"></span>
+                        <span className="w-1 h-1 bg-black"></span>
                         <span>v{session.appVersion || '?.?.?'}</span>
                       </div>
                     </td>
@@ -1012,11 +1012,11 @@ export const RecordingsList: React.FC = () => {
                     {/* Duration: LIVE REPLAY while ingest / replay preparing; MM:SS once replay is playable (or session ended) and not live-ingesting */}
                     <td className="hidden md:table-cell py-2.5 px-3 align-middle text-right w-28 min-w-[7rem]">
                       {showLiveReplayInDurationColumn ? (
-                        <span className="inline-flex items-center justify-end whitespace-nowrap text-[9px] font-semibold leading-none text-black bg-[#34d399]/20 border border-[#34d399] px-1.5 py-1 animate-pulse">
+                        <span className="inline-flex items-center justify-end whitespace-nowrap border-2 border-black bg-[#86efac] px-1.5 py-1 text-[9px] font-black leading-none text-black shadow-neo-sm animate-pulse">
                           LIVE REPLAY
                         </span>
                       ) : (
-                        <span className="text-xs font-mono font-medium text-black bg-[#f4f4f5] border border-gray-300 px-1.5 py-0.5">
+                        <span className="border border-black bg-white px-1.5 py-0.5 text-xs font-mono font-bold text-black">
                           {Math.floor(session.durationSeconds / 60)}:{String(session.durationSeconds % 60).padStart(2, '0')}
                         </span>
                       )}
@@ -1030,14 +1030,14 @@ export const RecordingsList: React.FC = () => {
                     {/* API Metrics */}
                     <td className="hidden xl:table-cell py-2.5 px-3 align-middle text-right w-20">
                       {(session.apiAvgResponseMs || 0) > 0 ? (
-                        <span className={`text-xs font-mono font-medium ${session.apiAvgResponseMs > 1000 ? 'text-amber-700' : session.apiAvgResponseMs > 500 ? 'text-slate-600' : 'text-slate-700'}`}>
+                        <span className={`text-xs font-mono font-medium ${session.apiAvgResponseMs > 1000 ? 'text-pink-700' : session.apiAvgResponseMs > 500 ? 'text-slate-600' : 'text-slate-700'}`}>
                           {Math.round(session.apiAvgResponseMs)}ms
                         </span>
                       ) : <span className="text-slate-300 text-xs">-</span>}
                     </td>
                     <td className="hidden xl:table-cell py-2.5 px-3 align-middle text-right w-20">
                       {(session.apiErrorCount || 0) > 0 ? (
-                        <span className="inline-block text-xs font-mono font-medium text-[#ef4444] bg-[#f4f4f5] border border-gray-300 px-1.5 py-0.5">
+                        <span className="inline-block border border-black bg-[#fecaca] px-1.5 py-0.5 text-xs font-mono font-bold text-black">
                           {session.apiErrorCount}
                         </span>
                       ) : <span className="text-slate-300 text-xs">-</span>}
@@ -1048,7 +1048,7 @@ export const RecordingsList: React.FC = () => {
                       <div className="flex justify-end gap-1.5 items-center flex-wrap min-h-[28px]">
                       {session.isFirstSession && (
                         <span
-                          className="inline-flex items-center rounded-md border border-emerald-800 bg-emerald-950/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight text-emerald-900"
+                          className="inline-flex items-center border-2 border-black bg-[#86efac] px-2 py-0.5 text-[10px] font-black uppercase text-black shadow-neo-sm"
                           title="First recorded session for this visitor in this project"
                         >
                           NEW USER
@@ -1075,7 +1075,7 @@ export const RecordingsList: React.FC = () => {
                           }
                         }}
                         disabled={!canNavigateToSession}
-                        className={`inline-flex items-center justify-center p-1.5 rounded transition-colors group/play ${isReplayBlocked ? 'cursor-not-allowed opacity-40 text-slate-300' : 'text-slate-600 hover:text-slate-900'}`}
+                        className={`inline-flex items-center justify-center border-2 border-transparent p-1.5 transition-all group/play ${isReplayBlocked ? 'cursor-not-allowed opacity-40 text-slate-300' : 'text-slate-700 hover:border-black hover:bg-[#67e8f9] hover:text-black hover:shadow-neo-sm'}`}
                         title={
                           !canNavigateToSession
                             ? 'Replay unavailable for this session'
@@ -1096,7 +1096,7 @@ export const RecordingsList: React.FC = () => {
                     <td className="w-12 py-2.5 pl-2 pr-6 align-middle">
                     <button
                       onClick={(e) => toggleExpand(e, session.id)}
-                      className={`flex items-center justify-center p-1.5 rounded transition-colors mx-auto ${isExpanded ? 'text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                      className={`flex items-center justify-center border-2 border-transparent p-1.5 transition-all mx-auto ${isExpanded ? 'border-black bg-[#67e8f9] text-black shadow-neo-sm' : 'text-slate-600 hover:border-black hover:bg-[#ecfeff] hover:text-black hover:shadow-neo-sm'}`}
                     >
                       {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
@@ -1106,7 +1106,7 @@ export const RecordingsList: React.FC = () => {
                   {/* Expanded Details - full-width row */}
                   {isExpanded && (
                     <tr>
-                      <td colSpan={11} className="bg-[#f4f4f5] border-b border-gray-200 p-0 align-top">
+                      <td colSpan={11} className="border-b-2 border-black bg-[#f8fafc] p-0 align-top">
                         <div className="px-5 sm:px-7 pb-5 pt-3 space-y-3">
 
                           {/* ── Top stats strip ── */}
@@ -1128,7 +1128,7 @@ export const RecordingsList: React.FC = () => {
                                 if (n >= 50) return { label: '👑 Top 1%', color: 'text-violet-700', bg: 'bg-violet-50' };
                                 if (n >= 20) return { label: '🔥 Top 5%', color: 'text-indigo-700', bg: 'bg-indigo-50' };
                                 if (n >= 10) return { label: '⭐ Top 15%', color: 'text-sky-700', bg: 'bg-sky-50' };
-                                if (n >= 5)  return { label: '↩ Regular', color: 'text-amber-700', bg: 'bg-amber-50' };
+                                if (n >= 5)  return { label: '↩ Regular', color: 'text-pink-700', bg: 'bg-pink-50' };
                                 return { label: '↩ Returning', color: 'text-slate-700', bg: 'bg-slate-100' };
                               };
                               const tier = getTier(sessionNum);
@@ -1137,22 +1137,22 @@ export const RecordingsList: React.FC = () => {
                               const showTotal = totalSessions !== null && sessionNum !== null && totalSessions >= sessionNum;
 
                               return (
-                                <div className="bg-white border border-gray-200 rounded-lg p-3 col-span-2 md:col-span-1" style={{ boxShadow: '1px 1px 0 0 rgba(0,0,0,0.06)' }}>
-                                  <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                                <div className="col-span-2 border-2 border-black bg-white p-3 shadow-neo-sm md:col-span-1">
+                                  <div className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase text-slate-600">
                                     <User className="w-3 h-3" /> User
                                   </div>
                                   <div className="space-y-1.5">
                                     {/* Loyalty tier */}
                                     <div className="flex justify-between items-center">
                                       <span className="text-[10px] text-slate-500 font-semibold uppercase">Loyalty</span>
-                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${tier.color} ${tier.bg}`}>
+                                      <span className={`border border-black px-1.5 py-0.5 text-[10px] font-black ${tier.color} ${tier.bg}`}>
                                         {tier.label}
                                       </span>
                                     </div>
                                     {/* Session ordinal */}
                                     <div className="flex justify-between items-center">
                                       <span className="text-[10px] text-slate-500 font-semibold uppercase">Session #</span>
-                                      <span className="font-mono text-xs font-bold text-slate-800 bg-slate-50 px-1.5 py-0.5 rounded">
+                                      <span className="border border-black bg-[#f8fafc] px-1.5 py-0.5 font-mono text-xs font-black text-black">
                                         {sessionNum !== null && sessionNum > 0 ? sessionNum : '—'}
                                         {showTotal ? ` of ${totalSessions}` : ''}
                                       </span>
@@ -1160,7 +1160,7 @@ export const RecordingsList: React.FC = () => {
                                     {/* Engagement score */}
                                     <div className="flex justify-between items-center">
                                       <span className="text-[10px] text-slate-500 font-semibold uppercase">Engagement</span>
-                                      <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded ${interactionScore >= 70 ? 'text-emerald-700 bg-emerald-50' : interactionScore >= 40 ? 'text-amber-700 bg-amber-50' : 'text-red-700 bg-red-50'}`}>
+                                      <span className={`border border-black px-1.5 py-0.5 font-mono text-xs font-black ${interactionScore >= 70 ? 'text-black bg-[#86efac]' : interactionScore >= 40 ? 'text-black bg-[#f9a8d4]' : 'text-black bg-[#fecaca]'}`}>
                                         {interactionScore}/100
                                       </span>
                                     </div>
@@ -1170,24 +1170,24 @@ export const RecordingsList: React.FC = () => {
                             })()}
 
                             {/* Performance */}
-                            <div className="bg-white border border-gray-200 rounded-lg p-3" style={{ boxShadow: '1px 1px 0 0 rgba(0,0,0,0.06)' }}>
-                              <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2"><Gauge className="w-3 h-3" /> Performance</div>
+                            <div className="border-2 border-black bg-white p-3 shadow-neo-sm">
+                              <div className="mb-2 flex items-center gap-1 text-[9px] font-black uppercase text-slate-600"><Gauge className="w-3 h-3" /> Performance</div>
                               <div className="space-y-1.5">
                                 <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-slate-500 font-semibold uppercase">Startup</span>
-                                  <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded ${((session as any).appStartupTimeMs || 0) > 2000 ? 'text-red-700 bg-red-50' : 'text-emerald-700 bg-emerald-50'}`}>
+                                  <span className={`border border-black px-1.5 py-0.5 font-mono text-xs font-black ${((session as any).appStartupTimeMs || 0) > 2000 ? 'text-black bg-[#fecaca]' : 'text-black bg-[#86efac]'}`}>
                                     {((session as any).appStartupTimeMs || 0).toFixed(0)}ms
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-slate-500 font-semibold uppercase">API Avg</span>
-                                  <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded ${(session.apiAvgResponseMs || 0) > 1000 ? 'text-amber-700 bg-amber-50' : 'text-slate-800 bg-slate-50'}`}>
+                                  <span className={`border border-black px-1.5 py-0.5 font-mono text-xs font-black ${(session.apiAvgResponseMs || 0) > 1000 ? 'text-black bg-[#f9a8d4]' : 'text-black bg-[#f8fafc]'}`}>
                                     {(session.apiAvgResponseMs || 0).toFixed(0)}ms
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-slate-500 font-semibold uppercase">Duration</span>
-                                  <span className="font-mono text-xs font-bold text-slate-800 bg-slate-50 px-1.5 py-0.5 rounded">
+                                  <span className="border border-black bg-[#f8fafc] px-1.5 py-0.5 font-mono text-xs font-black text-black">
                                     {Math.floor(session.durationSeconds / 60)}:{String(session.durationSeconds % 60).padStart(2, '0')}
                                   </span>
                                 </div>
@@ -1195,8 +1195,8 @@ export const RecordingsList: React.FC = () => {
                             </div>
 
                             {/* Environment */}
-                            <div className="bg-white border border-gray-200 rounded-lg p-3" style={{ boxShadow: '1px 1px 0 0 rgba(0,0,0,0.06)' }}>
-                              <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">🌐 Environment</div>
+                            <div className="border-2 border-black bg-white p-3 shadow-neo-sm">
+                              <div className="mb-2 text-[9px] font-black uppercase text-slate-600">Environment</div>
                               <div className="space-y-1.5">
                                 <div className="flex justify-between items-center gap-1">
                                   <span className="text-[10px] text-slate-500 font-semibold uppercase shrink-0">Network</span>
@@ -1219,20 +1219,20 @@ export const RecordingsList: React.FC = () => {
                             </div>
 
                             {/* API — compact inline */}
-                            <div className="bg-white border border-gray-200 rounded-lg p-3" style={{ boxShadow: '1px 1px 0 0 rgba(0,0,0,0.06)' }}>
-                              <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2">📡 API Calls</div>
+                            <div className="border-2 border-black bg-white p-3 shadow-neo-sm">
+                              <div className="mb-2 text-[9px] font-black uppercase text-slate-600">API Calls</div>
                               <div className="space-y-1.5">
                                 <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-slate-500 font-semibold uppercase">OK</span>
-                                  <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{session.apiSuccessCount || 0}</span>
+                                  <span className="border border-black bg-[#86efac] px-1.5 py-0.5 font-mono text-xs font-black text-black">{session.apiSuccessCount || 0}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-slate-500 font-semibold uppercase">Errors</span>
-                                  <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded ${(session.apiErrorCount || 0) > 0 ? 'text-red-700 bg-red-50' : 'text-slate-500 bg-slate-50'}`}>{session.apiErrorCount || 0}</span>
+                                  <span className={`border border-black px-1.5 py-0.5 font-mono text-xs font-black ${(session.apiErrorCount || 0) > 0 ? 'text-black bg-[#fecaca]' : 'text-slate-600 bg-[#f8fafc]'}`}>{session.apiErrorCount || 0}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-slate-500 font-semibold uppercase">Avg Lat.</span>
-                                  <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded ${(session.apiAvgResponseMs || 0) > 1000 ? 'text-amber-700 bg-amber-50' : 'text-slate-800 bg-slate-50'}`}>
+                                  <span className={`border border-black px-1.5 py-0.5 font-mono text-xs font-black ${(session.apiAvgResponseMs || 0) > 1000 ? 'text-black bg-[#f9a8d4]' : 'text-black bg-[#f8fafc]'}`}>
                                     {(session.apiAvgResponseMs || 0).toFixed(0)}ms
                                   </span>
                                 </div>
@@ -1240,8 +1240,8 @@ export const RecordingsList: React.FC = () => {
                             </div>
 
                             {/* Replay — compact */}
-                            <div className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col gap-2" style={{ boxShadow: '1px 1px 0 0 rgba(0,0,0,0.06)' }}>
-                              <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400">🎬 Replay</div>
+                            <div className="flex flex-col gap-2 border-2 border-black bg-white p-3 shadow-neo-sm">
+                              <div className="text-[9px] font-black uppercase text-slate-600">Replay</div>
                               <NeoButton
                                 variant="primary"
                                 size="sm"
@@ -1268,9 +1268,9 @@ export const RecordingsList: React.FC = () => {
                             const screens: string[] = (session as any).screensVisited || [];
                             if (screens.length === 0) return null;
                             return (
-                              <div className="bg-white border border-gray-200 rounded-lg p-3" style={{ boxShadow: '1px 1px 0 0 rgba(0,0,0,0.06)' }}>
+                            <div className="border-2 border-black bg-white p-3 shadow-neo-sm">
                                 <div className="flex items-center justify-between mb-2.5">
-                                  <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400">🗺️ Page Journey</div>
+                                  <div className="text-[9px] font-black uppercase text-slate-600">Page Journey</div>
                                   <div className="text-[9px] font-semibold text-slate-400 uppercase">{screens.length} screen{screens.length !== 1 ? 's' : ''} visited</div>
                                 </div>
                                 <div className="overflow-x-auto no-scrollbar pb-1 pt-3">
@@ -1287,20 +1287,20 @@ export const RecordingsList: React.FC = () => {
                                                 ${isEntry
                                                   ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
                                                   : isExit
-                                                  ? 'bg-amber-50 border-amber-300 text-amber-800'
+                                                  ? 'bg-pink-50 border-pink-300 text-pink-800'
                                                   : 'bg-slate-50 border-slate-200 text-slate-700'
                                                 }`}
                                             >
-                                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isEntry ? 'bg-emerald-500' : isExit ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isEntry ? 'bg-emerald-500' : isExit ? 'bg-pink-500' : 'bg-slate-300'}`} />
                                               <span className="whitespace-nowrap max-w-[120px] truncate">{screen}</span>
                                               {/* step number badge */}
                                               <span className={`absolute -top-2 -right-1.5 text-[8px] font-bold px-1 py-0 rounded-full leading-4 min-w-[16px] text-center
-                                                ${isEntry ? 'bg-emerald-500 text-white' : isExit ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                                ${isEntry ? 'bg-emerald-500 text-white' : isExit ? 'bg-pink-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
                                                 {idx + 1}
                                               </span>
                                             </div>
                                             <span className={`text-[8px] font-bold uppercase tracking-wider
-                                              ${isEntry ? 'text-emerald-600' : isExit ? 'text-amber-600' : 'text-transparent'}`}>
+                                              ${isEntry ? 'text-emerald-600' : isExit ? 'text-pink-600' : 'text-transparent'}`}>
                                               {isEntry ? 'Entry' : isExit ? 'Exit' : 'ー'}
                                             </span>
                                           </div>
@@ -1335,7 +1335,7 @@ export const RecordingsList: React.FC = () => {
 
           {/* Pagination & Info Bar */}
           {filteredSessions.length > 0 && (
-            <div className="flex items-center justify-between border-t border-gray-200 py-4 px-6 flex-wrap gap-4 bg-white">
+            <div className="flex items-center justify-between border-t-2 border-black bg-[#f8fafc] px-6 py-4 flex-wrap gap-4">
               {/* Left: Showing X-Y of Z */}
               <div className="flex items-center gap-3">
                 <span className="text-xs font-bold text-slate-500">
@@ -1366,7 +1366,7 @@ export const RecordingsList: React.FC = () => {
                 <button
                   onClick={() => setCurrentPage(1)}
                   disabled={currentPage === 1}
-                  className="p-1.5 dashboard-surface hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  className="border-2 border-black bg-white p-1.5 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-30"
                   title="First page"
                 >
                   <ChevronsLeft size={14} />
@@ -1374,7 +1374,7 @@ export const RecordingsList: React.FC = () => {
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="p-1.5 dashboard-surface hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  className="border-2 border-black bg-white p-1.5 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-30"
                   title="Previous page"
                 >
                   <ChevronLeft size={14} />
@@ -1392,7 +1392,7 @@ export const RecordingsList: React.FC = () => {
                     }
                   }}
                   disabled={(currentPage >= totalPages && !hasMore) || isLoadingMore}
-                  className="p-1.5 dashboard-surface hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  className="border-2 border-black bg-white p-1.5 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-30"
                   title="Next page"
                 >
                   <ChevronRight size={14} />
@@ -1400,7 +1400,7 @@ export const RecordingsList: React.FC = () => {
                 <button
                   onClick={() => setCurrentPage(totalPages)}
                   disabled={currentPage >= totalPages}
-                  className="p-1.5 dashboard-surface hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  className="border-2 border-black bg-white p-1.5 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-30"
                   title="Last page"
                 >
                   <ChevronsRight size={14} />
@@ -1416,7 +1416,7 @@ export const RecordingsList: React.FC = () => {
                     setRowsPerPage(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold font-mono shadow-sm outline-none focus:outline-none"
+                  className="cursor-pointer border-2 border-black bg-white px-2 py-1 text-xs font-black shadow-neo-sm outline-none focus:outline-none"
                 >
                   {PAGE_SIZE_OPTIONS.map(size => (
                     <option key={size} value={size}>{size}</option>

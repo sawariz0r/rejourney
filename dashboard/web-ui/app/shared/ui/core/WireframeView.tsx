@@ -69,7 +69,7 @@ const getViewColor = (node: ViewNode): { fill: string; stroke: string; textColor
 
   // ScrollViews
   if (type.includes('scroll') || type.includes('flatlist') || type.includes('sectionlist')) {
-    return { fill: 'rgba(245, 158, 11, 0.1)', stroke: '#f59e0b', textColor: '#b45309' };
+    return { fill: 'rgba(249, 168, 212, 0.16)', stroke: '#f9a8d4', textColor: '#be185d' };
   }
 
   // TextInputs
@@ -324,7 +324,7 @@ export const WireframeView: React.FC<WireframeViewProps> = ({
         <LegendItem color="#3b82f6" label="Interactive" />
         <LegendItem color="#10b981" label="Text" />
         <LegendItem color="#a855f7" label="Image" />
-        <LegendItem color="#f59e0b" label="ScrollView" />
+        <LegendItem color="#f9a8d4" label="ScrollView" />
         <LegendItem color="#ec4899" label="Input" />
         <LegendItem color="#ef4444" label="Masked" />
       </div>

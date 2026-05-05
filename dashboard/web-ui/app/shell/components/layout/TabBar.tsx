@@ -49,115 +49,115 @@ type TabTheme = {
 const TAB_THEME_MAP: Record<TabThemeKey, TabTheme> = {
     general: {
         shortLabel: 'GEN',
-        accent: '#5dadec',
-        badgeBg: '#dbeafe',
-        badgeText: '#0369a1',
-        idleBg: '#eff6ff',
-        idleHoverBg: '#dbeafe',
+        accent: '#67e8f9',
+        badgeBg: '#cffafe',
+        badgeText: '#0f172a',
+        idleBg: '#ecfeff',
+        idleHoverBg: '#cffafe',
     },
     sessions: {
         shortLabel: 'RPL',
-        accent: '#6366f1',
-        badgeBg: '#e0e7ff',
-        badgeText: '#4338ca',
-        idleBg: '#eef2ff',
-        idleHoverBg: '#e0e7ff',
+        accent: '#67e8f9',
+        badgeBg: '#cffafe',
+        badgeText: '#0f172a',
+        idleBg: '#ecfeff',
+        idleHoverBg: '#cffafe',
     },
     api: {
         shortLabel: 'API',
-        accent: '#10b981',
+        accent: '#86efac',
         badgeBg: '#d1fae5',
-        badgeText: '#047857',
+        badgeText: '#0f172a',
         idleBg: '#ecfdf5',
         idleHoverBg: '#d1fae5',
     },
     journeys: {
         shortLabel: 'JRN',
-        accent: '#d946ef',
-        badgeBg: '#fae8ff',
-        badgeText: '#a21caf',
-        idleBg: '#fdf4ff',
-        idleHoverBg: '#fae8ff',
+        accent: '#f9a8d4',
+        badgeBg: '#fce7f3',
+        badgeText: '#0f172a',
+        idleBg: '#fdf2f8',
+        idleHoverBg: '#fce7f3',
     },
     heatmaps: {
         shortLabel: 'HEA',
-        accent: '#f43f5e',
-        badgeBg: '#ffe4e6',
-        badgeText: '#be123c',
-        idleBg: '#fff1f2',
-        idleHoverBg: '#ffe4e6',
+        accent: '#f9a8d4',
+        badgeBg: '#fce7f3',
+        badgeText: '#0f172a',
+        idleBg: '#f8fafc',
+        idleHoverBg: '#fce7f3',
     },
     devices: {
         shortLabel: 'DEV',
-        accent: '#6366f1',
+        accent: '#c4b5fd',
         badgeBg: '#e0e7ff',
-        badgeText: '#4338ca',
+        badgeText: '#0f172a',
         idleBg: '#eef2ff',
         idleHoverBg: '#e0e7ff',
     },
     geo: {
         shortLabel: 'GEO',
-        accent: '#0284c7',
+        accent: '#5dadec',
         badgeBg: '#dbeafe',
-        badgeText: '#0369a1',
-        idleBg: '#f0f9ff',
+        badgeText: '#0f172a',
+        idleBg: '#eff6ff',
         idleHoverBg: '#dbeafe',
     },
     crashes: {
         shortLabel: 'CRH',
-        accent: '#e11d48',
+        accent: '#fb7185',
         badgeBg: '#ffe4e6',
-        badgeText: '#be123c',
+        badgeText: '#0f172a',
         idleBg: '#fff1f2',
         idleHoverBg: '#ffe4e6',
     },
     anrs: {
         shortLabel: 'ANR',
-        accent: '#8b5cf6',
+        accent: '#c4b5fd',
         badgeBg: '#ede9fe',
-        badgeText: '#6d28d9',
+        badgeText: '#0f172a',
         idleBg: '#f5f3ff',
         idleHoverBg: '#ede9fe',
     },
     errors: {
         shortLabel: 'ERR',
-        accent: '#f59e0b',
-        badgeBg: '#fef3c7',
-        badgeText: '#b45309',
-        idleBg: '#fffbeb',
-        idleHoverBg: '#fef3c7',
+        accent: '#f9a8d4',
+        badgeBg: '#fce7f3',
+        badgeText: '#0f172a',
+        idleBg: '#f8fafc',
+        idleHoverBg: '#fce7f3',
     },
     alerts: {
         shortLabel: 'ALT',
-        accent: '#ef4444',
+        accent: '#fca5a5',
         badgeBg: '#fee2e2',
-        badgeText: '#b91c1c',
+        badgeText: '#0f172a',
         idleBg: '#fef2f2',
         idleHoverBg: '#fee2e2',
     },
     settings: {
         shortLabel: 'CFG',
-        accent: '#475569',
-        badgeBg: '#e2e8f0',
-        badgeText: '#334155',
-        idleBg: '#f1f5f9',
-        idleHoverBg: '#e2e8f0',
+        accent: '#f4f4f5',
+        badgeBg: '#f4f4f5',
+        badgeText: '#0f172a',
+        idleBg: '#fafafa',
+        idleHoverBg: '#f4f4f5',
     },
     search: {
         shortLabel: 'NEW',
-        accent: '#334155',
-        badgeBg: '#e2e8f0',
-        badgeText: '#1e293b',
+        accent: '#000000',
+        badgeBg: '#f8fafc',
+        badgeText: '#0f172a',
         idleBg: '#f8fafc',
-        idleHoverBg: '#e2e8f0',
+        idleHoverBg: '#ecfeff',
     },
     other: {
         shortLabel: 'TAB',
-        accent: '#64748b',
-        badgeBg: '#e2e8f0',
-        badgeText: '#475569',
+        accent: '#000000',
+        badgeBg: '#f8fafc',
+        badgeText: '#0f172a',
         idleBg: '#f8fafc',
-        idleHoverBg: '#e2e8f0',
+        idleHoverBg: '#ecfeff',
     },
 };
 
@@ -356,7 +356,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
 
     return (
         <div
-            className="flex min-w-0 items-end bg-slate-50 border-b-2 border-black"
+            className="flex min-w-0 items-end border-b-2 border-black bg-[#f8fafc]"
             onClick={() => setContextMenu(null)}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -416,7 +416,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                                         className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'stroke-[2.8]' : 'stroke-[2.3]'}`}
                                         style={{ color: theme.accent }}
                                     />
-                                    <div className={`truncate text-xs uppercase tracking-widest ${isActive ? 'font-black text-slate-900' : 'font-bold'}`}>
+                                    <div className={`truncate text-xs uppercase ${isActive ? 'font-black text-slate-900' : 'font-bold'}`}>
                                         {tab.title}
                                     </div>
                                 </div>
@@ -439,12 +439,12 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                         );
                     })}
                     {groupTabs.length === 0 && (
-                        <div className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-slate-400">No open tabs</div>
+                        <div className="px-4 py-2 text-xs font-black uppercase text-slate-500">No open tabs</div>
                     )}
                     {group === 'primary' && (
                         <button
                             onClick={handleNewTab}
-                            className="ml-1 flex h-[34px] w-[34px] shrink-0 items-center justify-center border-2 border-black border-b-0 bg-slate-200 text-slate-500 transition-colors hover:bg-white hover:text-black -mb-[2px]"
+                            className="ml-1 flex h-[34px] w-[34px] shrink-0 items-center justify-center border-2 border-black border-b-0 bg-[#ecfeff] text-black transition-all hover:-translate-y-px hover:bg-white -mb-[2px]"
                             title="New tab"
                         >
                             <Plus className="h-4 w-4" />
@@ -454,15 +454,15 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
             </div>
 
             {/* Controls Area */}
-            <div className="flex items-center gap-1 border-l border-slate-200 pl-2 ml-1 shrink-0 pb-1">
+            <div className="flex items-center gap-1 border-l-2 border-black pl-2 ml-1 shrink-0 pb-1">
                 {group === 'primary' && (
                     <>
                         <button
                             onClick={handleReopen}
                             disabled={!canReopen}
                             className={[
-                                'flex h-7 w-7 items-center justify-center rounded transition-colors',
-                                canReopen ? 'hover:bg-slate-200 text-slate-500 hover:text-slate-800' : 'text-slate-300 cursor-not-allowed'
+                                'flex h-7 w-7 items-center justify-center border-2 border-transparent transition-all',
+                                canReopen ? 'hover:border-black hover:bg-[#ecfeff] text-slate-600 hover:text-black' : 'text-slate-300 cursor-not-allowed'
                             ].join(' ')}
                             title={canReopen ? 'Reopen closed tab' : 'No recently closed tabs'}
                         >
@@ -473,8 +473,8 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                             onClick={handleCloseStale}
                             disabled={!canCloseStale}
                             className={[
-                                'flex h-7 w-7 items-center justify-center rounded transition-colors',
-                                canCloseStale ? 'hover:bg-amber-100 text-slate-500 hover:text-amber-700' : 'text-slate-300 cursor-not-allowed'
+                                'flex h-7 w-7 items-center justify-center border-2 border-transparent transition-all',
+                                canCloseStale ? 'hover:border-black hover:bg-[#ecfeff] text-slate-600 hover:text-black' : 'text-slate-300 cursor-not-allowed'
                             ].join(' ')}
                             title={canCloseStale ? 'Close stale tabs' : 'No stale tabs'}
                         >
@@ -486,7 +486,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                 {isSplitView && group === 'secondary' && (
                     <button
                         onClick={handleCloseSplit}
-                        className="flex h-7 w-7 items-center justify-center rounded hover:bg-blue-100 text-blue-600 transition-colors"
+                        className="flex h-7 w-7 items-center justify-center border-2 border-transparent text-black transition-all hover:border-black hover:bg-[#67e8f9]"
                         title="Close split view"
                     >
                         <PanelRightClose className="h-4 w-4" />
@@ -495,7 +495,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
 
                 <button
                     onClick={handleCloseAll}
-                    className="flex h-7 w-7 items-center justify-center rounded hover:bg-red-100 text-slate-500 hover:text-red-600 transition-colors"
+                    className="flex h-7 w-7 items-center justify-center border-2 border-transparent text-slate-600 transition-all hover:border-black hover:bg-[#fecaca] hover:text-red-700"
                     title="Close all tabs"
                 >
                     <Trash2 className="h-4 w-4" />
@@ -504,12 +504,12 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
 
             {contextMenu && (
                 <div
-                    className="fixed z-[100] min-w-[180px] rounded-lg border border-slate-200 bg-white py-1 text-xs font-medium shadow-xl"
+                    className="fixed z-[100] min-w-[180px] border-2 border-black bg-white py-1 text-xs font-bold shadow-neo"
                     style={{ left: contextMenu.x, top: contextMenu.y }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <button
-                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-[#ecfeff]"
                         onClick={() => {
                             closeTab(contextMenu.id);
                             setContextMenu(null);
@@ -520,7 +520,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                     </button>
 
                     <button
-                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-[#ecfeff]"
                         onClick={() => {
                             openTabInSplit(contextMenu.id);
                             setContextMenu(null);
@@ -531,17 +531,17 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                     </button>
 
                     <button
-                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-[#ecfeff]"
                         onClick={() => handleCloseOthers(contextMenu.id)}
                     >
                         Close Others
                         <X className="h-3 w-3" />
                     </button>
 
-                    <div className="mx-1 my-1 h-px bg-slate-100" />
+                    <div className="mx-1 my-1 h-px bg-black/20" />
 
                     <button
-                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-red-50 text-red-600"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-[#fecaca] text-red-600"
                         onClick={handleCloseAll}
                     >
                         Close All

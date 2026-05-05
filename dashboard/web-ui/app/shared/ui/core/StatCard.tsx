@@ -13,7 +13,7 @@ interface StatCardProps {
         positiveIsGood?: boolean;
     };
     icon?: React.ReactNode;
-    color?: 'blue' | 'emerald' | 'amber' | 'rose' | 'purple';
+    color?: 'blue' | 'emerald' | 'rose' | 'rose' | 'purple';
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -25,9 +25,9 @@ export const StatCard: React.FC<StatCardProps> = ({
     color = 'blue'
 }) => {
     return (
-        <div className="h-full bg-white border-2 border-black p-5 shadow-neo-sm hover:shadow-neo transition-all hover:-translate-y-1 relative group overflow-hidden">
+        <div className="group relative h-full border-2 border-black bg-white p-5 shadow-neo-sm transition-all hover:-translate-y-1 hover:shadow-neo">
             {/* Subtle background wash on hover matching their brand */}
-            <div className="absolute inset-0 bg-[#5dadec]/5 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-500 ease-out z-0 pointer-events-none" />
+            <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-[#5dadec]/5 transition-transform duration-500 ease-out transform -translate-x-full group-hover:translate-x-0" />
             
             <div className="relative z-10">
                 <div className="flex items-start justify-between mb-4">

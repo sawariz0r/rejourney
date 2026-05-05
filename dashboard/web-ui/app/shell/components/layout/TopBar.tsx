@@ -193,7 +193,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
     : `Refresh data (last: ${lastRefreshTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})`;
 
   return (
-    <div className="relative z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b-2 border-black bg-white px-4 py-3 sm:px-6">
+    <div className="dashboard-topbar relative z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
         {/* Mobile Menu Button */}
         <button
@@ -213,15 +213,15 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         {currentProject ? (
           <>
             <div className="min-w-0 flex flex-col justify-center">
-              <h1 className="truncate text-sm font-black uppercase tracking-widest text-black leading-none">{currentProject.name}</h1>
+              <h1 className="truncate text-sm font-black uppercase text-black leading-none">{currentProject.name}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {currentProject.platforms.map((platform) => (
-                  <span key={platform} className="flex items-center gap-1 bg-[#5dadec] px-1.5 py-px text-[10px] font-black uppercase tracking-wider text-black border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                {currentProject.platforms.map((platform, index) => (
+                  <span key={platform} className={`flex items-center gap-1 px-1.5 py-px text-[10px] font-black uppercase text-black border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] ${index % 2 === 0 ? 'bg-[#67e8f9]' : 'bg-[#86efac]'}`}>
                     {platform}
                   </span>
                 ))}
                 {teamPlan?.videoRetentionLabel && (
-                  <span className="flex items-center gap-1 bg-[#fef08a] px-1.5 py-px text-[10px] font-black uppercase tracking-wider text-black border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                  <span className="flex items-center gap-1 bg-[#f9a8d4] px-1.5 py-px text-[10px] font-black uppercase text-black border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
                     {teamPlan.videoRetentionLabel} video retention
                   </span>
                 )}
@@ -229,7 +229,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
             </div>
           </>
         ) : (
-          <div className="text-sm font-black uppercase tracking-widest text-slate-400">Select a project</div>
+          <div className="text-sm font-black uppercase text-slate-500">Select a project</div>
         )}
       </div>
 
@@ -257,7 +257,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
           title="Copy AI Integration Prompt"
         >
           <BookOpen className="w-4 h-4 text-black stroke-[2]" />
-          <span className="hidden sm:inline text-xs font-black uppercase tracking-widest">AI Docs</span>
+          <span className="hidden sm:inline text-xs font-black uppercase">AI Docs</span>
           {copiedDocs ? (
             <Check className="w-4 h-4 text-black stroke-[3]" />
           ) : (
@@ -284,10 +284,10 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         {user && currentTeam && (
           <Link
             to={`${pathPrefix}/team`}
-            className="hidden h-9 items-center gap-2 border-2 border-black bg-white px-3 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo active:translate-y-0 active:shadow-none xl:flex"
+            className="hidden h-9 items-center gap-2 border-2 border-black bg-[#86efac] px-3 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo active:translate-y-0 active:shadow-none xl:flex"
             title={`${currentTeam.name} - Usage this month`}
           >
-            <span className="font-black text-black uppercase tracking-wider text-xs">{planLabel}</span>
+            <span className="font-black text-black uppercase text-xs">{planLabel}</span>
             <span className="h-4 w-0.5 bg-black"></span>
             <span className="font-mono font-black text-black text-sm">{sessionsUsed.toLocaleString()}</span>
           </Link>
@@ -303,7 +303,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
               <UserIcon className="w-3.5 h-3.5 stroke-[3]" />
             </div>
             <div className="hidden min-w-0 md:block">
-              <div className="text-xs font-black uppercase tracking-wider text-black max-w-[100px] truncate">{displayLabel}</div>
+              <div className="text-xs font-black uppercase text-black max-w-[100px] truncate">{displayLabel}</div>
             </div>
             <ChevronDown className="w-4 h-4 text-black stroke-[3]" />
           </button>
@@ -312,13 +312,13 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
             <>
               <div className="fixed inset-0 z-[90]" onClick={() => setShowUserMenu(false)} />
               <div className="absolute right-0 top-full mt-2 bg-white border-2 border-black p-1 shadow-neo-lg z-[100] w-56 animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-4 py-3 border-b border-gray-200 mb-1">
-                  <div className="text-xs font-semibold text-slate-800 truncate">{displayLabel}</div>
+                <div className="mb-1 border-b-2 border-black bg-[#f8fafc] px-4 py-3">
+                  <div className="text-xs font-black uppercase text-black truncate">{displayLabel}</div>
                   <div className="text-[10px] text-slate-500 truncate font-mono">{userEmail}</div>
                 </div>
                 <button
                   onClick={() => navigate(`${pathPrefix}/account`)}
-                  className="w-full text-left px-4 py-2 text-xs font-medium text-black hover:bg-gray-100 flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 text-xs font-bold text-black hover:bg-[#ecfeff] flex items-center gap-2"
                 >
                   <CreditCard className="w-3.5 h-3.5 text-slate-500" />
                   Account
@@ -328,7 +328,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
                     setShowUserMenu(false);
                     logout();
                   }}
-                  className="w-full text-left px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-[#fecaca] flex items-center gap-2"
                 >
                   <LogOut className="w-3.5 h-3.5 stroke-[2px]" />
                   Logout
