@@ -460,6 +460,7 @@ async function putObjectToEndpoint(
             Body: body,
             ContentType: contentType,
             Metadata: metadata,
+            ...(endpoint.storageClass ? { StorageClass: endpoint.storageClass as any } : {}),
         })
     );
 }
@@ -482,6 +483,7 @@ async function putObjectStreamToEndpoint(
         ContentType: contentType,
         ...(typeof contentLength === 'number' ? { ContentLength: contentLength } : {}),
         Metadata: metadata,
+        ...(endpoint.storageClass ? { StorageClass: endpoint.storageClass as any } : {}),
     });
 
     try {

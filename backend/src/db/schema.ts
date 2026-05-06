@@ -519,6 +519,7 @@ export const storageEndpoints = pgTable('storage_endpoints', {
     priority: integer('priority').default(0).notNull(),
     active: boolean('active').default(true).notNull(),
     shadow: boolean('shadow').default(false).notNull(),
+    storageClass: varchar('storage_class', { length: 64 }),
 });
 
 // =============================================================================
