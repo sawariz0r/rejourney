@@ -16,6 +16,7 @@ type RedisClient = InstanceType<typeof Redis>;
 
 let redis: RedisClient | null = null;
 let isConnected = false;
+const ARTIFACT_BUF_TTL_SECONDS = 30 * 60;
 
 /** For structured logs when debugging Redis vs app logic (ingest, rate limits, session cache). */
 export function getRedisDiagnosticsForLog(): {
@@ -109,6 +110,18 @@ export async function initRedis(): Promise<void> {
 
 export function isRedisConnected(): boolean {
     return isConnected;
+}
+
+export async function setArtifactBuffer(artifactId: string, data: Buffer): Promise<void> {
+    await getRedis().set(`artifact:buf:${artifactId}`, data, 'EX', ARTIFACT_BUF_TTL_SECONDS);
+}
+
+export async function getArtifactBuffer(artifactId: string): Promise<Buffer | null> {
+    return getRedis().getBuffer(`artifact:buf:${artifactId}`);
+}
+
+export async function deleteArtifactBuffer(artifactId: string): Promise<void> {
+    await getRedis().del(`artifact:buf:${artifactId}`);
 }
 
 /**

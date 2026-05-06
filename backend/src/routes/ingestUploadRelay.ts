@@ -1,18 +1,17 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { eq } from 'drizzle-orm';
 import { db, recordingArtifacts, sessions } from '../db/client.js';
-import { getObjectSizeBytesForArtifact, uploadStreamToS3ForArtifact } from '../db/s3.js';
 import { config } from '../config.js';
 import { ApiError, asyncHandler } from '../middleware/index.js';
 import { logger } from '../logger.js';
 import {
+    markArtifactBuffered,
     markArtifactUploadInterrupted,
-    markArtifactUploadStored,
 } from '../services/ingestArtifactLifecycle.js';
 import {
     verifyArtifactUploadRelayTokenResult,
 } from '../services/ingestUploadRelay.js';
-import { getRedisDiagnosticsForLog } from '../db/redis.js';
+import { deleteArtifactBuffer, getRedisDiagnosticsForLog, setArtifactBuffer } from '../db/redis.js';
 import { assertSessionAcceptsNewIngestWork } from '../services/sessionIngestImmutability.js';
 
 const router = Router();
@@ -22,6 +21,22 @@ function parseContentLength(value: string | undefined): number | null {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed <= 0) return null;
     return Math.floor(parsed);
+}
+
+async function collectRequestBody(req: Request, maxBytes: number): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+
+    for await (const chunk of req) {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Buffer);
+        totalBytes += buf.byteLength;
+        if (totalBytes > maxBytes) {
+            throw ApiError.badRequest('Artifact exceeds ingest max object size');
+        }
+        chunks.push(buf);
+    }
+
+    return Buffer.concat(chunks, totalBytes);
 }
 
 router.put(
@@ -133,6 +148,19 @@ router.put(
             previousStatus: artifact.status,
         }, 'artifact.upload_received');
 
+        if (artifact.status === 'ready' || artifact.status === 'uploaded') {
+            log.info({
+                event: 'ingest.relay_artifact_already_stored',
+                status: artifact.status,
+            }, 'ingest.relay_artifact_already_stored');
+            res.status(204).end();
+            return;
+        }
+
+        if (artifact.status !== 'pending' && artifact.status !== 'buffered') {
+            throw ApiError.conflict(`Artifact is not accepting uploads in status ${artifact.status}`);
+        }
+
         let requestInterrupted = Boolean(req.aborted);
         const markInterrupted = () => {
             requestInterrupted = true;
@@ -145,37 +173,29 @@ router.put(
             }
         });
 
-        const uploadResult = await uploadStreamToS3ForArtifact(
-            session.projectId,
-            artifact.s3ObjectKey,
-            req,
-            contentType,
-            artifact.endpointId,
-            contentLength ?? undefined,
-            {
-                artifact_id: artifact.id,
-                session_id: session.id,
-                kind: artifact.kind,
-            },
-        );
+        let body: Buffer;
+        try {
+            body = await collectRequestBody(req, config.INGEST_MAX_OBJECT_BYTES);
+        } catch (err) {
+            if (err instanceof ApiError) {
+                throw err;
+            }
 
-        if (!uploadResult.success) {
-            const wasInterrupted = requestInterrupted || uploadResult.errorType === 'aborted';
+            const wasInterrupted = requestInterrupted || req.aborted;
             log.error(
                 {
-                    event: 'ingest.relay_s3_upload_failed',
+                    event: 'ingest.relay_body_read_failed',
                     wasInterrupted,
-                    errorType: uploadResult.errorType,
-                    errorMessage: uploadResult.error,
+                    errorMessage: String(err),
                     contentLength,
                     ...getRedisDiagnosticsForLog(),
                 },
-                'ingest.relay_s3_upload_failed',
+                'ingest.relay_body_read_failed',
             );
             await markArtifactUploadInterrupted({
                 artifactId: artifact.id,
                 reason: wasInterrupted ? 'relay_upload_aborted' : 'relay_upload_failed',
-                errorMsg: uploadResult.error ?? 'Failed to store artifact upload',
+                errorMsg: String(err),
             });
 
             if (!res.headersSent && !res.writableEnded && !res.destroyed) {
@@ -190,19 +210,33 @@ router.put(
             return;
         }
 
-        const resolvedSizeBytes = contentLength
-            ?? artifact.declaredSizeBytes
-            ?? await getObjectSizeBytesForArtifact(
-                session.projectId,
-                artifact.s3ObjectKey,
-                uploadResult.endpointId || artifact.endpointId,
+        try {
+            await setArtifactBuffer(artifact.id, body);
+            const bufferState = await markArtifactBuffered(artifact.id);
+            if (!bufferState.buffered) {
+                deleteArtifactBuffer(artifact.id).catch((err) => {
+                    log.warn({ err }, 'ingest.relay_buffer_cleanup_failed');
+                });
+            }
+        } catch (err) {
+            log.error(
+                {
+                    event: 'ingest.relay_buffer_write_failed',
+                    errorMessage: String(err),
+                    contentLength,
+                    receivedBytes: body.byteLength,
+                    ...getRedisDiagnosticsForLog(),
+                },
+                'ingest.relay_buffer_write_failed',
             );
+            throw ApiError.serviceUnavailable('Failed to buffer artifact upload');
+        }
 
-        await markArtifactUploadStored({
-            artifactId: artifact.id,
-            sizeBytes: resolvedSizeBytes,
+        log.info({
+            event: 'ingest.relay_artifact_buffered',
+            contentLength,
+            receivedBytes: body.byteLength,
             contentType,
-            endpointId: uploadResult.endpointId || artifact.endpointId,
         });
 
         res.status(204).end();

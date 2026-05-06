@@ -194,19 +194,20 @@ export async function checkQueueHealth(): Promise<QueueHealth> {
         const replayGraceSeconds = Math.floor(REPLAY_PENDING_ARTIFACT_GRACE_MS / 1000);
 
         // Query BullMQ queue counts instead of ingest_jobs table.
-        const { getIngestQueueCounts, getReplayQueueCounts } = await import('./artifactBullQueue.js');
-        const [ingestCounts, replayCounts] = await Promise.all([
+        const { getFlushQueueCounts, getIngestQueueCounts, getReplayQueueCounts } = await import('./artifactBullQueue.js');
+        const [ingestCounts, replayCounts, flushCounts] = await Promise.all([
             getIngestQueueCounts(),
             getReplayQueueCounts(),
+            getFlushQueueCounts(),
         ]);
 
         // BullMQ states → logical queue health mapping:
         //   waiting + delayed  → "pending" (ready or scheduled)
         //   active             → "processing"
         //   failed             → "dlq / failed" (all retries exhausted)
-        const pendingJobs    = ingestCounts.waiting + ingestCounts.delayed;
-        const processingJobs = ingestCounts.active + replayCounts.active;
-        const dlqJobs        = ingestCounts.failed + replayCounts.failed;
+        const pendingJobs    = ingestCounts.waiting + ingestCounts.delayed + flushCounts.waiting + flushCounts.delayed;
+        const processingJobs = ingestCounts.active + replayCounts.active + flushCounts.active;
+        const dlqJobs        = ingestCounts.failed + replayCounts.failed + flushCounts.failed;
         const failedJobs     = dlqJobs; // same concept in BullMQ — exhausted jobs
         const replayPendingByKind = {
             // All replay-queue waiting jobs are screenshots or hierarchy — we

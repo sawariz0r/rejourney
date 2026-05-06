@@ -11,6 +11,7 @@ import { assertSessionAcceptsNewIngestWork, isSessionIngestImmutable } from './s
 import { ApiError } from '../middleware/errorHandler.js';
 import {
     enqueueArtifactJob,
+    ensureArtifactFlushJob,
     removeArtifactJobIfQueued,
     type ArtifactJobData,
 } from './artifactBullQueue.js';
@@ -232,7 +233,7 @@ export async function prepareReplayArtifactForUpload(
         };
     }
 
-    if (artifact.status === 'pending' || artifact.status === 'uploaded') {
+    if (artifact.status === 'pending' || artifact.status === 'buffered' || artifact.status === 'uploaded') {
         await db.update(recordingArtifacts)
             .set({
                 s3ObjectKey: params.s3ObjectKey,
@@ -314,6 +315,62 @@ export async function registerPendingArtifact(params: PendingArtifactParams) {
     return artifact;
 }
 
+export async function markArtifactBuffered(artifactId: string) {
+    const artifactResult = await getArtifactWithSessionById(artifactId);
+    if (!artifactResult) {
+        logger.warn({ artifactId }, 'artifact.buffer_missing');
+        return { ignored: true, buffered: false, queued: false };
+    }
+
+    const { artifact, session } = artifactResult;
+    if (artifact.status === 'ready' || artifact.status === 'uploaded') {
+        logger.info({
+            sessionId: session.id,
+            artifactId: artifact.id,
+            kind: artifact.kind,
+            status: artifact.status,
+        }, 'artifact.buffer_already_stored');
+        return { ignored: false, buffered: false, queued: false };
+    }
+
+    if (artifact.status !== 'pending' && artifact.status !== 'buffered') {
+        logger.warn({
+            sessionId: session.id,
+            artifactId: artifact.id,
+            kind: artifact.kind,
+            status: artifact.status,
+        }, 'artifact.buffer_ignored_for_terminal_status');
+        return { ignored: true, buffered: false, queued: false };
+    }
+
+    const bufferedAt = new Date();
+    if (artifact.status === 'pending') {
+        await db.update(recordingArtifacts)
+            .set({ status: 'buffered' })
+            .where(and(eq(recordingArtifacts.id, artifact.id), eq(recordingArtifacts.status, 'pending')));
+    }
+
+    if (!isSessionIngestImmutable(session)) {
+        await markSessionIngestActivity(session.id, { at: bufferedAt });
+    }
+
+    const queued = await ensureArtifactFlushJob(artifact.id);
+
+    logger.info({
+        event: 'artifact.buffered',
+        replayArtifact: isReplayArtifactKind(artifact.kind),
+        projectId: session.projectId,
+        sessionId: session.id,
+        artifactId: artifact.id,
+        kind: artifact.kind,
+        s3ObjectKey: artifact.s3ObjectKey,
+        endpointId: artifact.endpointId ?? null,
+        queued,
+    }, 'artifact.buffered');
+
+    return { ignored: false, buffered: true, queued };
+}
+
 export async function markArtifactUploadStored(params: {
     artifactId: string;
     sizeBytes?: number | null;
@@ -379,6 +436,72 @@ export async function markArtifactUploadStored(params: {
         artifactId: artifact.id,
         projectId: session.projectId,
     };
+}
+
+export async function markArtifactBufferLost(params: {
+    artifactId: string;
+    errorMsg?: string | null;
+    reason: string;
+}) {
+    const artifactResult = await getArtifactWithSessionById(params.artifactId);
+    if (!artifactResult) {
+        logger.warn({ artifactId: params.artifactId, reason: params.reason }, 'artifact.buffer_lost_missing');
+        return { ignored: true };
+    }
+
+    const { artifact, session } = artifactResult;
+    if (artifact.status !== 'buffered') {
+        logger.info({
+            sessionId: session.id,
+            artifactId: artifact.id,
+            kind: artifact.kind,
+            status: artifact.status,
+            reason: params.reason,
+        }, 'artifact.buffer_lost_ignored_for_status');
+        return { ignored: true };
+    }
+
+    const now = new Date();
+    await db.update(recordingArtifacts)
+        .set({ status: 'failed', readyAt: null, verifiedAt: null })
+        .where(and(eq(recordingArtifacts.id, artifact.id), eq(recordingArtifacts.status, 'buffered')));
+
+    if (!isSessionIngestImmutable(session)) {
+        await touchSessionForArtifactMutation(session, now);
+    }
+
+    logger.warn({
+        sessionId: session.id,
+        artifactId: artifact.id,
+        kind: artifact.kind,
+        clientUploadId: artifact.clientUploadId,
+        reason: params.reason,
+        errorMsg: params.errorMsg ?? 'Buffered artifact payload missing before S3 flush',
+    }, 'artifact.buffer_lost');
+
+    return {
+        ignored: false,
+        sessionId: session.id,
+        artifactId: artifact.id,
+        status: 'failed',
+    };
+}
+
+export async function markArtifactFlushFailedAfterExhausted(
+    artifactId: string,
+    errMsg: string,
+): Promise<void> {
+    try {
+        await db.update(recordingArtifacts)
+            .set({ status: 'failed', readyAt: null, verifiedAt: null })
+            .where(and(eq(recordingArtifacts.id, artifactId), eq(recordingArtifacts.status, 'buffered')));
+        logger.warn(
+            { event: 'artifact.flush_exhausted', artifactId, errMsg: errMsg.slice(0, 400) },
+            'artifact.flush_exhausted',
+        );
+    } catch (err) {
+        logger.error({ err, artifactId }, 'Failed to mark artifact flush as failed after job exhausted');
+    }
 }
 
 export async function markArtifactUploadInterrupted(params: {
@@ -503,10 +626,9 @@ export async function completeArtifactUpload(params: CompleteArtifactParams) {
 }
 
 export async function queueRecoverableArtifacts(limit = 100): Promise<number> {
-    // Find uploaded artifacts with no active BullMQ job.
-    // We simply call enqueueArtifactJob for each — BullMQ's jobId deduplication
-    // makes this safe to call even when a job already exists.
-    const rows = await db.select({
+    // Find uploaded/buffered artifacts with no active BullMQ job.
+    // BullMQ's jobId deduplication makes this safe to call even when a job exists.
+    const uploadedRows = await db.select({
         artifact: recordingArtifacts,
         projectId: sessions.projectId,
     })
@@ -516,7 +638,7 @@ export async function queueRecoverableArtifacts(limit = 100): Promise<number> {
         .limit(limit);
 
     let queued = 0;
-    for (const row of rows) {
+    for (const row of uploadedRows) {
         const enqueued = await enqueueArtifactJob(buildArtifactJobData(row.artifact, row.projectId));
         if (enqueued) {
             queued += 1;
@@ -527,6 +649,30 @@ export async function queueRecoverableArtifacts(limit = 100): Promise<number> {
                 artifactId: row.artifact.id,
                 kind: row.artifact.kind,
             }, 'artifact.queued');
+        }
+    }
+
+    const bufferedRows = await db.select({
+        artifact: recordingArtifacts,
+        projectId: sessions.projectId,
+    })
+        .from(recordingArtifacts)
+        .innerJoin(sessions, eq(recordingArtifacts.sessionId, sessions.id))
+        .where(eq(recordingArtifacts.status, 'buffered'))
+        .limit(limit);
+
+    for (const row of bufferedRows) {
+        const enqueued = await ensureArtifactFlushJob(row.artifact.id);
+        if (enqueued) {
+            queued += 1;
+            logger.info({
+                event: 'artifact.flush_queued',
+                replayArtifact: isReplayArtifactKind(row.artifact.kind),
+                projectId: row.projectId,
+                sessionId: row.artifact.sessionId,
+                artifactId: row.artifact.id,
+                kind: row.artifact.kind,
+            }, 'artifact.flush_queued');
         }
     }
 

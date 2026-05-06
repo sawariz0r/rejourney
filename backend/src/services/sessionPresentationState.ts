@@ -97,7 +97,7 @@ export async function loadSessionWorkAggregate(sessionId: string): Promise<Sessi
                 select count(*)::int
                 from ${recordingArtifacts} ra
                 where ra.session_id = s.id
-                  and ra.status in ('pending', 'uploaded')
+                  and ra.status in ('pending', 'buffered', 'uploaded')
             ), 0) as "openArtifactCount",
             coalesce((
                 select count(*)::int
@@ -110,7 +110,7 @@ export async function loadSessionWorkAggregate(sessionId: string): Promise<Sessi
                 from ${recordingArtifacts} ra
                 where ra.session_id = s.id
                   and ra.kind in ('screenshots', 'hierarchy')
-                  and ra.status in ('pending', 'uploaded')
+                  and ra.status in ('pending', 'buffered', 'uploaded')
             ), 0) as "openReplayArtifactCount",
             coalesce((
                 select count(*)::int

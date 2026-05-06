@@ -237,7 +237,7 @@ export async function reconcileDueSessions(batchSize = 500, maxBatches = 20): Pr
                         select 1 from ${recordingArtifacts} ra
                         where ra.session_id = s.id
                           and ra.kind in ('screenshots', 'hierarchy')
-                          and ra.status in ('pending', 'uploaded')
+                          and ra.status in ('pending', 'buffered', 'uploaded')
                     )
                     and exists (
                         select 1 from ${recordingArtifacts} ra

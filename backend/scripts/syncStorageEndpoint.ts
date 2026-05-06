@@ -39,51 +39,34 @@ async function main() {
     shadow: false,
   };
 
-  const existing = await db
-    .select({
-      id: storageEndpoints.id,
-      projectId: storageEndpoints.projectId,
-    })
+  // Only touch the row that matches this exact endpoint URL + is a global default.
+  // Never update rows for other endpoints — those are managed via manage-s3-endpoints.mjs.
+  const [existing] = await db
+    .select({ id: storageEndpoints.id })
     .from(storageEndpoints)
-    .where(eq(storageEndpoints.shadow, false));
+    .where(and(
+      isNull(storageEndpoints.projectId),
+      eq(storageEndpoints.endpointUrl, endpointUrl),
+      eq(storageEndpoints.shadow, false),
+    ))
+    .limit(1);
 
-  if (existing.length === 0) {
+  if (!existing) {
     await db.insert(storageEndpoints).values({
       projectId: null,
       priority: 0,
       ...endpointData,
     });
-
-    console.log(
-      `[${logPrefix}] Inserted global storage endpoint: ${endpointUrl} (${bucket})`,
-    );
+    console.log(`[${logPrefix}] Inserted storage endpoint: ${endpointUrl} (${bucket})`);
     return;
   }
 
-  for (const row of existing) {
-    await db
-      .update(storageEndpoints)
-      .set(endpointData)
-      .where(eq(storageEndpoints.id, row.id));
-  }
+  await db
+    .update(storageEndpoints)
+    .set(endpointData)
+    .where(eq(storageEndpoints.id, existing.id));
 
-  const hasGlobal = existing.some((row) => row.projectId === null);
-  if (!hasGlobal) {
-    await db.insert(storageEndpoints).values({
-      projectId: null,
-      priority: 0,
-      ...endpointData,
-    });
-  }
-
-  const globalRows = await db
-    .select({ id: storageEndpoints.id })
-    .from(storageEndpoints)
-    .where(and(isNull(storageEndpoints.projectId), eq(storageEndpoints.shadow, false)));
-
-  console.log(
-    `[${logPrefix}] Synced ${existing.length} storage endpoint row(s) to ${endpointUrl} (${bucket}); global rows=${globalRows.length}`,
-  );
+  console.log(`[${logPrefix}] Synced storage endpoint: ${endpointUrl} (${bucket})`);
 }
 
 main()

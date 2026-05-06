@@ -1,9 +1,10 @@
 /**
  * Artifact BullMQ Queues
  *
- * Two queues backed by the existing Redis Sentinel cluster:
- *   rj:ingest-artifacts  — events, crashes, anrs   (was polled from ingest_jobs)
- *   rj:replay-artifacts  — screenshots, hierarchy  (was polled from ingest_jobs)
+ * Three queues backed by the existing Redis Sentinel cluster:
+ *   rj-ingest-artifacts  — events, crashes, anrs   (was polled from ingest_jobs)
+ *   rj-replay-artifacts  — screenshots, hierarchy  (was polled from ingest_jobs)
+ *   rj-artifact-flush    — Redis-buffered uploads waiting to be written to S3
  *
  * Using jobId = `artifact-{artifactId}` gives natural deduplication:
  * BullMQ will not enqueue a second job for the same artifact while the first
@@ -38,10 +39,15 @@ export type ArtifactJobData = {
     endpointId: string | null;
 };
 
+export type ArtifactFlushJobData = {
+    artifactId: string;
+};
+
 // ─── Queue names ──────────────────────────────────────────────────────────────
 
 export const INGEST_QUEUE_NAME = 'rj-ingest-artifacts';
 export const REPLAY_QUEUE_NAME = 'rj-replay-artifacts';
+export const FLUSH_QUEUE_NAME = 'rj-artifact-flush';
 
 const REPLAY_KINDS = new Set(['screenshots', 'hierarchy']);
 
@@ -76,6 +82,7 @@ export function createBullMQRedisConnection() {
 
 let _ingestQueue: Queue<ArtifactJobData> | null = null;
 let _replayQueue: Queue<ArtifactJobData> | null = null;
+let _flushQueue: Queue<ArtifactFlushJobData> | null = null;
 
 const DEFAULT_JOB_OPTIONS = {
     attempts: 5,
@@ -84,10 +91,15 @@ const DEFAULT_JOB_OPTIONS = {
     removeOnFail: { age: 7 * 24 * 3600 },   // keep failed jobs 7 days (DLQ window)
 };
 
+const FLUSH_JOB_OPTIONS = {
+    ...DEFAULT_JOB_OPTIONS,
+    attempts: 8,
+    backoff: { type: 'exponential' as const, delay: 500 },
+};
+
 export function getIngestQueue(): Queue<ArtifactJobData> {
     if (!_ingestQueue) {
         // Dynamic import so the module can be loaded in environments without bullmq
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { Queue: BullQueue } = require('bullmq');
         _ingestQueue = new BullQueue(INGEST_QUEUE_NAME, {
             connection: createBullMQRedisConnection(),
@@ -99,7 +111,6 @@ export function getIngestQueue(): Queue<ArtifactJobData> {
 
 export function getReplayQueue(): Queue<ArtifactJobData> {
     if (!_replayQueue) {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { Queue: BullQueue } = require('bullmq');
         _replayQueue = new BullQueue(REPLAY_QUEUE_NAME, {
             connection: createBullMQRedisConnection(),
@@ -107,6 +118,17 @@ export function getReplayQueue(): Queue<ArtifactJobData> {
         });
     }
     return _replayQueue!;
+}
+
+export function getFlushQueue(): Queue<ArtifactFlushJobData> {
+    if (!_flushQueue) {
+        const { Queue: BullQueue } = require('bullmq');
+        _flushQueue = new BullQueue(FLUSH_QUEUE_NAME, {
+            connection: createBullMQRedisConnection(),
+            defaultJobOptions: FLUSH_JOB_OPTIONS,
+        });
+    }
+    return _flushQueue!;
 }
 
 export function getQueueForKind(kind: string): Queue<ArtifactJobData> {
@@ -145,6 +167,27 @@ export async function enqueueArtifactJob(data: ArtifactJobData): Promise<boolean
     }
 
     await queue.add(data.kind, data, { jobId });
+    return true;
+}
+
+export async function ensureArtifactFlushJob(artifactId: string): Promise<boolean> {
+    const queue = getFlushQueue();
+    const jobId = `flush-${artifactId}`;
+
+    const existing = await queue.getJob(jobId);
+    if (existing) {
+        const state = await existing.getState();
+        if (state !== 'completed' && state !== 'failed' && state !== 'unknown') {
+            logger.debug({
+                artifactId,
+                existingState: state,
+            }, 'artifact.flush_job_already_exists');
+            return false;
+        }
+        await existing.remove().catch(() => {/* ignore races */});
+    }
+
+    await queue.add('flush', { artifactId }, { jobId, attempts: 8, backoff: { type: 'exponential', delay: 500 } });
     return true;
 }
 
@@ -201,18 +244,28 @@ export async function getReplayQueueCounts(): Promise<BullQueueCounts> {
     };
 }
 
+export async function getFlushQueueCounts(): Promise<BullQueueCounts> {
+    const q = getFlushQueue();
+    const counts = await q.getJobCounts('waiting', 'active', 'failed', 'delayed');
+    return {
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        failed: counts.failed ?? 0,
+        delayed: counts.delayed ?? 0,
+    };
+}
+
 // ─── Worker factory ───────────────────────────────────────────────────────────
 
-export type ArtifactWorkerProcessor = (job: Job<ArtifactJobData>) => Promise<void>;
+export type ArtifactWorkerProcessor<T extends { artifactId: string } = ArtifactJobData> = (job: Job<T>) => Promise<void>;
 
-export function createArtifactBullWorker(
+export function createArtifactBullWorker<T extends { artifactId: string } = ArtifactJobData>(
     queueName: string,
-    processor: ArtifactWorkerProcessor,
+    processor: ArtifactWorkerProcessor<T>,
     concurrency: number,
-): Worker<ArtifactJobData> {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+): Worker<T> {
     const { Worker: BullWorker } = require('bullmq');
-    const worker: Worker<ArtifactJobData> = new BullWorker(
+    const worker: Worker<T> = new BullWorker(
         queueName,
         processor,
         {
@@ -229,14 +282,15 @@ export function createArtifactBullWorker(
         logger.error({ err, queueName }, 'bullmq.worker_error');
     });
 
-    worker.on('failed', (job: Job<ArtifactJobData> | undefined, err: Error) => {
+    worker.on('failed', (job: Job<T> | undefined, err: Error) => {
+        const data = job?.data as Partial<ArtifactJobData> | undefined;
         logger.warn(
             {
                 event: 'artifact.bullmq_job_failed',
                 jobId: job?.id,
-                artifactId: job?.data?.artifactId,
-                sessionId: job?.data?.sessionId,
-                kind: job?.data?.kind,
+                artifactId: data?.artifactId,
+                sessionId: data?.sessionId,
+                kind: data?.kind,
                 attemptsMade: job?.attemptsMade,
                 errMsg: err?.message?.slice(0, 400),
                 queueName,

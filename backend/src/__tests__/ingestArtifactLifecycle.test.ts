@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     or: vi.fn((...args) => ({ args })),
     sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
     enqueueArtifactJob: vi.fn(async () => true),
+    ensureArtifactFlushJob: vi.fn(async () => true),
     removeArtifactJobIfQueued: vi.fn(async () => undefined),
     db: {
         select: vi.fn(),
@@ -64,13 +65,17 @@ vi.mock('../db/s3.js', () => ({
 
 vi.mock('../services/artifactBullQueue.js', () => ({
     enqueueArtifactJob: mocks.enqueueArtifactJob,
+    ensureArtifactFlushJob: mocks.ensureArtifactFlushJob,
     removeArtifactJobIfQueued: mocks.removeArtifactJobIfQueued,
     getIngestQueueCounts: vi.fn(async () => ({ waiting: 0, delayed: 0, active: 0, failed: 0 })),
     getReplayQueueCounts: vi.fn(async () => ({ waiting: 0, delayed: 0, active: 0, failed: 0 })),
+    getFlushQueueCounts: vi.fn(async () => ({ waiting: 0, delayed: 0, active: 0, failed: 0 })),
 }));
 
 import {
+    queueRecoverableArtifacts,
     recoverStalePendingReplayArtifacts,
+    markArtifactBuffered,
     markArtifactUploadStored,
     markArtifactUploadInterrupted,
     prepareReplayArtifactForUpload,
@@ -78,11 +83,15 @@ import {
 } from '../services/ingestArtifactLifecycle.js';
 
 function queueJoinedSelectResult(result: any) {
+    queueJoinedSelectRows(result ? [result] : []);
+}
+
+function queueJoinedSelectRows(result: any[]) {
     mocks.db.select.mockImplementationOnce(() => ({
         from: vi.fn(() => ({
             innerJoin: vi.fn(() => ({
                 where: vi.fn(() => ({
-                    limit: vi.fn(async () => result ? [result] : []),
+                    limit: vi.fn(async () => result),
                 })),
             })),
         })),
@@ -411,15 +420,6 @@ describe('ingestArtifactLifecycle', () => {
                 projectId: 'project_1',
             },
         });
-        // No existing ingest job -> insert one.
-        mocks.db.select.mockImplementationOnce(() => ({
-            from: vi.fn(() => ({
-                where: vi.fn(() => ({
-                    limit: vi.fn(async () => []),
-                })),
-            })),
-        }));
-
         await markArtifactUploadStored({
             artifactId: 'artifact_uploaded',
             endpointId: 'endpoint_new',
@@ -433,6 +433,64 @@ describe('ingestArtifactLifecycle', () => {
             status: 'uploaded',
             sizeBytes: 123,
         });
+    });
+
+    it('marks pending artifacts buffered and enqueues a flush job', async () => {
+        const updateCalls: Array<{ table: unknown; payload: any }> = [];
+        mocks.db.update.mockImplementation((table: unknown) => ({
+            set: vi.fn((payload) => {
+                updateCalls.push({ table, payload });
+                return {
+                    where: vi.fn(async () => ({ table, payload })),
+                };
+            }),
+        }));
+
+        queueJoinedSelectResult({
+            artifact: {
+                id: 'artifact_pending',
+                sessionId: 'session_1',
+                status: 'pending',
+                kind: 'screenshots',
+                s3ObjectKey: 'tenant/t/p/s/screenshots/1.tar.gz',
+                endpointId: 'endpoint_1',
+            },
+            session: {
+                id: 'session_1',
+                projectId: 'project_1',
+            },
+        });
+
+        const result = await markArtifactBuffered('artifact_pending');
+
+        expect(result).toMatchObject({ ignored: false, buffered: true, queued: true });
+        expect(updateCalls[0]?.table).toBe(mocks.recordingArtifacts);
+        expect(updateCalls[0]?.payload).toMatchObject({ status: 'buffered' });
+        expect(mocks.ensureArtifactFlushJob).toHaveBeenCalledWith('artifact_pending');
+        expect(mocks.markSessionIngestActivity).toHaveBeenCalledWith(
+            'session_1',
+            expect.objectContaining({ at: expect.any(Date) }),
+        );
+    });
+
+    it('recovers buffered artifacts by re-enqueueing flush jobs', async () => {
+        mocks.db.select.mockReset();
+        queueJoinedSelectRows([]);
+        queueJoinedSelectRows([{
+            artifact: {
+                id: 'artifact_buffered',
+                sessionId: 'session_1',
+                status: 'buffered',
+                kind: 'screenshots',
+            },
+            projectId: 'project_1',
+        }]);
+
+        const result = await queueRecoverableArtifacts(10);
+
+        expect(result).toBe(1);
+        expect(mocks.enqueueArtifactJob).not.toHaveBeenCalled();
+        expect(mocks.ensureArtifactFlushJob).toHaveBeenCalledWith('artifact_buffered');
     });
 
     it('recovers stale pending replay artifacts when the object already exists in storage', async () => {

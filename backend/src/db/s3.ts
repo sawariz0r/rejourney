@@ -632,6 +632,54 @@ export async function uploadStreamToS3ForArtifact(
     }
 }
 
+export async function uploadBytesToS3ForArtifact(
+    artifactId: string,
+    body: Buffer,
+    contentType: string = 'application/octet-stream',
+): Promise<{ success: boolean; endpointId: string; error?: string }> {
+    try {
+        const { db } = await import('./client.js');
+        const { recordingArtifacts, sessions } = await import('./schema.js');
+
+        const [row] = await db.select({
+            artifact: recordingArtifacts,
+            projectId: sessions.projectId,
+        })
+            .from(recordingArtifacts)
+            .innerJoin(sessions, eq(recordingArtifacts.sessionId, sessions.id))
+            .where(eq(recordingArtifacts.id, artifactId))
+            .limit(1);
+
+        if (!row) {
+            return {
+                success: false,
+                endpointId: 'unknown',
+                error: `Artifact ${artifactId} not found`,
+            };
+        }
+
+        return uploadToS3ForArtifact(
+            row.projectId,
+            row.artifact.s3ObjectKey,
+            body,
+            contentType,
+            {
+                artifact_id: row.artifact.id,
+                session_id: row.artifact.sessionId,
+                kind: row.artifact.kind,
+            },
+            row.artifact.endpointId,
+        );
+    } catch (err) {
+        logger.error({ err, artifactId }, 'Failed to upload buffered artifact bytes to S3');
+        return {
+            success: false,
+            endpointId: 'unknown',
+            error: String(err),
+        };
+    }
+}
+
 /**
  * Get signed URL for downloading from specific endpoint
  */
