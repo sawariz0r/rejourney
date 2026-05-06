@@ -27,14 +27,15 @@ export const meta: Route.MetaFunction = ({ params, location }) => {
     }
 
     const title = `${metadata.title} - Rejourney Documentation`;
-    const description = metadata.category
-        ? `${metadata.title}: Learn about ${metadata.category} in Rejourney's open-source session replay and monitoring documentation.`
-        : `${metadata.title} documentation for Rejourney's open-source mobile observability platform.`;
+    const description = metadata.description
+        ?? `${metadata.title} documentation for Rejourney's open-source mobile observability platform.`;
+    const keywords = metadata.keywords?.join(", ");
 
     return [
         { title },
         { name: "description", content: description },
-        { name: "robots", content: "index, follow" },
+        ...(keywords ? [{ name: "keywords", content: keywords }] : []),
+        { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1" },
         { tagName: "link", rel: "canonical", href: canonicalUrl },
         // OpenGraph
         { property: "og:title", content: title },
@@ -90,15 +91,41 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
                 dangerouslySetInnerHTML={{
                     __html: JSON.stringify({
                         "@context": "https://schema.org",
-                        "@type": "TechArticle",
-                        "headline": metadata.title,
-                        "description": `${metadata.title} documentation for Rejourney.`,
-                        "category": metadata.category,
-                        "publisher": {
-                            "@type": "Organization",
-                            "name": "Rejourney",
-                            "logo": "https://rejourney.co/rejourneyIcon-removebg-preview.png"
-                        }
+                        "@graph": [
+                            {
+                                "@type": "TechArticle",
+                                "headline": metadata.title,
+                                "description": metadata.description ?? `${metadata.title} documentation for Rejourney.`,
+                                "category": metadata.category,
+                                "keywords": metadata.keywords,
+                                "mainEntityOfPage": {
+                                    "@type": "WebPage",
+                                    "@id": `https://rejourney.co/docs/${metadata.path}`
+                                },
+                                "publisher": {
+                                    "@type": "Organization",
+                                    "name": "Rejourney",
+                                    "logo": "https://rejourney.co/rejourneyIcon-removebg-preview.png"
+                                }
+                            },
+                            {
+                                "@type": "BreadcrumbList",
+                                "itemListElement": [
+                                    {
+                                        "@type": "ListItem",
+                                        "position": 1,
+                                        "name": "Docs",
+                                        "item": "https://rejourney.co/docs/reactnative/overview"
+                                    },
+                                    {
+                                        "@type": "ListItem",
+                                        "position": 2,
+                                        "name": metadata.title,
+                                        "item": `https://rejourney.co/docs/${metadata.path}`
+                                    }
+                                ]
+                            }
+                        ]
                     })
                 }}
             />

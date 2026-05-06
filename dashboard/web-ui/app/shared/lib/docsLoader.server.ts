@@ -84,6 +84,8 @@ export function getDocMetadata(docPath: string): DocMetadata | null {
         title: docInfo.title,
         path: docPath,
         category: docInfo.category,
+        description: docInfo.description,
+        keywords: docInfo.keywords,
     };
 }
 

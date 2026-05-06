@@ -9,11 +9,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Maximize2, MousePointerClick } from 'lucide-react';
 
-const HEADING_CURSOR_FOLLOW_PAD_PX = 16;
+const DEMO_CURSOR_FOLLOW_PAD_PX = 16;
 
 export const EmbeddedDemoWindow: React.FC = () => {
     const sectionRef = useRef<HTMLElement>(null);
-    const headingInteractiveZoneRef = useRef<HTMLDivElement>(null);
+    const demoFrameRef = useRef<HTMLIFrameElement>(null);
     const [shouldLoadDemo, setShouldLoadDemo] = useState(false);
     const [followingPointer, setFollowingPointer] = useState(false);
     const [followPos, setFollowPos] = useState({ x: 0, y: 0 });
@@ -55,76 +55,136 @@ export const EmbeddedDemoWindow: React.FC = () => {
     }, [shouldLoadDemo]);
 
     const updateFollowCoords = useCallback((clientX: number, clientY: number) => {
-        const zone = headingInteractiveZoneRef.current;
-        if (!zone) return;
-        const r = zone.getBoundingClientRect();
-        const xmin = HEADING_CURSOR_FOLLOW_PAD_PX;
-        const ymin = HEADING_CURSOR_FOLLOW_PAD_PX;
-        const xmax = Math.max(xmin + 8, r.width - HEADING_CURSOR_FOLLOW_PAD_PX);
-        const ymax = Math.max(ymin + 8, r.height - HEADING_CURSOR_FOLLOW_PAD_PX);
+        const section = sectionRef.current;
+        if (!section) return;
+        const r = section.getBoundingClientRect();
+        const xmin = DEMO_CURSOR_FOLLOW_PAD_PX;
+        const ymin = DEMO_CURSOR_FOLLOW_PAD_PX;
+        const xmax = Math.max(xmin + 8, r.width - DEMO_CURSOR_FOLLOW_PAD_PX);
+        const ymax = Math.max(ymin + 8, r.height - DEMO_CURSOR_FOLLOW_PAD_PX);
         setFollowPos({
             x: Math.min(xmax, Math.max(xmin, clientX - r.left)),
             y: Math.min(ymax, Math.max(ymin, clientY - r.top)),
         });
     }, []);
 
-    const onHeadingZoneEnter = useCallback(
-        (e: React.MouseEvent) => {
+    const onSectionPointerEnter = useCallback(
+        (e: React.PointerEvent<HTMLElement>) => {
+            if (e.pointerType !== 'mouse') return;
             setFollowingPointer(true);
             updateFollowCoords(e.clientX, e.clientY);
         },
         [updateFollowCoords],
     );
 
-    const onHeadingZoneMove = useCallback(
-        (e: React.MouseEvent) => {
+    const onSectionPointerMove = useCallback(
+        (e: React.PointerEvent<HTMLElement>) => {
+            if (e.pointerType !== 'mouse') return;
             updateFollowCoords(e.clientX, e.clientY);
         },
         [updateFollowCoords],
     );
 
-    const onHeadingZoneLeave = useCallback(() => {
+    const onSectionPointerLeave = useCallback(() => {
         setFollowingPointer(false);
     }, []);
+
+    useEffect(() => {
+        if (!shouldLoadDemo) return;
+
+        const frame = demoFrameRef.current;
+        if (!frame) return;
+
+        let cleanupFrameDocument = () => {};
+
+        const attachFrameDocumentListeners = () => {
+            cleanupFrameDocument();
+
+            let doc: Document | null = null;
+            try {
+                doc = frame.contentDocument;
+            } catch {
+                doc = null;
+            }
+            if (!doc) return;
+
+            const hideCursorStyle = doc.createElement('style');
+            hideCursorStyle.textContent = 'html, body, body * { cursor: none !important; }';
+            doc.head?.appendChild(hideCursorStyle);
+
+            const handleFrameMove = (event: MouseEvent) => {
+                const frameRect = frame.getBoundingClientRect();
+                setFollowingPointer(true);
+                updateFollowCoords(frameRect.left + event.clientX, frameRect.top + event.clientY);
+            };
+
+            const handleFrameLeave = (event: MouseEvent) => {
+                const section = sectionRef.current;
+                if (!section) {
+                    setFollowingPointer(false);
+                    return;
+                }
+
+                const frameRect = frame.getBoundingClientRect();
+                const sectionRect = section.getBoundingClientRect();
+                const clientX = frameRect.left + event.clientX;
+                const clientY = frameRect.top + event.clientY;
+                const stillInsideSection =
+                    clientX >= sectionRect.left &&
+                    clientX <= sectionRect.right &&
+                    clientY >= sectionRect.top &&
+                    clientY <= sectionRect.bottom;
+
+                if (!stillInsideSection) {
+                    setFollowingPointer(false);
+                }
+            };
+
+            doc.addEventListener('mousemove', handleFrameMove);
+            doc.addEventListener('mouseleave', handleFrameLeave);
+
+            cleanupFrameDocument = () => {
+                doc?.removeEventListener('mousemove', handleFrameMove);
+                doc?.removeEventListener('mouseleave', handleFrameLeave);
+                hideCursorStyle.remove();
+            };
+        };
+
+        attachFrameDocumentListeners();
+        frame.addEventListener('load', attachFrameDocumentListeners);
+
+        return () => {
+            frame.removeEventListener('load', attachFrameDocumentListeners);
+            cleanupFrameDocument();
+        };
+    }, [shouldLoadDemo, updateFollowCoords]);
 
     return (
         <section
             ref={sectionRef}
             aria-label="Interactive Demo"
-            className="w-full border-t-2 border-black bg-[#f8fafc] px-3 pb-14 pt-16 sm:px-4 sm:pb-20 sm:pt-24 lg:px-6 lg:pt-28"
+            className={`relative w-full border-t-2 border-black bg-[#f8fafc] px-3 pb-14 pt-16 sm:px-4 sm:pb-20 sm:pt-24 lg:px-6 lg:pt-28 ${followingPointer ? 'cursor-none' : ''}`}
+            onPointerEnter={onSectionPointerEnter}
+            onPointerMove={onSectionPointerMove}
+            onPointerLeave={onSectionPointerLeave}
         >
             {/* Embed must be >1280px wide (after borders) or Tailwind `xl:` breakpoints won't apply inside the iframe. */}
             <div className="mx-auto mb-7 max-w-7xl sm:mb-10">
-                <div
-                    ref={headingInteractiveZoneRef}
-                    role="presentation"
-                    className={`relative w-full px-3 py-10 sm:py-14 lg:py-16 ${followingPointer ? 'cursor-none' : ''}`}
-                    onMouseEnter={onHeadingZoneEnter}
-                    onMouseLeave={onHeadingZoneLeave}
-                    onMouseMove={onHeadingZoneMove}
-                >
+                <div role="presentation" className="relative w-full px-3 py-10 sm:py-14 lg:py-16">
                     <div className="relative z-[1] mx-auto inline-block max-w-2xl px-2 pb-2 pt-1 sm:px-3">
                         <h2 className="relative pl-11 text-3xl font-black uppercase leading-[0.92] tracking-tight text-black sm:pl-14 sm:text-5xl lg:pl-16 lg:text-6xl">
                             Walk the product.
                         </h2>
                     </div>
-                    <div className="pointer-events-none absolute inset-0 isolate z-[2] overflow-visible" aria-hidden>
-                        <MousePointerClick
-                            className="walk-product-heading-cursor h-8 w-8 sm:h-11 sm:w-11 lg:h-12 lg:w-12"
-                            strokeWidth={2.5}
-                            aria-hidden
-                            style={
-                                followingPointer
-                                    ? {
-                                          animation: 'none',
-                                          left: `${followPos.x}px`,
-                                          top: `${followPos.y}px`,
-                                          transform: 'translate(-4px, -4px)',
-                                      }
-                                    : undefined
-                            }
-                        />
-                    </div>
+                    {!followingPointer && (
+                        <div className="pointer-events-none absolute inset-0 isolate z-[2] overflow-visible" aria-hidden>
+                            <MousePointerClick
+                                className="walk-product-heading-cursor h-8 w-8 sm:h-11 sm:w-11 lg:h-12 lg:w-12"
+                                strokeWidth={2.5}
+                                aria-hidden
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -165,8 +225,9 @@ export const EmbeddedDemoWindow: React.FC = () => {
                         <div className="relative bg-white">
                             {shouldLoadDemo ? (
                                 <iframe
+                                    ref={demoFrameRef}
                                     src="/demo"
-                                    className="h-[min(68vh,560px)] min-h-[420px] w-full border-0 bg-white sm:h-[700px] lg:h-[min(82vh,920px)] lg:min-h-[760px]"
+                                    className="h-[min(68vh,560px)] min-h-[420px] w-full cursor-none border-0 bg-white sm:h-[700px] lg:h-[min(82vh,920px)] lg:min-h-[760px]"
                                     title="Rejourney Dashboard Demo"
                                     loading="eager"
                                     tabIndex={-1}
@@ -191,6 +252,22 @@ export const EmbeddedDemoWindow: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {followingPointer && (
+                <div className="pointer-events-none absolute inset-0 isolate z-30 overflow-hidden" aria-hidden>
+                    <MousePointerClick
+                        className="walk-product-heading-cursor h-8 w-8 sm:h-11 sm:w-11 lg:h-12 lg:w-12"
+                        strokeWidth={2.5}
+                        aria-hidden
+                        style={{
+                            animation: 'none',
+                            left: `${followPos.x}px`,
+                            top: `${followPos.y}px`,
+                            transform: 'translate(-4px, -4px)',
+                        }}
+                    />
+                </div>
+            )}
         </section>
     );
 };

@@ -25,7 +25,7 @@ export const EngineeringCTA: React.FC = () => {
                             <span
                                 key={item}
                                 className={`border-2 border-black px-3 py-1 text-[10px] font-mono font-black uppercase tracking-widest shadow-neo-sm ${
-                                    index === 0 ? 'bg-[#5dadec]' : 'bg-[#86efac]'
+                                    index === 0 ? 'bg-[#5dadec]' : 'bg-[#fef08a]'
                                 }`}
                             >
                                 {item}
@@ -33,12 +33,14 @@ export const EngineeringCTA: React.FC = () => {
                         ))}
                     </div>
 
-                    <h2 className="mx-auto mb-8 max-w-5xl text-4xl font-black uppercase leading-[0.88] tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
-                        Engineering
-                        <span className="mt-2 block text-[#5dadec] [text-shadow:3px_3px_0_rgb(0_0_0)] sm:[text-shadow:4px_4px_0_rgb(0_0_0)]">
-                            decisions.
+                    <h2 className="mx-auto mb-8 max-w-5xl text-xl font-black uppercase leading-[0.88] tracking-tight text-black sm:text-2xl md:text-3xl lg:text-4xl">
+                        Open Docuemented
+                        <span className="text-[#5dadec]">
+                            {' '}Engineering
                         </span>
+                        {' '}Decisions.
                     </h2>
+
 
                     <div className="flex flex-col justify-center gap-4 sm:flex-row">
                         <Link to="/engineering">

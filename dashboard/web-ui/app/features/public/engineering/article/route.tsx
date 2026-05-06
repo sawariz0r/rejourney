@@ -8,16 +8,29 @@ import { Header } from "~/shell/components/layout/Header";
 import { Footer } from "~/shell/components/layout/Footer";
 import { ARTICLES } from "~/shared/data/engineering";
 import { ArrowLeft } from "lucide-react";
-import { Link, useParams } from "react-router";
+import { Link, redirect, useParams } from "react-router";
+
+const SITE_URL = "https://rejourney.co";
+
+function getArticleUrl(article: (typeof ARTICLES)[number]): string {
+    return `${SITE_URL}/engineering/${article.urlDate}/${article.id}`;
+}
+
+function getArticleKeywords(article: (typeof ARTICLES)[number]): string {
+    return article.seo.targetKeywords.join(", ");
+}
 
 // Loader to validate slug
 export function loader({ params }: LoaderFunctionArgs) {
-    // We look up by slug (id) and ignore the date param for now, 
-    // though we could strictly validate it matches article.urlDate if desired.
     const article = ARTICLES.find((a) => a.id === params.slug);
     if (!article) {
         throw new Response("Article not found", { status: 404 });
     }
+
+    if (params.date !== article.urlDate) {
+        throw redirect(`/engineering/${article.urlDate}/${article.id}`, { status: 301 });
+    }
+
     return null;
 }
 
@@ -26,26 +39,32 @@ export const meta: MetaFunction = ({ params }) => {
     if (!article) {
         return [{ title: "Article Not Found - Rejourney" }];
     }
+    const canonicalUrl = getArticleUrl(article);
+    const metaTitle = article.seo.metaTitle;
+    const metaDescription = article.seo.metaDescription;
     const metaTags = [
-        { title: `${article.title} - Rejourney Engineering` },
-        { name: "robots", content: "index, follow" },
-        { name: "description", content: article.subtitle },
-        ...(article.seoKeywords ? [{ name: "keywords", content: article.seoKeywords }] : []),
-        { property: "og:title", content: article.title },
-        { property: "og:description", content: article.subtitle },
+        { title: `${metaTitle} | Rejourney Engineering` },
+        { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
+        { name: "description", content: metaDescription },
+        { name: "keywords", content: getArticleKeywords(article) },
+        { name: "author", content: article.author.name },
+        { property: "og:title", content: metaTitle },
+        { property: "og:description", content: metaDescription },
         { property: "og:type", content: "article" },
-        {
-            property: "og:url",
-            content: `https://rejourney.co/engineering/${article.urlDate}/${article.id}`,
-        },
+        { property: "og:url", content: canonicalUrl },
         { property: "og:image", content: article.image },
+        { property: "og:image:alt", content: article.title },
+        { property: "og:site_name", content: "Rejourney" },
         { property: "article:published_time", content: `${article.urlDate}T12:00:00.000Z` },
+        { property: "article:modified_time", content: `${article.dateModified ?? article.urlDate}T12:00:00.000Z` },
+        { property: "article:section", content: "Engineering" },
         { property: "article:author", content: article.author.name },
+        ...article.seo.topicTags.map((tag) => ({ property: "article:tag", content: tag })),
         { name: "twitter:card", content: "summary_large_image" },
-        { name: "twitter:title", content: article.title },
-        { name: "twitter:description", content: article.subtitle },
+        { name: "twitter:title", content: metaTitle },
+        { name: "twitter:description", content: metaDescription },
         { name: "twitter:image", content: article.image },
-        { tagName: "link", rel: "canonical", href: `https://rejourney.co/engineering/${article.urlDate}/${article.id}` },
+        { tagName: "link", rel: "canonical", href: canonicalUrl },
     ];
     return metaTags;
 };
@@ -58,23 +77,44 @@ export default function EngineeringArticlePage() {
         return <div>Article not found</div>;
     }
 
+    const canonicalUrl = getArticleUrl(article);
+    const articleStructuredData = {
+        ...article.schema,
+        headline: article.title,
+        description: article.seo.metaDescription,
+        url: canonicalUrl,
+        keywords: article.seo.targetKeywords,
+        dateModified: article.dateModified ?? article.urlDate,
+        image: [article.image],
+        mainEntityOfPage: {
+            "@type": "WebPage",
+            "@id": canonicalUrl,
+        },
+        isPartOf: {
+            "@type": "WebSite",
+            name: "Rejourney",
+            url: SITE_URL,
+        },
+        about: article.seo.topicTags.map((tag) => ({
+            "@type": "Thing",
+            name: tag,
+        })),
+        publisher: {
+            "@type": "Organization",
+            name: "Rejourney",
+            logo: {
+                "@type": "ImageObject",
+                url: `${SITE_URL}/rejourneyIcon-removebg-preview.png`,
+            },
+        },
+    };
+
     return (
         <div className="min-h-screen w-full bg-white text-slate-900 font-sans selection:bg-yellow-200 flex flex-col">
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{
-                    __html: JSON.stringify({
-                        ...article.schema,
-                        image: [article.image],
-                        publisher: {
-                            "@type": "Organization",
-                            name: "Rejourney",
-                            logo: {
-                                "@type": "ImageObject",
-                                url: "https://rejourney.co/rejourneyIcon-removebg-preview.png",
-                            },
-                        },
-                    }),
+                    __html: JSON.stringify(articleStructuredData),
                 }}
             />
             <Header />

@@ -42,6 +42,8 @@ export const links: Route.LinksFunction = () => [
     { rel: "manifest", href: "/site.webmanifest" },
     // RSS feed for engineering content
     { rel: "alternate", type: "application/rss+xml", title: "Rejourney Engineering RSS", href: "/feed.xml" },
+    // AI/LLM context file for answer engines and developer agents
+    { rel: "alternate", type: "text/plain", title: "Rejourney LLM context", href: "/llms.txt" },
 ];
 
 export const meta: Route.MetaFunction = () => [
@@ -132,12 +134,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 {
                                     "@type": "WebSite",
                                     "name": "Rejourney",
-                                    "url": "https://rejourney.co/",
-                                    "potentialAction": {
-                                        "@type": "SearchAction",
-                                        "target": "https://rejourney.co/search?q={search_term_string}",
-                                        "query-input": "required name=search_term_string"
-                                    }
+                                    "url": "https://rejourney.co/"
                                 },
                                 {
                                     "@type": "ItemList",

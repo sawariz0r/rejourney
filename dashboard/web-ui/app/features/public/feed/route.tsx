@@ -26,21 +26,24 @@ export async function loader() {
     <item>
       <title>${escapeXml(article.title)}</title>
       <link>${link}</link>
-      <description>${escapeXml(article.subtitle)}</description>
+      <description>${escapeXml(article.seo.metaDescription)}</description>
       <author>contact@rejourney.co (${escapeXml(article.author.name)})</author>
       <pubDate>${articlePubDate(article.urlDate)}</pubDate>
       <guid isPermaLink="true">${link}</guid>
+      ${article.seo.topicTags.map((tag) => `<category>${escapeXml(tag)}</category>`).join("")}
+      <media:content url="${escapeXml(article.image)}" medium="image" type="image/png" />
     </item>`;
     }).join("");
 
     const rssFeed = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
     <title>Rejourney Engineering Log</title>
     <link>${base}/engineering</link>
     <description>Technical articles on React Native session replay, mobile observability, and how Rejourney is built.</description>
     <language>en-us</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <ttl>60</ttl>
     <atom:link href="${base}/feed.xml" rel="self" type="application/rss+xml" />${itemsXml}
   </channel>
 </rss>`;

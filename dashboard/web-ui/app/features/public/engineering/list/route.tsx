@@ -11,6 +11,9 @@ import { ARTICLES } from "~/shared/data/engineering";
 import { Link } from "react-router";
 
 const ENGINEERING_LOG_URL = "https://rejourney.co/engineering";
+const ENGINEERING_KEYWORDS = Array.from(
+    new Set(ARTICLES.flatMap((article) => article.seo.targetKeywords))
+).join(", ");
 
 export const meta: MetaFunction = () => [
     { title: "Engineering Log — Technical articles | Rejourney" },
@@ -21,8 +24,7 @@ export const meta: MetaFunction = () => [
     },
     {
         name: "keywords",
-        content:
-            "Rejourney engineering blog, React Native session replay, mobile observability, map performance, Sentry alternative, open source monitoring, technical articles",
+        content: ENGINEERING_KEYWORDS,
     },
     { name: "robots", content: "index, follow" },
     { property: "og:title", content: "Rejourney Engineering Log" },
@@ -69,7 +71,9 @@ export default function EngineeringIndexPage() {
                                     position: index + 1,
                                     url: `${ENGINEERING_LOG_URL}/${article.urlDate}/${article.id}`,
                                     name: article.title,
-                                    description: article.subtitle,
+                                    description: article.seo.metaDescription,
+                                    image: article.image,
+                                    keywords: article.seo.targetKeywords,
                                 })),
                             },
                         ],

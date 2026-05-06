@@ -24,7 +24,7 @@ export default function PrivacyPolicy() {
                 {/* Main Content */}
                 <div>
                     <h1 className="text-4xl font-bold mb-4">Privacy Policy</h1>
-                    <p className="text-sm text-muted-foreground mb-8">Last Updated: April 13, 2026</p>
+                    <p className="text-sm text-muted-foreground mb-8">Last Updated: May 6, 2026</p>
 
                     <div className="bg-muted/30 border border-input rounded-lg p-8 space-y-6">
                         <div className="text-sm leading-relaxed space-y-6">
@@ -108,6 +108,14 @@ export default function PrivacyPolicy() {
                                             <td className="px-4 py-2 border-b border-input">Session Data Backups</td>
                                             <td className="px-4 py-2 border-b border-input">EU (Guaranteed)</td>
                                             <td className="px-4 py-2 border-b border-input">EU — no transfer</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-4 py-2 border-b border-input">OVHcloud US</td>
+                                            <td className="px-4 py-2 border-b border-input">Object Storage</td>
+                                            <td className="px-4 py-2 border-b border-input">United States</td>
+                                            <td className="px-4 py-2 border-b border-input">
+                                                <a href="https://us.ovhcloud.com/legal/data-processing-agreement/" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">DPA</a>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td className="px-4 py-2 border-b border-input">ZeptoMail (Zoho)</td>
