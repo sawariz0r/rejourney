@@ -1492,8 +1492,9 @@ export const GeneralOverview: React.FC = () => {
                             </section>
                         )}
 
-                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                            <GA4Card title="User activity over time" className="xl:col-span-5" accentClassName="bg-[#67e8f9]">
+                        <div className="soft-border-scope space-y-6">
+                            <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                                <GA4Card title="User activity over time" className="xl:col-span-5" accentClassName="bg-[#67e8f9]">
                                 <div className="mb-4 grid grid-cols-2 gap-3 text-left">
                                     <div>
                                         <span className="text-[9px] font-black uppercase text-slate-500">LATEST DAU</span>
@@ -1524,9 +1525,9 @@ export const GeneralOverview: React.FC = () => {
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
-                            </GA4Card>
+                                </GA4Card>
 
-                            <GA4Card title="Active users snapshot" className="xl:col-span-3" accentClassName="bg-[#86efac]">
+                                <GA4Card title="Active users snapshot" className="xl:col-span-3" accentClassName="bg-[#86efac]">
                                 <div className="mt-1 text-center">
                                     <div className="text-4xl font-black text-black">{formatCompact(activitySummary.latestDau)}</div>
                                     <div className="mt-2 text-[10px] font-black uppercase text-slate-500">LATEST DAILY ACTIVE USERS</div>
@@ -1567,9 +1568,9 @@ export const GeneralOverview: React.FC = () => {
                                         View geographic activity →
                                     </Link>
                                 </div>
-                            </GA4Card>
+                                </GA4Card>
 
-                            <GA4Card title="Active users by app version" className="xl:col-span-4" accentClassName="bg-[#c4b5fd]">
+                                <GA4Card title="Active users by app version" className="xl:col-span-4" accentClassName="bg-[#c4b5fd]">
                                 <div className="h-[180px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <LineChart data={versionChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -1610,9 +1611,9 @@ export const GeneralOverview: React.FC = () => {
                                         View app versions →
                                     </Link>
                                 </div>
-                            </GA4Card>
+                                </GA4Card>
 
-                            <GA4Card title="User engagement mix" className="xl:col-span-12" accentClassName="bg-[#67e8f9]">
+                                <GA4Card title="User engagement mix" className="xl:col-span-12" accentClassName="bg-[#67e8f9]">
                                 <div className="mb-4 grid grid-cols-2 gap-3 text-left">
                                     <div>
                                         <span className="text-[9px] font-black uppercase text-slate-500">Latest tracked users</span>
@@ -1691,10 +1692,10 @@ export const GeneralOverview: React.FC = () => {
                                         No engagement segment rollups for this filter.
                                     </div>
                                 )}
-                            </GA4Card>
-                        </div>
+                                </GA4Card>
+                            </div>
 
-                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                            <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
                             <GA4Card title="App stability overview" className="xl:col-span-4" accentClassName="bg-[#f9a8d4]">
                                 <div className="-mx-1 overflow-x-auto px-1">
                                     <table className="mt-1 min-w-[360px] w-full text-xs">
@@ -1832,9 +1833,9 @@ export const GeneralOverview: React.FC = () => {
                                     Week 0 = first active week for that cohort
                                 </div>
                             </GA4Card>
-                        </div>
+                            </div>
 
-                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                            <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
                             <GA4Card title="Custom Events" className="xl:col-span-5" accentClassName="bg-[#f9a8d4]">
                                 {customEvents.length > 0 ? (
                                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
@@ -1907,9 +1908,9 @@ export const GeneralOverview: React.FC = () => {
                                     </div>
                                 )}
                             </GA4Card>
-                        </div>
+                            </div>
 
-                        <section className="space-y-4">
+                            <section className="space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <h2 className="border-2 border-black bg-[#fb7185] px-4 py-2 text-lg font-black uppercase text-black shadow-neo-sm">Top Issues</h2>
                                 <div className="flex flex-wrap items-center gap-2">
@@ -2013,9 +2014,9 @@ export const GeneralOverview: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-                        </section>
+                            </section>
 
-                        <section className="space-y-4">
+                            <section className="space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                     <h2 className="border-2 border-black bg-[#86efac] px-4 py-2 text-lg font-black uppercase text-black shadow-neo-sm">Top Users</h2>
@@ -2166,9 +2167,9 @@ export const GeneralOverview: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-                        </section>
+                            </section>
 
-                        <section className="space-y-4">
+                            <section className="space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                     <h2 className="border-2 border-black bg-[#67e8f9] px-4 py-2 text-lg font-black uppercase text-black shadow-neo-sm">Recommended Sessions</h2>
@@ -2313,7 +2314,8 @@ export const GeneralOverview: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-                        </section>
+                            </section>
+                        </div>
                     </>
                 )}
             </div>

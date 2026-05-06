@@ -35,6 +35,8 @@
     --ring: 205 70% 63%;
 
     --radius: 0.75rem;
+    --font-sans: 'Nunito Sans', 'Avenir Next', Avenir, 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: var(--font-sans);
 
     /* Dashboard surface tokens */
     --dashboard-canvas: #f8fafc;
@@ -100,11 +102,23 @@
     overflow-x: hidden;
   }
 
+  html {
+    font-family: var(--font-sans);
+  }
+
   body {
     @apply text-foreground antialiased;
     background-color: #ffffff;
-    font-family: 'Outfit', sans-serif;
+    font-family: var(--font-sans);
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  button,
+  input,
+  optgroup,
+  select,
+  textarea {
+    font-family: inherit;
   }
 
   /*
@@ -168,6 +182,121 @@
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(148, 163, 184, 0.65);
+  }
+
+  .soft-border-scope :where(.border-black) {
+    border-color: rgb(203 213 225) !important;
+  }
+
+  .soft-border-scope :where(.border-2) {
+    border-width: 1px !important;
+  }
+
+  .soft-border-scope :where(.border-t-2) {
+    border-top-width: 1px !important;
+  }
+
+  .soft-border-scope :where(.border-b-2) {
+    border-bottom-width: 1px !important;
+  }
+
+  .soft-border-scope :where(.divide-black > :not([hidden]) ~ :not([hidden])) {
+    border-color: rgb(226 232 240) !important;
+  }
+
+  .soft-border-scope :where(.divide-y-2 > :not([hidden]) ~ :not([hidden])) {
+    border-top-width: 1px !important;
+  }
+
+  .soft-border-scope :where(.shadow-neo-sm, .shadow-neo, .shadow-neo-lg) {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+  }
+
+  .soft-border-scope :where(.hover\:shadow-neo-sm:hover, .hover\:shadow-neo:hover, .hover\:shadow-neo-lg:hover) {
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1) !important;
+  }
+
+  .soft-border-scope :where(.focus\:ring-black:focus) {
+    --tw-ring-color: rgb(148 163 184) !important;
+  }
+
+  .dashboard-surface-mix :where(.dashboard-panel:not(.dashboard-keep-neo):not(.dashboard-panel-strong):not([class*="border-rose"]):not([class*="border-emerald"]):not([class*="border-sky"]):not([class*="border-blue"]):not([class*="border-violet"]):not([class*="border-amber"]),
+    .dashboard-card-surface,
+    .dashboard-surface,
+    .dashboard-section,
+    .dashboard-inner-surface) {
+    border-color: rgb(203 213 225) !important;
+    border-width: 1px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07) !important;
+  }
+
+  .dashboard-surface-mix :where(.dashboard-inner-surface,
+    .dashboard-section) {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.07) !important;
+  }
+
+  .dashboard-surface-mix :where(.dashboard-panel:not(.dashboard-keep-neo):not(.dashboard-panel-strong):not([class*="border-rose"]):not([class*="border-emerald"]):not([class*="border-sky"]):not([class*="border-blue"]):not([class*="border-violet"]):not([class*="border-amber"]) > .border-b-2.border-black,
+    .dashboard-card-surface > .border-b-2.border-black,
+    .dashboard-surface > .border-b-2.border-black,
+    .dashboard-section > .border-b-2.border-black,
+    .dashboard-inner-surface > .border-b-2.border-black) {
+    border-bottom-color: rgb(226 232 240) !important;
+    border-bottom-width: 1px !important;
+  }
+
+  .dashboard-surface-mix :where(.dashboard-panel:not(.dashboard-keep-neo):not(.dashboard-panel-strong):not([class*="border-rose"]):not([class*="border-emerald"]):not([class*="border-sky"]):not([class*="border-blue"]):not([class*="border-violet"]):not([class*="border-amber"]):hover) {
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.09) !important;
+  }
+
+  .public-readable-scope {
+    color: #0f172a;
+    text-rendering: optimizeLegibility;
+  }
+
+  .public-readable-scope :where(header .font-mono, footer .font-mono) {
+    font-family: var(--font-sans) !important;
+    letter-spacing: 0 !important;
+  }
+
+  .public-readable-scope :where(main h1, main h2, main h3) {
+    letter-spacing: 0 !important;
+    line-height: 1.08 !important;
+  }
+
+  .public-readable-scope :where(main p, main li) {
+    line-height: 1.65;
+  }
+
+  .public-readable-scope :where(.text-gray-400, .text-gray-500, .text-slate-400, .text-slate-500):not(.public-visual-copy *):not(.bg-black *):not(.bg-slate-950 *):not(.bg-gray-950 *) {
+    color: rgb(71 85 105) !important;
+  }
+
+  .public-readable-scope :where(main p.text-gray-600, main p.text-slate-600, main .prose p) {
+    color: rgb(51 65 85) !important;
+  }
+
+  .public-readable-scope :where(.tracking-widest):not(.public-visual-copy *) {
+    letter-spacing: 0.06em !important;
+  }
+
+  .public-readable-scope :where(.tracking-tight, .tracking-tighter):not(.public-visual-copy *) {
+    letter-spacing: 0 !important;
+  }
+
+  .public-readable-scope :where(.text-\[9px\], .text-\[10px\]):not(.public-visual-copy *) {
+    font-size: 0.75rem !important;
+    line-height: 1rem !important;
+  }
+
+  .public-readable-scope :where(.opacity-60, .opacity-80):not(.public-visual-copy *) {
+    opacity: 1 !important;
+  }
+
+  .public-readable-scope :where(main .hero-kinetic-word) {
+    color: #2563eb !important;
+    font-family: var(--font-sans) !important;
+    letter-spacing: 0 !important;
   }
 
   /* Custom Range Slider with Blue Fill */
@@ -739,38 +868,43 @@
 
   /* Embedded demo heading — cursor traces a rectangle around the title, then settles on the left */
   @keyframes walk-product-heading-cursor {
-    0%,
-    100% {
+    0% {
       left: 0%;
       top: 50%;
       transform: translate(0%, -50%);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    8% {
+    12% {
       left: 0%;
-      top: 0%;
+      top: 8%;
       transform: translate(0%, 0%);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    30% {
+    36% {
       left: 100%;
-      top: 0%;
+      top: 8%;
       transform: translate(-100%, 0%);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    52% {
+    58% {
       left: 100%;
-      top: 100%;
+      top: 88%;
       transform: translate(-100%, -100%);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    74% {
+    80% {
       left: 0%;
-      top: 100%;
+      top: 88%;
       transform: translate(0%, -100%);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    90% {
+    92%,
+    100% {
       left: 0%;
       top: 50%;
       transform: translate(0%, -50%);
@@ -781,8 +915,7 @@
     position: absolute;
     pointer-events: none;
     filter: drop-shadow(0 0 4px rgb(248 250 252));
-    will-change: left, top, transform;
-    animation: walk-product-heading-cursor 4.8s cubic-bezier(0.45, 0.02, 0.24, 1) infinite;
+    animation: walk-product-heading-cursor 6s linear infinite;
     animation-delay: 0.4s;
   }
 

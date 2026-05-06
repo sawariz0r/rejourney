@@ -18,11 +18,11 @@ export const NeoCard: React.FC<NeoCardProps> = ({
     disablePadding = false,
     ...props
 }) => {
-    const baseStyles = "transition-all duration-200 bg-white border-2 border-black relative";
+    const baseStyles = "dashboard-panel transition-all duration-200 bg-white border-2 border-black relative";
     const variants = {
         default: "shadow-neo-sm hover:shadow-neo hover:-translate-y-1 transition-all rounded-none",
         flat: "shadow-none rounded-none",
-        monitor: "p-6 relative bg-slate-900 border-4 border-black shadow-[8px_8px_0_0_rgba(0,0,0,1)] rounded-none"
+        monitor: "dashboard-panel-strong p-6 relative bg-slate-900 border-4 border-black shadow-[8px_8px_0_0_rgba(0,0,0,1)] rounded-none"
     };
 
     if (variant === 'monitor') {

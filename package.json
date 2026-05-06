@@ -1,6 +1,6 @@
 {
   "name": "rejourney-monorepo",
-  "version": "2.0.41",
+  "version": "2.0.42",
   "private": true,
   "description": "Rejourney Monorepo - Session Recording Platform",
   "workspaces": [
@@ -30,12 +30,16 @@
     "example:boilerplate": "cd examples/react-native-boilerplate && npm start",
     "example:brew": "cd examples/brew-coffee-labs && npm start",
     "example:bare": "cd examples/react-native-bare && npm start",
+    "example:swift": "open examples/swift-clean-arch/CountriesSwiftUI.xcodeproj",
     "example:boilerplate:ios": "cd examples/react-native-boilerplate && npm run ios",
     "example:boilerplate:android": "cd examples/react-native-boilerplate && npm run android",
     "example:brew:ios": "cd examples/brew-coffee-labs && npm run ios",
     "example:brew:android": "cd examples/brew-coffee-labs && npm run android",
     "example:bare:ios": "cd examples/react-native-bare && npm run ios",
     "example:bare:android": "cd examples/react-native-bare && npm run android",
+    "example:swift:sdk:old": "cd examples/swift-clean-arch && bash ./scripts/switch-rejourney-sdk.sh --old",
+    "example:swift:sdk:new": "cd examples/swift-clean-arch && bash ./scripts/switch-rejourney-sdk.sh --new",
+    "example:swift:sdk:status": "cd examples/swift-clean-arch && bash ./scripts/switch-rejourney-sdk.sh --status",
     "postinstall": "npm run build:sdk"
   },
   "repository": "https://github.com/rejourneyco/rejourney",

@@ -1635,8 +1635,8 @@ router.get(
             return;
         }
 
-        // Cache check - v4 includes per-dimension issue counts.
-        const cacheKey = `analytics:device-summary:${projectIds.sort().join(',')}:${timeRange || 'all'}:v4`;
+        // Cache check - v6 includes per-device business engagement metrics.
+        const cacheKey = `analytics:device-summary:${projectIds.sort().join(',')}:${timeRange || 'all'}:v6`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -1646,7 +1646,19 @@ router.get(
         // Date filter for rollup query
         let startDateStr: string | undefined;
         if (timeRange && timeRange !== 'all' && timeRange !== 'max') {
-            const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : undefined;
+            const days = timeRange === '24h'
+                ? 1
+                : timeRange === '7d'
+                    ? 7
+                    : timeRange === '30d'
+                        ? 30
+                        : timeRange === '90d'
+                            ? 90
+                            : timeRange === '180d'
+                                ? 180
+                                : timeRange === '1y'
+                                    ? 365
+                                    : undefined;
             if (days) {
                 const startDate = new Date();
                 startDate.setDate(startDate.getDate() - days);
@@ -1830,8 +1842,56 @@ router.get(
             addIssueCount(row.appVersion, 'rageTaps', c, versionIssues);
         }
 
+        const engagementWhere = [inArray(sessions.projectId, projectIds)];
+        if (startTime) engagementWhere.push(gte(sessions.startedAt, startTime));
+
+        const engagementDeviceExpr = sql<string>`COALESCE(NULLIF(TRIM(${sessions.deviceModel}), ''), 'UNKNOWN')`;
+        const screenCountExpr = sql<number>`coalesce(array_length(${sessionMetrics.screensVisited}, 1), 0)`;
+        const engagementRows = await db
+            .select({
+                model: engagementDeviceExpr,
+                avgDurationSeconds: sql<number>`round(avg(coalesce(${sessions.durationSeconds}, 0))::numeric, 1)`,
+                avgInteractionScore: sql<number>`round(avg(coalesce(${sessionMetrics.interactionScore}, 0))::numeric, 1)`,
+                avgExplorationScore: sql<number>`round(avg(coalesce(${sessionMetrics.explorationScore}, 0))::numeric, 1)`,
+                avgUxScore: sql<number>`round(avg(coalesce(${sessionMetrics.uxScore}, 0))::numeric, 1)`,
+                totalEvents: sql<number>`coalesce(sum(coalesce(${sessionMetrics.totalEvents}, 0)), 0)::int`,
+                engagedSessions: sql<number>`sum(
+                    case
+                        when coalesce(${sessionMetrics.interactionScore}, 0) >= 60
+                            or coalesce(${sessions.durationSeconds}, 0) >= 120
+                            or ${screenCountExpr} >= 3
+                        then 1 else 0
+                    end
+                )::int`,
+            })
+            .from(sessions)
+            .leftJoin(sessionMetrics, eq(sessions.id, sessionMetrics.sessionId))
+            .where(and(...engagementWhere))
+            .groupBy(engagementDeviceExpr);
+
+        const deviceEngagement: Record<string, {
+            avgDurationSeconds: number;
+            avgInteractionScore: number;
+            avgExplorationScore: number;
+            avgUxScore: number;
+            totalEvents: number;
+            engagedSessions: number;
+        }> = {};
+
+        for (const row of engagementRows) {
+            const model = normalizeKey(row.model);
+            deviceEngagement[model] = {
+                avgDurationSeconds: Number(row.avgDurationSeconds) || 0,
+                avgInteractionScore: Number(row.avgInteractionScore) || 0,
+                avgExplorationScore: Number(row.avgExplorationScore) || 0,
+                avgUxScore: Number(row.avgUxScore) || 0,
+                totalEvents: Number(row.totalEvents) || 0,
+                engagedSessions: Number(row.engagedSessions) || 0,
+            };
+        }
+
         // Transform to arrays. Session counts come from rollups, issue counts from raw tables.
-        const deviceKeys = new Set([...Object.keys(deviceCounts), ...Object.keys(deviceIssues)]);
+        const deviceKeys = new Set([...Object.keys(deviceCounts), ...Object.keys(deviceIssues), ...Object.keys(deviceEngagement)]);
         const osKeys = new Set([...Object.keys(osCounts), ...Object.keys(osIssues)]);
         const versionKeys = new Set([...Object.keys(versionCounts), ...Object.keys(versionIssues)]);
 
@@ -1843,6 +1903,12 @@ router.get(
                 anrs: deviceIssues[model]?.anrs || 0,
                 errors: deviceIssues[model]?.errors || 0,
                 rageTaps: deviceIssues[model]?.rageTaps || 0,
+                avgDurationSeconds: deviceEngagement[model]?.avgDurationSeconds || 0,
+                avgInteractionScore: deviceEngagement[model]?.avgInteractionScore || 0,
+                avgExplorationScore: deviceEngagement[model]?.avgExplorationScore || 0,
+                avgUxScore: deviceEngagement[model]?.avgUxScore || 0,
+                engagedSessions: deviceEngagement[model]?.engagedSessions || 0,
+                totalEvents: deviceEngagement[model]?.totalEvents || 0,
             }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 50);
@@ -1916,7 +1982,7 @@ router.get(
         if (!membership) throw ApiError.forbidden('Access denied');
 
         // Check cache
-        const cacheKey = `analytics:device-matrix:${projectId}:${timeRange || 'all'}`;
+        const cacheKey = `analytics:device-matrix:${projectId}:${timeRange || 'all'}:v2`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -1925,8 +1991,20 @@ router.get(
 
         // Date filter
         let startDate: Date | undefined;
-        if (timeRange && timeRange !== 'all') {
-            const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : undefined;
+        if (timeRange && timeRange !== 'all' && timeRange !== 'max') {
+            const days = timeRange === '24h'
+                ? 1
+                : timeRange === '7d'
+                    ? 7
+                    : timeRange === '30d'
+                        ? 30
+                        : timeRange === '90d'
+                            ? 90
+                            : timeRange === '180d'
+                                ? 180
+                                : timeRange === '1y'
+                                    ? 365
+                                    : undefined;
             if (days) {
                 startDate = new Date();
                 startDate.setDate(startDate.getDate() - days);
@@ -1986,7 +2064,7 @@ router.get(
         const filteredMatrix = matrixData
             .filter(row => topDevicesSet.has(row.device) && topVersionsSet.has(row.version))
             .map(row => {
-                const totalIssues = (row.crashCount || 0) + (row.anrCount || 0) + (row.errorCount || 0);
+                const totalIssues = (row.crashCount || 0) + (row.anrCount || 0) + (row.errorCount || 0) + (row.rageTapCount || 0);
                 const issueRate = row.sessions > 0 ? totalIssues / row.sessions : 0;
                 return {
                     device: row.device,

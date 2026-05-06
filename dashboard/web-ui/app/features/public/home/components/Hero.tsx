@@ -315,7 +315,7 @@ export const Hero: React.FC = () => {
 
                     {/* Right - phones */}
                     <div
-                        className="relative hidden animate-fade-in-right opacity-0 lg:flex lg:items-end lg:justify-center"
+                        className="public-visual-copy relative hidden animate-fade-in-right opacity-0 lg:flex lg:items-end lg:justify-center"
                         style={{ animationDelay: '0.2s' }}
                     >
                         <div className="relative h-[536px] w-[560px] origin-center scale-[0.8] xl:scale-90 2xl:scale-100">

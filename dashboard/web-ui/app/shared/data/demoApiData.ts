@@ -11,6 +11,7 @@ import {
     GeoSummary,
     GeoRegionalValue,
     GeoIssuesSummary,
+    DeviceIssueMatrix,
     DeviceSummary,
     JourneySummary,
     UserSegmentsSummary,
@@ -462,16 +463,16 @@ export const demoGeoIssues: GeoIssuesSummary = {
 
 export const demoDeviceSummary: DeviceSummary = {
     devices: [
-        { model: 'iPhone 15 Pro', count: 2341, crashes: 5, anrs: 2, errors: 12, rageTaps: 45 },
-        { model: 'iPhone 14', count: 1876, crashes: 3, anrs: 1, errors: 8, rageTaps: 32 },
-        { model: 'Samsung Galaxy S24', count: 1654, crashes: 12, anrs: 8, errors: 23, rageTaps: 56 },
-        { model: 'Pixel 8 Pro', count: 987, crashes: 4, anrs: 3, errors: 9, rageTaps: 21 },
-        { model: 'iPhone 15', count: 876, crashes: 2, anrs: 0, errors: 5, rageTaps: 12 },
-        { model: 'iPhone 13', count: 765, crashes: 6, anrs: 2, errors: 11, rageTaps: 23 },
-        { model: 'Samsung Galaxy S23', count: 654, crashes: 8, anrs: 5, errors: 15, rageTaps: 34 },
-        { model: 'OnePlus 12', count: 543, crashes: 3, anrs: 2, errors: 7, rageTaps: 15 },
-        { model: 'iPad Pro 12.9"', count: 432, crashes: 1, anrs: 0, errors: 3, rageTaps: 5 },
-        { model: 'Pixel 7', count: 321, crashes: 2, anrs: 1, errors: 4, rageTaps: 8 },
+        { model: 'iPhone 15 Pro', count: 2341, crashes: 5, anrs: 2, errors: 12, rageTaps: 45, avgDurationSeconds: 386, avgInteractionScore: 78, avgExplorationScore: 73, avgUxScore: 84, engagedSessions: 1884, totalEvents: 84562 },
+        { model: 'iPhone 14', count: 1876, crashes: 3, anrs: 1, errors: 8, rageTaps: 32, avgDurationSeconds: 342, avgInteractionScore: 74, avgExplorationScore: 70, avgUxScore: 86, engagedSessions: 1394, totalEvents: 60472 },
+        { model: 'Samsung Galaxy S24', count: 1654, crashes: 12, anrs: 8, errors: 23, rageTaps: 56, avgDurationSeconds: 301, avgInteractionScore: 64, avgExplorationScore: 61, avgUxScore: 71, engagedSessions: 1051, totalEvents: 54808 },
+        { model: 'Pixel 8 Pro', count: 987, crashes: 4, anrs: 3, errors: 9, rageTaps: 21, avgDurationSeconds: 418, avgInteractionScore: 81, avgExplorationScore: 77, avgUxScore: 82, engagedSessions: 824, totalEvents: 37991 },
+        { model: 'iPhone 15', count: 876, crashes: 2, anrs: 0, errors: 5, rageTaps: 12, avgDurationSeconds: 365, avgInteractionScore: 76, avgExplorationScore: 74, avgUxScore: 88, engagedSessions: 684, totalEvents: 29284 },
+        { model: 'iPhone 13', count: 765, crashes: 6, anrs: 2, errors: 11, rageTaps: 23, avgDurationSeconds: 238, avgInteractionScore: 56, avgExplorationScore: 53, avgUxScore: 69, engagedSessions: 384, totalEvents: 18112 },
+        { model: 'Samsung Galaxy S23', count: 654, crashes: 8, anrs: 5, errors: 15, rageTaps: 34, avgDurationSeconds: 214, avgInteractionScore: 48, avgExplorationScore: 46, avgUxScore: 62, engagedSessions: 283, totalEvents: 14976 },
+        { model: 'OnePlus 12', count: 543, crashes: 3, anrs: 2, errors: 7, rageTaps: 15, avgDurationSeconds: 334, avgInteractionScore: 69, avgExplorationScore: 66, avgUxScore: 77, engagedSessions: 374, totalEvents: 17244 },
+        { model: 'iPad Pro 12.9"', count: 432, crashes: 1, anrs: 0, errors: 3, rageTaps: 5, avgDurationSeconds: 476, avgInteractionScore: 83, avgExplorationScore: 81, avgUxScore: 90, engagedSessions: 371, totalEvents: 19835 },
+        { model: 'Pixel 7', count: 321, crashes: 2, anrs: 1, errors: 4, rageTaps: 8, avgDurationSeconds: 276, avgInteractionScore: 58, avgExplorationScore: 55, avgUxScore: 70, engagedSessions: 172, totalEvents: 8264 },
     ],
     platforms: {
         ios: 7234,
@@ -493,6 +494,62 @@ export const demoDeviceSummary: DeviceSummary = {
         { version: 'iOS 17.0', count: 456, crashes: 2, anrs: 0, errors: 5, rageTaps: 12 },
     ],
     totalSessions: 12847,
+};
+
+export const demoDeviceIssueMatrix: DeviceIssueMatrix = {
+    devices: [
+        'Samsung Galaxy S23',
+        'Samsung Galaxy S24',
+        'iPhone 13',
+        'Pixel 8 Pro',
+        'iPhone 15 Pro',
+        'iPhone 14',
+    ],
+    versions: ['2.3.1', '2.3.0', '2.2.9', '2.2.8'],
+    matrix: [
+        {
+            device: 'Samsung Galaxy S23',
+            version: '2.3.0',
+            sessions: 240,
+            issues: { crashes: 5, anrs: 3, errors: 9, rageTaps: 18 },
+            issueRate: 0.1458,
+        },
+        {
+            device: 'Samsung Galaxy S24',
+            version: '2.3.0',
+            sessions: 620,
+            issues: { crashes: 7, anrs: 5, errors: 14, rageTaps: 31 },
+            issueRate: 0.0919,
+        },
+        {
+            device: 'iPhone 13',
+            version: '2.2.9',
+            sessions: 360,
+            issues: { crashes: 4, anrs: 2, errors: 8, rageTaps: 13 },
+            issueRate: 0.075,
+        },
+        {
+            device: 'Pixel 8 Pro',
+            version: '2.3.1',
+            sessions: 510,
+            issues: { crashes: 1, anrs: 1, errors: 5, rageTaps: 9 },
+            issueRate: 0.0314,
+        },
+        {
+            device: 'iPhone 15 Pro',
+            version: '2.3.1',
+            sessions: 1100,
+            issues: { crashes: 2, anrs: 0, errors: 5, rageTaps: 12 },
+            issueRate: 0.0173,
+        },
+        {
+            device: 'iPhone 14',
+            version: '2.3.1',
+            sessions: 980,
+            issues: { crashes: 1, anrs: 0, errors: 4, rageTaps: 10 },
+            issueRate: 0.0153,
+        },
+    ],
 };
 
 // ================================================================================

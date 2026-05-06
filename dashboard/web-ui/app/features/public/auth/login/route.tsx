@@ -232,7 +232,7 @@ export default function LoginPage() {
     // Show loading state while checking authentication
     if (authLoading) {
         return (
-            <div className="min-h-screen bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] flex items-center justify-center p-4 font-sans text-gray-900">
+            <div className="public-readable-scope min-h-screen bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] flex items-center justify-center p-4 font-sans text-gray-900">
                 <div className="text-center">
                     <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                     <div className="text-sm text-gray-500 font-mono uppercase">Checking authentication...</div>
@@ -242,7 +242,7 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] flex items-center justify-center p-4 font-sans text-gray-900">
+        <div className="public-readable-scope min-h-screen bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] flex items-center justify-center p-4 font-sans text-gray-900">
             <div className="w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-10">

@@ -429,7 +429,7 @@ let stopResult = await Rejourney.stop()`}</pre>
             </ul>
             <p className="mt-6">
                 Native iOS versioning is independent from the React Native package. Tags follow plain
-                semver (<code>v0.2.0</code>). A CI check validates that{" "}
+                semver (<code>v0.1.1</code>). A CI check validates that{" "}
                 <code>packages/ios/VERSION</code> and <code>RejourneySDKInfo.version</code> are in
                 sync before a tag is created.
             </p>

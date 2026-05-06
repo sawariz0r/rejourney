@@ -40,7 +40,7 @@ export const meta: MetaFunction = () => [
 
 export default function EngineeringIndexPage() {
     return (
-        <div className="min-h-screen w-full bg-white text-slate-900 font-sans selection:bg-yellow-200 flex flex-col">
+        <div className="public-readable-scope min-h-screen w-full bg-white text-slate-900 font-sans selection:bg-yellow-200 flex flex-col">
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{

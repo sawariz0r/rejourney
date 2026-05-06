@@ -18,7 +18,7 @@ export const meta: Route.MetaFunction = () => [
 
 export default function ChangelogPage() {
     return (
-        <div className="min-h-screen w-full bg-white text-slate-900 font-sans selection:bg-yellow-200 flex flex-col">
+        <div className="public-readable-scope min-h-screen w-full bg-white text-slate-900 font-sans selection:bg-yellow-200 flex flex-col">
             <Header />
             <main className="flex-grow w-full">
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">

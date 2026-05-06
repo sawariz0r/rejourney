@@ -57,6 +57,12 @@ import {
 } from '../services/sessionArchiveListSort.js';
 import { hasNewerSessionForSameVisitor } from '../services/sessionTimingQuery.js';
 import { resolveAnrStackTrace } from '../services/anrStack.js';
+import {
+    buildSessionExportCsvRow,
+    createSessionExportDateTimeFormatters,
+    encodeCsvRow,
+    SESSION_EXPORT_CSV_HEADERS,
+} from '../services/sessionExportCsv.js';
 
 const router = Router();
 
@@ -1291,6 +1297,8 @@ router.get(
             q,
             sort: sortRaw,
             sortDir: sortDirRaw,
+            locale,
+            timeZone,
         } = req.query as any;
 
         const sortKey = normalizeArchiveListSortKey(sortRaw);
@@ -1352,11 +1360,17 @@ router.get(
             accessibleProjectIds
         );
 
+        const exportDateTimeFormatters = createSessionExportDateTimeFormatters(locale, timeZone);
+
         // Get sessions with metrics - NO LIMIT for export
         const sessionsList = await db
             .select({
-                session: sessions,
+                session: { ...sessionsArchiveListColumns },
                 metrics: sessionMetrics,
+                latestReplayArtifactEndMs: archiveListLatestReplayEndMsSql,
+                hasNewerSessionOnVisitor: archiveListHasNewerVisitorSessionSql,
+                visitorSessionNumber: archiveVisitorSessionNumberSql,
+                visitorFinalSessionNumber: archiveVisitorFinalSessionNumberSql,
             })
             .from(sessions)
             .leftJoin(sessionMetrics, eq(sessions.id, sessionMetrics.sessionId))
@@ -1364,42 +1378,51 @@ router.get(
             .orderBy(exportOrderPrimary, exportOrderSecondary);
 
         // Set Headers for CSV Download
-        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="sessions_export_${new Date().toISOString().split('T')[0]}.csv"`);
 
-        // CSV Header
-        res.write('Session ID,User ID,Anonymous ID,Device Model,OS,App Version,Duration (sec),Screens Visited,Network Type,API Success,API Error,Rage Taps,Crashes,Errors,UX Score,Date,Time\n');
+        res.write(`${encodeCsvRow(SESSION_EXPORT_CSV_HEADERS)}\n`);
 
-        // CSV Rows
-        for (const { session: s, metrics: m } of sessionsList) {
-            const userId = s.userDisplayId || '';
-            const anonymousId = s.anonymousHash || '';
-            const displayName = s.deviceId && !s.userDisplayId ? generateAnonymousName(s.deviceId) : '';
-            const userLabel = userId || displayName || 'Anonymous';
+        for (const {
+            session: s,
+            metrics: m,
+            latestReplayArtifactEndMs,
+            hasNewerSessionOnVisitor,
+            visitorSessionNumber,
+            visitorFinalSessionNumber,
+        } of sessionsList) {
+            const durationSec = durationSecondsForDisplay({
+                ...s,
+                latestReplayEndMs: latestReplayArtifactEndMs,
+                replayAvailable: s.replayAvailable,
+            });
+            const successfulRecording = hasSuccessfulRecording(s, m, false);
+            const presentationState = deriveSessionPresentationState({
+                status: s.status,
+                replayAvailable: s.replayAvailable,
+                recordingDeleted: s.recordingDeleted,
+                isReplayExpired: s.isReplayExpired,
+                lastIngestActivityAt: s.lastIngestActivityAt,
+                startedAt: s.startedAt,
+                endedAt: s.endedAt,
+                hasPendingWork: false,
+                hasPendingReplayWork: false,
+                supersededByNewerVisitorSession: Boolean(hasNewerSessionOnVisitor),
+            });
+            const anonymousDisplayName = s.deviceId && !s.userDisplayId ? generateAnonymousName(s.deviceId) : null;
 
-            const row = [
-                s.id,
-                userLabel, // Combined User/Anon label to match UI broadly, or just IDs
-                anonymousId,
-                s.deviceModel || 'Unknown',
-                s.platform || '',
-                s.appVersion || '',
-                s.durationSeconds || 0,
-                (m?.screensVisited?.length || 0),
-                m?.networkType || '',
-                m?.apiSuccessCount || 0,
-                m?.apiErrorCount || 0,
-                m?.rageTapCount || 0,
-                m?.deadTapCount || 0,
-                m?.crashCount || 0,
-                m?.errorCount || 0,
-                m?.uxScore || 0,
-                s.startedAt.toISOString().split('T')[0], // Date
-                s.startedAt.toISOString().split('T')[1].split('.')[0], // Time
-            ].map(val => `"${String(val).replace(/"/g, '""')}"`) // Escape quotes
-                .join(',');
-
-            res.write(row + '\n');
+            res.write(`${encodeCsvRow(buildSessionExportCsvRow({
+                session: s,
+                metrics: m,
+                presentation: presentationState,
+                durationSeconds: durationSec,
+                successfulRecording,
+                isFirstSession: visitorSessionNumber === 1,
+                anonymousDisplayName,
+                visitorSessionNumber,
+                visitorFinalSessionNumber,
+                formatters: exportDateTimeFormatters,
+            }))}\n`);
         }
 
         res.end();

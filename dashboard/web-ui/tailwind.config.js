@@ -9,8 +9,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', ...defaultTheme.fontFamily.sans],
-        mono: ['"JetBrains Mono"', 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", "monospace"],
+        sans: ['"Nunito Sans"', ...defaultTheme.fontFamily.sans],
+        mono: ['"Nunito Sans"', ...defaultTheme.fontFamily.sans],
       },
       colors: {
         border: "hsl(var(--border))",

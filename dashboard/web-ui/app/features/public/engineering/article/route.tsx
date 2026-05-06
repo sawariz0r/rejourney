@@ -110,7 +110,7 @@ export default function EngineeringArticlePage() {
     };
 
     return (
-        <div className="min-h-screen w-full bg-white text-slate-900 font-sans selection:bg-yellow-200 flex flex-col">
+        <div className="public-readable-scope min-h-screen w-full bg-white text-slate-900 font-sans selection:bg-yellow-200 flex flex-col">
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{
@@ -153,9 +153,16 @@ export default function EngineeringArticlePage() {
                                 </div>
                                 <div className="text-sm">
                                     <div className="font-bold text-gray-900">{article.author.name}</div>
-                                    <a href={article.author.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                        View Profile
-                                    </a>
+                                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                        <a href={article.author.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                            View LinkedIn
+                                        </a>
+                                        {article.author.github && (
+                                            <a href={article.author.github} target="_blank" rel="noopener noreferrer" className="text-gray-900 hover:underline">
+                                                View GitHub
+                                            </a>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </header>
@@ -174,12 +181,12 @@ export default function EngineeringArticlePage() {
                                     <div className="font-bold text-xl text-gray-900 mb-1">{article.author.name}</div>
                                     <p className="text-gray-500 text-sm mb-2">Rejourney Engineering Team</p>
                                     <div className="flex gap-4">
-                                        <a href={article.author.url} className="text-blue-600 font-bold hover:underline">
-                                            Follow on LinkedIn
+                                        <a href={article.author.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline">
+                                            View LinkedIn
                                         </a>
                                         {article.author.github && (
-                                            <a href={article.author.github} className="text-gray-900 font-bold hover:underline">
-                                                GitHub
+                                            <a href={article.author.github} target="_blank" rel="noopener noreferrer" className="text-gray-900 font-bold hover:underline">
+                                                View GitHub
                                             </a>
                                         )}
                                     </div>

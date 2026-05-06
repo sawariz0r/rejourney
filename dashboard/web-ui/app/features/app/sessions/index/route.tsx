@@ -587,6 +587,9 @@ export const RecordingsList: React.FC = () => {
               if (qExport) params.append('q', qExport);
               params.append('sort', primarySortKey);
               params.append('sortDir', primarySortDir);
+              const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              if (browserTimeZone) params.append('timeZone', browserTimeZone);
+              if (window.navigator.language) params.append('locale', window.navigator.language);
               window.location.href = `/api/sessions/export?${params.toString()}`;
             }}
             className="inline-flex h-9 w-9 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
@@ -651,7 +654,7 @@ export const RecordingsList: React.FC = () => {
 
         {/* Query Builder Panel */}
         {showQueryBuilder && (
-          <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-4 sm:px-6">
+          <div className="border-b border-slate-200 bg-[#f8fafc] px-4 py-4 sm:px-6">
             <div className="max-w-[1800px] mx-auto">
               <QueryBuilder
                 groups={queryGroups}
@@ -667,8 +670,8 @@ export const RecordingsList: React.FC = () => {
 
         {/* Compact summary bar when panel is closed but conditions are active */}
         {!showQueryBuilder && totalConditions > 0 && (
-          <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-2 sm:px-6">
-            <div className="flex items-center gap-1.5 max-w-[1800px] mx-auto overflow-x-auto no-scrollbar">
+          <div className="border-b border-slate-200 bg-[#f8fafc] px-4 py-2 sm:px-6">
+            <div className="soft-border-scope flex items-center gap-1.5 max-w-[1800px] mx-auto overflow-x-auto no-scrollbar">
               <span className="text-[9px] font-black text-slate-600 uppercase shrink-0">WHERE</span>
               {queryGroups.map((group, gi) => (
                 <React.Fragment key={group.id}>

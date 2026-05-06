@@ -631,6 +631,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const [domCopied, setDomCopied] = useState(false);
     const [metadataCopied, setMetadataCopied] = useState(false);
     const [userIdCopied, setUserIdCopied] = useState(false);
+    const [sessionIdCopied, setSessionIdCopied] = useState(false);
 
     // DOM Inspector state
     const [hierarchySnapshots, setHierarchySnapshots] = useState<HierarchySnapshot[]>([]);
@@ -2377,6 +2378,17 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         }
     };
 
+    const copySessionId = async () => {
+        if (!id) return;
+        try {
+            await navigator.clipboard.writeText(id);
+            setSessionIdCopied(true);
+            setTimeout(() => setSessionIdCopied(false), 2000);
+        } catch {
+            setSessionIdCopied(false);
+        }
+    };
+
     const copyReplayUserId = async () => {
         if (!replayUserIdCopyValue) return;
         try {
@@ -2426,9 +2438,24 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                             v{appVersion}
                                         </span>
                                     )}
-                                    <span className="max-w-[140px] truncate border-2 border-black bg-white px-2 py-0.5 font-mono text-[9px] font-bold text-black shadow-neo-sm sm:max-w-[220px] md:max-w-full md:text-[10px]">
-                                        {(id || '').slice(0, 20)}
-                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={copySessionId}
+                                        className="inline-flex max-w-[140px] items-center gap-1 truncate border-2 border-black bg-white px-2 py-0.5 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo sm:max-w-[220px] md:max-w-full"
+                                        title={`${id} — click to copy`}
+                                        aria-label={`Copy session ID: ${id}`}
+                                    >
+                                        <span className="min-w-0 truncate font-mono text-[9px] font-bold text-black md:text-[10px]">
+                                            {(id || '').slice(0, 20)}
+                                        </span>
+                                        <span className="shrink-0 text-slate-500" aria-hidden>
+                                            {sessionIdCopied ? (
+                                                <Check className="h-3 w-3 text-emerald-600" strokeWidth={2.25} />
+                                            ) : (
+                                                <Copy className="h-3 w-3" strokeWidth={2.25} />
+                                            )}
+                                        </span>
+                                    </button>
                                 </div>
                                 <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto">
                                 {canCopyReplayUserId ? (

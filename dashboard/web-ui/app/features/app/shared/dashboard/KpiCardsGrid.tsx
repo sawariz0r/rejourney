@@ -399,7 +399,7 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
                     const deltaLabel = card.delta?.label ?? comparisonLabel;
 
                     return (
-                        <NeoCard key={card.id} className="min-w-0 bg-white !p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform border-2 border-black shadow-neo-sm">
+                        <NeoCard key={card.id} className="dashboard-keep-neo min-w-0 bg-white !p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform border-2 border-black shadow-neo-sm">
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 text-[11px] font-black uppercase tracking-widest text-black break-words">
                                     {card.label}
@@ -426,7 +426,7 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
                 })}
 
                 {filteredCards.length === 0 && (
-                    <NeoCard className="col-span-full border-dashed border-slate-300 bg-white">
+                    <NeoCard className="dashboard-keep-neo col-span-full border-dashed border-slate-300 bg-white">
                         <div className="py-5 text-center text-xs font-medium text-slate-500">
                             No KPI cards match the current filters
                         </div>

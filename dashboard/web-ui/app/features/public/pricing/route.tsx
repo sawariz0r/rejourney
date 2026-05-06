@@ -38,7 +38,7 @@ export const meta: Route.MetaFunction = () => [
 
 export default function Pricing() {
     return (
-        <div className="min-h-screen w-full bg-white text-black">
+        <div className="public-readable-scope min-h-screen w-full bg-white text-black">
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{

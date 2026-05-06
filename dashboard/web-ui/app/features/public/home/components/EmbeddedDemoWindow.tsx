@@ -16,7 +16,9 @@ export const EmbeddedDemoWindow: React.FC = () => {
     const demoFrameRef = useRef<HTMLIFrameElement>(null);
     const [shouldLoadDemo, setShouldLoadDemo] = useState(false);
     const [followingPointer, setFollowingPointer] = useState(false);
+    const [cursorVisible, setCursorVisible] = useState(false);
     const [followPos, setFollowPos] = useState({ x: 0, y: 0 });
+    const cursorLeaveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
     useEffect(() => {
         const section = sectionRef.current;
@@ -71,8 +73,10 @@ export const EmbeddedDemoWindow: React.FC = () => {
     const onSectionPointerEnter = useCallback(
         (e: React.PointerEvent<HTMLElement>) => {
             if (e.pointerType !== 'mouse') return;
-            setFollowingPointer(true);
+            clearTimeout(cursorLeaveTimerRef.current);
             updateFollowCoords(e.clientX, e.clientY);
+            setCursorVisible(true);
+            setFollowingPointer(true);
         },
         [updateFollowCoords],
     );
@@ -87,6 +91,8 @@ export const EmbeddedDemoWindow: React.FC = () => {
 
     const onSectionPointerLeave = useCallback(() => {
         setFollowingPointer(false);
+        clearTimeout(cursorLeaveTimerRef.current);
+        cursorLeaveTimerRef.current = setTimeout(() => setCursorVisible(false), 180);
     }, []);
 
     useEffect(() => {
@@ -122,6 +128,8 @@ export const EmbeddedDemoWindow: React.FC = () => {
                 const section = sectionRef.current;
                 if (!section) {
                     setFollowingPointer(false);
+                    clearTimeout(cursorLeaveTimerRef.current);
+                    cursorLeaveTimerRef.current = setTimeout(() => setCursorVisible(false), 180);
                     return;
                 }
 
@@ -137,6 +145,8 @@ export const EmbeddedDemoWindow: React.FC = () => {
 
                 if (!stillInsideSection) {
                     setFollowingPointer(false);
+                    clearTimeout(cursorLeaveTimerRef.current);
+                    cursorLeaveTimerRef.current = setTimeout(() => setCursorVisible(false), 180);
                 }
             };
 
@@ -163,7 +173,7 @@ export const EmbeddedDemoWindow: React.FC = () => {
         <section
             ref={sectionRef}
             aria-label="Interactive Demo"
-            className={`relative w-full border-t-2 border-black bg-[#f8fafc] px-3 pb-14 pt-16 sm:px-4 sm:pb-20 sm:pt-24 lg:px-6 lg:pt-28 ${followingPointer ? 'cursor-none' : ''}`}
+            className={`relative w-full border-t border-slate-200 bg-[#f8fafc] px-3 pb-14 pt-16 sm:px-4 sm:pb-20 sm:pt-24 lg:px-6 lg:pt-28 ${cursorVisible ? 'cursor-none' : ''}`}
             onPointerEnter={onSectionPointerEnter}
             onPointerMove={onSectionPointerMove}
             onPointerLeave={onSectionPointerLeave}
@@ -172,37 +182,40 @@ export const EmbeddedDemoWindow: React.FC = () => {
             <div className="mx-auto mb-7 max-w-7xl sm:mb-10">
                 <div role="presentation" className="relative w-full px-3 py-10 sm:py-14 lg:py-16">
                     <div className="relative z-[1] mx-auto inline-block max-w-2xl px-2 pb-2 pt-1 sm:px-3">
-                        <h2 className="relative pl-11 text-3xl font-black uppercase leading-[0.92] tracking-tight text-black sm:pl-14 sm:text-5xl lg:pl-16 lg:text-6xl">
-                            Walk the product.
+                        <h2 className="relative pl-11 whitespace-nowrap text-2xl font-black uppercase leading-[0.92] tracking-tight text-black sm:pl-14 sm:text-4xl lg:pl-16 lg:text-5xl xl:text-6xl">
+                            Walk the product...
                         </h2>
                     </div>
-                    {!followingPointer && (
-                        <div className="pointer-events-none absolute inset-0 isolate z-[2] overflow-visible" aria-hidden>
-                            <MousePointerClick
-                                className="walk-product-heading-cursor h-8 w-8 sm:h-11 sm:w-11 lg:h-12 lg:w-12"
-                                strokeWidth={2.5}
-                                aria-hidden
-                            />
-                        </div>
-                    )}
+                    {/* Idle animated cursor — fades out when user hovers, always mounted to avoid jump */}
+                    <div
+                        className="pointer-events-none absolute inset-0 isolate z-[2] overflow-visible transition-opacity duration-[180ms] ease-out"
+                        style={{ opacity: followingPointer ? 0 : 1 }}
+                        aria-hidden
+                    >
+                        <MousePointerClick
+                            className="walk-product-heading-cursor h-8 w-8 sm:h-11 sm:w-11 lg:h-12 lg:w-12"
+                            strokeWidth={2.5}
+                            aria-hidden
+                        />
+                    </div>
                 </div>
             </div>
 
             <div className="mx-auto max-w-[min(100%,1720px)]">
-                <div className="relative">
-                    <div className="absolute -inset-2 hidden rotate-[-0.35deg] border-2 border-black bg-[#5dadec] lg:block" />
-                    <div className="absolute -inset-2 hidden translate-x-2 translate-y-2 border-2 border-black bg-[#fef08a] lg:block" />
+                    <div className="relative">
+                    <div className="absolute -inset-2 hidden rotate-[-0.25deg] rounded-[14px] border border-sky-200 bg-[#5dadec]/20 lg:block" />
+                    <div className="absolute -inset-2 hidden translate-x-2 translate-y-2 rounded-[14px] border border-amber-200 bg-[#fef08a]/25 lg:block" />
 
-                    <div className="relative z-10 overflow-hidden border-2 border-black bg-white shadow-[7px_7px_0px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black bg-white px-3 py-3 sm:gap-3 sm:px-4">
+                    <div className="relative z-10 overflow-hidden rounded-[10px] border border-slate-200 bg-white shadow-[0_22px_60px_rgba(15,23,42,0.14)]">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/80 px-3 py-3 sm:gap-3 sm:px-4">
                             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                                 <div className="flex shrink-0 gap-1.5 sm:gap-2">
-                                    <div className="h-3 w-3 border-2 border-black bg-[#ef4444]" />
-                                    <div className="h-3 w-3 border-2 border-black bg-[#fef08a]" />
-                                    <div className="h-3 w-3 border-2 border-black bg-[#86efac]" />
+                                    <div className="h-3 w-3 rounded-full bg-[#ef4444]" />
+                                    <div className="h-3 w-3 rounded-full bg-[#facc15]" />
+                                    <div className="h-3 w-3 rounded-full bg-[#22c55e]" />
                                 </div>
-                                <div className="min-w-0 border-2 border-black bg-[#f8fafc] px-3 py-1">
-                                    <span className="truncate font-mono text-[10px] font-black uppercase tracking-widest text-black sm:text-xs">
+                                <div className="min-w-0 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-sm">
+                                    <span className="truncate font-mono text-[10px] font-black uppercase tracking-wider text-slate-700 sm:text-xs">
                                         Live dashboard demo
                                     </span>
                                 </div>
@@ -213,7 +226,7 @@ export const EmbeddedDemoWindow: React.FC = () => {
                                     to="/demo"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex w-full items-center justify-center gap-2 border-2 border-black bg-[#fef08a] px-3 py-2 font-mono text-[10px] font-black uppercase tracking-widest text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-neo min-[460px]:w-auto"
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-[10px] font-black uppercase tracking-wider text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-400 hover:bg-[#ecfeff] min-[460px]:w-auto"
                                     title="Open in new tab"
                                 >
                                     <Maximize2 size={14} strokeWidth={3} />
@@ -234,10 +247,10 @@ export const EmbeddedDemoWindow: React.FC = () => {
                                 />
                             ) : (
                                 <div className="flex h-[min(68vh,560px)] min-h-[420px] items-center justify-center bg-white sm:h-[700px] lg:h-[min(82vh,920px)] lg:min-h-[760px]">
-                                    <div className="relative h-32 w-32 border-2 border-black bg-white shadow-neo sm:h-40 sm:w-40">
-                                        <div className="absolute -left-6 top-6 h-12 w-12 rotate-[-8deg] border-2 border-black bg-[#5dadec] shadow-neo-sm sm:-left-8 sm:top-7 sm:h-14 sm:w-14" />
-                                        <div className="absolute -right-6 top-10 h-10 w-10 rotate-[7deg] border-2 border-black bg-[#fef08a] shadow-neo-sm sm:-right-8 sm:top-12 sm:h-12 sm:w-12" />
-                                        <div className="absolute bottom-5 left-1/2 flex h-20 w-20 -translate-x-1/2 items-center justify-center border-2 border-black bg-white shadow-neo-sm sm:bottom-6 sm:h-24 sm:w-24">
+                                    <div className="relative h-32 w-32 rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-200/70 sm:h-40 sm:w-40">
+                                        <div className="absolute -left-6 top-6 h-12 w-12 rotate-[-8deg] rounded-lg border border-sky-200 bg-[#5dadec]/30 shadow-sm sm:-left-8 sm:top-7 sm:h-14 sm:w-14" />
+                                        <div className="absolute -right-6 top-10 h-10 w-10 rotate-[7deg] rounded-lg border border-amber-200 bg-[#fef08a]/60 shadow-sm sm:-right-8 sm:top-12 sm:h-12 sm:w-12" />
+                                        <div className="absolute bottom-5 left-1/2 flex h-20 w-20 -translate-x-1/2 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm sm:bottom-6 sm:h-24 sm:w-24">
                                             <img
                                                 src="/rejourneyIcon-removebg-preview.png"
                                                 alt=""

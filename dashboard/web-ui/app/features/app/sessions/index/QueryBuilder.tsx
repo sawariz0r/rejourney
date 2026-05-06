@@ -248,7 +248,7 @@ export function QueryBuilder({ groups, onGroupsChange, onClearQueries, available
   }
 
   return (
-    <div className="space-y-4">
+    <div className="soft-border-scope space-y-4">
       <div className="border-2 border-black bg-white p-2.5 shadow-neo-sm sm:p-3">
         <div className="flex flex-col gap-2">
           <div className="min-w-0 flex-1 space-y-2">

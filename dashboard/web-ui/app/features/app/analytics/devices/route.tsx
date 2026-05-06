@@ -1,84 +1,114 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Activity,
     AlertTriangle,
+    Bug,
     Clock,
     Cpu,
+    Flame,
+    Gauge,
     Layers,
+    ListChecks,
     Smartphone,
+    Timer,
+    TrendingDown,
+    TrendingUp,
+    Zap,
+    type LucideIcon,
 } from 'lucide-react';
-import {
-    Bar,
-    BarChart,
-    CartesianGrid,
-    ComposedChart,
-    Legend,
-    Line,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
-} from 'recharts';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import {
     getDevicesOverview,
     DeviceIssueMatrix,
     DeviceSummary,
-    InsightsTrends,
-    ObservabilityDeepMetrics,
 } from '~/shared/api/client';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { TimeFilter, TimeRange, DEFAULT_TIME_RANGE } from '~/shared/ui/core/TimeFilter';
-import { KpiCardItem, KpiCardsGrid, computePeriodDeltaFromSeries } from '~/features/app/shared/dashboard/KpiCardsGrid';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 
-type DeviceRiskRow = DeviceSummary['devices'][number] & {
-    incidentRatePer100: number;
-    impactScore: number;
+type DeviceBaseRow = DeviceSummary['devices'][number];
+type CohortBaseRow = DeviceSummary['osVersions'][number] | DeviceSummary['appVersions'][number];
+
+type DeviceMetricRow = DeviceBaseRow & {
+    displayName: string;
+    sessionShare: number;
+    avgDurationSeconds: number;
+    avgInteractionScore: number;
+    avgExplorationScore: number;
+    avgUxScore: number;
+    engagedSessions: number;
+    engagementRate: number;
+    engagementScore: number;
+    totalEvents: number;
+    eventsPerSession: number;
+    issueTotal: number;
+    criticalTotal: number;
+    issueRatePer100: number;
+    criticalRatePer100: number;
+    frictionScore: number;
 };
 
-type OsRiskRow = DeviceSummary['osVersions'][number] & {
-    incidentRatePer100: number;
-    impactScore: number;
-};
-
-type ReleaseRiskRow = DeviceSummary['appVersions'][number] & {
-    failureRate: number;
-    deltaVsOverall: number;
-    riskBand: 'critical' | 'watch' | 'healthy';
+type CohortMetricRow = CohortBaseRow & {
+    issueTotal: number;
+    issueRatePer100: number;
+    criticalTotal: number;
+    criticalRatePer100: number;
+    frictionScore: number;
 };
 
 type MatrixHotspot = DeviceIssueMatrix['matrix'][number] & {
-    impactScore: number;
-    totalIssues: number;
+    displayName: string;
+    issueTotal: number;
+    criticalTotal: number;
+    issueRatePer100: number;
+    frictionScore: number;
 };
 
-const toApiRange = (value: TimeRange): string | undefined => {
-    if (value === 'all') return undefined;
-    return value;
+type SummaryCardProps = {
+    label: string;
+    value: string;
+    detail: string;
+    icon: LucideIcon;
+    accentClassName: string;
 };
 
-const toTrendsRange = (value: TimeRange): string => {
-    if (value === '24h') return '7d';
-    if (value === '7d') return '30d';
-    if (value === '30d') return '90d';
-    if (value === '90d' || value === '180d' || value === '1y') return value;
-    return 'all';
+type RankingCardProps = {
+    title: string;
+    subtitle: string;
+    icon: LucideIcon;
+    rows: DeviceMetricRow[];
+    emptyText: string;
+    metricLabel: string;
+    getMetric: (row: DeviceMetricRow) => string;
+    getDetail: (row: DeviceMetricRow) => string;
+    accentClassName: string;
+    tone?: 'good' | 'bad' | 'neutral';
 };
+
+const RETRO_CARD_ACCENTS = ['bg-[#67e8f9]', 'bg-[#86efac]', 'bg-[#f9a8d4]', 'bg-[#fef08a]'];
 
 const formatCompact = (value: number): string => {
     if (!Number.isFinite(value)) return '0';
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
     if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
-    return value.toLocaleString();
+    return Math.round(value).toLocaleString();
 };
 
-const getPlatformBarColor = (platform: string): string => {
-    const key = platform.trim().toLowerCase();
-    if (key === 'ios') return '#0284c7';
-    if (key === 'android') return '#16a34a';
-    return '#6366f1';
+const formatPercent = (value: number, digits = 1): string => {
+    if (!Number.isFinite(value)) return '0%';
+    return `${value.toFixed(digits)}%`;
+};
+
+const formatDuration = (seconds: number): string => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return '0s';
+    const rounded = Math.round(seconds);
+    const minutes = Math.floor(rounded / 60);
+    const remainder = rounded % 60;
+    if (minutes <= 0) return `${remainder}s`;
+    if (minutes < 60) return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    const hourMinutes = minutes % 60;
+    return hourMinutes > 0 ? `${hours}h ${hourMinutes}m` : `${hours}h`;
 };
 
 const ratePer100 = (value: number, total: number): number => {
@@ -86,10 +116,11 @@ const ratePer100 = (value: number, total: number): number => {
     return Number(((value / total) * 100).toFixed(1));
 };
 
-const getReleaseRiskBand = (failureRate: number, deltaVsOverall: number): 'critical' | 'watch' | 'healthy' => {
-    if (failureRate >= 25 || deltaVsOverall >= 5) return 'critical';
-    if (failureRate >= 15 || deltaVsOverall >= 2) return 'watch';
-    return 'healthy';
+const getPlatformColor = (platform: string): string => {
+    const normalized = platform.trim().toLowerCase();
+    if (normalized === 'ios') return '#0284c7';
+    if (normalized === 'android') return '#16a34a';
+    return '#7c3aed';
 };
 
 const isValidDeviceLabel = (value: string | null | undefined): boolean => {
@@ -97,22 +128,205 @@ const isValidDeviceLabel = (value: string | null | undefined): boolean => {
     return Boolean(normalized) && normalized !== 'unknown' && normalized !== 'unknown device' && normalized !== 'n/a';
 };
 
+const safeScore = (value: number | undefined): number => {
+    return Number.isFinite(value) ? Number(value) : 0;
+};
+
+const getIssueToneClass = (value: number): string => {
+    if (value >= 10) return 'text-rose-700';
+    if (value >= 4) return 'text-amber-700';
+    return 'text-slate-700';
+};
+
+const getMetricToneClass = (tone: RankingCardProps['tone']): string => {
+    if (tone === 'good') return 'text-emerald-700';
+    if (tone === 'bad') return 'text-rose-700';
+    return 'text-black';
+};
+
+const SummaryCard: React.FC<SummaryCardProps> = ({ label, value, detail, icon: Icon, accentClassName }) => (
+    <div className="dashboard-keep-neo min-w-0 border-2 border-black bg-white p-4 shadow-neo transition-all hover:-translate-y-1 hover:shadow-neo-lg">
+        <div className={`mb-3 h-2 border-2 border-black ${accentClassName}`} />
+        <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+                <div className="break-words text-[10px] font-black uppercase text-slate-700">{label}</div>
+                <div className="mt-2 break-words text-2xl font-black leading-none text-black sm:text-3xl">{value}</div>
+            </div>
+            <div className="shrink-0 border-2 border-black bg-[#f8fafc] p-2 shadow-neo-sm">
+                <Icon className="h-5 w-5 text-black" />
+            </div>
+        </div>
+        <div className="mt-3 border-2 border-black bg-white px-2 py-1 text-xs font-black uppercase text-slate-700 shadow-neo-sm">
+            {detail}
+        </div>
+    </div>
+);
+
+const Panel: React.FC<{
+    title: string;
+    subtitle?: string;
+    icon: LucideIcon;
+    children: React.ReactNode;
+    className?: string;
+}> = ({ title, subtitle, icon: Icon, children, className = '' }) => (
+    <section className={`dashboard-surface overflow-hidden p-0 ${className}`}>
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
+            <div className="min-w-0">
+                <h2 className="text-sm font-black uppercase tracking-wide text-black">{title}</h2>
+                {subtitle && <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{subtitle}</p>}
+            </div>
+            <Icon className="h-5 w-5 shrink-0 text-slate-700" />
+        </div>
+        <div className="p-5">{children}</div>
+    </section>
+);
+
+const RankingCard: React.FC<RankingCardProps> = ({
+    title,
+    subtitle,
+    icon: Icon,
+    rows,
+    emptyText,
+    metricLabel,
+    getMetric,
+    getDetail,
+    accentClassName,
+    tone = 'neutral',
+}) => (
+    <Panel title={title} subtitle={subtitle} icon={Icon}>
+        <div className={`mb-4 h-1.5 rounded-full ${accentClassName}`} />
+        <div className="space-y-2">
+            {rows.length > 0 ? rows.slice(0, 6).map((row, index) => (
+                <div key={`${title}-${row.model}`} className="flex items-center gap-3 border border-slate-200 bg-white px-3 py-3 shadow-sm">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-slate-100 text-xs font-black text-slate-600">
+                        {index + 1}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-black text-slate-900" title={row.model}>{row.displayName}</div>
+                        <div className="mt-1 text-[11px] font-semibold uppercase text-slate-500">{getDetail(row)}</div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                        <div className={`text-lg font-black ${getMetricToneClass(tone)}`}>{getMetric(row)}</div>
+                        <div className="text-[10px] font-black uppercase text-slate-400">{metricLabel}</div>
+                    </div>
+                </div>
+            )) : (
+                <div className="border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-semibold text-slate-500">{emptyText}</div>
+            )}
+        </div>
+    </Panel>
+);
+
+const TechnicalMetricCard: React.FC<{
+    label: string;
+    row: DeviceMetricRow | null;
+    value: string;
+    icon: LucideIcon;
+    accentClassName: string;
+}> = ({ label, row, value, icon: Icon, accentClassName }) => (
+    <div className="border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+                <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</div>
+                <div className="mt-2 truncate text-base font-black text-black" title={row?.model || ''}>
+                    {row ? row.displayName : 'No data'}
+                </div>
+            </div>
+            <div className={`shrink-0 p-2 ${accentClassName}`}>
+                <Icon className="h-4 w-4 text-black" />
+            </div>
+        </div>
+        <div className="mt-3 flex items-end justify-between gap-3">
+            <div className="text-2xl font-black text-black">{value}</div>
+            <div className="text-right text-[11px] font-semibold uppercase leading-4 text-slate-500">
+                {row ? `${formatCompact(row.count)} sessions` : 'No sessions'}
+            </div>
+        </div>
+    </div>
+);
+
+const DeviceTable: React.FC<{ rows: DeviceMetricRow[] }> = ({ rows }) => (
+    <div className="overflow-x-auto">
+        <table className="w-full min-w-[980px] text-left text-sm">
+            <thead className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <tr>
+                    <th className="pb-3 pr-4">Device</th>
+                    <th className="pb-3 pr-4 text-right">Sessions</th>
+                    <th className="pb-3 pr-4 text-right">Engaged</th>
+                    <th className="pb-3 pr-4 text-right">Avg Duration</th>
+                    <th className="pb-3 pr-4 text-right">Events / Session</th>
+                    <th className="pb-3 pr-4 text-right">Crashes</th>
+                    <th className="pb-3 pr-4 text-right">ANRs</th>
+                    <th className="pb-3 pr-4 text-right">Errors</th>
+                    <th className="pb-3 pr-4 text-right">Rage Taps</th>
+                    <th className="pb-3 pr-4 text-right">Friction /100</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+                {rows.slice(0, 14).map((row) => (
+                    <tr key={row.model} className="hover:bg-[#f8fafc]">
+                        <td className="py-3 pr-4 font-black text-slate-900" title={row.model}>{row.displayName}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(row.count)}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatPercent(row.engagementRate)}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatDuration(row.avgDurationSeconds)}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{row.eventsPerSession.toFixed(1)}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(row.crashes)}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(row.anrs)}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(row.errors)}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(row.rageTaps)}</td>
+                        <td className={`py-3 pr-4 text-right font-black ${getIssueToneClass(row.frictionScore)}`}>{row.frictionScore.toFixed(1)}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
+
+const CohortTable: React.FC<{
+    rows: CohortMetricRow[];
+    label: string;
+    valuePrefix?: string;
+}> = ({ rows, label, valuePrefix = '' }) => (
+    <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                <tr>
+                    <th className="pb-3 pr-4">{label}</th>
+                    <th className="pb-3 pr-4 text-right">Sessions</th>
+                    <th className="pb-3 pr-4 text-right">Crash + ANR /100</th>
+                    <th className="pb-3 pr-4 text-right">Errors</th>
+                    <th className="pb-3 pr-4 text-right">Rage Taps</th>
+                    <th className="pb-3 pr-4 text-right">Friction /100</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+                {rows.slice(0, 8).map((row) => (
+                    <tr key={row.version} className="hover:bg-[#f8fafc]">
+                        <td className="py-3 pr-4 font-black text-slate-900">{valuePrefix}{row.version}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(row.count)}</td>
+                        <td className={`py-3 pr-4 text-right font-black ${getIssueToneClass(row.criticalRatePer100)}`}>{row.criticalRatePer100.toFixed(1)}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(row.errors)}</td>
+                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(row.rageTaps)}</td>
+                        <td className={`py-3 pr-4 text-right font-black ${getIssueToneClass(row.frictionScore)}`}>{row.frictionScore.toFixed(1)}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
+
 export const Devices: React.FC = () => {
     const { selectedProject } = useSessionData();
     const [timeRange, setTimeRange] = useState<TimeRange>(DEFAULT_TIME_RANGE);
     const [data, setData] = useState<DeviceSummary | null>(null);
-    const [deepMetrics, setDeepMetrics] = useState<ObservabilityDeepMetrics | null>(null);
     const [matrixData, setMatrixData] = useState<DeviceIssueMatrix | null>(null);
-    const [trends, setTrends] = useState<InsightsTrends | null>(null);
     const [partialError, setPartialError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         if (!selectedProject?.id) {
             setData(null);
-            setDeepMetrics(null);
             setMatrixData(null);
-            setTrends(null);
             setPartialError(null);
             setIsLoading(false);
             return;
@@ -126,19 +340,15 @@ export const Devices: React.FC = () => {
             .then((overview) => {
                 if (cancelled) return;
                 setData(overview.summary);
-                setDeepMetrics(overview.deepMetrics);
                 setMatrixData(overview.matrix);
-                setTrends(overview.trends);
                 setPartialError(overview.failedSections.length > 0 ? `${overview.failedSections.join(', ')} unavailable.` : null);
             })
             .catch((err) => {
                 console.error('Devices overview failed:', err);
                 if (cancelled) return;
                 setData(null);
-                setDeepMetrics(null);
                 setMatrixData(null);
-                setTrends(null);
-                setPartialError('Device overview unavailable.');
+                setPartialError('Device analytics unavailable.');
             })
             .finally(() => {
                 if (!cancelled) setIsLoading(false);
@@ -151,621 +361,399 @@ export const Devices: React.FC = () => {
 
     const hasData = Boolean(data && data.totalSessions > 0);
 
-    const deviceRiskRows = useMemo<DeviceRiskRow[]>(() => {
+    const deviceRows = useMemo<DeviceMetricRow[]>(() => {
         if (!data?.devices) return [];
         return data.devices
+            .filter((row) => isValidDeviceLabel(row.model))
             .map((row) => {
-                const weightedIncidents = (row.crashes * 5) + (row.anrs * 4) + (row.errors * 2) + row.rageTaps;
-                const incidentRatePer100 = ratePer100(weightedIncidents, row.count);
-                const impactScore = Number((incidentRatePer100 * Math.log10(row.count + 9)).toFixed(1));
+                const count = Math.max(row.count || 0, 0);
+                const avgDurationSeconds = safeScore(row.avgDurationSeconds);
+                const avgInteractionScore = safeScore(row.avgInteractionScore);
+                const avgExplorationScore = safeScore(row.avgExplorationScore);
+                const avgUxScore = safeScore(row.avgUxScore);
+                const engagedSessions = Math.max(row.engagedSessions || 0, 0);
+                const totalEvents = Math.max(row.totalEvents || 0, 0);
+                const issueTotal = row.crashes + row.anrs + row.errors + row.rageTaps;
+                const criticalTotal = row.crashes + row.anrs;
+                const engagementRate = count > 0 ? (engagedSessions / count) * 100 : 0;
+                const scoreFromAverages = (avgInteractionScore * 0.4) + (avgExplorationScore * 0.3) + (avgUxScore * 0.3);
+                const engagementScore = scoreFromAverages > 0 ? scoreFromAverages : engagementRate;
+                const weightedIssues = (row.crashes * 8) + (row.anrs * 6) + (row.errors * 3) + row.rageTaps;
+
                 return {
                     ...row,
-                    incidentRatePer100,
-                    impactScore,
+                    displayName: formatDeviceModel(row.model, 'Unknown device'),
+                    sessionShare: data.totalSessions > 0 ? (count / data.totalSessions) * 100 : 0,
+                    avgDurationSeconds,
+                    avgInteractionScore,
+                    avgExplorationScore,
+                    avgUxScore,
+                    engagedSessions,
+                    engagementRate,
+                    engagementScore,
+                    totalEvents,
+                    eventsPerSession: count > 0 ? totalEvents / count : 0,
+                    issueTotal,
+                    criticalTotal,
+                    issueRatePer100: ratePer100(issueTotal, count),
+                    criticalRatePer100: ratePer100(criticalTotal, count),
+                    frictionScore: ratePer100(weightedIssues, count),
                 };
-            })
-            .sort((a, b) => b.impactScore - a.impactScore || b.count - a.count);
-    }, [data]);
-
-    const osRiskRows = useMemo<OsRiskRow[]>(() => {
-        if (!data?.osVersions) return [];
-        return data.osVersions
-            .map((row) => {
-                const weightedIncidents = (row.crashes * 5) + (row.anrs * 4) + (row.errors * 2) + row.rageTaps;
-                const incidentRatePer100 = ratePer100(weightedIncidents, row.count);
-                const impactScore = Number((incidentRatePer100 * Math.log10(row.count + 9)).toFixed(1));
-                return {
-                    ...row,
-                    incidentRatePer100,
-                    impactScore,
-                };
-            })
-            .sort((a, b) => b.impactScore - a.impactScore || b.count - a.count)
-            .slice(0, 10);
-    }, [data]);
-
-    const releaseRiskLookup = useMemo(() => {
-        const map = new Map<string, { failureRate: number; deltaVsOverall: number }>();
-        for (const risk of deepMetrics?.releaseRisk || []) {
-            map.set(risk.version, {
-                failureRate: risk.failureRate,
-                deltaVsOverall: risk.deltaVsOverall,
             });
-        }
-        return map;
-    }, [deepMetrics]);
+    }, [data]);
 
-    const releaseRiskRows = useMemo<ReleaseRiskRow[]>(() => {
-        if (!data?.appVersions) return [];
-        return data.appVersions
-            .map((row) => {
-                const fallbackFailureRate = ratePer100((row.crashes * 5) + (row.anrs * 4) + (row.errors * 2) + row.rageTaps, row.count);
-                const fromDeep = releaseRiskLookup.get(row.version);
-                const failureRate = fromDeep?.failureRate ?? fallbackFailureRate;
-                const deltaVsOverall = fromDeep?.deltaVsOverall ?? 0;
-                return {
-                    ...row,
-                    failureRate,
-                    deltaVsOverall,
-                    riskBand: getReleaseRiskBand(failureRate, deltaVsOverall),
-                };
-            })
-            .sort((a, b) => b.failureRate - a.failureRate || b.count - a.count)
-            .slice(0, 10);
-    }, [data, releaseRiskLookup]);
+    const cohortRows = useMemo(() => {
+        const build = (rows: CohortBaseRow[] = []): CohortMetricRow[] => rows.map((row) => {
+            const issueTotal = row.crashes + row.anrs + row.errors + row.rageTaps;
+            const criticalTotal = row.crashes + row.anrs;
+            const weightedIssues = (row.crashes * 8) + (row.anrs * 6) + (row.errors * 3) + row.rageTaps;
+            return {
+                ...row,
+                issueTotal,
+                issueRatePer100: ratePer100(issueTotal, row.count),
+                criticalTotal,
+                criticalRatePer100: ratePer100(criticalTotal, row.count),
+                frictionScore: ratePer100(weightedIssues, row.count),
+            };
+        }).sort((a, b) => b.frictionScore - a.frictionScore || b.count - a.count);
+
+        return {
+            os: build(data?.osVersions),
+            versions: build(data?.appVersions),
+        };
+    }, [data]);
 
     const matrixHotspots = useMemo<MatrixHotspot[]>(() => {
         if (!matrixData?.matrix?.length) return [];
         return matrixData.matrix
-            .filter((cell) => cell.sessions >= 20)
             .map((cell) => {
-                const totalIssues = cell.issues.crashes + cell.issues.anrs + cell.issues.errors + cell.issues.rageTaps;
-                const weighted = (cell.issues.crashes * 5) + (cell.issues.anrs * 4) + (cell.issues.errors * 2) + cell.issues.rageTaps;
+                const issueTotal = cell.issues.crashes + cell.issues.anrs + cell.issues.errors + cell.issues.rageTaps;
+                const criticalTotal = cell.issues.crashes + cell.issues.anrs;
+                const weightedIssues = (cell.issues.crashes * 8) + (cell.issues.anrs * 6) + (cell.issues.errors * 3) + cell.issues.rageTaps;
                 return {
                     ...cell,
-                    totalIssues,
-                    impactScore: Number((((weighted / Math.max(cell.sessions, 1)) * 100) * Math.log10(cell.sessions + 9)).toFixed(1)),
+                    displayName: formatDeviceModel(cell.device, 'Unknown device'),
+                    issueTotal,
+                    criticalTotal,
+                    issueRatePer100: ratePer100(issueTotal, cell.sessions),
+                    frictionScore: ratePer100(weightedIssues, cell.sessions),
                 };
             })
-            .sort((a, b) => b.impactScore - a.impactScore)
+            .filter((cell) => cell.sessions > 0 && isValidDeviceLabel(cell.device))
+            .sort((a, b) => b.frictionScore - a.frictionScore || b.sessions - a.sessions)
             .slice(0, 8);
     }, [matrixData]);
 
-    const topDevice = deviceRiskRows[0] || null;
-    const topRelease = releaseRiskRows[0] || null;
-    const topOs = osRiskRows[0] || null;
+    const sampleFloor = useMemo(() => {
+        if (!data?.totalSessions) return 10;
+        return Math.max(10, Math.min(100, Math.ceil(data.totalSessions * 0.01)));
+    }, [data?.totalSessions]);
 
-    const topThreeDeviceShare = useMemo(() => {
-        if (!data?.totalSessions || !deviceRiskRows.length) return 0;
-        const top3 = deviceRiskRows.slice(0, 3).reduce((acc, row) => acc + row.count, 0);
-        return (top3 / data.totalSessions) * 100;
-    }, [deviceRiskRows, data]);
-
-    const compatibilityHotspotCount = useMemo(
-        () => matrixHotspots.filter((cell) => cell.issueRate >= 0.02).length,
-        [matrixHotspots],
+    const rankableRows = useMemo(
+        () => deviceRows.filter((row) => row.count >= sampleFloor),
+        [deviceRows, sampleFloor],
     );
 
-    const rolloutGateReleaseCount = useMemo(
-        () => releaseRiskRows.filter((row) => row.failureRate >= 15 || row.deltaVsOverall >= 2).length,
-        [releaseRiskRows],
-    );
-
-    const deviceImpactChartData = useMemo(() => {
-        return deviceRiskRows
-            .filter((row) => isValidDeviceLabel(row.model) && row.impactScore > 0)
-            .slice(0, 8)
-            .map((row) => ({
-                device: formatDeviceModel(row.model),
-                sessions: row.count,
-                incidentRatePer100: row.incidentRatePer100,
-                impactScore: row.impactScore,
-            }));
-    }, [deviceRiskRows]);
-
-    const releaseRiskChartData = useMemo(() => {
-        return releaseRiskRows
-            .slice(0, 8)
-            .map((row) => ({
-                version: `v${row.version}`,
-                sessions: row.count,
-                failureRate: Number(row.failureRate.toFixed(2)),
-                deltaVsOverall: Number(row.deltaVsOverall.toFixed(2)),
-            }));
-    }, [releaseRiskRows]);
-
-    const dominantPlatform = useMemo(() => {
-        if (!data?.platforms || !data.totalSessions) return null;
-        const entries = Object.entries(data.platforms);
-        if (!entries.length) return null;
-        const [platform, count] = entries.sort((a, b) => b[1] - a[1])[0];
-        return {
-            platform,
-            count,
-            share: (count / data.totalSessions) * 100,
+    const rankings = useMemo(() => {
+        const sortBy = (fn: (row: DeviceMetricRow) => number, direction: 'asc' | 'desc' = 'desc') => {
+            return [...rankableRows].sort((a, b) => {
+                const delta = fn(a) - fn(b);
+                return direction === 'asc' ? delta || b.count - a.count : -delta || b.count - a.count;
+            });
         };
-    }, [data]);
 
-    const highRiskDeviceCohorts = useMemo(
-        () => deviceRiskRows.filter((row) => row.incidentRatePer100 >= 12).length,
-        [deviceRiskRows],
-    );
+        return {
+            mostUsed: [...deviceRows].sort((a, b) => b.count - a.count),
+            mostEngaged: sortBy((row) => row.engagementScore),
+            longestDuration: sortBy((row) => row.avgDurationSeconds),
+            worstEngaged: sortBy((row) => row.engagementScore, 'asc'),
+            mostCrashes: sortBy((row) => row.crashes),
+            mostAnrs: sortBy((row) => row.anrs),
+            mostErrors: sortBy((row) => row.errors),
+            mostRageTaps: sortBy((row) => row.rageTaps),
+            worstFriction: sortBy((row) => row.frictionScore),
+        };
+    }, [deviceRows, rankableRows]);
 
-    const kpiCards = useMemo<KpiCardItem[]>(() => {
-        const sessionVolumeDelta = computePeriodDeltaFromSeries(
-            (trends?.daily || []).map((day) => day.sessions),
-            timeRange,
-            'sum',
-        );
-        const issuePressureDelta = computePeriodDeltaFromSeries(
-            (trends?.daily || []).map((day) => (day.sessions > 0 ? (day.errorCount / day.sessions) * 100 : 0)),
-            timeRange,
-            'avg',
-        );
+    const topUsed = rankings.mostUsed[0] || null;
+    const topEngaged = rankings.mostEngaged[0] || null;
+    const topDuration = rankings.longestDuration[0] || null;
+    const worstEngaged = rankings.worstEngaged[0] || null;
+    const worstFriction = rankings.worstFriction[0] || null;
 
-        return [
-            {
-                id: 'device-fragmentation',
-                label: 'Fragmentation',
-                value: `${topThreeDeviceShare.toFixed(1)}%`,
-                sortValue: topThreeDeviceShare,
-                info: 'Session share concentrated in the top three device models.',
-                detail: `${data?.devices.length.toLocaleString() || 0} models · ${data?.osVersions.length.toLocaleString() || 0} OS versions`,
-                delta: sessionVolumeDelta
-                    ? {
-                        value: sessionVolumeDelta.deltaPct,
-                        label: sessionVolumeDelta.comparisonLabel,
-                        betterDirection: 'up',
-                        precision: 1,
-                    }
-                    : undefined,
-            },
-            {
-                id: 'platform-concentration',
-                label: 'Platform Concentration',
-                value: dominantPlatform ? `${dominantPlatform.share.toFixed(1)}%` : 'N/A',
-                sortValue: dominantPlatform?.share ?? null,
-                info: 'Share of traffic carried by the dominant platform in this time range.',
-                detail: dominantPlatform
-                    ? `${dominantPlatform.platform.toUpperCase()} · ${formatCompact(dominantPlatform.count)} sessions`
-                    : 'No platform distribution data',
-                delta: sessionVolumeDelta
-                    ? {
-                        value: sessionVolumeDelta.deltaPct,
-                        label: sessionVolumeDelta.comparisonLabel,
-                        betterDirection: 'up',
-                        precision: 1,
-                    }
-                    : undefined,
-            },
-            {
-                id: 'compatibility-hotspots',
-                label: 'Compatibility Hotspots',
-                value: compatibilityHotspotCount.toLocaleString(),
-                sortValue: compatibilityHotspotCount,
-                info: 'Device x OS cohorts exceeding issue-rate hotspot thresholds.',
-                detail: matrixHotspots[0]
-                    ? `${formatDeviceModel(matrixHotspots[0].device, 'Unknown device')} x v${matrixHotspots[0].version} at ${(matrixHotspots[0].issueRate * 100).toFixed(1)}%`
-                    : 'No matrix hotspot data',
-                delta: issuePressureDelta
-                    ? {
-                        value: issuePressureDelta.deltaPct,
-                        label: issuePressureDelta.comparisonLabel,
-                        betterDirection: 'down',
-                        precision: 1,
-                    }
-                    : undefined,
-            },
-            {
-                id: 'release-gate-candidates',
-                label: 'Release Gates',
-                value: rolloutGateReleaseCount.toLocaleString(),
-                sortValue: rolloutGateReleaseCount,
-                info: 'App versions currently breaching release-risk gate thresholds.',
-                detail: topRelease
-                    ? `Highest risk v${topRelease.version} · ${topRelease.failureRate.toFixed(1)}%`
-                    : 'No release risk data',
-                delta: issuePressureDelta
-                    ? {
-                        value: issuePressureDelta.deltaPct,
-                        label: issuePressureDelta.comparisonLabel,
-                        betterDirection: 'down',
-                        precision: 1,
-                    }
-                    : undefined,
-            },
-        ];
-    }, [trends, timeRange, topThreeDeviceShare, data, dominantPlatform, compatibilityHotspotCount, matrixHotspots, rolloutGateReleaseCount, topRelease]);
+    const totals = useMemo(() => {
+        const totalIssues = deviceRows.reduce((sum, row) => sum + row.issueTotal, 0);
+        const totalCritical = deviceRows.reduce((sum, row) => sum + row.criticalTotal, 0);
+        const weightedEngagement = deviceRows.reduce((sum, row) => sum + (row.engagementScore * row.count), 0);
+        const weightedDuration = deviceRows.reduce((sum, row) => sum + (row.avgDurationSeconds * row.count), 0);
+        const totalSessions = deviceRows.reduce((sum, row) => sum + row.count, 0);
+        const engagedSessions = deviceRows.reduce((sum, row) => sum + row.engagedSessions, 0);
 
-    if (isLoading && selectedProject?.id && !data && !deepMetrics) {
+        return {
+            totalIssues,
+            totalCritical,
+            avgEngagementScore: totalSessions > 0 ? weightedEngagement / totalSessions : 0,
+            avgDurationSeconds: totalSessions > 0 ? weightedDuration / totalSessions : 0,
+            engagedRate: totalSessions > 0 ? (engagedSessions / totalSessions) * 100 : 0,
+        };
+    }, [deviceRows]);
+
+    if (isLoading && selectedProject?.id && !data) {
         return <DashboardGhostLoader variant="analytics" />;
     }
 
     return (
         <div className="min-h-screen bg-transparent pb-12 font-sans text-slate-900">
             <DashboardPageHeader
-                title="Device Reliability Intelligence"
-                icon={<Smartphone className="w-6 h-6" />}
-                iconColor="bg-indigo-500"
+                title="Devices"
+                subtitle="Business behavior and technical friction by device model."
+                icon={<Smartphone className="h-6 w-6" />}
+                iconColor="bg-[#67e8f9]"
             >
                 <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
                     <TimeFilter value={timeRange} onChange={setTimeRange} />
                 </div>
             </DashboardPageHeader>
 
-            <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6">
+            <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-6 sm:px-6">
                 {!selectedProject?.id && (
-                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900">
+                    <div className="border-2 border-black bg-[#f9a8d4] p-5 text-sm font-black uppercase text-black shadow-neo">
                         Select a project to load device analytics.
                     </div>
                 )}
 
                 {!isLoading && selectedProject?.id && !hasData && (
-                    <div className="dashboard-surface p-6 text-sm text-slate-600">
+                    <div className="dashboard-surface p-6 text-sm font-semibold text-slate-600">
                         No device telemetry available for this range.
                     </div>
                 )}
 
                 {!isLoading && partialError && (
-                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+                    <div className="border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-900">
                         {partialError}
                     </div>
                 )}
 
                 {hasData && data && (
                     <>
-                        <KpiCardsGrid
-                            cards={kpiCards}
-                            timeRange={timeRange}
-                            storageKey="analytics-devices"
-                        />
-
-                        <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                            <div className="dashboard-surface p-5">
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Top Devices</h2>
-                                    <Smartphone className="h-5 w-5 text-indigo-600" />
-                                </div>
-                                <div className="h-[300px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={deviceImpactChartData} layout="vertical" margin={{ left: 8, right: 16, top: 6, bottom: 6 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                            <XAxis type="number" tick={{ fontSize: 11 }} />
-                                            <YAxis dataKey="device" type="category" width={180} tick={{ fontSize: 11 }} />
-                                            <Tooltip />
-                                            <Bar dataKey="impactScore" name="Impact score" fill="#6366f1" radius={[4, 4, 4, 4]} isAnimationActive={false} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-
-                            <div className="dashboard-surface p-5">
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Release Risk Curve</h2>
-                                    <Layers className="h-5 w-5 text-indigo-600" />
-                                </div>
-                                <div className="h-[300px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <ComposedChart data={releaseRiskChartData}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                            <XAxis dataKey="version" tick={{ fontSize: 11 }} />
-                                            <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-                                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
-                                            <Tooltip />
-                                            <Legend />
-                                            <Bar yAxisId="left" dataKey="sessions" name="Sessions" fill="#93c5fd" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                                            <Line yAxisId="right" type="monotone" dataKey="failureRate" name="Failure Rate %" stroke="#dc2626" strokeWidth={2} isAnimationActive={false} />
-                                            <Line yAxisId="right" type="monotone" dataKey="deltaVsOverall" name="Delta vs Overall (pts)" stroke="#7c3aed" strokeWidth={2} isAnimationActive={false} />
-                                        </ComposedChart>
-                                    </ResponsiveContainer>
-                                </div>
+                        <section>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                <SummaryCard
+                                    label="Most Used Device"
+                                    value={topUsed?.displayName || 'N/A'}
+                                    detail={topUsed ? `${formatCompact(topUsed.count)} sessions · ${formatPercent(topUsed.sessionShare)} share` : 'No device sample'}
+                                    icon={Smartphone}
+                                    accentClassName={RETRO_CARD_ACCENTS[0]}
+                                />
+                                <SummaryCard
+                                    label="Most Engaged Device"
+                                    value={topEngaged?.displayName || 'N/A'}
+                                    detail={topEngaged ? `${topEngaged.engagementScore.toFixed(1)} score · ${formatPercent(topEngaged.engagementRate)} engaged` : 'No engagement sample'}
+                                    icon={TrendingUp}
+                                    accentClassName={RETRO_CARD_ACCENTS[1]}
+                                />
+                                <SummaryCard
+                                    label="Longest Sessions"
+                                    value={topDuration?.displayName || 'N/A'}
+                                    detail={topDuration ? `${formatDuration(topDuration.avgDurationSeconds)} average · ${formatCompact(topDuration.count)} sessions` : 'No duration sample'}
+                                    icon={Timer}
+                                    accentClassName={RETRO_CARD_ACCENTS[2]}
+                                />
+                                <SummaryCard
+                                    label="Worst Engaged Device"
+                                    value={worstEngaged?.displayName || 'N/A'}
+                                    detail={worstEngaged ? `${worstEngaged.engagementScore.toFixed(1)} score · ${formatDuration(worstEngaged.avgDurationSeconds)} average` : 'No weak cohort'}
+                                    icon={TrendingDown}
+                                    accentClassName={RETRO_CARD_ACCENTS[3]}
+                                />
                             </div>
                         </section>
 
-                        <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                            <div className="border border-gray-200 bg-white p-5 xl:col-span-2" style={{ boxShadow: '2px 2px 0 0 rgba(0,0,0,0.07)' }}>
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Device Risk Leaderboard</h2>
-                                    <Smartphone className="h-5 w-5 text-indigo-600" />
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[960px] text-left text-sm">
-                                        <thead className="text-xs font-mono uppercase tracking-wide text-gray-500">
-                                            <tr>
-                                                <th className="pb-2 pr-4">Device Model</th>
-                                                <th className="pb-2 pr-4 text-right">Sessions</th>
-                                                <th className="pb-2 pr-4 text-right">Crash</th>
-                                                <th className="pb-2 pr-4 text-right">ANR</th>
-                                                <th className="pb-2 pr-4 text-right">Errors</th>
-                                                <th className="pb-2 pr-4 text-right">Rage</th>
-                                                <th className="pb-2 pr-4 text-right">Incident /100</th>
-                                                <th className="pb-2 pr-4 text-right">Impact</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-200">
-                                            {deviceRiskRows.slice(0, 12).map((row) => (
-                                                <tr key={row.model} className="hover:bg-[#f4f4f5]">
-                                                    <td className="py-3 pr-4 font-medium text-slate-900" title={row.model}>
-                                                        {formatDeviceModel(row.model)}
-                                                    </td>
-                                                    <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(row.count)}</td>
-                                                    <td className="py-3 pr-4 text-right text-slate-700">{row.crashes}</td>
-                                                    <td className="py-3 pr-4 text-right text-slate-700">{row.anrs}</td>
-                                                    <td className="py-3 pr-4 text-right text-slate-700">{row.errors}</td>
-                                                    <td className="py-3 pr-4 text-right text-slate-700">{row.rageTaps}</td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.incidentRatePer100 >= 18 ? 'text-rose-700' : row.incidentRatePer100 >= 10 ? 'text-rose-700' : 'text-slate-700'}`}>
-                                                        {row.incidentRatePer100.toFixed(1)}
-                                                    </td>
-                                                    <td className="py-3 pr-4 text-right font-semibold text-slate-700">{row.impactScore.toFixed(1)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <div className="space-y-4 dashboard-surface p-5">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Coverage Snapshot</h2>
-                                    <Layers className="h-5 w-5 text-indigo-600" />
-                                </div>
-
-                                <div className="bg-[#f4f4f5] border border-gray-200 p-4">
-                                    <div className="text-xs font-mono uppercase tracking-wide text-gray-500">Coverage profile</div>
-                                    <div className="mt-2 space-y-1 text-sm text-slate-700">
-                                        <div className="flex items-center justify-between">
-                                            <span>Total sessions</span>
-                                            <span className="font-semibold">{formatCompact(data.totalSessions)}</span>
+                        <div className="soft-border-scope space-y-6">
+                            <section className="grid grid-cols-1 gap-6 xl:grid-cols-4">
+                                <Panel title="Device Portfolio" subtitle={`${formatCompact(data.totalSessions)} sessions across ${deviceRows.length.toLocaleString()} models`} icon={Layers}>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <div className="text-[10px] font-black uppercase text-slate-500">Avg engagement</div>
+                                            <div className="mt-1 text-3xl font-black text-black">{totals.avgEngagementScore.toFixed(1)}</div>
                                         </div>
-                                        <div className="flex items-center justify-between">
-                                            <span>Dominant platform</span>
-                                            <span className="font-semibold">
-                                                {dominantPlatform ? `${dominantPlatform.platform.toUpperCase()} (${dominantPlatform.share.toFixed(1)}%)` : 'N/A'}
-                                            </span>
+                                        <div>
+                                            <div className="text-[10px] font-black uppercase text-slate-500">Engaged sessions</div>
+                                            <div className="mt-1 text-3xl font-black text-black">{formatPercent(totals.engagedRate)}</div>
                                         </div>
-                                        <div className="flex items-center justify-between">
-                                            <span>High-risk cohorts</span>
-                                            <span className="font-semibold">{highRiskDeviceCohorts.toLocaleString()}</span>
+                                        <div>
+                                            <div className="text-[10px] font-black uppercase text-slate-500">Avg duration</div>
+                                            <div className="mt-1 text-2xl font-black text-slate-700">{formatDuration(totals.avgDurationSeconds)}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] font-black uppercase text-slate-500">Issue events</div>
+                                            <div className="mt-1 text-2xl font-black text-slate-700">{formatCompact(totals.totalIssues)}</div>
                                         </div>
                                     </div>
-                                </div>
+                                    <div className="mt-4 border-t border-slate-100 pt-3 text-[11px] font-semibold uppercase text-slate-500">
+                                        Rankings use devices with at least {sampleFloor.toLocaleString()} sessions where possible.
+                                    </div>
+                                </Panel>
 
-                                <div className="bg-[#f4f4f5] border border-gray-200 p-4">
-                                    <div className="text-xs font-mono uppercase tracking-wide text-gray-500">Most volatile OS cohort</div>
-                                    {topOs ? (
-                                        <div className="mt-2 space-y-1 text-sm text-slate-700">
-                                            <div className="flex items-center justify-between">
-                                                <span className="font-medium text-slate-900">{topOs.version}</span>
-                                                <span className="font-semibold text-rose-700">{topOs.incidentRatePer100.toFixed(1)} /100</span>
-                                            </div>
-                                            <div className="text-xs text-slate-600">
-                                                C{topOs.crashes} | A{topOs.anrs} | E{topOs.errors} | R{topOs.rageTaps}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <p className="mt-2 text-sm text-slate-500">No OS-level cohort risk in this range.</p>
-                                    )}
-                                </div>
-
-                                <div className="bg-[#f4f4f5] border border-gray-200 p-4">
-                                    <div className="text-xs font-mono uppercase tracking-wide text-gray-500">Highest-risk device model</div>
-                                    {topDevice ? (
-                                        <div className="mt-2 space-y-1 text-sm text-slate-700">
-                                            <div className="font-medium text-slate-900" title={topDevice.model}>
-                                                {formatDeviceModel(topDevice.model)}
-                                            </div>
-                                            <div className="flex items-center justify-between text-xs">
-                                                <span>{formatCompact(topDevice.count)} sessions</span>
-                                                <span className="font-semibold text-rose-700">
-                                                    {topDevice.incidentRatePer100.toFixed(1)} incidents /100
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <p className="mt-2 text-sm text-slate-500">No device risk data available in this range.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </section>
-
-                        <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                            <div className="dashboard-surface p-5">
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Release Reliability Ranking</h2>
-                                    <Layers className="h-5 w-5 text-indigo-600" />
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[720px] text-left text-sm">
-                                        <thead className="text-xs font-mono uppercase tracking-wide text-gray-500">
-                                            <tr>
-                                                <th className="pb-2 pr-4">Version</th>
-                                                <th className="pb-2 pr-4 text-right">Sessions</th>
-                                                <th className="pb-2 pr-4 text-right">Failure Rate</th>
-                                                <th className="pb-2 pr-4 text-right">Delta vs Overall</th>
-                                                <th className="pb-2 pr-4 text-center">Risk Band</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-200">
-                                            {releaseRiskRows.map((row) => (
-                                                <tr key={row.version} className="hover:bg-[#f4f4f5]">
-                                                    <td className="py-3 pr-4 font-medium text-slate-900">v{row.version}</td>
-                                                    <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(row.count)}</td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.failureRate >= 25 ? 'text-rose-700' : row.failureRate >= 15 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                                        {row.failureRate.toFixed(1)}%
-                                                    </td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.deltaVsOverall >= 2 ? 'text-rose-700' : row.deltaVsOverall > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                                        {row.deltaVsOverall >= 0 ? '+' : ''}{row.deltaVsOverall.toFixed(1)} pts
-                                                    </td>
-                                                    <td className="py-3 pr-4 text-center">
-                                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${row.riskBand === 'critical'
-                                                            ? 'bg-rose-100 text-rose-700'
-                                                            : row.riskBand === 'watch'
-                                                                ? 'bg-rose-100 text-rose-700'
-                                                                : 'bg-emerald-100 text-emerald-700'
-                                                            }`}>
-                                                            {row.riskBand}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <div className="dashboard-surface p-5">
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold uppercase tracking-wide text-black">OS Cohort Risk</h2>
-                                    <Cpu className="h-5 w-5 text-rose-600" />
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[640px] text-left text-sm">
-                                        <thead className="text-xs font-mono uppercase tracking-wide text-gray-500">
-                                            <tr>
-                                                <th className="pb-2 pr-4">OS Version</th>
-                                                <th className="pb-2 pr-4 text-right">Sessions</th>
-                                                <th className="pb-2 pr-4 text-right">Incident /100</th>
-                                                <th className="pb-2 pr-4 text-right">Impact</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-200">
-                                            {osRiskRows.map((row) => (
-                                                <tr key={row.version} className="hover:bg-[#f4f4f5]">
-                                                    <td className="py-3 pr-4 font-medium text-slate-900">{row.version}</td>
-                                                    <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(row.count)}</td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${row.incidentRatePer100 >= 18 ? 'text-rose-700' : row.incidentRatePer100 >= 10 ? 'text-rose-700' : 'text-slate-700'}`}>
-                                                        {row.incidentRatePer100.toFixed(1)}
-                                                    </td>
-                                                    <td className="py-3 pr-4 text-right font-semibold text-slate-700">{row.impactScore.toFixed(1)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </section>
-
-                        <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                            <div className="dashboard-surface p-5">
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Platform Mix</h2>
-                                    <Smartphone className="h-5 w-5 text-blue-600" />
-                                </div>
-                                <div className="space-y-3">
-                                    {Object.entries(data.platforms).map(([platform, count]) => (
-                                        <div key={platform} className="bg-[#f4f4f5] border border-gray-200 p-4">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2 text-sm font-medium uppercase text-slate-900">
-                                                    <span
-                                                        className="h-2.5 w-2.5 rounded-full"
-                                                        style={{ backgroundColor: getPlatformBarColor(platform) }}
-                                                    />
-                                                    {platform}
+                                <Panel title="Platform Mix" subtitle="Where the device traffic comes from." icon={Smartphone} className="xl:col-span-3">
+                                    <div className="grid gap-3 md:grid-cols-3">
+                                        {Object.entries(data.platforms).map(([platform, count]) => (
+                                            <div key={platform} className="border border-slate-200 bg-white p-4 shadow-sm">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-2 text-sm font-black uppercase text-slate-900">
+                                                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getPlatformColor(platform) }} />
+                                                        {platform}
+                                                    </div>
+                                                    <div className="text-sm font-black text-black">{formatPercent((count / Math.max(data.totalSessions, 1)) * 100)}</div>
                                                 </div>
-                                                <div className="text-sm font-semibold text-slate-900">{formatCompact(count)}</div>
+                                                <div className="mt-3 h-2 bg-slate-100">
+                                                    <div
+                                                        className="h-2"
+                                                        style={{
+                                                            backgroundColor: getPlatformColor(platform),
+                                                            width: `${Math.min(100, (count / Math.max(data.totalSessions, 1)) * 100)}%`,
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="mt-2 text-xs font-semibold text-slate-500">{formatCompact(count)} sessions</div>
                                             </div>
-                                            <div className="mt-2 h-2 rounded-full bg-slate-200">
-                                                <div
-                                                    className="h-2 rounded-full"
-                                                    style={{
-                                                        backgroundColor: getPlatformBarColor(platform),
-                                                        width: `${Math.min(100, (count / Math.max(data.totalSessions, 1)) * 100)}%`,
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                                        ))}
+                                    </div>
+                                </Panel>
+                            </section>
 
-                            <div className="border border-gray-200 bg-white p-5 xl:col-span-2" style={{ boxShadow: '2px 2px 0 0 rgba(0,0,0,0.07)' }}>
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Network Reliability by Device Context</h2>
-                                    <Clock className="h-5 w-5 text-indigo-600" />
+                            <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                                <RankingCard
+                                    title="Most Used Devices"
+                                    subtitle="Highest session volume by model."
+                                    icon={Smartphone}
+                                    rows={rankings.mostUsed}
+                                    emptyText="No device volume available."
+                                    metricLabel="sessions"
+                                    getMetric={(row) => formatCompact(row.count)}
+                                    getDetail={(row) => `${formatPercent(row.sessionShare)} of sessions · ${formatDuration(row.avgDurationSeconds)} avg`}
+                                    accentClassName="bg-[#67e8f9]"
+                                />
+                                <RankingCard
+                                    title="Most Engaged Devices"
+                                    subtitle="Best combined interaction, exploration, and UX score."
+                                    icon={TrendingUp}
+                                    rows={rankings.mostEngaged}
+                                    emptyText="No engagement data available."
+                                    metricLabel="score"
+                                    getMetric={(row) => row.engagementScore.toFixed(1)}
+                                    getDetail={(row) => `${formatPercent(row.engagementRate)} engaged · ${row.eventsPerSession.toFixed(1)} events/session`}
+                                    accentClassName="bg-[#86efac]"
+                                    tone="good"
+                                />
+                                <RankingCard
+                                    title="Longest Duration Devices"
+                                    subtitle="Devices with the longest average session length."
+                                    icon={Clock}
+                                    rows={rankings.longestDuration}
+                                    emptyText="No duration data available."
+                                    metricLabel="avg"
+                                    getMetric={(row) => formatDuration(row.avgDurationSeconds)}
+                                    getDetail={(row) => `${formatCompact(row.count)} sessions · ${row.engagementScore.toFixed(1)} engagement score`}
+                                    accentClassName="bg-[#f9a8d4]"
+                                />
+                                <RankingCard
+                                    title="Worst Engaged Devices"
+                                    subtitle="Lower engagement cohorts worth inspecting."
+                                    icon={TrendingDown}
+                                    rows={rankings.worstEngaged}
+                                    emptyText="No low-engagement device cohort found."
+                                    metricLabel="score"
+                                    getMetric={(row) => row.engagementScore.toFixed(1)}
+                                    getDetail={(row) => `${formatDuration(row.avgDurationSeconds)} avg · ${formatPercent(row.engagementRate)} engaged`}
+                                    accentClassName="bg-[#fef08a]"
+                                    tone="bad"
+                                />
+                            </section>
+
+                            <Panel title="Technical Device Pressure" subtitle="Crash, ANR, error, and rage tap leaders by device model." icon={ListChecks}>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                    <TechnicalMetricCard
+                                        label="Most Crashes"
+                                        row={rankings.mostCrashes[0] || null}
+                                        value={rankings.mostCrashes[0] ? formatCompact(rankings.mostCrashes[0].crashes) : '0'}
+                                        icon={Bug}
+                                        accentClassName="bg-[#fecaca]"
+                                    />
+                                    <TechnicalMetricCard
+                                        label="Most ANRs"
+                                        row={rankings.mostAnrs[0] || null}
+                                        value={rankings.mostAnrs[0] ? formatCompact(rankings.mostAnrs[0].anrs) : '0'}
+                                        icon={AlertTriangle}
+                                        accentClassName="bg-[#fed7aa]"
+                                    />
+                                    <TechnicalMetricCard
+                                        label="Most Errors"
+                                        row={rankings.mostErrors[0] || null}
+                                        value={rankings.mostErrors[0] ? formatCompact(rankings.mostErrors[0].errors) : '0'}
+                                        icon={Zap}
+                                        accentClassName="bg-[#dbeafe]"
+                                    />
+                                    <TechnicalMetricCard
+                                        label="Most Rage Taps"
+                                        row={rankings.mostRageTaps[0] || null}
+                                        value={rankings.mostRageTaps[0] ? formatCompact(rankings.mostRageTaps[0].rageTaps) : '0'}
+                                        icon={Flame}
+                                        accentClassName="bg-[#f9a8d4]"
+                                    />
                                 </div>
-                                {(deepMetrics?.networkBreakdown?.length || 0) > 0 ? (
+                            </Panel>
+
+                            <Panel
+                                title="Device Detail"
+                                subtitle={worstFriction ? `Highest friction right now: ${worstFriction.displayName} at ${worstFriction.frictionScore.toFixed(1)} weighted events per 100 sessions.` : 'Detailed device rows for the selected range.'}
+                                icon={Gauge}
+                            >
+                                <DeviceTable rows={rankings.worstFriction.length ? rankings.worstFriction : deviceRows} />
+                            </Panel>
+
+                            <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                                <Panel title="OS Version Pressure" subtitle="Technical friction grouped by OS version." icon={Cpu}>
+                                    <CohortTable rows={cohortRows.os} label="OS Version" />
+                                </Panel>
+                                <Panel title="App Version Pressure" subtitle="Technical friction grouped by app version." icon={Layers}>
+                                    <CohortTable rows={cohortRows.versions} label="App Version" valuePrefix="v" />
+                                </Panel>
+                            </section>
+
+                            {matrixHotspots.length > 0 && (
+                                <Panel title="Device + Version Hotspots" subtitle="Device/version combinations with the most concentrated friction." icon={AlertTriangle}>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full min-w-[760px] text-left text-sm">
-                                            <thead className="text-xs font-mono uppercase tracking-wide text-gray-500">
+                                        <table className="w-full min-w-[820px] text-left text-sm">
+                                            <thead className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                                                 <tr>
-                                                    <th className="pb-2 pr-4">Network</th>
-                                                    <th className="pb-2 pr-4 text-right">Sessions</th>
-                                                    <th className="pb-2 pr-4 text-right">API Calls</th>
-                                                    <th className="pb-2 pr-4 text-right">Fail Rate</th>
-                                                    <th className="pb-2 pr-4 text-right">Latency</th>
-                                                    <th className="pb-2 pr-4 text-center">Status</th>
+                                                    <th className="pb-3 pr-4">Device</th>
+                                                    <th className="pb-3 pr-4">App Version</th>
+                                                    <th className="pb-3 pr-4 text-right">Sessions</th>
+                                                    <th className="pb-3 pr-4 text-right">Crash + ANR</th>
+                                                    <th className="pb-3 pr-4 text-right">Errors</th>
+                                                    <th className="pb-3 pr-4 text-right">Rage Taps</th>
+                                                    <th className="pb-3 pr-4 text-right">Friction /100</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-200">
-                                                {deepMetrics?.networkBreakdown?.slice(0, 8).map((network) => {
-                                                    const critical = network.apiErrorRate > 3 || network.avgLatencyMs > 800;
-                                                    const watch = !critical && (network.apiErrorRate > 1.5 || network.avgLatencyMs > 450);
-                                                    return (
-                                                        <tr key={network.networkType} className="hover:bg-[#f4f4f5]">
-                                                            <td className="py-3 pr-4 font-medium text-slate-900">{network.networkType.toUpperCase()}</td>
-                                                            <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(network.sessions)}</td>
-                                                            <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(network.apiCalls)}</td>
-                                                            <td className={`py-3 pr-4 text-right font-semibold ${network.apiErrorRate > 3 ? 'text-rose-700' : network.apiErrorRate > 1.5 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                                                {network.apiErrorRate.toFixed(2)}%
-                                                            </td>
-                                                            <td className={`py-3 pr-4 text-right font-semibold ${network.avgLatencyMs > 800 ? 'text-rose-700' : network.avgLatencyMs > 450 ? 'text-rose-700' : 'text-slate-700'}`}>
-                                                                {network.avgLatencyMs} ms
-                                                            </td>
-                                                            <td className="py-3 pr-4 text-center">
-                                                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${critical ? 'bg-rose-100 text-rose-700' : watch ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                                    {critical ? 'critical' : watch ? 'watch' : 'healthy'}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
+                                            <tbody className="divide-y divide-slate-100">
+                                                {matrixHotspots.map((cell) => (
+                                                    <tr key={`${cell.device}-${cell.version}`} className="hover:bg-[#f8fafc]">
+                                                        <td className="py-3 pr-4 font-black text-slate-900" title={cell.device}>{cell.displayName}</td>
+                                                        <td className="py-3 pr-4 font-semibold text-slate-700">v{cell.version}</td>
+                                                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(cell.sessions)}</td>
+                                                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(cell.criticalTotal)}</td>
+                                                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(cell.issues.errors)}</td>
+                                                        <td className="py-3 pr-4 text-right font-semibold text-slate-700">{formatCompact(cell.issues.rageTaps)}</td>
+                                                        <td className={`py-3 pr-4 text-right font-black ${getIssueToneClass(cell.frictionScore)}`}>{cell.frictionScore.toFixed(1)}</td>
+                                                    </tr>
+                                                ))}
                                             </tbody>
                                         </table>
                                     </div>
-                                ) : (
-                                    <p className="text-sm text-slate-500">No network quality metrics available in this range.</p>
-                                )}
-                            </div>
-                        </section>
-
-                        {matrixHotspots.length > 0 && (
-                            <section className="dashboard-surface p-5">
-                                <div className="mb-4 flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Device-Version Compatibility Hotspots</h2>
-                                    <AlertTriangle className="h-5 w-5 text-rose-600" />
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[860px] text-left text-sm">
-                                        <thead className="text-xs font-mono uppercase tracking-wide text-gray-500">
-                                            <tr>
-                                                <th className="pb-2 pr-4">Device</th>
-                                                <th className="pb-2 pr-4">Version</th>
-                                                <th className="pb-2 pr-4 text-right">Sessions</th>
-                                                <th className="pb-2 pr-4 text-right">Issue Rate</th>
-                                                <th className="pb-2 pr-4 text-right">Total Issues</th>
-                                                <th className="pb-2 pr-4 text-right">Impact</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-200">
-                                            {matrixHotspots.map((cell) => (
-                                                <tr key={`${cell.device}-${cell.version}`} className="hover:bg-[#f4f4f5]">
-                                                    <td className="py-3 pr-4 font-medium text-slate-900" title={cell.device}>
-                                                        {formatDeviceModel(cell.device)}
-                                                    </td>
-                                                    <td className="py-3 pr-4 text-slate-700">v{cell.version}</td>
-                                                    <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(cell.sessions)}</td>
-                                                    <td className={`py-3 pr-4 text-right font-semibold ${cell.issueRate >= 0.05 ? 'text-rose-700' : cell.issueRate >= 0.02 ? 'text-rose-700' : 'text-slate-700'}`}>
-                                                        {(cell.issueRate * 100).toFixed(1)}%
-                                                    </td>
-                                                    <td className="py-3 pr-4 text-right text-slate-700">{formatCompact(cell.totalIssues)}</td>
-                                                    <td className="py-3 pr-4 text-right font-semibold text-slate-700">{cell.impactScore.toFixed(1)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </section>
-                        )}
+                                </Panel>
+                            )}
+                        </div>
                     </>
                 )}
             </div>

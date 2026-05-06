@@ -58,6 +58,28 @@ The example also calls `Rejourney.start()`, attaches demo metadata, tracks the c
 
 `CountriesSwiftUI.xcodeproj` references the monorepo root `Package.swift` via an `XCLocalSwiftPackageReference` pointing to `../..` — the same mechanism used by `examples/ios-native`. No symlinks or CocoaPods needed; SwiftPM resolves it automatically when you open the `.xcodeproj`.
 
+## Switching SDK source
+
+Use the switch script to test the released SwiftPM package and then jump back to the local in-repo SDK:
+
+From the repo root:
+
+```bash
+npm run example:swift:sdk:old
+npm run example:swift:sdk:new
+npm run example:swift:sdk:status
+```
+
+Or from `examples/swift-clean-arch`:
+
+```bash
+bash ./scripts/switch-rejourney-sdk.sh --old
+bash ./scripts/switch-rejourney-sdk.sh --new
+bash ./scripts/switch-rejourney-sdk.sh --status
+```
+
+`--old` switches both `Package.swift` and `CountriesSwiftUI.xcodeproj` to the latest released `https://github.com/rejourneyco/rejourney` tag. `--new` switches both back to the local package at `../..`. Add `--no-resolve` if you only want to rewrite the dependency files and skip SwiftPM/Xcode dependency resolution.
+
 ## License
 
 The base app is MIT © Alexey Naumov. Rejourney SDK additions are covered by the Rejourney license.

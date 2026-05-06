@@ -18,7 +18,7 @@ export const meta: Route.MetaFunction = () => [
 
 export default function DPA() {
     return (
-        <div className="min-h-screen bg-background">
+        <div className="public-readable-scope min-h-screen bg-background">
             <Header />
             <div className="container mx-auto px-6 py-16 max-w-4xl">
                 {/* Main Content */}

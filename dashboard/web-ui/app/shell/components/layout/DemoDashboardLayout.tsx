@@ -51,7 +51,7 @@ export const DemoDashboardLayout: React.FC = () => {
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Demo Banner */}
-                <div className="z-10 flex flex-wrap items-center justify-between gap-2 border-b-2 border-black bg-[#67e8f9] px-4 py-2 text-black shadow-[0_2px_0_0_rgba(0,0,0,1)]">
+                <div className="z-10 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-[#e0f2fe] px-4 py-2 text-slate-900 shadow-sm">
                     <div className="flex min-w-0 items-center gap-2">
                         <div className="w-2 h-2 border border-black bg-[#86efac] animate-pulse" />
                         <span className="text-sm font-black uppercase">
@@ -63,7 +63,7 @@ export const DemoDashboardLayout: React.FC = () => {
                     </div>
                     <Link
                         to="/login"
-                        className="border-2 border-black bg-white px-3 py-1 text-xs font-black uppercase text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:shadow-neo"
+                        className="border border-slate-300 bg-white px-3 py-1 text-xs font-black uppercase text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-[#ecfeff]"
                     >
                         Sign Up
                     </Link>
@@ -73,7 +73,7 @@ export const DemoDashboardLayout: React.FC = () => {
                 <TopBar currentProject={selectedProject} />
 
                 {/* Page Content */}
-                <div className="dashboard-content flex-1 overflow-y-auto overflow-x-hidden pb-10 pt-0">
+                <div className="dashboard-content dashboard-surface-mix flex-1 overflow-y-auto overflow-x-hidden pb-10 pt-0">
                     <Outlet />
                 </div>
             </div>

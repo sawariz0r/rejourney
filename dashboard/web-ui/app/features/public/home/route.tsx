@@ -46,7 +46,7 @@ export const meta: Route.MetaFunction = () => [
 
 export default function LandingPage() {
     return (
-        <div className="min-h-screen w-full bg-background text-foreground overflow-x-hidden">
+        <div className="public-readable-scope min-h-screen w-full bg-background text-foreground overflow-x-hidden">
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{

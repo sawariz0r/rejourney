@@ -51,14 +51,14 @@ The native SDK fetches `/api/sdk/config` itself, then uses the existing producti
 There is no manual tagging step. CI handles it automatically:
 
 1. Bump the version in **both** of these files (they must match or CI fails):
-   - `packages/ios/VERSION` — plain semver, e.g. `0.2.0`
+   - `packages/ios/VERSION` — plain semver, e.g. `0.1.1`
    - `packages/ios/Sources/Rejourney/RejourneySDKInfo.swift` — the `version` string in `RejourneySDKInfo`
 2. Merge to `main`.
 3. CI detects that `packages/ios/VERSION` changed, runs the full build + test suite, then creates and pushes a `v{version}` Git tag and GitHub release automatically.
 
 Pushes that do **not** change `packages/ios/VERSION` are built and tested but never tagged, so consumers on a pinned SPM version are unaffected.
 
-> **Note on version numbering:** The iOS SDK version is independent from the React Native SDK version. iOS uses plain semver tags (e.g. `v0.2.0`) as required by SPM. React Native uses prefixed tags (e.g. `react-native/v1.2.0`). There is no collision risk.
+> **Note on version numbering:** The iOS SDK version is independent from the React Native SDK version. iOS uses plain semver tags (e.g. `v0.1.1`) as required by SPM. React Native uses prefixed tags (e.g. `react-native/v1.2.0`). There is no collision risk.
 
 ## CI
 

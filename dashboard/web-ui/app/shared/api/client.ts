@@ -3362,7 +3362,20 @@ export async function getApiEndpointStats(projectId: string, timeRange?: string)
 // =============================================================================
 
 export interface DeviceSummary {
-  devices: Array<{ model: string; count: number; crashes: number; anrs: number; errors: number; rageTaps: number }>;
+  devices: Array<{
+    model: string;
+    count: number;
+    crashes: number;
+    anrs: number;
+    errors: number;
+    rageTaps: number;
+    avgDurationSeconds?: number;
+    avgInteractionScore?: number;
+    avgExplorationScore?: number;
+    avgUxScore?: number;
+    engagedSessions?: number;
+    totalEvents?: number;
+  }>;
   platforms: Record<string, number>;
   appVersions: Array<{ version: string; count: number; crashes: number; anrs: number; errors: number; rageTaps: number }>;
   osVersions: Array<{ version: string; count: number; crashes: number; anrs: number; errors: number; rageTaps: number }>;
@@ -3398,8 +3411,7 @@ export interface DeviceIssueMatrix {
 export async function getDeviceIssueMatrix(projectId?: string, timeRange?: string): Promise<DeviceIssueMatrix> {
   // Demo mode: return mock data
   if (isDemoMode()) {
-    // Basic mock
-    return { matrix: [], devices: [], versions: [] };
+    return demoApiData.demoDeviceIssueMatrix;
   }
 
   const params = new URLSearchParams();

@@ -155,7 +155,7 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
         )}
         <div
           key={contentScopeKey}
-          className={isWarehouseRoute ? 'dashboard-content min-w-0 flex-1 overflow-hidden' : 'dashboard-content min-w-0 flex-1 overflow-x-hidden overflow-y-auto'}
+          className={isWarehouseRoute ? 'dashboard-content dashboard-surface-mix min-w-0 flex-1 overflow-hidden' : 'dashboard-content dashboard-surface-mix min-w-0 flex-1 overflow-x-hidden overflow-y-auto'}
         >
           {isWarehouseRoute ? children : hasNoTeam ? (
             <div className="mx-auto flex h-full w-full max-w-4xl items-center justify-center p-4 sm:p-8">
