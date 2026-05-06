@@ -41,6 +41,7 @@ export interface StorageEndpoint {
     priority: number;
     active: boolean;
     shadow: boolean;
+    storageClass: string | null;
 }
 
 export interface S3PrefixDeletionEndpointResult {
