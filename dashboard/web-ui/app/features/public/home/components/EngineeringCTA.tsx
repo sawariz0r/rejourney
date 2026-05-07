@@ -34,7 +34,7 @@ export const EngineeringCTA: React.FC = () => {
                     </div>
 
                     <h2 className="mx-auto mb-8 max-w-5xl text-xl font-black uppercase leading-[0.88] tracking-tight text-black sm:text-2xl md:text-3xl lg:text-4xl">
-                        Open Docuemented
+                        Open, documented
                         <span className="text-[#5dadec]">
                             {' '}Engineering
                         </span>

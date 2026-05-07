@@ -20,13 +20,14 @@ export const meta: MetaFunction = () => [
     {
         name: "description",
         content:
-            "Rejourney engineering log: deep dives on React Native session replay, 120Hz map capture (Mapbox, Apple & Google Maps), pixel-perfect GPU replay architecture, and mobile observability—written by our team.",
+            "Technical articles on mobile session replay, map capture, GPU replay architecture, and lightweight mobile observability.",
     },
     {
         name: "keywords",
         content: ENGINEERING_KEYWORDS,
     },
     { name: "robots", content: "index, follow" },
+    { property: "og:locale", content: "en_US" },
     { property: "og:title", content: "Rejourney Engineering Log" },
     { property: "og:type", content: "website" },
     { property: "og:url", content: ENGINEERING_LOG_URL },
@@ -52,8 +53,9 @@ export default function EngineeringIndexPage() {
                                 "@id": `${ENGINEERING_LOG_URL}#webpage`,
                                 url: ENGINEERING_LOG_URL,
                                 name: "Rejourney Engineering Log",
+                                inLanguage: "en-US",
                                 description:
-                                    "Technical articles from the Rejourney team on React Native session replay, map SDK capture, and observability architecture.",
+                                    "Technical articles from the Rejourney team on mobile session replay, map SDK capture, and observability architecture.",
                                 isPartOf: {
                                     "@type": "WebSite",
                                     name: "Rejourney",
@@ -65,6 +67,7 @@ export default function EngineeringIndexPage() {
                                 "@type": "ItemList",
                                 "@id": `${ENGINEERING_LOG_URL}#posts`,
                                 name: "Engineering log articles",
+                                inLanguage: "en-US",
                                 numberOfItems: ARTICLES.length,
                                 itemListElement: ARTICLES.map((article, index) => ({
                                     "@type": "ListItem",

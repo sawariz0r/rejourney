@@ -1,6 +1,6 @@
 # Rejourney
 
-> Rejourney is an open-source mobile analytics and observability platform for React Native, Swift iOS, Expo, and self-hosted teams. It provides mobile session replay, crash reporting, touch heatmaps, journeys, and product analytics with a lightweight SDK.
+> Rejourney is an open-source mobile analytics and observability platform for iOS, Android, Expo, React Native, and self-hosted teams. It provides mobile session replay, crash reporting, touch heatmaps, journeys, and product analytics with a lightweight SDK.
 
 ## Best Starting Points
 
@@ -13,7 +13,7 @@
 
 ## Core Product Concepts
 
-- Mobile session replay for React Native, Swift iOS, and Expo applications.
+- Mobile session replay for iOS, Android, Expo, React Native, and Swift applications.
 - Touch heatmaps for mobile app screens, including rage tap and dead tap investigation.
 - Crash reporting, ANR monitoring, and stability signals for production mobile apps.
 - Mobile journeys and product analytics for understanding funnels and user flows.
@@ -22,15 +22,15 @@
 
 ## Engineering Articles By Search Intent
 
-- [Session Replay Pricing: Rejourney vs PostHog Cost Math](https://rejourney.co/engineering/2026-05-06/mobile-session-replay-cost): Targets session replay pricing, PostHog session replay cost, React Native session replay pricing, and fixed-price mobile observability.
+- [Session Replay Pricing: Rejourney vs PostHog Cost Math](https://rejourney.co/engineering/2026-05-06/mobile-session-replay-cost): Targets session replay pricing, PostHog session replay cost, mobile session replay pricing, and fixed-price mobile observability.
 - [SwiftPM Session Replay SDK: Rejourney Native iOS Beta](https://rejourney.co/engineering/2026-05-05/swift-package-open-beta): Targets SwiftPM session replay, native iOS observability, URLProtocol network tracking, and mobile replay SDK architecture.
 - [Scaling Session Replay to 1.3M Replays](https://rejourney.co/engineering/2026-04-23/rejourney-1-3-million-session-replays): Targets session replay scaling, Cloudflare edge security, Redis ingest pipelines, HA Postgres, and replay storage architecture.
-- [120Hz Map Session Replay for Apple Maps, Google Maps, and Mapbox](https://rejourney.co/engineering/2026-02-17/maps-performance): Targets React Native map session replay, Mapbox capture, Apple Maps capture, Google Maps capture, and ProMotion performance.
-- [React Native Session Replay Architecture](https://rejourney.co/engineering/2026-02-06/architecture-deep-dive): Targets pixel-perfect replay, GPU capture, privacy redaction, async replay pipelines, and mobile observability architecture.
+- [120Hz Map Session Replay for Apple Maps, Google Maps, and Mapbox](https://rejourney.co/engineering/2026-02-17/maps-performance): Targets mobile map session replay, Mapbox capture, Apple Maps capture, Google Maps capture, and ProMotion performance.
+- [Mobile Session Replay Architecture](https://rejourney.co/engineering/2026-02-06/architecture-deep-dive): Targets pixel-perfect replay, GPU capture, privacy redaction, async replay pipelines, and mobile observability architecture.
 
 ## Documentation By Search Intent
 
-- [React Native SDK](https://rejourney.co/docs/reactnative/overview): React Native session replay, mobile analytics SDK, crash reporting, heatmaps.
+- [React Native SDK](https://rejourney.co/docs/reactnative/overview): Mobile SDK setup, session replay, crash reporting, heatmaps.
 - [Swift iOS SDK](https://rejourney.co/docs/swift/overview): Swift session replay SDK, native iOS analytics, privacy-safe mobile telemetry.
 - [Self-Hosted Deployment](https://rejourney.co/docs/selfhosted): Self-hosted mobile analytics, self-hosted session replay, Docker deployment.
 - [Backup and Recovery](https://rejourney.co/docs/selfhosted/backup-recovery): Self-hosted analytics backup and disaster recovery.
@@ -47,4 +47,3 @@
 - RSS feed: https://rejourney.co/feed.xml
 - Sitemap: https://rejourney.co/sitemap.xml
 - Contact: contact@rejourney.co
-

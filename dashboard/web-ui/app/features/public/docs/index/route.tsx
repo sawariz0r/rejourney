@@ -12,7 +12,7 @@ import { extractTOCFromMarkdown } from "~/shared/lib/markdownTOC";
 
 export const meta: Route.MetaFunction = ({ location }) => {
     const title = "Mobile SDK Documentation - Rejourney";
-    const description = "Rejourney documentation for React Native and native Swift iOS SDKs, plus self-hosting and architecture guides.";
+    const description = "Rejourney documentation for mobile apps, including React Native, Swift iOS, Expo, self-hosting, and architecture guides.";
     const domain = "https://rejourney.co";
     const canonicalUrl = `${domain}${location.pathname}`;
 
@@ -22,6 +22,7 @@ export const meta: Route.MetaFunction = ({ location }) => {
         { name: "robots", content: "index, follow" },
         { tagName: "link", rel: "canonical", href: canonicalUrl },
         // OpenGraph
+        { property: "og:locale", content: "en_US" },
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         { property: "og:url", content: canonicalUrl },

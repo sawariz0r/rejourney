@@ -35,6 +35,8 @@ export default function handleRequest(
     routerContext: EntryContext,
     loadContext: AppLoadContext
 ) {
+    responseHeaders.set("Content-Language", "en-US");
+
     // Avoid sending duplicate CSP headers in production.
     // In production we rely on Helmet in `server.js` to set CSP.
     if (process.env.NODE_ENV !== "production") {

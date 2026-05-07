@@ -52,13 +52,14 @@ export const meta: Route.MetaFunction = () => [
     { title: "Rejourney: Open Source Mobile App Analytics & Observability" },
     {
         name: "description",
-        content: "Rejourney is a lightweight, open-source analytics and observability stack for mobile apps. Get session replay, crash reporting, journeys, and heatmaps with a light SDK.",
+        content: "Open-source mobile analytics with session replay, crash reports, heatmaps, journeys, and a lightweight SDK for mobile apps.",
     },
     {
         name: "keywords",
         content: "mobile app analytics, mobile observability, open source session replay, crash reporting, heatmaps, product analytics, lightweight SDK, self-hosted",
     },
     { name: "robots", content: "index, follow" },
+    { property: "og:locale", content: "en_US" },
     { property: "og:type", content: "website" },
     { property: "og:url", content: "https://rejourney.co/" },
     { property: "og:title", content: "Rejourney: Lightweight Mobile App Analytics & Observability" },
@@ -86,7 +87,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const runtimeEnv = getPublicRuntimeEnvSnapshot();
 
     return (
-        <html lang="en">
+        <html lang="en-US">
             <head>
                 {/* Must be first — sets scrollRestoration=manual globally before the
                     browser can restore any saved scroll position. ScrollRestoration
@@ -94,6 +95,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <script dangerouslySetInnerHTML={{ __html: `(function(){try{window.history.scrollRestoration='manual';}catch(e){}if(window.location.pathname==='/'){window.scrollTo(0,0);}})();` }} />
                 <meta charSet="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <meta httpEquiv="Content-Language" content="en-US" />
                 <Meta />
                 <Links />
                 {/* Structured data for rich results */}
@@ -106,6 +108,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 {
                                     "@type": "Organization",
                                     "name": "Rejourney",
+                                    "inLanguage": "en-US",
                                     "url": "https://rejourney.co/",
                                     "logo": "https://rejourney.co/rejourneyIcon-removebg-preview.png",
                                     "sameAs": [
@@ -121,8 +124,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 {
                                     "@type": "SoftwareApplication",
                                     "name": "Rejourney",
+                                    "inLanguage": "en-US",
                                     "applicationCategory": "DeveloperApplication",
-                                    "operatingSystem": "iOS, Android, React Native",
+                                    "operatingSystem": "iOS, Android, Expo, React Native",
                                     "offers": {
                                         "@type": "Offer",
                                         "price": "0",
@@ -134,11 +138,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 {
                                     "@type": "WebSite",
                                     "name": "Rejourney",
+                                    "inLanguage": "en-US",
                                     "url": "https://rejourney.co/"
                                 },
                                 {
                                     "@type": "ItemList",
                                     "name": "Sitelinks",
+                                    "inLanguage": "en-US",
                                     "itemListElement": [
                                         { "@type": "SiteNavigationElement", "position": 1, "name": "Docs", "url": "https://rejourney.co/docs/reactnative/overview" },
                                         { "@type": "SiteNavigationElement", "position": 2, "name": "Engineering", "url": "https://rejourney.co/engineering" },

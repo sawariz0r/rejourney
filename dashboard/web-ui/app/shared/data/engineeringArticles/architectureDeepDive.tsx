@@ -12,7 +12,7 @@ const techArticleSchema = {
         "How Rejourney delivers high-fidelity session replay without UI stutter. Learn about our async capture pipeline, run loop gating, and zero-trust privacy redaction.",
     url: TECH_ARTICLE_URL,
     keywords: [
-        "React Native session replay",
+        "mobile session replay",
         "pixel-perfect replay",
         "mobile observability",
         "Sentry alternative",
@@ -432,14 +432,14 @@ export const architectureDeepDiveArticle: Article = {
     title: "Rejourney Architecture",
     subtitle: "How we achieved pixel-perfect replay with 3 FPS and zero main-thread impact.",
     seoKeywords:
-        "session replay architecture, React Native, pixel-perfect replay, GPU capture, observability, Sentry alternative, async pipeline, mobile crash monitoring",
+        "mobile session replay architecture, pixel-perfect replay, GPU capture, observability, Sentry alternative, async pipeline, mobile crash monitoring",
     seo: {
-        primaryKeyword: "React Native session replay architecture",
-        metaTitle: "React Native Session Replay Architecture: Pixel-Perfect GPU Capture",
+        primaryKeyword: "mobile session replay architecture",
+        metaTitle: "Mobile Session Replay Architecture: Pixel-Perfect GPU Capture",
         metaDescription:
-            "A deep dive into Rejourney's React Native session replay architecture: GPU capture, async pipelines, privacy redaction, and low main-thread impact.",
+            "Rejourney's mobile session replay architecture: GPU capture, async pipelines, privacy redaction, and low main-thread impact.",
         targetKeywords: [
-            "React Native session replay architecture",
+            "mobile session replay architecture",
             "pixel-perfect session replay",
             "GPU capture mobile",
             "mobile observability architecture",
@@ -447,7 +447,7 @@ export const architectureDeepDiveArticle: Article = {
             "privacy redaction SDK",
             "async replay pipeline",
         ],
-        topicTags: ["Architecture", "React Native", "GPU Capture", "Privacy", "Mobile Observability"],
+        topicTags: ["Architecture", "Mobile SDK", "GPU Capture", "Privacy", "Mobile Observability"],
     },
     date: "Feb 06, 2026",
     urlDate: "2026-02-06",

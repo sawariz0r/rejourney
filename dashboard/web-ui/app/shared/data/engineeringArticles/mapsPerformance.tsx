@@ -13,7 +13,7 @@ const mapArticleSchema = {
         "How we solved 120Hz micro-stutter in map captures by hooking native SDK delegates for Mapbox, Apple Maps, and Google Maps.",
     url: MAP_ARTICLE_URL,
     keywords: [
-        "React Native session replay",
+        "mobile session replay",
         "Mapbox capture",
         "Apple Maps",
         "Google Maps",
@@ -214,14 +214,14 @@ export const mapsPerformanceArticle: Article = {
     title: "120Hz Map Performance: Hooking Native SDKs",
     subtitle: "Solving micro-stutter on Apple Maps, Google Maps, and Mapbox via delegate swizzling.",
     seoKeywords:
-        "React Native session replay, Mapbox, Apple Maps, Google Maps, 120Hz ProMotion, map capture, iOS Android, delegate swizzling, mobile observability",
+        "mobile session replay, Mapbox, Apple Maps, Google Maps, 120Hz ProMotion, map capture, iOS Android, delegate swizzling, mobile observability",
     seo: {
-        primaryKeyword: "React Native map session replay",
+        primaryKeyword: "mobile map session replay",
         metaTitle: "120Hz Map Session Replay for Apple Maps, Google Maps, and Mapbox",
         metaDescription:
-            "How Rejourney captures Apple Maps, Google Maps, and Mapbox in React Native session replay without 120Hz ProMotion stutter.",
+            "How Rejourney captures Apple Maps, Google Maps, and Mapbox in mobile session replay without 120Hz ProMotion stutter.",
         targetKeywords: [
-            "React Native map session replay",
+            "mobile map session replay",
             "Mapbox session replay",
             "Apple Maps session replay",
             "Google Maps session replay",
@@ -229,7 +229,7 @@ export const mapsPerformanceArticle: Article = {
             "delegate swizzling",
             "mobile map capture",
         ],
-        topicTags: ["Maps", "React Native", "Mapbox", "Apple Maps", "Performance"],
+        topicTags: ["Maps", "Mobile SDK", "Mapbox", "Apple Maps", "Performance"],
     },
     date: "Feb 17, 2026",
     urlDate: "2026-02-17",

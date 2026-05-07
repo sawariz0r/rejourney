@@ -11,13 +11,14 @@ export const meta: Route.MetaFunction = () => [
     { title: "Rejourney Pricing: Fixed-Price Mobile Analytics & Session Replay" },
     {
         name: "description",
-        content: "Transparent fixed pricing for open-source mobile analytics, session replay, heatmaps, crash reporting, and self-hosted Rejourney deployments.",
+        content: "Rejourney pricing for mobile analytics, session replay, crash reporting, heatmaps, and self-hosted deployments.",
     },
     {
         name: "keywords",
-        content: "mobile analytics pricing, session replay pricing, React Native analytics pricing, PostHog alternative pricing, self-hosted analytics pricing, mobile observability pricing",
+        content: "mobile analytics pricing, mobile session replay pricing, mobile app analytics pricing, PostHog alternative pricing, self-hosted analytics pricing, mobile observability pricing",
     },
     { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1" },
+    { property: "og:locale", content: "en_US" },
     { property: "og:title", content: "Rejourney Pricing: Fixed-Price Mobile Analytics & Session Replay" },
     {
         property: "og:description",
@@ -50,6 +51,7 @@ export default function Pricing() {
                                 "@id": "https://rejourney.co/pricing#webpage",
                                 url: "https://rejourney.co/pricing",
                                 name: "Rejourney Pricing",
+                                inLanguage: "en-US",
                                 description:
                                     "Fixed pricing for mobile analytics, session replay, heatmaps, crash reporting, journeys, and self-hosted deployments.",
                                 isPartOf: {
@@ -61,6 +63,7 @@ export default function Pricing() {
                             {
                                 "@type": "OfferCatalog",
                                 name: "Rejourney pricing plans",
+                                inLanguage: "en-US",
                                 itemListElement: [
                                     {
                                         "@type": "Offer",

@@ -38,6 +38,7 @@ export const meta: Route.MetaFunction = ({ params, location }) => {
         { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1" },
         { tagName: "link", rel: "canonical", href: canonicalUrl },
         // OpenGraph
+        { property: "og:locale", content: "en_US" },
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         { property: "og:url", content: canonicalUrl },
@@ -96,6 +97,7 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
                                 "@type": "TechArticle",
                                 "headline": metadata.title,
                                 "description": metadata.description ?? `${metadata.title} documentation for Rejourney.`,
+                                "inLanguage": "en-US",
                                 "category": metadata.category,
                                 "keywords": metadata.keywords,
                                 "mainEntityOfPage": {
@@ -105,11 +107,13 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
                                 "publisher": {
                                     "@type": "Organization",
                                     "name": "Rejourney",
+                                    "inLanguage": "en-US",
                                     "logo": "https://rejourney.co/rejourneyIcon-removebg-preview.png"
                                 }
                             },
                             {
                                 "@type": "BreadcrumbList",
+                                "inLanguage": "en-US",
                                 "itemListElement": [
                                     {
                                         "@type": "ListItem",

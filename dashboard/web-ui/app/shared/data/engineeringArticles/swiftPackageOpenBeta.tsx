@@ -15,7 +15,7 @@ const swiftPackageBetaArticleSchema = {
         "Swift Package Manager",
         "iOS session replay",
         "native iOS SDK",
-        "React Native session replay",
+        "mobile session replay",
         "mobile observability",
         "URLProtocol interception",
         "Swift concurrency",
@@ -447,7 +447,7 @@ export const swiftPackageOpenBetaArticle: Article = {
         primaryKeyword: "SwiftPM session replay",
         metaTitle: "SwiftPM Session Replay SDK: Rejourney Native iOS Beta",
         metaDescription:
-            "Inside Rejourney's native iOS SDK: session state machine, URLProtocol swizzle for custom URLSessions, visual capture backpressure, ANR ping-pong sentinel, and crash recovery checkpoints.",
+            "Inside Rejourney's native iOS SDK: session states, URLProtocol swizzling, visual capture backpressure, ANR detection, and crash recovery.",
         targetKeywords: [
             "SwiftPM session replay",
             "native iOS session replay SDK",

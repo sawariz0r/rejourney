@@ -293,6 +293,15 @@ export const Hero: React.FC = () => {
                             </span>
                         </h1>
 
+                        <p
+                            className="max-w-2xl animate-fade-in-up text-base font-extrabold leading-relaxed text-slate-700 opacity-0 sm:text-lg"
+                            style={{ animationDelay: '0.36s' }}
+                        >
+                            Rejourney helps mobile teams understand every app session with replay,
+                            crash reporting, touch heatmaps, user journeys, and product analytics
+                            for mobile apps.
+                        </p>
+
                         <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
                             <Link
                                 to="/login"

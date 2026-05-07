@@ -40,7 +40,7 @@ export async function loader() {
   <channel>
     <title>Rejourney Engineering Log</title>
     <link>${base}/engineering</link>
-    <description>Technical articles on React Native session replay, mobile observability, and how Rejourney is built.</description>
+    <description>Technical articles on mobile session replay, mobile observability, and how Rejourney is built.</description>
     <language>en-us</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <ttl>60</ttl>
