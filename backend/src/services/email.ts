@@ -137,7 +137,7 @@ function emailInviteAcceptUrl(token: string): string {
   if (emailUseLocalOrigins()) {
     return `${DEV_APP_ORIGIN}/invite/accept/${token}`;
   }
-  return `${PRODUCTION_DASHBOARD_BASE}/invite/accept/${token}`;
+  return `https://rejourney.co/invite/accept/${token}`;
 }
 
 /**
