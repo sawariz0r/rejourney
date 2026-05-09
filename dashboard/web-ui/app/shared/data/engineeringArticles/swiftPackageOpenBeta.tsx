@@ -353,7 +353,7 @@ if didAdd, let addedMethod = class_getInstanceMethod(configClass, swizzledSel) {
                     07 // PUBLIC API
                 </span>
                 <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter mb-4">
-                    The Full Public Surface
+                    The Core Public Surface
                 </h2>
             </div>
             <p>
@@ -364,9 +364,7 @@ if didAdd, let addedMethod = class_getInstanceMethod(configClass, swizzledSel) {
             </p>
             <div className="bg-slate-50 border-2 border-black p-6 my-6 overflow-x-auto">
                 <pre className="text-xs sm:text-sm font-mono text-blue-900">{`// Configure — call before start, safe to call multiple times
-Rejourney.configure(publicKey: "pk_live_...", options: .init(
-    captureFPS: 2,
-    captureQuality: .medium,   // JPEG 0.5 — low=0.4, high=0.7
+Rejourney.configure(publicKey: "rj_...", options: .init(
     wifiOnly: false,
     captureANR: true,
     autoTrackNetwork: true
@@ -381,9 +379,8 @@ Rejourney.identify("user_abc123")
 // Screen tracking — queued before session is ready, replayed on active
 Rejourney.trackScreen("Checkout")
 
-// Metadata — typed indirect enum, literals work directly
-Rejourney.setMetadata("plan", "pro")
-Rejourney.setMetadata("retries", 3)
+// Custom events — typed properties accept Swift literals directly
+Rejourney.logEvent("checkout_started", properties: ["plan": "pro"])
 
 // View-level redaction — registered in VisualCapture's RedactionMask
 Rejourney.mask(sensitiveLabel)
@@ -392,7 +389,8 @@ Rejourney.mask(sensitiveLabel)
 let stopResult = await Rejourney.stop()`}</pre>
             </div>
             <p>
-                <code>RejourneyMetadataValue</code> is an <code>indirect</code> enum with{" "}
+                Custom event properties use <code>RejourneyMetadataValue</code>, an{" "}
+                <code>indirect</code> enum with{" "}
                 <code>ExpressibleByStringLiteral</code>, <code>ExpressibleByIntegerLiteral</code>,{" "}
                 <code>ExpressibleByFloatLiteral</code>, <code>ExpressibleByBooleanLiteral</code>,
                 and <code>ExpressibleByNilLiteral</code> conformances. You can pass a string, int,

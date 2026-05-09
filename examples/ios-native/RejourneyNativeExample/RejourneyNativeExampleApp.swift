@@ -9,8 +9,6 @@ struct RejourneyNativeExampleApp: App {
             publicKey: "rj_94f602bb3ff12873008b16fb2f3389cc",
             options: RejourneyOptions(
                 observeOnly: true,
-                captureFPS: 1,
-                captureQuality: .medium,
                 autoTrackNetwork: true,
                 debug: true
             )

@@ -175,7 +175,7 @@ SCREEN TRACKING RULES (implement the appropriate one):
 3. FOR NAVIGATIONSTACK — observe the path and track on change:
    @State private var path = NavigationPath()
    NavigationStack(path: $path) { ContentView() }
-       .onChange(of: path) { Rejourney.trackScreen(currentScreenName(from: path)) }
+       .onChange(of: path) { _ in Rejourney.trackScreen(currentScreenName(from: path)) }
 
 USER IDENTITY (hook this up immediately using a non-PII ID like a UUID):
 import Rejourney
@@ -205,35 +205,7 @@ Rules for events:
 - Property values should be simple types: strings, numbers, booleans (no nested objects)
 - Focus on actions that matter for debugging or analytics — don't log every tap
 - Events appear as markers on the replay timeline AND are filterable in the session archive
-- You can filter by event name, by property key, by property key+value, and by event count
-
-METADATA — describe who the user is / what state they're in (session-level, one value per key):
-
-API: Rejourney.setMetadata(_ key: String, _ value: RejourneyMetadataValue)
-API: Rejourney.setMetadata(_ properties: [String: RejourneyMetadataValue])
-
-// Single property
-Rejourney.setMetadata("plan", "premium")
-
-// Multiple properties at once
-Rejourney.setMetadata([
-    "role": "admin",
-    "segment": "enterprise",
-    "ab_variant": "checkout_v2"
-])
-
-Rules for metadata:
-- Use for traits: plan, role, team, A/B variant, locale, etc.
-- NOT for actions — use logEvent for those
-- Capped at 100 properties per session
-- Setting the same key again overwrites the previous value
-
-WHEN TO USE EVENTS VS METADATA:
-- "User purchased a plan" → Rejourney.logEvent("purchase_completed", properties: ["plan": "pro"])
-- "User is on the pro plan" → Rejourney.setMetadata("plan", "pro")
-- "User tapped signup" → Rejourney.logEvent("button_tapped", properties: ["buttonName": "signup"])
-- "User is an admin" → Rejourney.setMetadata("role", "admin")
-Rule of thumb: If it describes SOMETHING THAT HAPPENED, use logEvent. If it describes WHO THE USER IS, use setMetadata.
+- You can filter by event name and event count
 
 PRIVACY MASKING (for sensitive UIKit views):
 import UIKit
@@ -245,11 +217,15 @@ Rejourney.unmask(balanceLabel)
 For SwiftUI views, get the underlying UIView via a UIViewRepresentable wrapper or introspect.
 
 STOPPING RECORDING (e.g. on consent withdrawal):
-await Rejourney.stop()
-Rejourney.clearIdentity()
+func onUserOptedOut() {
+    Task { @MainActor in
+        await Rejourney.stop()
+        Rejourney.clearIdentity()
+    }
+}
 
 GOOD PRACTICES:
-- Never track PII (emails, names, passwords) via logEvent or setMetadata
+- Never track PII (emails, names, passwords) via logEvent
 - Use internal IDs or UUIDs for identify()
 - Call configure() before start() — options cannot be changed after start() is called
 
@@ -262,10 +238,9 @@ IMPORTANT:
 POST-INTEGRATION STEPS:
 Once the integration is successfully implemented:
 1. Inform the user that the Rejourney integration is now complete and active.
-2. Proactively ask the user if they would like to enrich their session data with custom events and metadata.
+2. Proactively ask the user if they would like to enrich their session data with custom events.
 3. Analyze the user's code and suggest 3-5 specific examples of:
    - Events with properties that would be valuable to track (e.g., 'checkout_completed' with properties: ["total": amount, "items": count])
-   - Metadata that would help filter sessions (e.g., subscription_tier, user_role, app_theme)
    Base your suggestions on the actual business logic you see in the user's code.`;
 
 type ProjectForPrompt = {

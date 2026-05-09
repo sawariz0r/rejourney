@@ -10,4 +10,4 @@ xcodebuild \
   build CODE_SIGNING_ALLOWED=NO
 ```
 
-Replace `pk_test_replace_me` in the app source before doing a dashboard smoke test.
+Replace the sample `rj_...` project key in the app source before doing a dashboard smoke test.

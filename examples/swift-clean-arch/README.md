@@ -31,7 +31,7 @@ Or from the repo root:
 npm run example:swift
 ```
 
-Xcode will automatically resolve the local Rejourney package from the repo root (`../..` relative to this folder) along with the two remote dependencies (EnvironmentOverrides, ViewInspector).
+Xcode will resolve the released Rejourney Swift package along with the two remote dependencies (EnvironmentOverrides, ViewInspector). Use the switch script below if you want to point the example at the local in-repo package.
 
 ## SDK configuration
 
@@ -42,8 +42,6 @@ Rejourney.configure(
     publicKey: "rj_94f602bb3ff12873008b16fb2f3389cc",
     options: RejourneyOptions(
         apiURL: resolvedAPIURL,
-        captureFPS: 1,
-        captureQuality: .medium,
         autoTrackNetwork: true,
         debug: true
     )
@@ -52,11 +50,11 @@ Rejourney.configure(
 
 The example resolves the API URL the same way the other example apps do: set `API_URL` (or `PUBLIC_API_URL` / `REJOURNEY_API_URL`) for a custom backend, otherwise it uses the local development API at `http://127.0.0.1:3000`.
 
-The example also calls `Rejourney.start()`, attaches demo metadata, tracks the countries list/detail/flag modal screens, records navigation and search events, and leaves `autoTrackNetwork` enabled so the app's `URLSession` requests appear in replay telemetry.
+The example also calls `Rejourney.start()`, identifies a demo user with a non-PII ID, tracks the countries list/detail/flag modal screens, records navigation and search events, and leaves `autoTrackNetwork` enabled so the app's `URLSession` requests appear in replay telemetry.
 
-## How the local package is linked
+## How the SDK package is linked
 
-`CountriesSwiftUI.xcodeproj` references the monorepo root `Package.swift` via an `XCLocalSwiftPackageReference` pointing to `../..` — the same mechanism used by `examples/ios-native`. No symlinks or CocoaPods needed; SwiftPM resolves it automatically when you open the `.xcodeproj`.
+By default, `Package.swift` and `CountriesSwiftUI.xcodeproj` reference the released `https://github.com/rejourneyco/rejourney` SwiftPM package. The switch script can rewrite both files to use the monorepo root package at `../..` for local SDK development. No symlinks or CocoaPods are needed in either mode.
 
 ## Switching SDK source
 

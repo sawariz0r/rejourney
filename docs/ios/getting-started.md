@@ -45,7 +45,7 @@ struct MyApp: App {
 
     @MainActor
     init() {
-        Rejourney.configure(publicKey: "pk_live_your_public_key")
+        Rejourney.configure(publicKey: "rj_your_public_key")
         Task { await Rejourney.start() }
     }
 
@@ -71,7 +71,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        Rejourney.configure(publicKey: "pk_live_your_public_key")
+        Rejourney.configure(publicKey: "rj_your_public_key")
         Task { await Rejourney.start() }
         return true
     }
@@ -127,7 +127,7 @@ Observe the navigation path and track on change:
 NavigationStack(path: $path) {
     ContentView()
 }
-.onChange(of: path) {
+.onChange(of: path) { _ in
     // derive screen name from path and call trackScreen
     Rejourney.trackScreen(currentScreenName(from: path))
 }
@@ -227,7 +227,6 @@ Custom events are stored per-session and visible in two places:
 1. **Session Replay Timeline** — Events appear as markers on the replay timeline so you can jump to the exact moment an action occurred.
 2. **Session Archive Filters** — Filter the session list by:
    - **Event name** — Find all sessions containing a specific event (e.g. `purchase_completed`)
-   - **Event property** — Narrow further by property key and/or value (e.g. `plan = pro`)
    - **Event count** — Find sessions with a specific number of custom events
 
 ### Best Practices
@@ -236,40 +235,6 @@ Custom events are stored per-session and visible in two places:
 > - Use consistent naming (`snake_case`, e.g. `button_tapped` not `Button Tapped`)
 > - Keep property values simple (strings, numbers, booleans) — avoid deeply nested objects
 > - Focus on actions that matter for debugging or analytics — don't log everything
-> - Properties are for per-event context. For session-level attributes, use **Metadata** instead
-
----
-
-## Metadata
-
-Attach session-level key-value pairs that describe the user or session context. Unlike events, metadata applies to the entire session.
-
-```swift
-import Rejourney
-
-// Set a single property
-Rejourney.setMetadata("plan", "premium")
-
-// Set multiple properties at once
-Rejourney.setMetadata([
-    "role":       "admin",
-    "segment":    "enterprise",
-    "ab_variant": "checkout_v2"
-])
-```
-
-### When to Use Metadata vs Events
-
-| Use Case | Use **Metadata** | Use **Events** |
-|---|---|---|
-| User's subscription plan | `setMetadata("plan", "pro")` | |
-| User tapped a button | | `logEvent("button_tapped", ...)` |
-| A/B test variant | `setMetadata("ab_variant", "v2")` | |
-| Purchase completed | | `logEvent("purchase", ...)` |
-| User's role | `setMetadata("role", "admin")` | |
-| Onboarding step reached | | `logEvent("onboarding_step", ...)` |
-
-**Rule of thumb:** If it describes *who the user is* or *what state they're in*, use metadata. If it describes *something that happened*, use events.
 
 ## Privacy Controls
 
@@ -303,19 +268,25 @@ For SwiftUI, get the underlying `UIView` via a `UIViewRepresentable` wrapper or 
 
    ```swift
    // Configure early — before consent is known
-   Rejourney.configure(publicKey: "pk_live_your_public_key")
+   Rejourney.configure(publicKey: "rj_your_public_key")
 
    // Call start() only after the user accepts your privacy policy
    func onUserConsented() {
-       Task { await Rejourney.start() }
+       Task { @MainActor in
+           await Rejourney.start()
+       }
    }
    ```
 
 3. **Respect opt-outs.** If a user withdraws consent, stop recording and clear their identity:
 
    ```swift
-   await Rejourney.stop()
-   Rejourney.clearIdentity()
+   func onUserOptedOut() {
+       Task { @MainActor in
+           await Rejourney.stop()
+           Rejourney.clearIdentity()
+       }
+   }
    ```
 
 #### Observe-Only Mode (No Visual Recording)
@@ -324,7 +295,7 @@ To capture errors, crashes, ANRs, and network activity **without** recording vis
 
 ```swift
 Rejourney.configure(
-    publicKey: "pk_live_your_public_key",
+    publicKey: "rj_your_public_key",
     options: RejourneyOptions(observeOnly: true)
 )
 ```
@@ -336,7 +307,7 @@ When enabled, all telemetry is collected but no screenshots are taken — sessio
 > ```swift
 > let optedOut = UserDefaults.standard.bool(forKey: "noRecording")
 > Rejourney.configure(
->     publicKey: "pk_live_your_public_key",
+>     publicKey: "rj_your_public_key",
 >     options: RejourneyOptions(observeOnly: optedOut)
 > )
 > ```
@@ -347,7 +318,7 @@ Network request capture (`autoTrackNetwork: true` by default) intercepts `URLSes
 
 ```swift
 Rejourney.configure(
-    publicKey: "pk_live_your_public_key",
+    publicKey: "rj_your_public_key",
     options: RejourneyOptions(autoTrackNetwork: false)
 )
 ```
@@ -357,7 +328,10 @@ Rejourney.configure(
 IP-derived geolocation (country, region, city) is collected by default. Disable it to suppress the lookup entirely:
 
 ```swift
-RejourneyOptions(collectGeoLocation: false)
+Rejourney.configure(
+    publicKey: "rj_your_public_key",
+    options: RejourneyOptions(collectGeoLocation: false)
+)
 ```
 
 ## Configuration Reference
@@ -366,19 +340,16 @@ All options are set once in `configure` and cannot be changed after `start` is c
 
 ```swift
 Rejourney.configure(
-    publicKey: "pk_live_your_public_key",
+    publicKey: "rj_your_public_key",
     options: RejourneyOptions(
         apiURL:             URL(string: "https://api.rejourney.co")!,
         enabled:            true,
         observeOnly:        false,
-        captureFPS:         nil,          // nil = SDK default
-        captureQuality:     .medium,      // .low | .medium | .high
         wifiOnly:           false,
         captureScreen:      true,
         captureAnalytics:   true,
         captureCrashes:     true,
         captureANR:         true,
-        trackConsoleLogs:   true,
         collectGeoLocation: true,
         autoTrackNetwork:   true,
         debug:              false
@@ -391,14 +362,11 @@ Rejourney.configure(
 | `apiURL` | `URL` | `https://api.rejourney.co` | Override for self-hosted deployments |
 | `enabled` | `Bool` | `true` | Master kill switch — set to `false` to disable the SDK entirely |
 | `observeOnly` | `Bool` | `false` | Collect telemetry only, no visual recording |
-| `captureFPS` | `Int?` | SDK default | Frames per second for screen capture (1–30). `nil` lets the SDK decide |
-| `captureQuality` | `RejourneyCaptureQuality` | `.medium` | JPEG compression quality for captured frames |
 | `wifiOnly` | `Bool` | `false` | Only upload session data on Wi-Fi |
 | `captureScreen` | `Bool` | `true` | Enable/disable visual screen capture |
 | `captureAnalytics` | `Bool` | `true` | Enable/disable analytics event collection |
 | `captureCrashes` | `Bool` | `true` | Enable/disable crash reporting |
 | `captureANR` | `Bool` | `true` | Enable/disable ANR (App Not Responding) detection |
-| `trackConsoleLogs` | `Bool` | `true` | Capture diagnostic log output |
 | `collectGeoLocation` | `Bool` | `true` | Collect IP-derived geolocation |
 | `autoTrackNetwork` | `Bool` | `true` | Intercept `URLSession` requests for network capture |
 | `debug` | `Bool` | `false` | Print verbose SDK logs to the console |
@@ -426,7 +394,6 @@ Access the current session ID at any time to correlate with your own logs or sup
 
 ```swift
 if let sessionId = Rejourney.currentSessionId {
-    MyLogger.log("Rejourney session: \(sessionId)")
-    Crashlytics.setCustomValue(sessionId, forKey: "rejourney_session_id")
+    print("Rejourney session: \(sessionId)")
 }
 ```

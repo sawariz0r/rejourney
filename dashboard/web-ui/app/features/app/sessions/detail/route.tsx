@@ -2054,7 +2054,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
     const rawDeviceModel = fullSession?.deviceInfo?.model || session?.deviceModel || 'Unknown';
     const deviceModel = formatDeviceModel(rawDeviceModel, 'Unknown');
-    const platform = fullSession?.deviceInfo?.systemName?.toLowerCase() || session?.platform || 'ios';
+    const platform = fullSession?.deviceInfo?.systemName?.toLowerCase() || session?.platform?.toLowerCase() || 'unknown';
     const appVersion = fullSession?.deviceInfo?.appVersion || session?.appVersion || '';
     const geoLocation = fullSession?.geoLocation || fullSession?.geoInfo || session?.geoLocation || null;
     const geoDisplay = formatGeoDisplay(geoLocation);

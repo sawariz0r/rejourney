@@ -7,7 +7,7 @@ Native iOS Swift Package for Rejourney. This package is intentionally independen
 Add this repository URL in Xcode:
 
 ```text
-https://github.com/rejourney/rejourney.git
+https://github.com/rejourneyco/rejourney
 ```
 
 Select the `Rejourney` package product and choose a version tag (e.g. `v0.1.1`).
@@ -23,11 +23,9 @@ import Rejourney
 struct AppMain: App {
     init() {
         Rejourney.configure(
-            publicKey: "pk_live_...",
+            publicKey: "rj_...",
             options: RejourneyOptions(
-                apiURL: URL(string: "https://api.rejourney.co")!,
-                captureFPS: 1,
-                captureQuality: .medium
+                apiURL: URL(string: "https://api.rejourney.co")!
             )
         )
     }

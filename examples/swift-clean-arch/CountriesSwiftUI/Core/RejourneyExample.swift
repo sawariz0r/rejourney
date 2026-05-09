@@ -11,7 +11,7 @@ import Rejourney
 @MainActor
 enum RejourneyExample {
     /// Demo identity for Rejourney `identify` / `RejourneyOptions.userId` (not real PII).
-    static let demoUserId = "test@email.com"
+    static let demoUserId = "user_abc123"
 
     private static let publicKey = "rj_94f602bb3ff12873008b16fb2f3389cc"
     // Fallback URL (Set this to your Mac's local IP address like 192.168.x.x for physical device testing)
@@ -44,8 +44,6 @@ enum RejourneyExample {
             options: RejourneyOptions(
                 apiURL: resolvedAPIURL,
                 userId: demoUserId,
-                captureFPS: 1,
-                captureQuality: .medium,
                 autoTrackNetwork: true,
                 debug: true
             )
@@ -60,7 +58,7 @@ enum RejourneyExample {
 
             didStart = true
             Rejourney.identify(demoUserId)
-            Rejourney.setMetadata([
+            Rejourney.logEvent("swift_clean_arch_context", properties: [
                 "example_app": .string("swift-clean-arch"),
                 "platform": .string("ios"),
                 "environment": .string(ProcessInfo.processInfo.environment["ENV"] ?? "development"),

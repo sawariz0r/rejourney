@@ -46,7 +46,6 @@ const NAVIGATION: NavCategory[] = [
                     { label: "Screen Tracking", href: "/docs/swift/overview#screen-tracking", isRoute: false },
                     { label: "User Identification", href: "/docs/swift/overview#user-identification", isRoute: false },
                     { label: "Custom Events", href: "/docs/swift/overview#custom-events", isRoute: false },
-                    { label: "Metadata", href: "/docs/swift/overview#metadata", isRoute: false },
                     { label: "Privacy Controls", href: "/docs/swift/overview#privacy-controls", isRoute: false },
                 ]
             }
