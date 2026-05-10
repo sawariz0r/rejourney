@@ -51,22 +51,48 @@ async function main() {
     ))
     .limit(1);
 
-  if (!existing) {
-    await db.insert(storageEndpoints).values({
-      projectId: null,
-      priority: 0,
-      ...endpointData,
-    });
-    console.log(`[${logPrefix}] Inserted storage endpoint: ${endpointUrl} (${bucket})`);
+  if (existing) {
+    await db
+      .update(storageEndpoints)
+      .set(endpointData)
+      .where(eq(storageEndpoints.id, existing.id));
+
+    console.log(`[${logPrefix}] Synced storage endpoint: ${endpointUrl} (${bucket})`);
     return;
   }
 
-  await db
-    .update(storageEndpoints)
-    .set(endpointData)
-    .where(eq(storageEndpoints.id, existing.id));
+  // No row matches the K8s secret's URL. Before inserting a brand-new active
+  // endpoint, refuse to run if another global active endpoint already exists —
+  // otherwise we'd silently dual-activate two buckets and split traffic.
+  // Switching endpoints must be an intentional, two-step operation:
+  //   1. Mark the current active endpoint inactive (UPDATE … SET active=false)
+  //   2. THEN update the K8s s3-secret + redeploy
+  // Bootstrap case (no active rows yet) is allowed.
+  const otherActive = await db
+    .select({ id: storageEndpoints.id, endpointUrl: storageEndpoints.endpointUrl, bucket: storageEndpoints.bucket })
+    .from(storageEndpoints)
+    .where(and(
+      isNull(storageEndpoints.projectId),
+      eq(storageEndpoints.active, true),
+      eq(storageEndpoints.shadow, false),
+    ));
 
-  console.log(`[${logPrefix}] Synced storage endpoint: ${endpointUrl} (${bucket})`);
+  if (otherActive.length > 0) {
+    const existingList = otherActive.map((r) => `  - ${r.endpointUrl} (${r.bucket})`).join('\n');
+    throw new Error(
+      `[${logPrefix}] REFUSING to insert new active endpoint ${endpointUrl} (${bucket}): ` +
+      `another global active endpoint already exists. To switch endpoints, first mark ` +
+      `the current active endpoint inactive in the DB, then redeploy.\n\n` +
+      `Currently active global endpoints:\n${existingList}`,
+    );
+  }
+
+  await db.insert(storageEndpoints).values({
+    projectId: null,
+    priority: 0,
+    ...endpointData,
+  });
+  console.log(`[${logPrefix}] Inserted storage endpoint: ${endpointUrl} (${bucket})`);
 }
 
 main()
