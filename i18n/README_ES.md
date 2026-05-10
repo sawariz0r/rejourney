@@ -13,7 +13,7 @@
   </p>
   
   <p>
-    <a href="https://rejourney.co"><strong>Explorar el sitio web »</strong></a>
+    <a href="https://rejourney.co/es"><strong>Explorar el sitio web »</strong></a>
   </p>
   
   <p>
@@ -43,7 +43,7 @@ Detección automática de eventos "La aplicación no responde" (ANR) con volcado
 Visualice cómo navegan los usuarios por su aplicación. Identifique puntos de abandono con alta fricción y optimice los embudos de conversión.
 
 ### Mapas de Calor de Interacción
-![Mapas de Calor](https://rejourney.co/heatmaps-demo.png)
+![Mapas de Calor](https://rejourney.co/images/heatmaps.png)
 
 **Visualice el compromiso del usuario con precisión.** Vea dónde pulsan, deslizan y hacen scroll para optimizar la ubicación de la interfaz de usuario.
 

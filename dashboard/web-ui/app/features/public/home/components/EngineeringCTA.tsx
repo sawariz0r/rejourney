@@ -33,7 +33,7 @@ export const EngineeringCTA: React.FC = () => {
                         ))}
                     </div>
 
-                    <h2 className="mx-auto mb-8 max-w-5xl text-xl font-black uppercase leading-[0.88] tracking-tight text-black sm:text-2xl md:text-3xl lg:text-4xl">
+                    <h2 className="mx-auto mb-8 max-w-5xl break-words text-xl font-black uppercase leading-tight tracking-tight text-black sm:text-2xl md:text-3xl lg:text-4xl">
                         Open, documented
                         <span className="text-[#5dadec]">
                             {' '}Engineering
@@ -43,18 +43,18 @@ export const EngineeringCTA: React.FC = () => {
 
 
                     <div className="flex flex-col justify-center gap-4 sm:flex-row">
-                        <Link to="/engineering">
+                        <Link to="/engineering" className="w-full sm:w-auto">
                             <button
-                                className="flex w-full items-center justify-center gap-3 border-2 border-black bg-black px-5 py-4 text-sm font-black uppercase tracking-widest text-white shadow-[6px_6px_0px_0px_rgba(93,173,236,1)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5dadec] hover:text-black hover:shadow-neo-lg active:translate-y-0 sm:w-auto sm:px-8 sm:text-base"
+                                className="flex w-full items-center justify-center gap-3 border-2 border-black bg-black px-4 py-4 text-xs font-black uppercase tracking-widest text-white shadow-[5px_5px_0px_0px_rgba(93,173,236,1)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5dadec] hover:text-black hover:shadow-neo-lg active:translate-y-0 sm:w-auto sm:px-8 sm:text-base"
                             >
                                 <Terminal size={20} strokeWidth={3} />
                                 View Engineering Decisions
                             </button>
                         </Link>
 
-                        <Link to="/login">
+                        <Link to="/login" className="w-full sm:w-auto">
                             <button
-                                className="flex w-full items-center justify-center gap-3 border-2 border-black bg-[#fef08a] px-5 py-4 text-sm font-black uppercase tracking-widest text-black shadow-neo transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-neo-lg active:translate-y-0 sm:w-auto sm:px-8 sm:text-base"
+                                className="flex w-full items-center justify-center gap-3 border-2 border-black bg-[#fef08a] px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-neo transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-neo-lg active:translate-y-0 sm:w-auto sm:px-8 sm:text-base"
                             >
                                 Start Building
                                 <ArrowRight size={20} strokeWidth={3} />

@@ -50,7 +50,7 @@ Automatic detection of Application Not Responding events with full thread dumps 
 Visualize how users navigate your app. Identify high-friction drop-off points and optimize conversion funnels.
 
 ### Interaction Heat Maps
-![Heatmaps](https://rejourney.co/heatmaps-demo.png)
+![Heatmaps](https://rejourney.co/images/heatmaps.png)
 
 **Visualize user engagement with precision.** See where they tap, swipe, and scroll to optimize UI placement.
 
@@ -124,5 +124,13 @@ Client-side components (SDKs, CLIs) are licensed under Apache 2.0. Server-side c
 ## Translations
 
 - [Arabic | العربية](i18n/README_AR.md)
+- [Chinese (Simplified) | 简体中文](i18n/README_ZH_CN.md)
+- [French | Français](i18n/README_FR.md)
+- [German | Deutsch](i18n/README_DE.md)
+- [Hindi | हिन्दी](i18n/README_HI.md)
+- [Indonesian | Bahasa Indonesia](i18n/README_ID.md)
+- [Japanese | 日本語](i18n/README_JA.md)
+- [Korean | 한국어](i18n/README_KO.md)
+- [Portuguese (Brazil) | Português do Brasil](i18n/README_PT_BR.md)
 - [Spanish | Español](i18n/README_ES.md)
 - [Turkish | Türkçe](i18n/README_TR.md)

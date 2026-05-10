@@ -173,16 +173,16 @@ export const EmbeddedDemoWindow: React.FC = () => {
         <section
             ref={sectionRef}
             aria-label="Interactive Demo"
-            className={`relative w-full border-t border-slate-200 bg-[#f8fafc] px-3 pb-14 pt-16 sm:px-4 sm:pb-20 sm:pt-24 lg:px-6 lg:pt-28 ${cursorVisible ? 'cursor-none' : ''}`}
+            className={`relative w-full overflow-hidden border-t border-slate-200 bg-[#f8fafc] px-4 pb-14 pt-14 sm:px-4 sm:pb-20 sm:pt-24 lg:px-6 lg:pt-28 ${cursorVisible ? 'cursor-none' : ''}`}
             onPointerEnter={onSectionPointerEnter}
             onPointerMove={onSectionPointerMove}
             onPointerLeave={onSectionPointerLeave}
         >
             {/* Embed must be >1280px wide (after borders) or Tailwind `xl:` breakpoints won't apply inside the iframe. */}
             <div className="mx-auto mb-7 max-w-7xl sm:mb-10">
-                <div role="presentation" className="relative w-full px-3 py-10 sm:py-14 lg:py-16">
+                <div role="presentation" className="relative w-full px-0 py-8 sm:px-3 sm:py-14 lg:py-16">
                     <div className="relative z-[1] mx-auto inline-block max-w-2xl px-2 pb-2 pt-1 sm:px-3">
-                        <h2 className="relative pl-11 whitespace-nowrap text-2xl font-black uppercase leading-[0.92] tracking-tight text-black sm:pl-14 sm:text-4xl lg:pl-16 lg:text-5xl xl:text-6xl">
+                        <h2 className="relative max-w-full pl-10 text-2xl font-black uppercase leading-tight tracking-tight text-black sm:pl-14 sm:text-4xl lg:pl-16 lg:text-5xl xl:text-6xl">
                             Walk the product...
                         </h2>
                     </div>
@@ -202,7 +202,30 @@ export const EmbeddedDemoWindow: React.FC = () => {
             </div>
 
             <div className="mx-auto max-w-[min(100%,1720px)]">
-                    <div className="relative">
+                <div className="md:hidden">
+                    <div className="rounded-[10px] border border-slate-200 bg-white p-5 shadow-[0_18px_44px_rgba(15,23,42,0.12)]">
+                        <div className="grid h-14 w-14 place-items-center rounded-lg bg-[#e8f4ff] text-slate-950">
+                            <MousePointerClick size={26} strokeWidth={2.7} />
+                        </div>
+                        <h3 className="mt-5 text-2xl font-black uppercase leading-tight text-slate-950">
+                            Full dashboard demo, best opened wide.
+                        </h3>
+                        <p className="mt-3 text-sm font-bold leading-relaxed text-slate-600">
+                            The live console is a dense desktop workspace, so phones get a fast overview here and a dedicated fullscreen launch.
+                        </p>
+                        <Link
+                            to="/demo"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-slate-950 px-4 py-3 text-sm font-black uppercase text-white shadow-sm"
+                        >
+                            Open demo
+                            <Maximize2 size={16} strokeWidth={3} />
+                        </Link>
+                    </div>
+                </div>
+
+                <div className="relative hidden md:block">
                     <div className="absolute -inset-2 hidden rotate-[-0.25deg] rounded-[14px] border border-sky-200 bg-[#5dadec]/20 lg:block" />
                     <div className="absolute -inset-2 hidden translate-x-2 translate-y-2 rounded-[14px] border border-amber-200 bg-[#fef08a]/25 lg:block" />
 

@@ -1,7 +1,11 @@
 import { index, route } from "@react-router/dev/routes";
+import { MARKETING_LOCALE_SLUGS } from "../../shared/lib/internationalMarketing";
 
 export const publicRoutes = [
   index("features/public/home/route.tsx", { id: "public-home" }),
+  ...MARKETING_LOCALE_SLUGS.map((locale) =>
+    route(locale, "features/public/home/route.tsx", { id: `public-home-${locale}` })
+  ),
   route("docs", "features/public/docs/index/route.tsx", { id: "public-docs-index" }),
   route("docs/*", "features/public/docs/slug/route.tsx", { id: "public-docs-slug" }),
   route("contribute", "features/public/contribute/route.tsx", { id: "public-contribute" }),

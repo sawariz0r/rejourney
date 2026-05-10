@@ -47,6 +47,7 @@ local.properties
 # Editor
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 .env.local

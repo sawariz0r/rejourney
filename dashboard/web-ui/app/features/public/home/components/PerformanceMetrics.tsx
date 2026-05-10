@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import {
     Bar,
     BarChart,
@@ -118,7 +118,7 @@ export const PerformanceMetrics: React.FC = () => {
     const rejourneyEfficiencyX = (sentryRow.minifiedKb / rejourneyRow.minifiedKb).toFixed(1);
 
     return (
-        <section ref={sectionRef} className="relative w-full overflow-hidden border-t-2 border-black bg-slate-50 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+        <section ref={sectionRef} className="relative w-full overflow-hidden border-t-2 border-black bg-slate-50 px-4 py-14 sm:px-6 sm:py-24 lg:px-8">
             {/* Background Grid Pattern */}
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
 
@@ -126,12 +126,8 @@ export const PerformanceMetrics: React.FC = () => {
 
                 {/* Header Section */}
                 <div className="mb-10 flex flex-col items-start justify-between gap-6 lg:mb-16 lg:flex-row lg:items-end lg:gap-8">
-                    <div>
-                        <div className="flex items-center gap-2 mb-4">
-                            <Activity className="w-4 h-4 text-[#5dadec]" />
-                            <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#5dadec]">Efficiency Audit</span>
-                        </div>
-                        <h2 className="mb-4 text-4xl font-black uppercase leading-[0.88] tracking-tight sm:text-7xl sm:tracking-tighter">
+                    <div className="min-w-0">
+                        <h2 className="mb-4 break-words text-3xl font-black uppercase leading-tight tracking-tight sm:text-7xl sm:tracking-tighter">
                             Tiny Footprint.<br />
                             <span className="text-gray-400">Extreme Impact.</span>
                         </h2>
@@ -148,7 +144,7 @@ export const PerformanceMetrics: React.FC = () => {
                 </div>
 
                 {/* Main Content Box */}
-                <div className="border-2 border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sm:p-10 sm:shadow-[16px_16px_0px_0px_rgba(0,0,0,1)]">
+                <div className="max-w-full border-2 border-black bg-white p-4 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] sm:p-10 sm:shadow-[16px_16px_0px_0px_rgba(0,0,0,1)]">
 
                     {/* Top Row: SDK Size Comparison */}
                     <div className="mb-12 grid grid-cols-1 gap-10 border-b-2 border-black border-dashed pb-10 lg:mb-16 lg:grid-cols-[1.5fr_1fr] lg:gap-12 lg:pb-12">

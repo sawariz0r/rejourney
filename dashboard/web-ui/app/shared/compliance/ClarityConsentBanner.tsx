@@ -72,30 +72,30 @@ export function ClarityConsentBanner() {
     }
 
     return (
-        <aside className="clarity-consent-banner fixed bottom-4 left-4 z-[90] max-w-none overflow-hidden rounded-xl border border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur sm:left-auto sm:right-4 sm:max-w-md">
+        <aside className="clarity-consent-banner fixed bottom-4 left-4 right-4 z-[90] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur sm:left-auto sm:right-4 sm:max-w-md">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Privacy Controls</p>
             <h2 className="mt-1 text-sm font-bold text-slate-900">Allow Analytics?</h2>
             <p className="mt-2 max-w-full break-words text-xs leading-relaxed text-slate-600">
                 We use cookies to analyze how you interact with our website, understand your browsing habits, and improve your experience. By clicking 'Accept', you consent to our use of these analytics cookies. These are non-essential cookies. The site will work without them.
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="mt-4 grid grid-cols-2 items-center gap-2 min-[420px]:flex min-[420px]:flex-wrap">
                 <button
                     type="button"
                     onClick={rejectAnalytics}
-                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                    className="rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 min-[420px]:py-1.5"
                 >
                     Reject
                 </button>
                 <button
                     type="button"
                     onClick={acceptAnalytics}
-                    className="rounded-md bg-[#5dadec] px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-[#4c9ddd]"
+                    className="rounded-md bg-[#5dadec] px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-[#4c9ddd] min-[420px]:py-1.5"
                 >
                     Accept
                 </button>
                 <a
                     href="/privacy-policy"
-                    className="inline-flex items-center text-xs font-semibold text-slate-600 underline-offset-4 hover:underline sm:ml-auto"
+                    className="col-span-2 inline-flex items-center justify-center text-xs font-semibold text-slate-600 underline-offset-4 hover:underline min-[420px]:col-span-1 min-[420px]:justify-start sm:ml-auto"
                 >
                     Privacy Policy
                 </a>

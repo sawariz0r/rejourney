@@ -13,7 +13,7 @@
   </p>
   
   <p>
-    <a href="https://rejourney.co"><strong>Web Sitesini Keşfedin »</strong></a>
+    <a href="https://rejourney.co/tr"><strong>Web Sitesini Keşfedin »</strong></a>
   </p>
   
   <p>
@@ -43,7 +43,7 @@ Tam iş parçacığı dökümleri ve ana iş parçacığı analizi ile Uygulama 
 Kullanıcıların uygulamanızda nasıl gezindiğini görselleştirin. Yüksek sürtünmeli ayrılma noktalarını belirleyin ve dönüşüm hunilerini optimize edin.
 
 ### Etkileşim Isı Haritaları
-![Isı Haritaları](https://rejourney.co/heatmaps-demo.png)
+![Isı Haritaları](https://rejourney.co/images/heatmaps.png)
 
 **Kullanıcı etkileşimini hassasiyetle görselleştirin.** Kullanıcı arayüzü yerleşimini optimize etmek için nereye dokunduklarını, kaydırdıklarını ve geçtiklerini görün.
 

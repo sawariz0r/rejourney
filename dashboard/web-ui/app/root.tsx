@@ -15,6 +15,7 @@ import {
     Scripts,
     ScrollRestoration,
     isRouteErrorResponse,
+    useLocation,
     useMatches,
 } from "react-router";
 import type { Route } from "./+types/root";
@@ -22,6 +23,10 @@ import type { Route } from "./+types/root";
 import "./styles/index.css";
 import "./styles/landing.css";
 import { getPublicRuntimeEnvSnapshot } from "./shared/config/runtimeEnv";
+import {
+    MARKETING_AVAILABLE_LANGUAGES,
+    getMarketingLocaleFromPathname,
+} from "./shared/lib/internationalMarketing";
 import { isDashboardShellBootstrapData } from "./shell/server/dashboardBootstrap";
 
 export const links: Route.LinksFunction = () => [
@@ -85,9 +90,11 @@ export const meta: Route.MetaFunction = () => [
 
 export function Layout({ children }: { children: React.ReactNode }) {
     const runtimeEnv = getPublicRuntimeEnvSnapshot();
+    const location = useLocation();
+    const locale = getMarketingLocaleFromPathname(location.pathname);
 
     return (
-        <html lang="en-US">
+        <html lang={locale.languageTag} dir={locale.dir}>
             <head>
                 {/* Must be first — sets scrollRestoration=manual globally before the
                     browser can restore any saved scroll position. ScrollRestoration
@@ -95,7 +102,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <script dangerouslySetInnerHTML={{ __html: `(function(){try{window.history.scrollRestoration='manual';}catch(e){}if(window.location.pathname==='/'){window.scrollTo(0,0);}})();` }} />
                 <meta charSet="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <meta httpEquiv="Content-Language" content="en-US" />
+                <meta httpEquiv="Content-Language" content={locale.languageTag} />
                 <Meta />
                 <Links />
                 {/* Structured data for rich results */}
@@ -108,7 +115,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 {
                                     "@type": "Organization",
                                     "name": "Rejourney",
-                                    "inLanguage": "en-US",
+                                    "inLanguage": locale.languageTag,
+                                    "availableLanguage": MARKETING_AVAILABLE_LANGUAGES,
                                     "url": "https://rejourney.co/",
                                     "logo": "https://rejourney.co/rejourneyIcon-removebg-preview.png",
                                     "sameAs": [
@@ -124,7 +132,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 {
                                     "@type": "SoftwareApplication",
                                     "name": "Rejourney",
-                                    "inLanguage": "en-US",
+                                    "inLanguage": locale.languageTag,
+                                    "availableLanguage": MARKETING_AVAILABLE_LANGUAGES,
                                     "applicationCategory": "DeveloperApplication",
                                     "operatingSystem": "iOS, Android, Expo, React Native",
                                     "offers": {
@@ -138,13 +147,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 {
                                     "@type": "WebSite",
                                     "name": "Rejourney",
-                                    "inLanguage": "en-US",
+                                    "inLanguage": locale.languageTag,
+                                    "availableLanguage": MARKETING_AVAILABLE_LANGUAGES,
                                     "url": "https://rejourney.co/"
                                 },
                                 {
                                     "@type": "ItemList",
                                     "name": "Sitelinks",
-                                    "inLanguage": "en-US",
+                                    "inLanguage": locale.languageTag,
                                     "itemListElement": [
                                         { "@type": "SiteNavigationElement", "position": 1, "name": "Docs", "url": "https://rejourney.co/docs/reactnative/overview" },
                                         { "@type": "SiteNavigationElement", "position": 2, "name": "Engineering", "url": "https://rejourney.co/engineering" },

@@ -1,4 +1,5 @@
 import React from 'react';
+import type { MarketingFeatureCopy } from '~/shared/lib/internationalMarketing';
 
 const features = [
     {
@@ -37,7 +38,7 @@ const features = [
         title: 'Touch',
         highlight: 'Heatmaps',
         highlightColor: 'text-rose-500',
-        image: '/heatmaps-demo.png',
+        image: '/images/heatmaps.png',
         badge: 'Taps',
         badgeColor: 'bg-rose-400',
     },
@@ -67,21 +68,32 @@ const features = [
     },
 ];
 
-export const Features: React.FC = () => {
+export const Features: React.FC<{
+    heading: string;
+    eyebrow: string;
+    copy: MarketingFeatureCopy[];
+    dir?: 'ltr' | 'rtl';
+}> = ({ heading, eyebrow, copy, dir = 'ltr' }) => {
+    const renderedFeatures = features.map((feature, index) => ({
+        ...feature,
+        ...(copy[index] ?? {}),
+    }));
+    const alignClass = dir === 'rtl' ? 'text-right' : 'text-left';
+
     return (
         <section className="w-full border-t-2 border-black bg-white px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
-            <div className="mx-auto max-w-7xl">
+            <div className={`mx-auto max-w-7xl ${alignClass}`} dir={dir}>
                 <div className="mb-8 flex flex-row items-end justify-between gap-3 border-b-2 border-black pb-5 sm:mb-10 sm:gap-4 sm:pb-6">
                     <h2 className="text-3xl font-black uppercase leading-none tracking-tight sm:text-5xl lg:text-6xl">
-                        Mobile stack.
+                        {heading}
                     </h2>
                     <span className="shrink-0 border-2 border-black bg-[#fef08a] px-2 py-1 font-mono text-[9px] font-black uppercase tracking-wider shadow-neo-sm sm:px-3 sm:text-[10px] sm:tracking-widest">
-                        Eight signals
+                        {eyebrow}
                     </span>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
-                    {features.map((feature, idx) => (
+                    {renderedFeatures.map((feature, idx) => (
                         <article
                             key={feature.badge}
                             className="group border-2 border-black bg-[#f8fafc] p-2.5 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo sm:p-3"

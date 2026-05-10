@@ -8,12 +8,12 @@ export const Header: React.FC = () => {
   const { isAuthenticated } = useAuth();
   return (
     <header aria-label="Site navigation" className="sticky top-0 z-50 border-b border-slate-200 bg-white/80 backdrop-blur-md">
-      <div className="mx-auto flex min-h-16 max-w-[95%] flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 sm:px-6 lg:max-w-[98%] lg:px-6">
+      <div className="mx-auto flex min-h-16 w-full max-w-7xl flex-nowrap items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:max-w-[98%] lg:px-6">
         <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity group animate-scale-in">
-          <div className="w-10 h-10 flex items-center justify-center group-hover:rotate-6 transition-transform">
-            <img src="/rejourneyIcon-removebg-preview.png" alt="Rejourney | Open Source Session Replay & Observability" className="w-10 h-10 object-contain" />
+          <div className="flex h-9 w-9 items-center justify-center transition-transform group-hover:rotate-6 sm:h-10 sm:w-10">
+            <img src="/rejourneyIcon-removebg-preview.png" alt="Rejourney | Open Source Session Replay & Observability" className="h-9 w-9 object-contain sm:h-10 sm:w-10" />
           </div>
-          <span className="text-xl font-black tracking-tighter uppercase font-mono text-slate-900 group-hover:text-[#5dadec] transition-colors">REJOURNEY</span>
+          <span className="text-lg font-black tracking-tighter uppercase font-mono text-slate-900 group-hover:text-[#5dadec] transition-colors sm:text-xl">REJOURNEY</span>
         </Link>
 
         <nav className="hidden items-center gap-5 lg:flex xl:gap-8">
