@@ -579,15 +579,19 @@ spec:
         - name: setup
           image: ghcr.io/rejourneyco/rejourney/migration:latest
           # Run migrate, conditionally seed only brand-new databases, bootstrap
-          # system rows, then sync DB-backed storage endpoint state from the
-          # current Kubernetes S3 secret before app rollouts continue.
+          # system rows. NOTE: syncStorageEndpoint.ts is intentionally NOT in
+          # the chain — that script's job was to mutate storage_endpoints on
+          # every deploy, which corrupted multi-bucket setups (OVH active +
+          # Hetzner/Scaleway inactive-for-reads). storage_endpoints is now
+          # operator-managed; bootstrapSystemData only seeds on an empty
+          # table. To rotate credentials or switch buckets, run
+          # `scripts/k8s/manage-s3-endpoints.mjs` or hand SQL — never CI.
           command: ["/bin/sh", "-c"]
           args:
             - >-
               node --import tsx scripts/applyDatabaseSchema.ts
               && node --import tsx scripts/seedIfDatabaseEmpty.ts
               && node --import tsx scripts/bootstrapSystemData.ts
-              && node --import tsx scripts/syncStorageEndpoint.ts
           env:
             - name: NODE_ENV
               value: production

@@ -54,6 +54,30 @@ async function main() {
 
   console.log('Retention policies bootstrapped');
 
+  // Storage endpoints are operator-managed, NEVER mutated by CI.
+  //
+  // History: this script (and a sibling, syncStorageEndpoint.ts) used to
+  // iterate every non-shadow row and overwrite it with the values from the
+  // K8s `s3-secret`. Across multi-bucket setups (OVH active, Hetzner+Scaleway
+  // inactive for legacy reads) every CI deploy clobbered the inactive rows
+  // into duplicates of whatever the K8s secret pointed at. To switch buckets,
+  // operators run `manage-s3-endpoints.mjs` or hand SQL — never CI.
+  //
+  // We still seed ONE row on a truly-empty fresh-cluster bootstrap, otherwise
+  // the API throws "No storage endpoint configured" on first session ingest.
+  // Any non-empty state (one row, ten rows, anything) means an operator has
+  // taken ownership and CI must not touch it.
+  const existing = await db
+    .select({ id: storageEndpoints.id })
+    .from(storageEndpoints)
+    .where(and(isNull(storageEndpoints.projectId), eq(storageEndpoints.shadow, false)))
+    .limit(1);
+
+  if (existing.length > 0) {
+    console.log('Storage endpoints already provisioned — skipping (CI never mutates this table).');
+    return;
+  }
+
   const endpointUrl = normalizeUrl(requireEnv('S3_ENDPOINT'));
   const bucket = requireEnv('S3_BUCKET');
   const region = process.env.S3_REGION || 'us-east-1';
@@ -61,7 +85,8 @@ async function main() {
   const secretAccessKey = requireEnv('S3_SECRET_ACCESS_KEY');
   const keyRef = safeEncrypt(secretAccessKey);
 
-  const endpointData = {
+  await db.insert(storageEndpoints).values({
+    projectId: null,
     endpointUrl,
     bucket,
     region,
@@ -70,33 +95,8 @@ async function main() {
     priority: 0,
     active: true,
     shadow: false,
-  };
-
-  const existing = await db
-    .select({
-      id: storageEndpoints.id,
-      projectId: storageEndpoints.projectId,
-    })
-    .from(storageEndpoints)
-    .where(and(isNull(storageEndpoints.projectId), eq(storageEndpoints.shadow, false)));
-
-  if (existing.length === 0) {
-    await db.insert(storageEndpoints).values({
-      projectId: null,
-      ...endpointData,
-    });
-    console.log(`Inserted global storage endpoint: ${endpointUrl} (${bucket})`);
-    return;
-  }
-
-  for (const row of existing) {
-    await db
-      .update(storageEndpoints)
-      .set(endpointData)
-      .where(eq(storageEndpoints.id, row.id));
-  }
-
-  console.log(`Updated ${existing.length} global storage endpoint row(s)`);
+  });
+  console.log(`Bootstrap-inserted storage endpoint: ${endpointUrl} (${bucket})`);
 }
 
 main()
