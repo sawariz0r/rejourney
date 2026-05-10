@@ -31,10 +31,29 @@ section() {
 
 dump_db_setup_diagnostics() {
   kubectl describe job db-setup -n "${NAMESPACE}" || true
-  kubectl logs job/db-setup -n "${NAMESPACE}" -c wait-postgres --tail=50 || true
-  kubectl logs job/db-setup -n "${NAMESPACE}" -c setup --tail=100 || true
+
+  # Pods may be running, terminated, or already cleaned up. Try every pod owned
+  # by the job (current + any retry attempts) and fall back to --previous so
+  # crash-loop logs survive container restart. Migration logs are SQL/drizzle
+  # output — safe to dump verbatim, no user PII.
+  local job_pods
+  job_pods="$(kubectl get pods -n "${NAMESPACE}" -l job-name=db-setup -o name 2>/dev/null || true)"
+  for pod in ${job_pods}; do
+    echo "[deploy-release] --- Logs from ${pod} (current attempt) ---"
+    kubectl logs "${pod}" -n "${NAMESPACE}" -c setup --tail=200 2>&1 || true
+    echo "[deploy-release] --- Logs from ${pod} (previous attempt) ---"
+    kubectl logs "${pod}" -n "${NAMESPACE}" -c setup --tail=200 --previous 2>&1 || true
+  done
 }
 
+# Dump deployment/daemonset state on rollout failure. We INTENTIONALLY do not
+# dump application logs here — `kubectl logs` on the api/web pods would print
+# the last 100 request lines, which include user cookies, CSRF tokens, upload
+# JWTs, and IP addresses. Anyone with access to the GitHub Actions log (i.e.
+# every repo collaborator and the GitHub support team) would see them. State
+# info from describe + events is enough to diagnose rollout failures (image
+# pull, scheduling, OOM, probe failure). For runtime debugging, run
+# `kubectl logs` directly against the cluster.
 dump_workload_diagnostics() {
   local kind="$1"
   local name="$2"
@@ -42,12 +61,6 @@ dump_workload_diagnostics() {
   kubectl describe "${kind}" "${name}" -n "${NAMESPACE}" || true
   kubectl get pods -n "${NAMESPACE}" -l "app=${name}" -o wide || true
   kubectl describe pods -n "${NAMESPACE}" -l "app=${name}" || true
-
-  if [ "${kind}" = "deployment" ]; then
-    kubectl logs deployment/"${name}" -n "${NAMESPACE}" --tail=100 || true
-  else
-    kubectl logs -n "${NAMESPACE}" -l "app=${name}" --tail=100 --all-containers=true || true
-  fi
 }
 
 require_bin() {
