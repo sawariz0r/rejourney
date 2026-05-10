@@ -22,8 +22,10 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 const API_URL = process.env.API_URL || 'http://api:3000';
 const isProduction = process.env.NODE_ENV === 'production';
+const MARKETING_LOCALE_PATH_PATTERN = /^\/(?:ar|es|tr|pt-br|de|fr|hi|id|ja|ko|zh-cn)$/;
 const EDGE_CACHEABLE_HTML_PATTERNS = [
   /^\/$/,
+  MARKETING_LOCALE_PATH_PATTERN,
   /^\/login$/,
   /^\/pricing$/,
   /^\/docs(?:\/.*)?$/,
@@ -150,6 +152,11 @@ app.use((req, res, next) => {
 
   const acceptsHtml = req.headers.accept?.includes('text/html') ?? false;
   if (acceptsHtml && isEdgeCacheableHtmlPath(req.path)) {
+    if (req.path === '/') {
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+      next();
+      return;
+    }
     // Let Cloudflare cache public marketing/login HTML briefly while browsers
     // still revalidate on navigation.
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');

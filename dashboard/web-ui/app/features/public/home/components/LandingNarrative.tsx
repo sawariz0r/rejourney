@@ -15,14 +15,15 @@ import {
     Zap,
 } from 'lucide-react';
 import { MarkExpo, MarkReactNative, MarkSwift } from './PlatformMarks';
+import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
 const EuFlag: React.FC<{ className?: string }> = ({ className = '' }) => (
     <svg viewBox="0 0 48 32" className={className} role="img" aria-label="European Union flag">
         <rect width="48" height="32" rx="6" fill="#1d4ed8" />
         {Array.from({ length: 12 }).map((_, index) => {
             const angle = (index / 12) * Math.PI * 2 - Math.PI / 2;
-            const cx = 24 + Math.cos(angle) * 8.5;
-            const cy = 16 + Math.sin(angle) * 8.5;
+            const cx = (24 + Math.cos(angle) * 8.5).toFixed(3);
+            const cy = (16 + Math.sin(angle) * 8.5).toFixed(3);
             return <circle key={index} cx={cx} cy={cy} r="1.2" fill="#fde047" />;
         })}
     </svg>
@@ -32,23 +33,29 @@ const journeySteps = [
     {
         label: 'Watch',
         title: 'Replay the exact mobile session',
-        copy: 'See screens, taps, swipes, navigation, crashes, network context, and the moment users hesitate.',
+        signal: 'Screens, taps, swipes, navigation, crashes, and network context.',
+        move: 'See the exact moment a user hesitates instead of inferring it from a chart.',
         icon: Eye,
         tone: 'bg-[#dbeafe]',
+        strip: 'bg-[#5dadec]',
     },
     {
         label: 'Understand',
         title: 'Find the friction pattern',
-        copy: 'Heatmaps, journeys, rage taps, crash reports, and ANRs turn one weird session into a clear trend.',
+        signal: 'Heatmaps, journeys, rage taps, crash reports, and ANRs.',
+        move: 'Turn one strange session into a repeated pattern the team can name.',
         icon: MousePointerClick,
         tone: 'bg-[#ffe4e6]',
+        strip: 'bg-[#f9a8d4]',
     },
     {
         label: 'Act',
         title: 'Ship the fix with confidence',
-        copy: 'Give product, engineering, support, and growth the same evidence instead of arguing from dashboards.',
+        signal: 'Replay-backed evidence for product, engineering, support, and growth.',
+        move: 'Decide what to fix before the next release repeats the same failure.',
         icon: CheckCircle2,
         tone: 'bg-[#dcfce7]',
+        strip: 'bg-[#86efac]',
     },
 ];
 
@@ -135,34 +142,81 @@ const trustCards = [
     },
 ];
 
-export const LandingNarrative: React.FC = () => {
+export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; dir?: 'ltr' | 'rtl' }> = ({ copy, dir = 'ltr' }) => {
+    const renderedSteps = journeySteps.map((step, index) => ({
+        ...step,
+        ...(copy.steps[index] ?? {}),
+    }));
+    const renderedStories = productStories.map((story, index) => ({
+        ...story,
+        ...(copy.productStories[index] ?? {}),
+    }));
+    const renderedTrustCards = trustCards.map((card, index) => ({
+        ...card,
+        ...(copy.trustCards[index] ?? {}),
+    }));
+    const alignClass = dir === 'rtl' ? 'text-right' : 'text-left';
+
     return (
-        <>
-            <section className="w-full border-b border-slate-200 bg-white px-4 py-14 text-slate-950 sm:px-6 sm:py-24 lg:px-8">
-                <div className="mx-auto max-w-7xl">
+        <div dir={dir} className={alignClass}>
+            <section className="relative w-full overflow-hidden border-b-2 border-black bg-[#f8fafc] px-4 py-14 text-slate-950 sm:px-6 sm:py-20 lg:px-8">
+                <div
+                    className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(#000_1px,transparent_1px),linear-gradient(90deg,#000_1px,transparent_1px)] [background-size:34px_34px]"
+                    aria-hidden
+                />
+                <div className="relative mx-auto max-w-7xl">
                     <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
                         <div className="min-w-0">
-                            <p className="mb-4 text-[11px] font-black uppercase text-[#2563eb]">The mobile insight loop</p>
-                            <h2 className="max-w-3xl break-words text-3xl font-black uppercase leading-tight tracking-tight sm:text-6xl">
-                                Stop guessing why users leave.
+                            <p className="mb-4 text-[11px] font-black uppercase text-[#2563eb]">{copy.loopEyebrow}</p>
+                            <h2 className="max-w-3xl break-words text-3xl font-black uppercase leading-tight sm:text-6xl">
+                                {copy.loopHeadingLines.map((line) => (
+                                    <span key={line} className="block">{line}</span>
+                                ))}
                             </h2>
                         </div>
                         <p className="max-w-2xl text-base font-bold leading-relaxed text-slate-600 sm:text-lg lg:justify-self-end">
-                            Rejourney is arranged around the way teams actually make product decisions: watch what happened, understand the pattern, and act before the next release repeats it.
+                            {copy.loopIntro}
                         </p>
                     </div>
 
-                    <div className="mt-10 grid gap-4 md:grid-cols-3 lg:mt-14">
-                        {journeySteps.map((step) => {
+                    <div className="mt-10 max-w-full overflow-hidden border-2 border-black bg-white shadow-neo sm:shadow-neo-lg lg:mt-14">
+                        <div className="hidden bg-slate-950 text-white md:grid md:grid-cols-[285px_minmax(0,1fr)_minmax(280px,0.78fr)]">
+                            <div className="border-b-2 border-black px-4 py-3 text-[11px] font-black uppercase md:border-b-0 md:border-r-2">
+                                {copy.tableStep}
+                            </div>
+                            <div className="border-b-2 border-black px-4 py-3 text-[11px] font-black uppercase md:border-b-0 md:border-r-2">
+                                {copy.tableCatches}
+                            </div>
+                            <div className="px-4 py-3 text-[11px] font-black uppercase">{copy.tableNext}</div>
+                        </div>
+                        {renderedSteps.map((step) => {
                             const Icon = step.icon;
                             return (
-                                <article key={step.label} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                                    <div className={`mb-5 grid h-12 w-12 place-items-center rounded-lg ${step.tone}`}>
-                                        <Icon size={22} strokeWidth={2.7} />
+                                <article
+                                    key={step.label}
+                                    className="grid border-t-2 border-black first:border-t-0 md:grid-cols-[285px_minmax(0,1fr)_minmax(280px,0.78fr)] md:first:border-t-2"
+                                >
+                                    <div className={`flex items-center gap-3 border-b-2 border-black px-4 py-5 md:border-b-0 md:border-r-2 ${step.strip}`}>
+                                        <div className={`grid h-11 w-11 shrink-0 place-items-center border-2 border-black bg-white shadow-neo-sm ${step.tone}`}>
+                                            <Icon size={20} strokeWidth={2.8} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] font-black uppercase text-black/65">{copy.loopStage}</p>
+                                            <h3 className="whitespace-nowrap text-lg font-black uppercase leading-tight text-black min-[380px]:text-xl">{step.label}</h3>
+                                        </div>
                                     </div>
-                                    <p className="mb-2 text-[11px] font-black uppercase text-slate-400">{step.label}</p>
-                                    <h3 className="text-xl font-black leading-tight">{step.title}</h3>
-                                    <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-600">{step.copy}</p>
+                                    <div className="border-b-2 border-black px-4 py-5 md:border-b-0 md:border-r-2 sm:px-6">
+                                        <p className="mb-2 text-[10px] font-black uppercase text-[#2563eb] md:hidden">{copy.tableCatches}</p>
+                                        <h3 className="text-xl font-black leading-tight">{step.title}</h3>
+                                        <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">{step.signal}</p>
+                                    </div>
+                                    <div className="bg-[#f8fafc] px-4 py-5 sm:px-6">
+                                        <p className="mb-2 text-[10px] font-black uppercase text-[#2563eb] md:hidden">{copy.tableNext}</p>
+                                        <div className="flex min-w-0 items-start gap-3 md:items-center">
+                                            <ArrowRight className="mt-0.5 h-5 w-5 shrink-0 text-[#2563eb] md:mt-0" strokeWidth={3} />
+                                            <p className="min-w-0 flex-1 text-sm font-black leading-relaxed text-slate-800">{step.move}</p>
+                                        </div>
+                                    </div>
                                 </article>
                             );
                         })}
@@ -174,22 +228,22 @@ export const LandingNarrative: React.FC = () => {
                 <div className="mx-auto max-w-7xl">
                     <div className="mb-10 flex flex-col gap-5 lg:mb-14 lg:flex-row lg:items-end lg:justify-between">
                         <div className="min-w-0">
-                            <p className="mb-4 text-[11px] font-black uppercase text-[#2563eb]">What you can see</p>
+                            <p className="mb-4 text-[11px] font-black uppercase text-[#2563eb]">{copy.signalsEyebrow}</p>
                             <h2 className="max-w-4xl break-words text-3xl font-black uppercase leading-tight tracking-tight sm:text-6xl">
-                                The signals mobile teams need in one place.
+                                {copy.signalsHeading}
                             </h2>
                         </div>
                         <Link
                             to="/demo"
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-3 text-sm font-black uppercase text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 sm:w-auto"
+                            className="inline-flex w-full items-center justify-center gap-2 border-2 border-black bg-[#fef08a] px-5 py-3 text-sm font-black uppercase text-black shadow-neo transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#67e8f9] hover:shadow-neo-lg active:translate-x-0 active:translate-y-0 active:shadow-none sm:w-auto sm:px-6 sm:py-4"
                         >
-                            See live demo
+                            {copy.demoCta}
                             <ArrowRight size={17} strokeWidth={3} />
                         </Link>
                     </div>
 
                     <div className="space-y-5 lg:space-y-7">
-                        {productStories.map((story, index) => {
+                        {renderedStories.map((story, index) => {
                             const Icon = story.icon;
                             const imageOrder = index % 2 === 1 ? 'lg:order-last' : '';
 
@@ -236,12 +290,12 @@ export const LandingNarrative: React.FC = () => {
             <section className="w-full border-y border-slate-200 bg-white px-4 py-14 text-slate-950 sm:px-6 sm:py-24 lg:px-8">
                 <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
                     <div className="min-w-0 lg:sticky lg:top-24">
-                        <p className="mb-4 text-[11px] font-black uppercase text-[#2563eb]">Why teams say yes</p>
+                        <p className="mb-4 text-[11px] font-black uppercase text-[#2563eb]">{copy.trustEyebrow}</p>
                         <h2 className="break-words text-3xl font-black uppercase leading-tight tracking-tight sm:text-6xl">
-                            Evidence for every person in the room.
+                            {copy.trustHeading}
                         </h2>
                         <p className="mt-5 max-w-xl text-base font-bold leading-relaxed text-slate-600">
-                            Adoption is easier when every team gets the same replay-backed source of truth, plus clear answers for performance, privacy, deployment, and mobile stack fit.
+                            {copy.trustCopy}
                         </p>
 
                         <div className="mt-7 flex flex-wrap gap-2">
@@ -261,7 +315,7 @@ export const LandingNarrative: React.FC = () => {
                     </div>
 
                     <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                        {trustCards.map((card) => {
+                        {renderedTrustCards.map((card) => {
                             const Icon = card.icon;
                             return (
                                 <article
@@ -288,21 +342,21 @@ export const LandingNarrative: React.FC = () => {
             <section className="w-full bg-[#e8f4ff] px-4 py-10 text-slate-950 sm:px-6 lg:px-8">
                 <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
                     <div className="rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm">
-                        <div className="text-3xl font-black leading-none sm:text-5xl">17x cheaper</div>
+                        <div className="text-3xl font-black leading-none sm:text-5xl">{copy.stats.cheaper}</div>
                         <div className="mt-3 max-w-xl text-[12px] font-black uppercase leading-relaxed text-slate-500">
-                            Than some of the cheapest session replay and product analytics tools in the industry.
+                            {copy.stats.cheaperCopy}
                         </div>
                     </div>
                     <div className="rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm">
-                        <div className="text-3xl font-black leading-none">5k sessions</div>
-                        <div className="mt-3 text-[11px] font-black uppercase text-slate-500">Free every month</div>
+                        <div className="text-3xl font-black leading-none sm:text-4xl">{copy.stats.freeSessions}</div>
+                        <div className="mt-3 text-[11px] font-black uppercase text-slate-500">{copy.stats.everyMonth}</div>
                     </div>
                     <div className="rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm">
-                        <div className="text-3xl font-black leading-none">All features</div>
-                        <div className="mt-3 text-[11px] font-black uppercase text-slate-500">Replay, heatmaps, crashes, journeys</div>
+                        <div className="text-3xl font-black leading-none">{copy.stats.allFeatures}</div>
+                        <div className="mt-3 text-[11px] font-black uppercase text-slate-500">{copy.stats.allFeaturesCopy}</div>
                     </div>
                 </div>
             </section>
-        </>
+        </div>
     );
 };

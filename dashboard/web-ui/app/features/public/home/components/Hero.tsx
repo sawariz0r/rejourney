@@ -4,16 +4,12 @@ import {
     ArrowRight,
     Bookmark,
     ChevronLeft,
-    Coffee,
     MapPin,
     Navigation,
-    Search,
     Server,
-    ShoppingBag,
-    SlidersHorizontal,
     Zap,
 } from 'lucide-react';
-import type { MarketingLocale } from '~/shared/lib/internationalMarketing';
+import type { MarketingHomeCopy, MarketingLocale } from '~/shared/lib/internationalMarketing';
 
 const PhoneCursor: React.FC<{ className?: string }> = ({ className }) => (
     <svg viewBox="0 0 16 20" fill="none" className={className}>
@@ -74,10 +70,17 @@ const IPhone: React.FC<{
 type TouchTone = 'blue' | 'rose' | 'amber' | 'green';
 
 const touchGradients: Record<TouchTone, string> = {
-    blue: 'radial-gradient(circle, rgba(93,173,236,0.92) 0%, rgba(93,173,236,0.38) 34%, transparent 72%)',
-    rose: 'radial-gradient(circle, rgba(244,63,94,0.95) 0%, rgba(251,113,133,0.58) 30%, rgba(251,113,133,0.18) 54%, transparent 78%)',
-    amber: 'radial-gradient(circle, rgba(251,191,36,0.95) 0%, rgba(251,191,36,0.44) 34%, transparent 72%)',
-    green: 'radial-gradient(circle, rgba(16,185,129,0.92) 0%, rgba(52,211,153,0.42) 36%, transparent 74%)',
+    blue: 'radial-gradient(circle, rgba(93,173,236,1) 0%, rgba(93,173,236,0.78) 24%, rgba(93,173,236,0.38) 52%, rgba(93,173,236,0.12) 74%, transparent 100%)',
+    rose: 'radial-gradient(circle, rgba(244,63,94,1) 0%, rgba(251,113,133,0.82) 24%, rgba(251,113,133,0.42) 52%, rgba(251,113,133,0.14) 74%, transparent 100%)',
+    amber: 'radial-gradient(circle, rgba(251,191,36,1) 0%, rgba(251,191,36,0.78) 24%, rgba(251,191,36,0.38) 52%, rgba(251,191,36,0.12) 74%, transparent 100%)',
+    green: 'radial-gradient(circle, rgba(16,185,129,1) 0%, rgba(52,211,153,0.78) 24%, rgba(52,211,153,0.38) 52%, rgba(52,211,153,0.12) 74%, transparent 100%)',
+};
+
+const touchGlows: Record<TouchTone, string> = {
+    blue: 'rgba(93,173,236,0.55)',
+    rose: 'rgba(244,63,94,0.52)',
+    amber: 'rgba(251,191,36,0.5)',
+    green: 'rgba(16,185,129,0.5)',
 };
 
 const TouchPulse: React.FC<{
@@ -88,7 +91,7 @@ const TouchPulse: React.FC<{
     className?: string;
 }> = ({ top, left, size, tone = 'blue', className = '' }) => (
     <div
-        className={`pointer-events-none absolute rounded-full blur-[1px] ${className}`}
+        className={`pointer-events-none absolute z-40 rounded-full blur-[1.5px] ${className}`}
         style={{
             top,
             left,
@@ -96,6 +99,8 @@ const TouchPulse: React.FC<{
             height: size,
             transform: 'translate(-50%, -50%)',
             background: touchGradients[tone],
+            boxShadow: `0 0 ${Math.round(size * 0.38)}px ${touchGlows[tone]}`,
+            opacity: 0.98,
         }}
     />
 );
@@ -116,6 +121,46 @@ const MountainScene: React.FC<{ className?: string }> = ({ className = '' }) => 
             <circle cx="155" cy="111" r="4" fill="#f97316" />
         </svg>
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/62 to-transparent" />
+    </div>
+);
+
+const CoastScene: React.FC<{ className?: string }> = ({ className = '' }) => (
+    <div className={`relative overflow-hidden bg-[linear-gradient(180deg,#d9fbff_0%,#a7e6ef_48%,#4fb3be_100%)] ${className}`}>
+        <div className="absolute left-6 top-5 h-16 w-16 rounded-full bg-amber-100/90 blur-lg" />
+        <svg viewBox="0 0 220 210" className="absolute inset-0 h-full w-full" fill="none" aria-hidden>
+            <path d="M-20 92 C25 72 61 78 97 64 C135 49 170 49 240 26 L240 210 L-20 210 Z" fill="#91d3c8" opacity="0.78" />
+            <path d="M-12 134 C31 107 61 115 104 96 C150 75 183 82 236 58 L236 210 L-12 210 Z" fill="#0f766e" />
+            <path d="M-18 157 C26 137 54 142 91 132 C139 119 169 130 239 103 L239 210 L-18 210 Z" fill="#164e63" />
+            <path d="M-10 163 C35 151 68 157 107 147 C149 136 179 142 234 126 L234 210 L-10 210 Z" fill="#5eead4" opacity="0.78" />
+            <path d="M-12 176 C42 157 75 166 112 155 C151 144 178 150 235 137" stroke="rgba(255,255,255,0.48)" strokeWidth="6" strokeLinecap="round" />
+            <path d="M18 188 C53 166 83 162 121 144 C153 129 177 116 208 85" stroke="#f8fafc" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="5 7" />
+            <circle cx="20" cy="188" r="4" fill="#34d399" />
+            <circle cx="208" cy="85" r="4" fill="#f97316" />
+            <path d="M19 112 C28 98 35 91 47 78 C54 93 60 104 75 118 C52 113 39 112 19 112 Z" fill="#fef3c7" opacity="0.95" />
+            <path d="M128 82 C139 69 149 60 165 47 C171 67 181 80 199 94 C171 91 151 89 128 82 Z" fill="#fef3c7" opacity="0.9" />
+        </svg>
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-cyan-950/64 to-transparent" />
+    </div>
+);
+
+const ForestScene: React.FC<{ className?: string }> = ({ className = '' }) => (
+    <div className={`relative overflow-hidden bg-[linear-gradient(180deg,#e8fff3_0%,#b7e7d0_45%,#386b58_100%)] ${className}`}>
+        <div className="absolute right-8 top-7 h-14 w-14 rounded-full bg-amber-100/80 blur-lg" />
+        <svg viewBox="0 0 220 210" className="absolute inset-0 h-full w-full" fill="none" aria-hidden>
+            <path d="M-22 104 C18 74 56 81 92 61 C133 39 173 44 240 16 L240 210 L-22 210 Z" fill="#9bd6b5" opacity="0.72" />
+            <path d="M-20 134 C30 102 74 105 113 89 C158 70 189 80 240 54 L240 210 L-20 210 Z" fill="#27765b" />
+            <path d="M-18 161 C35 134 75 139 113 127 C153 114 185 117 241 91 L241 210 L-18 210 Z" fill="#14513e" />
+            <path d="M-12 178 C30 164 66 168 103 158 C147 146 179 148 236 125 L236 210 L-12 210 Z" fill="#0f3c35" />
+            <path d="M63 210 C78 176 98 158 126 145 C148 135 166 117 188 84" stroke="#9eead4" strokeWidth="13" strokeLinecap="round" opacity="0.82" />
+            <path d="M64 210 C79 176 99 158 127 145 C149 135 167 117 189 84" stroke="rgba(255,255,255,0.38)" strokeWidth="4" strokeLinecap="round" />
+            <path d="M33 156 L45 122 L58 156 Z" fill="#052e26" opacity="0.92" />
+            <path d="M52 154 L68 108 L84 154 Z" fill="#0f513d" opacity="0.95" />
+            <path d="M161 135 L177 88 L195 135 Z" fill="#0f513d" opacity="0.94" />
+            <path d="M29 184 C63 164 92 159 123 143 C150 129 174 113 197 83" stroke="#f8fafc" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="5 7" />
+            <circle cx="29" cy="184" r="4" fill="#34d399" />
+            <circle cx="197" cy="83" r="4" fill="#f97316" />
+        </svg>
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-emerald-950/66 to-transparent" />
     </div>
 );
 
@@ -191,146 +236,172 @@ const OutdoorClientApp: React.FC = () => (
             Start route
         </button>
 
-        <TouchPulse top="46%" left="64%" size={62} tone="green" />
-        <TouchPulse top="87%" left="56%" size={54} tone="blue" />
-        <div className="pointer-events-none absolute right-[30%] top-[47%]">
+        <TouchPulse top="43%" left="61%" size={88} tone="green" />
+        <TouchPulse top="50%" left="69%" size={58} tone="amber" />
+        <TouchPulse top="87%" left="56%" size={68} tone="blue" />
+        <div className="pointer-events-none absolute right-[30%] top-[47%] z-50">
             <PhoneCursor className="h-5 w-4 drop-shadow-[0_0_8px_rgba(16,185,129,0.72)]" />
         </div>
     </div>
 );
 
 const RetailClientApp: React.FC = () => (
-    <div className="relative h-full overflow-hidden bg-[#f7f2ea] px-3 pb-8 pt-12 text-slate-950">
+    <div className="relative h-full overflow-hidden bg-[#f3f8ef] px-3 pb-8 pt-12 text-slate-950">
         <div className="flex items-center justify-between">
-            <div>
-                <div className="text-[18px] font-black leading-none">Vela</div>
-                <div className="mt-1 text-[7px] font-black uppercase text-slate-400">New outerwear</div>
+            <button type="button" className="grid h-8 w-8 place-items-center rounded-[10px] bg-white shadow-sm">
+                <ChevronLeft size={17} strokeWidth={3} />
+            </button>
+            <div className="text-center">
+                <div className="text-[7px] font-black uppercase text-slate-400">Coastline</div>
+                <div className="text-[13px] font-black">Tide walk</div>
             </div>
-            <button type="button" className="relative grid h-9 w-9 place-items-center rounded-[10px] bg-slate-950 text-white">
-                <ShoppingBag size={15} strokeWidth={2.5} />
-                <span className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-[#5dadec] text-[7px] font-black text-slate-950">2</span>
+            <button type="button" className="grid h-8 w-8 place-items-center rounded-[10px] bg-white text-slate-950 shadow-sm">
+                <Bookmark size={15} strokeWidth={2.6} />
             </button>
         </div>
 
-        <div className="relative mt-3 flex h-10 items-center gap-2 rounded-[13px] bg-white px-3 shadow-sm">
-            <Search size={15} className="text-slate-300" strokeWidth={3} />
-            <span className="flex-1 text-[10px] font-black text-slate-400">Search shells, packs</span>
-            <SlidersHorizontal size={14} className="text-slate-400" strokeWidth={2.5} />
+        <div className="relative mt-4 h-[174px] overflow-hidden rounded-[18px] shadow-[0_18px_32px_rgba(15,23,42,0.16)]">
+            <CoastScene className="h-full w-full" />
+            <div className="absolute left-3 top-3 rounded-[10px] bg-white/88 px-2.5 py-1.5 text-[8px] font-black uppercase text-slate-950 shadow-sm backdrop-blur">
+                Open coast
+            </div>
+            <div className="absolute bottom-3 left-3 right-3 rounded-[15px] bg-slate-950/76 p-3 text-white backdrop-blur">
+                <div className="text-[14px] font-black leading-none">Sea Glass Cove</div>
+                <div className="mt-2 flex items-center justify-between text-[8px] font-bold text-white/76">
+                    <span className="flex items-center gap-1">
+                        <MapPin size={9} strokeWidth={3} />
+                        Pacific rim
+                    </span>
+                    <span>520 ft rise</span>
+                </div>
+            </div>
         </div>
 
-        <div className="mt-3 flex gap-2">
-            {['Shells', 'Trail', 'Sale'].map((item, index) => (
-                <span
-                    key={item}
-                    className={`rounded-[10px] px-2.5 py-1.5 text-[8px] font-black ${index === 0 ? 'bg-slate-950 text-white' : 'bg-white text-slate-500 shadow-sm'}`}
-                >
-                    {item}
-                </span>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+            {[
+                ['4.8 mi', 'Trail'],
+                ['7:10', 'Start'],
+                ['62 F', 'Air'],
+            ].map(([value, label]) => (
+                <div key={label} className="rounded-[12px] bg-white px-2 py-2 shadow-sm">
+                    <div className="text-[11px] font-black leading-none">{value}</div>
+                    <div className="mt-1 text-[6px] font-black uppercase text-slate-400">{label}</div>
+                </div>
             ))}
         </div>
 
-        <div className="relative mt-3 overflow-hidden rounded-[18px] bg-[#15191f] p-3 text-white shadow-[0_18px_30px_rgba(15,23,42,0.18)]">
-            <div className="relative h-[126px] rounded-[15px] bg-[#d8eef8]">
-                <div className="absolute left-[18%] top-4 h-20 w-16 rounded-[18px] bg-white/48 blur-lg" />
-                <div className="absolute left-1/2 top-3 h-[100px] w-[70px] -translate-x-1/2 rounded-t-[34px] rounded-b-[15px] bg-[#69c7ee] shadow-[inset_0_-14px_22px_rgba(14,116,144,0.2)]" />
-                <div className="absolute left-[31%] top-12 h-12 w-5 rotate-[-18deg] rounded-full bg-[#38bdf8]/70" />
-                <div className="absolute right-[31%] top-12 h-12 w-5 rotate-[18deg] rounded-full bg-[#38bdf8]/70" />
-                <div className="absolute bottom-3 left-1/2 h-6 w-12 -translate-x-1/2 rounded-[9px] bg-slate-950/20" />
-            </div>
-            <div className="mt-3 flex items-start justify-between gap-3">
+        <div className="mt-3 rounded-[15px] bg-white p-3 shadow-[0_12px_24px_rgba(15,23,42,0.08)]">
+            <div className="flex items-center justify-between">
                 <div>
-                    <div className="text-[14px] font-black leading-none">Aero shell</div>
-                    <div className="mt-1 text-[8px] font-bold text-white/58">Waterproof layer</div>
+                    <div className="text-[12px] font-black leading-tight">Route notes</div>
+                    <div className="mt-1 text-[7px] font-bold text-slate-400">Sea path is clear</div>
                 </div>
-                <div className="text-[15px] font-black">$148</div>
+                <span className="rounded-[9px] bg-emerald-50 px-2 py-1 text-[7px] font-black text-emerald-700">
+                    Ready
+                </span>
             </div>
-            <div className="mt-3 flex items-center gap-2">
-                {['XS', 'S', 'M', 'L'].map((size, index) => (
-                    <span
-                        key={size}
-                        className={`grid h-7 flex-1 place-items-center rounded-[9px] text-[9px] font-black ${index === 0 ? 'bg-white/10 text-white/42' : index === 2 ? 'bg-white text-slate-950' : 'bg-white/12 text-white/70'}`}
+            <div className="mt-2 grid grid-cols-3 gap-2">
+                {['Cliffs', 'Cove', 'Sunset'].map((item, index) => (
+                    <div
+                        key={item}
+                        className={`rounded-[10px] px-1.5 py-2 text-center text-[7px] font-black ${index === 1 ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'}`}
                     >
-                        {size}
-                    </span>
+                        {item}
+                    </div>
                 ))}
             </div>
         </div>
 
         <button type="button" className="absolute bottom-10 left-4 right-4 flex h-11 items-center justify-center gap-2 rounded-[14px] bg-slate-950 text-[10px] font-black uppercase text-white shadow-[0_12px_20px_rgba(15,23,42,0.18)]">
-            Add to bag
-            <ShoppingBag size={13} strokeWidth={3} />
+            <Zap size={13} fill="currentColor" />
+            Start route
         </button>
 
-        <TouchPulse top="62%" left="56%" size={52} tone="rose" />
-        <TouchPulse top="87%" left="55%" size={50} tone="green" />
-        <div className="pointer-events-none absolute left-[58%] top-[63%]">
+        <TouchPulse top="55%" left="55%" size={80} tone="rose" />
+        <TouchPulse top="48%" left="34%" size={52} tone="amber" />
+        <TouchPulse top="87%" left="55%" size={68} tone="green" />
+        <div className="pointer-events-none absolute left-[58%] top-[56%] z-50">
             <PhoneCursor className="h-5 w-4 drop-shadow-[0_0_8px_rgba(244,63,94,0.72)]" />
         </div>
     </div>
 );
 
 const CafeClientApp: React.FC = () => (
-    <div className="relative h-full overflow-hidden bg-[#f8faf9] px-3 pb-8 pt-12 text-slate-950">
+    <div className="relative h-full overflow-hidden bg-[#f4faf5] px-3 pb-8 pt-12 text-slate-950">
         <div className="flex items-center justify-between">
             <button type="button" className="grid h-8 w-8 place-items-center rounded-[10px] bg-white shadow-sm">
                 <ChevronLeft size={17} strokeWidth={3} />
             </button>
-            <div className="flex items-center gap-2 rounded-[12px] bg-white px-3 py-2 shadow-sm">
-                <Coffee size={14} strokeWidth={2.8} />
-                <span className="text-[11px] font-black">Morning pickup</span>
+            <div className="text-center">
+                <div className="text-[7px] font-black uppercase text-slate-400">Wildflower</div>
+                <div className="text-[13px] font-black">Forest loop</div>
             </div>
             <button type="button" className="grid h-8 w-8 place-items-center rounded-[10px] bg-slate-950 text-white">
                 <Navigation size={14} strokeWidth={2.8} />
             </button>
         </div>
 
-        <div className="relative mt-4 h-[160px] overflow-hidden rounded-[18px] bg-[#e8f4ef] shadow-[0_18px_32px_rgba(15,23,42,0.12)]">
-            <svg viewBox="0 0 220 170" className="absolute inset-0 h-full w-full" fill="none" aria-hidden>
-                <rect width="220" height="170" fill="#e8f4ef" />
-                <path d="M-18 160 C27 132 52 133 84 105 C125 69 156 73 238 34" stroke="white" strokeWidth="18" strokeLinecap="round" />
-                <path d="M30 -14 C40 43 42 82 72 113 C101 143 127 159 147 232" stroke="white" strokeWidth="16" strokeLinecap="round" />
-                <path d="M-18 54 L244 147" stroke="white" strokeWidth="13" strokeLinecap="round" />
-                <path d="M-18 160 C27 132 52 133 84 105 C125 69 156 73 238 34" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeDasharray="7 9" />
-                <path d="M30 -14 C40 43 42 82 72 113 C101 143 127 159 147 232" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeDasharray="7 9" />
-                <path d="M-18 54 L244 147" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeDasharray="7 9" />
-            </svg>
-            <div className="absolute left-[29%] top-[44%] grid h-8 w-8 place-items-center rounded-[10px] bg-slate-950 text-white shadow-lg">
-                <Coffee size={15} strokeWidth={3} />
+        <div className="relative mt-4 h-[204px] overflow-hidden rounded-[18px] shadow-[0_18px_32px_rgba(15,23,42,0.14)]">
+            <ForestScene className="h-full w-full" />
+            <div className="absolute left-3 top-3 rounded-[10px] bg-white/88 px-2.5 py-1.5 text-[8px] font-black uppercase text-slate-950 shadow-sm backdrop-blur">
+                Open forest
             </div>
-            <div className="absolute right-[22%] top-[28%] grid h-7 w-7 place-items-center rounded-[10px] bg-white text-slate-950 shadow-md">
-                <Coffee size={13} strokeWidth={3} />
+            <div className="absolute bottom-3 left-3 right-3 rounded-[15px] bg-slate-950/76 p-3 text-white backdrop-blur">
+                <div className="text-[14px] font-black leading-none">Fern Hollow</div>
+                <div className="mt-2 flex items-center justify-between text-[8px] font-bold text-white/76">
+                    <span className="flex items-center gap-1">
+                        <MapPin size={9} strokeWidth={3} />
+                        North grove
+                    </span>
+                    <span>3.6 mi</span>
+                </div>
             </div>
         </div>
 
         <div className="mt-3 rounded-[17px] bg-white p-3 shadow-[0_16px_28px_rgba(15,23,42,0.12)]">
             <div className="flex items-start justify-between gap-2">
                 <div>
-                    <div className="text-[13px] font-black leading-tight">Loop Cafe</div>
+                    <div className="text-[13px] font-black leading-tight">Lookout notes</div>
                     <div className="mt-1 flex items-center gap-1 text-[8px] font-bold text-slate-400">
                         <MapPin size={10} strokeWidth={3} />
-                        Fulton Market
+                        Creek overlook
                     </div>
                 </div>
-                <div className="rounded-[9px] bg-emerald-50 px-2 py-1 text-[8px] font-black text-emerald-600">Open</div>
+                <div className="rounded-[9px] bg-emerald-50 px-2 py-1 text-[8px] font-black text-emerald-600">Clear</div>
             </div>
-            <div className="mt-3 flex items-center gap-2">
-                <div className="grid h-10 w-10 place-items-center rounded-[12px] bg-[#f3e5d8]">
-                    <Coffee size={16} strokeWidth={2.8} />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <div className="truncate text-[10px] font-black">Honey oat latte</div>
-                    <div className="text-[8px] font-black text-slate-400">$5.80</div>
-                </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+                {['Mist', 'Moss', 'Creek'].map((item, index) => (
+                    <div
+                        key={item}
+                        className={`rounded-[10px] px-2 py-2 text-center text-[8px] font-black ${index === 1 ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'}`}
+                    >
+                        {item}
+                    </div>
+                ))}
             </div>
-        </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+                {[
+                    ['6:50', 'Start'],
+                    ['58 F', 'Air'],
+                    ['Low', 'Wind'],
+                ].map(([value, label]) => (
+                    <div key={label} className="rounded-[10px] bg-slate-50 px-2 py-1.5">
+                        <div className="text-[10px] font-black leading-none">{value}</div>
+                        <div className="mt-1 text-[6px] font-black uppercase text-slate-400">{label}</div>
+                    </div>
+                ))}
+            </div>
+                </div>
 
         <button type="button" className="absolute bottom-10 left-4 right-4 flex h-11 items-center justify-center gap-2 rounded-[14px] bg-slate-950 text-[10px] font-black uppercase text-white shadow-[0_12px_20px_rgba(15,23,42,0.18)]">
-            Order ahead
+            <Zap size={13} fill="currentColor" />
+            Start route
         </button>
 
-        <TouchPulse top="49%" left="31%" size={54} tone="blue" />
-        <TouchPulse top="87%" left="56%" size={50} tone="rose" />
-        <div className="pointer-events-none absolute right-[36%] bottom-[54px]">
+        <TouchPulse top="49%" left="36%" size={78} tone="blue" />
+        <TouchPulse top="58%" left="63%" size={58} tone="green" />
+        <TouchPulse top="87%" left="56%" size={68} tone="rose" />
+        <div className="pointer-events-none absolute right-[36%] bottom-[54px] z-50">
             <PhoneCursor className="h-5 w-4 drop-shadow-[0_0_8px_rgba(244,63,94,0.72)]" />
         </div>
     </div>
@@ -338,13 +409,20 @@ const CafeClientApp: React.FC = () => (
 
 type HeroCopy = MarketingLocale['hero'];
 
-export const Hero: React.FC<{ copy: HeroCopy; dir?: 'ltr' | 'rtl' }> = ({ copy, dir = 'ltr' }) => {
+export const Hero: React.FC<{ copy: HeroCopy; homeCopy: MarketingHomeCopy['hero']; dir?: 'ltr' | 'rtl' }> = ({ copy, homeCopy, dir = 'ltr' }) => {
+    const isRtl = dir === 'rtl';
     const alignClass = dir === 'rtl' ? 'text-right' : 'text-left';
+    const headlinePrimaryClass = isRtl
+        ? 'block max-w-full break-words text-[2.35rem] font-black leading-[1.2] tracking-normal min-[380px]:text-[2.75rem] sm:text-[3.35rem] md:text-[4.15rem] lg:text-[4.55rem] xl:text-[4.95rem] 2xl:text-[5.35rem]'
+        : 'block max-w-full break-words text-[2.65rem] font-black uppercase leading-[0.92] tracking-tight min-[380px]:text-5xl sm:text-6xl md:text-7xl lg:text-8xl';
+    const headlineSecondaryClass = isRtl
+        ? 'mt-2 block max-w-full break-words font-mono text-[2rem] font-black leading-[1.18] tracking-normal text-[#5dadec] min-[380px]:text-[2.3rem] sm:mt-3 sm:text-[3rem] md:text-[3.7rem] lg:mt-4 lg:text-[4.1rem] xl:text-[4.55rem] 2xl:text-[5rem]'
+        : 'mt-3 block max-w-full break-words font-mono text-3xl font-black uppercase leading-[0.96] tracking-[0.06em] text-[#5dadec] min-[380px]:text-4xl sm:mt-3 sm:text-5xl sm:tracking-[0.1em] md:text-6xl lg:mt-4 lg:text-7xl';
 
     return (
         <section
-            aria-label="Hero section"
-            className="relative w-full overflow-hidden border-b-2 border-black bg-[#f8fafc] px-4 pb-16 pt-16 text-black sm:px-6 sm:pb-20 sm:pt-24 lg:px-8 lg:pb-28 lg:pt-28"
+            aria-label={homeCopy.ariaLabel}
+            className={`relative w-full overflow-hidden border-b-2 border-black bg-[#f8fafc] px-4 pb-16 text-black sm:px-6 sm:pb-20 lg:px-8 lg:pb-28 ${isRtl ? 'pt-20 sm:pt-28 lg:pt-32' : 'pt-16 sm:pt-24 lg:pt-28'}`}
         >
             <div
                 className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(#000_1px,transparent_1px),linear-gradient(90deg,#000_1px,transparent_1px)] [background-size:32px_32px]"
@@ -363,16 +441,16 @@ export const Hero: React.FC<{ copy: HeroCopy; dir?: 'ltr' | 'rtl' }> = ({ copy, 
 
 
                         <h1 className="max-w-4xl text-black">
-                            <span className="block max-w-full break-words text-[2.65rem] font-black uppercase leading-[0.92] tracking-tight min-[380px]:text-5xl sm:text-6xl md:text-7xl lg:text-8xl">
+                            <span className={headlinePrimaryClass}>
                                 {copy.headlinePrimary}
                             </span>
-                            <span className="mt-3 block max-w-full break-words font-mono text-3xl font-black uppercase leading-[0.96] tracking-[0.06em] text-[#5dadec] min-[380px]:text-4xl sm:mt-3 sm:text-5xl sm:tracking-[0.1em] md:text-6xl lg:mt-4 lg:text-7xl">
+                            <span className={headlineSecondaryClass}>
                                 {copy.headlineSecondary}
                             </span>
                         </h1>
 
                         <p className="max-w-full text-base font-extrabold leading-relaxed text-slate-700 sm:max-w-2xl sm:text-lg">
-                            See what users actually did inside your mobile app, why they got stuck, and which fixes will move retention, stability, and conversion.
+                            {homeCopy.description}
                         </p>
 
                         <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
@@ -394,11 +472,25 @@ export const Hero: React.FC<{ copy: HeroCopy; dir?: 'ltr' | 'rtl' }> = ({ copy, 
                             </Link>
                         </div>
 
-                        <div className="public-visual-copy flex justify-center pt-2 lg:hidden">
-                            <div className="-rotate-[3deg]">
-                                <IPhone size="sm" shadowClass="shadow-[0_24px_52px_rgba(15,23,42,0.2)]">
-                                    <CafeClientApp />
-                                </IPhone>
+                        <div className="public-visual-copy flex justify-center pt-4 lg:hidden">
+                            <div className="relative h-[390px] w-full max-w-[390px] min-[380px]:h-[420px]">
+                                <div className="absolute left-6 top-14 z-10 origin-bottom-left -rotate-[7deg] scale-[0.62] transform-gpu min-[380px]:scale-[0.66]">
+                                    <IPhone size="sm" shadowClass="shadow-[0_18px_38px_rgba(15,23,42,0.2)]">
+                                        <RetailClientApp />
+                                    </IPhone>
+                                </div>
+
+                                <div className="absolute left-1/2 top-0 z-30 origin-top -translate-x-1/2 scale-[0.7] transform-gpu min-[380px]:scale-[0.74]">
+                                    <IPhone size="lg" shadowClass="shadow-[0_24px_54px_rgba(15,23,42,0.26)]">
+                                        <OutdoorClientApp />
+                                    </IPhone>
+                                </div>
+
+                                <div className="absolute right-6 top-16 z-20 origin-bottom-right rotate-[7deg] scale-[0.62] transform-gpu min-[380px]:scale-[0.66]">
+                                    <IPhone size="sm" shadowClass="shadow-[0_18px_38px_rgba(15,23,42,0.2)]">
+                                        <CafeClientApp />
+                                    </IPhone>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -408,7 +500,7 @@ export const Hero: React.FC<{ copy: HeroCopy; dir?: 'ltr' | 'rtl' }> = ({ copy, 
                         className="public-visual-copy relative hidden animate-fade-in-right opacity-0 lg:flex lg:items-end lg:justify-end"
                         style={{ animationDelay: '0.2s' }}
                     >
-                        <div className="relative h-[610px] w-[760px] origin-right scale-[0.7] xl:scale-[0.84] 2xl:scale-[0.94]">
+                        <div className="relative h-[610px] w-[760px] origin-right translate-x-16 scale-[0.66] xl:translate-x-14 xl:scale-[0.8] 2xl:translate-x-12 2xl:scale-[0.92]">
                             <div className="absolute bottom-[88px] left-[9%] right-[9%] h-px bg-gradient-to-r from-transparent via-black/18 to-transparent" />
                             <div className="relative z-10 flex h-full items-end justify-center gap-7 xl:gap-8">
                                 <div className="relative z-10 mb-5 -rotate-[5deg] translate-y-1 transform-gpu">

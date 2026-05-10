@@ -5,7 +5,7 @@
  */
 
 import React from "react";
-import { useLocation } from "react-router";
+import { redirect, useLocation } from "react-router";
 import type { Route } from "./+types/route";
 import { Hero } from "~/features/public/home/components/Hero";
 import { TrustBanners } from "~/features/public/home/components/TrustBanners";
@@ -17,10 +17,27 @@ import { LandingNarrative } from "~/features/public/home/components/LandingNarra
 import { PerformanceMetrics } from "~/features/public/home/components/PerformanceMetrics";
 import {
     MARKETING_AVAILABLE_LANGUAGES,
+    MARKETING_LOCALE_VARY_HEADER,
     getMarketingAlternateLinks,
+    getMarketingHomeCopy,
     getMarketingLocaleFromPathname,
+    getMarketingLocaleRedirectPath,
     getMarketingLocaleUrl,
 } from "~/shared/lib/internationalMarketing";
+
+export function loader({ request }: Route.LoaderArgs) {
+    const redirectPath = getMarketingLocaleRedirectPath(request);
+    if (redirectPath) {
+        throw redirect(redirectPath, {
+            status: 302,
+            headers: {
+                Vary: MARKETING_LOCALE_VARY_HEADER,
+            },
+        });
+    }
+
+    return null;
+}
 
 export const meta: Route.MetaFunction = ({ location }) => {
     const locale = getMarketingLocaleFromPathname(location.pathname);
@@ -75,6 +92,7 @@ export const meta: Route.MetaFunction = ({ location }) => {
 export default function LandingPage() {
     const location = useLocation();
     const locale = getMarketingLocaleFromPathname(location.pathname);
+    const copy = getMarketingHomeCopy(locale);
     const canonicalUrl = getMarketingLocaleUrl(locale);
 
     return (
@@ -104,12 +122,6 @@ export default function LandingPage() {
                                     availableLanguage: MARKETING_AVAILABLE_LANGUAGES,
                                 },
                                 about: [
-                                    "mobile analytics",
-                                    "session replay",
-                                    "mobile observability",
-                                    "mobile app analytics",
-                                    "crash reporting",
-                                    "heatmaps",
                                     ...locale.keywords,
                                 ],
                             },
@@ -135,12 +147,12 @@ export default function LandingPage() {
             />
             <Header />
             <main aria-label={locale.mainAriaLabel} className="w-full">
-                <Hero copy={locale.hero} dir={locale.dir} />
-                <TrustBanners />
-                <LandingNarrative />
-                <EmbeddedDemoWindow />
-                <PerformanceMetrics />
-                <EngineeringCTA />
+                <Hero copy={locale.hero} homeCopy={copy.hero} dir={locale.dir} />
+                <TrustBanners copy={copy.trust} />
+                <LandingNarrative copy={copy.narrative} dir={locale.dir} />
+                <EmbeddedDemoWindow copy={copy.demo} />
+                <PerformanceMetrics copy={copy.performance} dir={locale.dir} />
+                <EngineeringCTA copy={copy.engineeringCta} />
             </main>
             <Footer />
         </div>

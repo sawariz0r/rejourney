@@ -9,6 +9,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
+import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
 const BUNDLEPHOBIA_REJOURNEY =
     'https://bundlephobia.com/package/@rejourneyco/react-native@1.0.17';
@@ -92,7 +93,7 @@ const performanceMetricRows = [
     },
 ];
 
-export const PerformanceMetrics: React.FC = () => {
+export const PerformanceMetrics: React.FC<{ copy: MarketingHomeCopy['performance']; dir?: 'ltr' | 'rtl' }> = ({ copy, dir = 'ltr' }) => {
     const sectionRef = useRef<HTMLElement>(null);
     const [isVisible, setIsVisible] = useState(false);
 
@@ -116,9 +117,13 @@ export const PerformanceMetrics: React.FC = () => {
     const rejourneyRow = bundleCompareRows[0];
     const sentryRow = bundleCompareRows[1];
     const rejourneyEfficiencyX = (sentryRow.minifiedKb / rejourneyRow.minifiedKb).toFixed(1);
+    const renderedMetricRows = performanceMetricRows.map((row, index) => ({
+        ...row,
+        ...(copy.metricRows[index] ?? {}),
+    }));
 
     return (
-        <section ref={sectionRef} className="relative w-full overflow-hidden border-t-2 border-black bg-slate-50 px-4 py-14 sm:px-6 sm:py-24 lg:px-8">
+        <section ref={sectionRef} dir={dir} className="relative w-full overflow-hidden border-t-2 border-black bg-slate-50 px-4 py-14 sm:px-6 sm:py-24 lg:px-8">
             {/* Background Grid Pattern */}
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
 
@@ -128,18 +133,18 @@ export const PerformanceMetrics: React.FC = () => {
                 <div className="mb-10 flex flex-col items-start justify-between gap-6 lg:mb-16 lg:flex-row lg:items-end lg:gap-8">
                     <div className="min-w-0">
                         <h2 className="mb-4 break-words text-3xl font-black uppercase leading-tight tracking-tight sm:text-7xl sm:tracking-tighter">
-                            Tiny Footprint.<br />
-                            <span className="text-gray-400">Extreme Impact.</span>
+                            {copy.headingPrimary}<br />
+                            <span className="text-gray-400">{copy.headingSecondary}</span>
                         </h2>
                         <p className="max-w-xl break-words font-mono text-[11px] font-bold uppercase leading-relaxed tracking-wide text-gray-500 sm:text-sm sm:tracking-widest">
-                            {rejourneyEfficiencyX}× smaller minified JS bundle vs {sentryRow.shortLabel}@{sentryRow.version} (BundlePhobia)
+                            {copy.bundleSummary(rejourneyEfficiencyX, sentryRow.shortLabel, sentryRow.version)}
                         </p>
                     </div>
 
                     {/* Floating Badge */}
                     <div className="hidden lg:block bg-black text-white p-6 border-2 border-black shadow-[8px_8px_0px_0px_rgba(93,173,236,1)] rotate-2">
                         <p className="text-4xl font-black font-mono">{rejourneyEfficiencyX}X</p>
-                        <p className="text-[10px] uppercase font-bold tracking-widest mt-1">Smaller JS bundle</p>
+                        <p className="text-[10px] uppercase font-bold tracking-widest mt-1">{copy.smallerBundle}</p>
                     </div>
                 </div>
 
@@ -152,15 +157,15 @@ export const PerformanceMetrics: React.FC = () => {
                         {/* Chart Area */}
                         <div className="flex flex-col h-full">
                             <div className="mb-5 flex flex-col gap-3 border-b-2 border-black pb-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:pb-2">
-                                <h3 className="text-base font-black uppercase tracking-tight sm:text-lg">Npm bundle size (BundlePhobia)</h3>
+                                <h3 className="text-base font-black uppercase tracking-tight sm:text-lg">{copy.chartTitle}</h3>
                                 <div className="flex flex-wrap gap-4">
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-[#1e3a5f] border-2 border-black" aria-hidden />
-                                        <span className="text-[10px] font-bold uppercase">Gzip</span>
+                                        <span className="text-[10px] font-bold uppercase">{copy.gzip}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="w-3 h-3 bg-[#bfdbfe] border-2 border-black" aria-hidden />
-                                        <span className="text-[10px] font-bold uppercase">Minified − gzip</span>
+                                        <span className="text-[10px] font-bold uppercase">{copy.minifiedMinusGzip}</span>
                                     </div>
                                 </div>
                             </div>
@@ -201,8 +206,8 @@ export const PerformanceMetrics: React.FC = () => {
                                                 formatter={(value: number | undefined, name: string | undefined) => {
                                                     const v = value ?? 0;
                                                     const n = name ?? '';
-                                                    if (n === 'minifiedAboveGzipKb') return [`${v.toFixed(1)} kB`, 'Minified − gzip'];
-                                                    if (n === 'gzipKb') return [`${v.toFixed(1)} kB`, 'Gzipped'];
+                                                    if (n === 'minifiedAboveGzipKb') return [`${v.toFixed(1)} kB`, copy.minifiedMinusGzip];
+                                                    if (n === 'gzipKb') return [`${v.toFixed(1)} kB`, copy.gzip];
                                                     return [`${v} kB`, n];
                                                 }}
                                                 labelFormatter={(_, payload) => {
@@ -240,7 +245,7 @@ export const PerformanceMetrics: React.FC = () => {
                                 ))}
                             </ul>
                             <p className="mt-2 text-[10px] font-mono text-gray-500 uppercase leading-relaxed">
-                                Bar height = minified size; darker segment = gzipped transfer size (same layout as BundlePhobia).
+                                {copy.chartNote}
                             </p>
                         </div>
 
@@ -256,11 +261,11 @@ export const PerformanceMetrics: React.FC = () => {
                                     </span>
                                     <span className="text-xl font-bold uppercase text-[#5dadec]">kB</span>
                                     <span className="text-[10px] font-bold font-mono uppercase text-gray-500">
-                                        minified
+                                        {copy.minified}
                                     </span>
                                 </div>
                                 <p className="text-sm font-mono font-bold text-gray-700 mt-1">
-                                    {rejourneyRow.gzipKb} kB gzipped
+                                    {rejourneyRow.gzipKb} {copy.gzipped}
                                 </p>
                                 <a
                                     href={rejourneyRow.href}
@@ -269,7 +274,7 @@ export const PerformanceMetrics: React.FC = () => {
                                     className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold font-mono uppercase text-gray-500 underline decoration-2 underline-offset-2 hover:text-black"
                                 >
                                     <ArrowDownRight className="w-3.5 h-3.5 text-[#008000]" aria-hidden />
-                                    BundlePhobia @{rejourneyRow.version}
+                                    {copy.bundlePhobiaVersion(rejourneyRow.version)}
                                 </a>
                             </div>
 
@@ -285,11 +290,11 @@ export const PerformanceMetrics: React.FC = () => {
                                     </span>
                                     <span className="text-xl font-bold uppercase">kB</span>
                                     <span className="text-[10px] font-bold font-mono uppercase text-gray-500">
-                                        minified
+                                        {copy.minified}
                                     </span>
                                 </div>
                                 <p className="text-sm font-mono font-bold text-gray-700 mt-1">
-                                    {sentryRow.gzipKb} kB gzipped
+                                    {sentryRow.gzipKb} {copy.gzipped}
                                 </p>
                                 <a
                                     href={sentryRow.href}
@@ -298,10 +303,10 @@ export const PerformanceMetrics: React.FC = () => {
                                     className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold font-mono uppercase text-gray-500 underline decoration-2 underline-offset-2 hover:text-black"
                                 >
                                     <ArrowUpRight className="w-3.5 h-3.5 text-[#ef4444]" aria-hidden />
-                                    BundlePhobia @{sentryRow.version}
+                                    {copy.bundlePhobiaVersion(sentryRow.version)}
                                 </a>
                                 <p className="text-[10px] font-mono text-gray-500 uppercase mt-3 max-w-[240px] leading-tight">
-                                    Includes transitive npm dependencies in BundlePhobia&apos;s model.
+                                    {copy.transitiveNote}
                                 </p>
                             </div>
                         </div>
@@ -311,12 +316,12 @@ export const PerformanceMetrics: React.FC = () => {
                     {/* Performance Metrics Table */}
                     <div className="mt-10 sm:mt-12">
                         <div className="mb-5 border-b-2 border-black pb-3 sm:mb-6 sm:pb-2">
-                            <h3 className="text-lg font-black uppercase tracking-tight">Performance Metrics</h3>
-                            <p className="mt-1 text-[10px] font-mono uppercase leading-relaxed text-gray-500">iPhone 15 Pro; iOS 18; Expo SDK 54; React Native New Architecture. Running on <a href="https://merchcampus.com" target="_blank" rel="noopener noreferrer" className="underline">Merch App</a>. Production build.</p>
+                            <h3 className="text-lg font-black uppercase tracking-tight">{copy.metricsTitle}</h3>
+                            <p className="mt-1 text-[10px] font-mono uppercase leading-relaxed text-gray-500">{copy.metricsNotePrefix} <a href="https://merchcampus.com" target="_blank" rel="noopener noreferrer" className="underline">{copy.metricsNoteApp}</a>. {copy.metricsNoteSuffix}</p>
                         </div>
 
                         <div className="grid gap-3 md:hidden">
-                            {performanceMetricRows.map((row) => (
+                            {renderedMetricRows.map((row) => (
                                 <article key={row.metric} className="border-2 border-black bg-[#f8fafc] p-3 shadow-neo-sm">
                                     <div className="mb-3 flex items-start justify-between gap-3 border-b-2 border-black pb-2">
                                         <h4 className="text-xs font-black uppercase leading-tight">{row.metric}</h4>
@@ -326,15 +331,15 @@ export const PerformanceMetrics: React.FC = () => {
                                     </div>
                                     <div className="grid grid-cols-3 gap-2 font-mono text-[10px] font-black uppercase">
                                         <div className="border-2 border-black bg-white p-2">
-                                            <p className="text-gray-500">Avg</p>
+                                            <p className="text-gray-500">{copy.tableAvgShort}</p>
                                             <p className="mt-1 text-sm text-black">{row.average}</p>
                                         </div>
                                         <div className="border-2 border-black bg-white p-2">
-                                            <p className="text-gray-500">Max</p>
+                                            <p className="text-gray-500">{copy.tableMaxShort}</p>
                                             <p className="mt-1 text-sm text-black">{row.max}</p>
                                         </div>
                                         <div className="border-2 border-black bg-white p-2">
-                                            <p className="text-gray-500">Min</p>
+                                            <p className="text-gray-500">{copy.tableMinShort}</p>
                                             <p className="mt-1 text-sm text-black">{row.min}</p>
                                         </div>
                                     </div>
@@ -346,15 +351,15 @@ export const PerformanceMetrics: React.FC = () => {
                             <table className="w-full min-w-[720px] border-collapse">
                                 <thead>
                                     <tr className="bg-black text-white">
-                                        <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-widest border-r-2 border-white">Metric</th>
-                                        <th className="text-right py-3 px-4 text-[10px] font-black uppercase tracking-widest border-r-2 border-white">Average (ms)</th>
-                                        <th className="text-right py-3 px-4 text-[10px] font-black uppercase tracking-widest border-r-2 border-white">Max (ms)</th>
-                                        <th className="text-right py-3 px-4 text-[10px] font-black uppercase tracking-widest border-r-2 border-white">Min (ms)</th>
-                                        <th className="text-right py-3 px-4 text-[10px] font-black uppercase tracking-widest">Thread</th>
+                                        <th className="text-left py-3 px-4 text-[10px] font-black uppercase tracking-widest border-r-2 border-white">{copy.tableMetric}</th>
+                                        <th className="text-right py-3 px-4 text-[10px] font-black uppercase tracking-widest border-r-2 border-white">{copy.tableAverage}</th>
+                                        <th className="text-right py-3 px-4 text-[10px] font-black uppercase tracking-widest border-r-2 border-white">{copy.tableMax}</th>
+                                        <th className="text-right py-3 px-4 text-[10px] font-black uppercase tracking-widest border-r-2 border-white">{copy.tableMin}</th>
+                                        <th className="text-right py-3 px-4 text-[10px] font-black uppercase tracking-widest">{copy.tableThread}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {performanceMetricRows.map((row, index) => (
+                                    {renderedMetricRows.map((row, index) => (
                                         <tr key={row.metric} className={`${index < performanceMetricRows.length - 1 ? 'border-b-2 border-black' : ''} transition-colors hover:bg-slate-50`}>
                                             <td className="border-r-2 border-black px-4 py-3 text-xs font-black uppercase">{row.metric}</td>
                                             <td className="border-r-2 border-black px-4 py-3 text-right font-mono text-xs font-bold">{row.average}</td>

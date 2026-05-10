@@ -8,10 +8,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { Maximize2, MousePointerClick } from 'lucide-react';
+import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
 const DEMO_CURSOR_FOLLOW_PAD_PX = 16;
 
-export const EmbeddedDemoWindow: React.FC = () => {
+export const EmbeddedDemoWindow: React.FC<{ copy: MarketingHomeCopy['demo'] }> = ({ copy }) => {
     const sectionRef = useRef<HTMLElement>(null);
     const demoFrameRef = useRef<HTMLIFrameElement>(null);
     const [shouldLoadDemo, setShouldLoadDemo] = useState(false);
@@ -172,7 +173,7 @@ export const EmbeddedDemoWindow: React.FC = () => {
     return (
         <section
             ref={sectionRef}
-            aria-label="Interactive Demo"
+            aria-label={copy.ariaLabel}
             className={`relative w-full overflow-hidden border-t border-slate-200 bg-[#f8fafc] px-4 pb-14 pt-14 sm:px-4 sm:pb-20 sm:pt-24 lg:px-6 lg:pt-28 ${cursorVisible ? 'cursor-none' : ''}`}
             onPointerEnter={onSectionPointerEnter}
             onPointerMove={onSectionPointerMove}
@@ -183,7 +184,7 @@ export const EmbeddedDemoWindow: React.FC = () => {
                 <div role="presentation" className="relative w-full px-0 py-8 sm:px-3 sm:py-14 lg:py-16">
                     <div className="relative z-[1] mx-auto inline-block max-w-2xl px-2 pb-2 pt-1 sm:px-3">
                         <h2 className="relative max-w-full pl-10 text-2xl font-black uppercase leading-tight tracking-tight text-black sm:pl-14 sm:text-4xl lg:pl-16 lg:text-5xl xl:text-6xl">
-                            Walk the product...
+                            {copy.heading}
                         </h2>
                     </div>
                     {/* Idle animated cursor — fades out when user hovers, always mounted to avoid jump */}
@@ -208,10 +209,10 @@ export const EmbeddedDemoWindow: React.FC = () => {
                             <MousePointerClick size={26} strokeWidth={2.7} />
                         </div>
                         <h3 className="mt-5 text-2xl font-black uppercase leading-tight text-slate-950">
-                            Full dashboard demo, best opened wide.
+                            {copy.mobileTitle}
                         </h3>
                         <p className="mt-3 text-sm font-bold leading-relaxed text-slate-600">
-                            The live console is a dense desktop workspace, so phones get a fast overview here and a dedicated fullscreen launch.
+                            {copy.mobileCopy}
                         </p>
                         <Link
                             to="/demo"
@@ -219,7 +220,7 @@ export const EmbeddedDemoWindow: React.FC = () => {
                             rel="noopener noreferrer"
                             className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-slate-950 px-4 py-3 text-sm font-black uppercase text-white shadow-sm"
                         >
-                            Open demo
+                            {copy.openDemo}
                             <Maximize2 size={16} strokeWidth={3} />
                         </Link>
                     </div>
@@ -239,7 +240,7 @@ export const EmbeddedDemoWindow: React.FC = () => {
                                 </div>
                                 <div className="min-w-0 rounded-md border border-slate-200 bg-white px-3 py-1 shadow-sm">
                                     <span className="truncate font-mono text-[10px] font-black uppercase tracking-wider text-slate-700 sm:text-xs">
-                                        Live dashboard demo
+                                        {copy.liveLabel}
                                     </span>
                                 </div>
                             </div>
@@ -250,10 +251,10 @@ export const EmbeddedDemoWindow: React.FC = () => {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-[10px] font-black uppercase tracking-wider text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-400 hover:bg-[#ecfeff] min-[460px]:w-auto"
-                                    title="Open in new tab"
+                                    title={copy.openInNewTabTitle}
                                 >
                                     <Maximize2 size={14} strokeWidth={3} />
-                                    Fullscreen
+                                    {copy.fullscreen}
                                 </Link>
                             </div>
                         </div>
@@ -264,7 +265,7 @@ export const EmbeddedDemoWindow: React.FC = () => {
                                     ref={demoFrameRef}
                                     src="/demo"
                                     className="h-[min(68vh,560px)] min-h-[420px] w-full cursor-none border-0 bg-white sm:h-[700px] lg:h-[min(82vh,920px)] lg:min-h-[760px]"
-                                    title="Rejourney Dashboard Demo"
+                                    title={copy.iframeTitle}
                                     loading="eager"
                                     tabIndex={-1}
                                 />

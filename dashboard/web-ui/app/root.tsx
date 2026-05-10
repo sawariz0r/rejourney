@@ -25,6 +25,7 @@ import "./styles/landing.css";
 import { getPublicRuntimeEnvSnapshot } from "./shared/config/runtimeEnv";
 import {
     MARKETING_AVAILABLE_LANGUAGES,
+    getMarketingHomeCopy,
     getMarketingLocaleFromPathname,
 } from "./shared/lib/internationalMarketing";
 import { isDashboardShellBootstrapData } from "./shell/server/dashboardBootstrap";
@@ -92,6 +93,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const runtimeEnv = getPublicRuntimeEnvSnapshot();
     const location = useLocation();
     const locale = getMarketingLocaleFromPathname(location.pathname);
+    const copy = getMarketingHomeCopy(locale);
 
     return (
         <html lang={locale.languageTag} dir={locale.dir}>
@@ -142,7 +144,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                         "priceCurrency": "USD"
                                     },
                                     "url": "https://rejourney.co/",
-                                    "description": "Lightweight, open-source analytics and observability for mobile apps with crash reporting, performant session replay, journeys, and heatmaps."
+                                    "description": locale.metaDescription
                                 },
                                 {
                                     "@type": "WebSite",
@@ -156,11 +158,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                     "name": "Sitelinks",
                                     "inLanguage": locale.languageTag,
                                     "itemListElement": [
-                                        { "@type": "SiteNavigationElement", "position": 1, "name": "Docs", "url": "https://rejourney.co/docs/reactnative/overview" },
-                                        { "@type": "SiteNavigationElement", "position": 2, "name": "Engineering", "url": "https://rejourney.co/engineering" },
-                                        { "@type": "SiteNavigationElement", "position": 3, "name": "Pricing", "url": "https://rejourney.co/pricing" },
-                                        { "@type": "SiteNavigationElement", "position": 4, "name": "Self-Hosted", "url": "https://rejourney.co/docs/selfhosted" },
-                                        { "@type": "SiteNavigationElement", "position": 5, "name": "Log In", "url": "https://rejourney.co/login" }
+                                        { "@type": "SiteNavigationElement", "position": 1, "name": copy.header.docs, "url": "https://rejourney.co/docs/reactnative/overview" },
+                                        { "@type": "SiteNavigationElement", "position": 2, "name": copy.header.engineering, "url": "https://rejourney.co/engineering" },
+                                        { "@type": "SiteNavigationElement", "position": 3, "name": copy.header.pricing, "url": "https://rejourney.co/pricing" },
+                                        { "@type": "SiteNavigationElement", "position": 4, "name": copy.header.selfHosted, "url": "https://rejourney.co/docs/selfhosted" },
+                                        { "@type": "SiteNavigationElement", "position": 5, "name": copy.header.login, "url": "https://rejourney.co/login" }
                                     ]
                                 }
                             ]

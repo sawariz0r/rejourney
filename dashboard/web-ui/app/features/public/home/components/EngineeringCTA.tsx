@@ -1,8 +1,9 @@
 import React from 'react';
 import { ArrowRight, Terminal } from 'lucide-react';
 import { Link } from 'react-router';
+import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
-export const EngineeringCTA: React.FC = () => {
+export const EngineeringCTA: React.FC<{ copy: MarketingHomeCopy['engineeringCta'] }> = ({ copy }) => {
     return (
         <section className="w-full border-t-2 border-black bg-[#f8fafc] text-black">
             <div className="relative w-full overflow-hidden px-4 py-16 sm:px-6 sm:py-32 lg:px-8">
@@ -21,7 +22,7 @@ export const EngineeringCTA: React.FC = () => {
 
                 <div className="relative z-10 mx-auto max-w-5xl border-2 border-black bg-white p-4 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sm:p-8 sm:shadow-[14px_14px_0px_0px_rgba(0,0,0,1)] lg:p-12">
                     <div className="mx-auto mb-6 flex max-w-xl flex-wrap justify-center gap-2 sm:mb-8">
-                        {['Open source', 'Self-hostable'].map((item, index) => (
+                        {copy.badges.map((item, index) => (
                             <span
                                 key={item}
                                 className={`border-2 border-black px-3 py-1 text-[10px] font-mono font-black uppercase tracking-widest shadow-neo-sm ${
@@ -34,11 +35,11 @@ export const EngineeringCTA: React.FC = () => {
                     </div>
 
                     <h2 className="mx-auto mb-8 max-w-5xl break-words text-xl font-black uppercase leading-tight tracking-tight text-black sm:text-2xl md:text-3xl lg:text-4xl">
-                        Open, documented
+                        {copy.headingBefore}
                         <span className="text-[#5dadec]">
-                            {' '}Engineering
+                            {' '}{copy.headingAccent}
                         </span>
-                        {' '}Decisions.
+                        {' '}{copy.headingAfter}
                     </h2>
 
 
@@ -48,7 +49,7 @@ export const EngineeringCTA: React.FC = () => {
                                 className="flex w-full items-center justify-center gap-3 border-2 border-black bg-black px-4 py-4 text-xs font-black uppercase tracking-widest text-white shadow-[5px_5px_0px_0px_rgba(93,173,236,1)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5dadec] hover:text-black hover:shadow-neo-lg active:translate-y-0 sm:w-auto sm:px-8 sm:text-base"
                             >
                                 <Terminal size={20} strokeWidth={3} />
-                                View Engineering Decisions
+                                {copy.primary}
                             </button>
                         </Link>
 
@@ -56,7 +57,7 @@ export const EngineeringCTA: React.FC = () => {
                             <button
                                 className="flex w-full items-center justify-center gap-3 border-2 border-black bg-[#fef08a] px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-neo transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-neo-lg active:translate-y-0 sm:w-auto sm:px-8 sm:text-base"
                             >
-                                Start Building
+                                {copy.secondary}
                                 <ArrowRight size={20} strokeWidth={3} />
                             </button>
                         </Link>
