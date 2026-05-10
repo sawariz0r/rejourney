@@ -27,13 +27,24 @@ metadata:
   labels:
     app.kubernetes.io/part-of: rejourney
 spec:
-  replicas: 4  # On the 12 vCPU / 24 GiB node, four API pods keep ingest spikes from saturating the event loop
-  minReadySeconds: 10  # Pod must stay Ready for 10s before old pods are killed — prevents premature cutover
+  # Replica count here is the HPA floor (minReplicas=3 in hpa.yaml).
+  # HPA will scale above this under load; setting it here keeps the manifest
+  # declarative and avoids drift if HPA is temporarily absent.
+  replicas: 3
+  # Pod must pass readiness AND stay Ready for 10s before old pods are terminated.
+  # This ensures the load balancer has fully picked up the new pod before traffic
+  # shifts — the key ingredient of zero-downtime blue-green deploys.
+  minReadySeconds: 10
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0  # Never take down existing pods first
-      maxSurge: 4        # Start all new pods simultaneously; kill all old pods only after all new are stable
+      # Blue-green guarantee: never kill an old pod before a new one is Ready.
+      # Combined with minReadySeconds=10 this means traffic never hits an unhealthy pod.
+      maxUnavailable: 0
+      # Surge by the full replica count so all new pods start simultaneously.
+      # Pre-pulling images in deploy-release.sh (prepull_images) keeps this fast
+      # regardless of which node the scheduler picks.
+      maxSurge: 3
   selector:
     matchLabels:
       app: api

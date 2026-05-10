@@ -216,6 +216,9 @@ print_migration_status() {
 
 wait_for_deployment() {
   local name="$1"
+  # Second arg overrides timeout; default 600s to handle cold image pulls on any node.
+  # Critical services (api, ingest-upload, web) are called with 600s explicitly.
+  local timeout="${2:-600s}"
   local deployment_exists
   local cronjob_exists
   local replicas
@@ -237,8 +240,8 @@ wait_for_deployment() {
     return
   fi
 
-  log "Waiting for rollout: ${name}"
-  if ! kubectl rollout status deployment/"${name}" -n "${NAMESPACE}" --timeout=300s; then
+  log "Waiting for rollout: ${name} (timeout: ${timeout})"
+  if ! kubectl rollout status deployment/"${name}" -n "${NAMESPACE}" "--timeout=${timeout}"; then
     dump_workload_diagnostics deployment "${name}"
     exit 1
   fi
@@ -257,6 +260,112 @@ wait_for_daemonset() {
     dump_workload_diagnostics daemonset "${name}"
     exit 1
   fi
+}
+
+# Pull the new API and web images onto every node before triggering the rolling
+# update.  Without this, pods scheduled to nodes that have never seen the image
+# (typically the HEL1 nodes) block in ContainerCreating for >5 min while the
+# image downloads, causing the rollout-wait to time out and CI to fail — even
+# though the API itself never goes down (maxUnavailable=0 keeps old pods alive).
+#
+# Approach: create a temporary DaemonSet that tolerates all taints so it lands
+# on every node.  Init containers run the real images (pulling them into the
+# container-runtime cache) and exit immediately.  The main container is a
+# minimal sleep so the pod stays "Ready" long enough for us to check status.
+# We delete the DaemonSet as soon as all nodes report Ready.
+prepull_images() {
+  local api_image="ghcr.io/${REPOSITORY}/api:${IMAGE_TAG}"
+  local web_image="ghcr.io/${REPOSITORY}/web:${IMAGE_TAG}"
+  local ds_name="prepull-${IMAGE_TAG:0:12}"
+
+  section "Pre-pulling Images on All Nodes"
+  log "Images: ${api_image}"
+  log "        ${web_image}"
+
+  # Remove any leftover prepull DaemonSets from a previous failed deploy
+  kubectl delete daemonset -n "${NAMESPACE}" \
+    -l app.kubernetes.io/component=image-prepull \
+    --ignore-not-found --wait=false 2>/dev/null || true
+
+  kubectl apply -f - <<YAML
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ${ds_name}
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/component: image-prepull
+spec:
+  selector:
+    matchLabels:
+      app: ${ds_name}
+  template:
+    metadata:
+      labels:
+        app: ${ds_name}
+    spec:
+      # Pull on every node, including control-plane/quorum nodes
+      tolerations:
+        - operator: Exists
+      imagePullSecrets:
+        - name: ghcr-secret
+      # Init containers pull the heavy images once each, then exit.
+      initContainers:
+        - name: pull-api
+          image: ${api_image}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c", "echo 'api image warmed on '\$(hostname)"]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
+        - name: pull-web
+          image: ${web_image}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c", "echo 'web image warmed on '\$(hostname)"]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
+      # Minimal main container — just keeps the pod Running so we can count Ready pods
+      containers:
+        - name: done
+          image: ${api_image}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c", "sleep 60"]
+          resources:
+            requests: { cpu: 1m, memory: 4Mi }
+            limits:   { cpu: 50m, memory: 32Mi }
+YAML
+
+  # Fetch desired count (may be 0 briefly while k8s schedules); retry a few times
+  local desired=0
+  for _ in 1 2 3 4 5; do
+    desired=$(kubectl get daemonset "${ds_name}" -n "${NAMESPACE}" \
+      -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || echo "0")
+    [ "${desired:-0}" -gt 0 ] && break
+    sleep 3
+  done
+
+  if [ "${desired:-0}" -eq 0 ]; then
+    log "⚠️  Could not determine desired node count for pre-pull DaemonSet; skipping wait."
+  else
+    log "Waiting for image pre-pull on ${desired} nodes (up to 300s)..."
+    local deadline=$(( $(date +%s) + 300 ))
+    while [ "$(date +%s)" -lt "${deadline}" ]; do
+      local ready
+      ready=$(kubectl get daemonset "${ds_name}" -n "${NAMESPACE}" \
+        -o jsonpath='{.status.numberReady}' 2>/dev/null || echo "0")
+      if [ "${ready:-0}" -ge "${desired}" ]; then
+        log "✅ Image pre-pull complete — ${ready}/${desired} nodes warmed"
+        break
+      fi
+      log "  Pre-pull: ${ready:-0}/${desired} nodes ready..."
+      sleep 10
+    done
+  fi
+
+  # Delete immediately (don't wait — pods will terminate on their own)
+  kubectl delete daemonset "${ds_name}" -n "${NAMESPACE}" \
+    --ignore-not-found --wait=false 2>/dev/null || true
 }
 
 # Evict any pods for DEPLOYMENT that landed on HEL1 nodes during the rolling
@@ -350,6 +459,12 @@ main() {
   # Sentinel tilt → 504s. The barrier here ensures only one disruption at a time.
   wait_for_postgres
 
+  # Pre-pull the new images onto every node BEFORE triggering the rolling update.
+  # This prevents ContainerCreating stalls on nodes that don't have the image
+  # cached (typically HEL1 nodes during surge), which previously caused the
+  # rollout-wait to time out and CI to report failure.
+  prepull_images
+
   bash "${ROOT_DIR}/scripts/k8s/check-archive-sync.sh"
 
   print_migration_status "before"
@@ -424,17 +539,21 @@ main() {
   print_migration_status "after"
 
   section "Waiting For Rollouts"
-  wait_for_deployment api
+  # Critical user-facing services: 600s to absorb any residual image-pull delay
+  # after the pre-pull step (e.g. a node was temporarily unavailable during pre-pull).
+  wait_for_deployment api            600s
   pin_deployment_to_fsn1 api
-  wait_for_deployment ingest-upload
+  wait_for_deployment ingest-upload  600s
   pin_deployment_to_fsn1 ingest-upload
-  wait_for_deployment web
+  wait_for_deployment web            600s
   pin_deployment_to_fsn1 web
+  # Background workers — standard timeout is fine; they have no inbound traffic.
   wait_for_deployment ingest-worker
   wait_for_deployment replay-worker
   wait_for_deployment session-lifecycle-worker
   wait_for_deployment retention-worker
   wait_for_deployment alert-worker
+  # Monitoring stack — not user-facing, standard timeout.
   wait_for_deployment postgres-exporter
   wait_for_deployment kube-state-metrics
   wait_for_deployment victoria-metrics
