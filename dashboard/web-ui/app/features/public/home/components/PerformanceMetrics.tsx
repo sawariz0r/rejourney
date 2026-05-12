@@ -124,10 +124,7 @@ export const PerformanceMetrics: React.FC<{ copy: MarketingHomeCopy['performance
 
     return (
         <section ref={sectionRef} dir={dir} className="relative w-full overflow-hidden border-t-2 border-black bg-slate-50 px-4 py-14 sm:px-6 sm:py-24 lg:px-8">
-            {/* Background Grid Pattern */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
-
-            <div className="max-w-7xl mx-auto relative z-10">
+<div className="max-w-7xl mx-auto relative z-10">
 
                 {/* Header Section */}
                 <div className="mb-10 flex flex-col items-start justify-between gap-6 lg:mb-16 lg:flex-row lg:items-end lg:gap-8">

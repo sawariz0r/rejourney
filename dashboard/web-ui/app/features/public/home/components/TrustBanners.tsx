@@ -12,11 +12,7 @@ export const TrustBanners: React.FC<{ copy: MarketingHomeCopy['trust'] }> = ({ c
             aria-label={copy.ariaLabel}
             className="relative w-full overflow-hidden border-b-2 border-black bg-[#5dadec] px-4 py-5 text-black sm:px-6 lg:px-8"
         >
-            <div
-                className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(#000_1.5px,transparent_1.5px)] [background-size:18px_18px]"
-                aria-hidden
-            />
-            <div className="relative mx-auto flex max-w-7xl flex-col items-center gap-2 sm:gap-3">
+<div className="relative mx-auto flex max-w-7xl flex-col items-center gap-2 sm:gap-3">
                 <div className="grid w-full grid-cols-2 items-center justify-center gap-2 min-[460px]:grid-cols-3 sm:flex sm:w-auto sm:flex-wrap sm:gap-3">
                     <span className={`${badgeClass} bg-[#86efac]`}>
                         <ShieldCheck size={16} strokeWidth={3} />

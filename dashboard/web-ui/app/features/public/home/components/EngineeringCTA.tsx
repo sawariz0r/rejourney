@@ -7,11 +7,7 @@ export const EngineeringCTA: React.FC<{ copy: MarketingHomeCopy['engineeringCta'
     return (
         <section className="w-full border-t-2 border-black bg-[#f8fafc] text-black">
             <div className="relative w-full overflow-hidden px-4 py-16 sm:px-6 sm:py-32 lg:px-8">
-                <div
-                    className="pointer-events-none absolute inset-0 opacity-[0.05] [background-image:linear-gradient(#000_1px,transparent_1px),linear-gradient(90deg,#000_1px,transparent_1px)] [background-size:28px_28px]"
-                    aria-hidden
-                />
-                <div
+<div
                     className="pointer-events-none absolute right-8 top-10 hidden h-24 w-72 rotate-[4deg] border-2 border-black bg-[#f9a8d4] shadow-neo-lg lg:block"
                     aria-hidden
                 />

@@ -445,10 +445,6 @@ export const Hero: React.FC<{ copy: HeroCopy; homeCopy: MarketingHomeCopy['hero'
             className={`relative w-full overflow-hidden border-b-2 border-black bg-[#f8fafc] px-4 pb-16 text-black sm:px-6 sm:pb-20 lg:px-8 lg:pb-28 ${isRtl ? 'pt-20 sm:pt-28 lg:pt-32' : 'pt-16 sm:pt-24 lg:pt-28'}`}
         >
             <div
-                className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(#000_1px,transparent_1px),linear-gradient(90deg,#000_1px,transparent_1px)] [background-size:32px_32px]"
-                aria-hidden
-            />
-            <div
                 className="pointer-events-none absolute -left-20 bottom-10 hidden h-40 w-80 rotate-[7deg] border-2 border-black bg-[#fef08a] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] lg:block"
                 aria-hidden
             />

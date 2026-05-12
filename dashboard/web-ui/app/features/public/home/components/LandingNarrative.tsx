@@ -327,7 +327,6 @@ const JourneyActionLoop: React.FC = () => {
 
     return (
         <div ref={ref} className="relative mt-7 min-w-0 sm:mt-9">
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 top-0 opacity-[0.22] [background-image:radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:18px_18px]" />
             <div className="relative hidden overflow-hidden md:block">
                 <SankeyDiagram active={active} />
             </div>
@@ -435,10 +434,6 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
     return (
         <div dir={dir} className={alignClass}>
             <section id="journey-action-center" className="relative w-full overflow-hidden border-b-2 border-black bg-[#f8fafc] px-4 pb-4 pt-10 text-slate-950 sm:px-6 sm:pb-8 sm:pt-14 lg:px-8">
-                <div
-                    className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(#000_1px,transparent_1px),linear-gradient(90deg,#000_1px,transparent_1px)] [background-size:34px_34px]"
-                    aria-hidden
-                />
                 <div className="relative mx-auto max-w-[1680px]">
                     <div className="max-w-5xl lg:ml-2">
                         <p className="mb-3 text-[11px] font-black uppercase text-[#2563eb]">{copy.loopEyebrow}</p>
@@ -482,20 +477,20 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
                             return (
                                 <article
                                     key={story.title}
-                                    className="grid overflow-hidden border-2 border-black bg-white shadow-neo lg:grid-cols-2"
+                                    className="grid overflow-hidden bg-white lg:grid-cols-2"
                                 >
-                                    <div className={`min-h-[220px] border-b-2 border-black bg-white p-2 sm:min-h-[260px] sm:p-3 lg:min-h-[420px] lg:border-b-0 ${index % 2 === 1 ? 'lg:border-l-2 lg:border-black' : 'lg:border-r-2 lg:border-black'} ${imageOrder}`}>
+                                    <div className={`min-h-[220px] bg-white p-2 sm:min-h-[260px] sm:p-3 lg:min-h-[420px] ${imageOrder}`}>
                                         <div className={`flex h-full items-center ${story.accent} p-3`}>
                                             <img
                                                 src={story.image}
                                                 alt={story.alt}
-                                                className="h-full max-h-[390px] w-full border-2 border-black object-cover object-left-top"
+                                                className="h-full max-h-[390px] w-full object-cover object-left-top"
                                                 loading="lazy"
                                             />
                                         </div>
                                     </div>
                                     <div className="flex min-w-0 flex-col justify-center p-5 sm:p-8 lg:p-12">
-                                        <div className={`mb-6 grid h-12 w-12 shrink-0 place-items-center border-2 border-black ${story.accent}`}>
+                                        <div className={`mb-6 grid h-12 w-12 shrink-0 place-items-center ${story.accent}`}>
                                             <Icon size={22} strokeWidth={2.7} />
                                         </div>
                                         <p className="mb-3 text-[11px] font-black uppercase text-slate-400">{story.eyebrow}</p>
