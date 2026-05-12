@@ -9,6 +9,7 @@ export const publicRoutes = [
   route("docs", "features/public/docs/index/route.tsx", { id: "public-docs-index" }),
   route("docs/*", "features/public/docs/slug/route.tsx", { id: "public-docs-slug" }),
   route("contribute", "features/public/contribute/route.tsx", { id: "public-contribute" }),
+  route("changelog", "features/public/changelog/route.tsx", { id: "public-changelog" }),
   route("pricing", "features/public/pricing/route.tsx", { id: "public-pricing" }),
   route("terms-of-service", "features/public/legal/terms/route.tsx", { id: "public-terms" }),
   route("privacy-policy", "features/public/legal/privacy/route.tsx", { id: "public-privacy" }),
