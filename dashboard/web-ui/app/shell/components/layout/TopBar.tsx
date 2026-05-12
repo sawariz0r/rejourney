@@ -198,7 +198,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         {/* Mobile Menu Button */}
         <button
           onClick={() => window.dispatchEvent(new CustomEvent('toggleMobileSidebar'))}
-          className="mr-1 flex h-8 w-8 items-center justify-center border-2 border-black bg-white hover:bg-[#5dadec] md:hidden transition-colors shadow-neo-sm"
+          className="mr-1 flex h-8 w-8 items-center justify-center border border-slate-200 bg-white hover:bg-slate-50 md:hidden transition-colors shadow-sm"
           aria-label="Toggle sidebar"
         >
           <Menu className="h-4 w-4 stroke-[3]" />
@@ -213,15 +213,15 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         {currentProject ? (
           <>
             <div className="min-w-0 flex flex-col justify-center">
-              <h1 className="truncate text-sm font-extrabold leading-none text-black">{currentProject.name}</h1>
+              <h1 className="truncate text-sm font-bold leading-none text-slate-900">{currentProject.name}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {currentProject.platforms.map((platform, index) => (
-                  <span key={platform} className={`flex items-center gap-1 px-1.5 py-px text-[10px] font-bold uppercase text-black border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] ${index % 2 === 0 ? 'bg-[#67e8f9]' : 'bg-[#86efac]'}`}>
+                  <span key={platform} className={`flex items-center gap-1 px-1.5 py-px text-[10px] font-semibold uppercase text-slate-700 border border-slate-200 rounded-sm ${index % 2 === 0 ? 'bg-cyan-50' : 'bg-emerald-50'}`}>
                     {platform}
                   </span>
                 ))}
                 {teamPlan?.videoRetentionLabel && (
-                  <span className="flex items-center gap-1 bg-[#f9a8d4] px-1.5 py-px text-[10px] font-bold text-black border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                  <span className="flex items-center gap-1 bg-pink-50 px-1.5 py-px text-[10px] font-semibold text-slate-600 border border-slate-200 rounded-sm">
                     {teamPlan.videoRetentionLabel} video retention
                   </span>
                 )}
@@ -238,7 +238,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         {currentProject?.publicKey && (
           <button
             onClick={handleCopyPublicKey}
-            className="group hidden h-9 items-center gap-2 border-2 border-black bg-white px-3 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo active:translate-y-0 active:shadow-none md:flex"
+            className="group hidden h-9 items-center gap-2 border border-slate-200 bg-white px-3 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:shadow-none md:flex"
             title={`Copy Public Key: ${currentProject.publicKey}`}
           >
             <span className="font-mono text-black font-bold text-xs">{truncatedKey}</span>
@@ -253,7 +253,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         {/* AI Docs Button */}
         <button
           onClick={handleCopyDocsUrl}
-          className="group flex h-9 items-center gap-2 border-2 border-black bg-white px-3 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo active:translate-y-0 active:shadow-none"
+          className="group flex h-9 items-center gap-2 border border-slate-200 bg-white px-3 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:shadow-none"
           title="Copy AI Integration Prompt"
         >
           <BookOpen className="w-4 h-4 text-black stroke-[2]" />
@@ -269,11 +269,11 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className={`flex items-center justify-center w-9 h-9 border-2 border-black shadow-neo-sm transition-all active:translate-y-0 active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${isRefreshing
+          className={`flex items-center justify-center w-9 h-9 border border-slate-200 shadow-sm transition-all active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${isRefreshing
             ? 'bg-white'
             : refreshCompletedPulse
-              ? 'bg-[#34d399]'
-              : 'bg-white hover:-translate-y-0.5 hover:shadow-neo hover:bg-[#5dadec]'
+              ? 'bg-emerald-100 border-emerald-200'
+              : 'bg-white hover:bg-slate-50 hover:border-slate-300'
             }`}
           title={refreshTitle}
         >
@@ -284,7 +284,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         {user && currentTeam && (
           <Link
             to={`${pathPrefix}/team`}
-            className="hidden h-9 items-center gap-2 border-2 border-black bg-[#86efac] px-3 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo active:translate-y-0 active:shadow-none xl:flex"
+            className="hidden h-9 items-center gap-2 border border-slate-200 bg-emerald-50 px-3 shadow-sm transition-all hover:bg-emerald-100 hover:border-slate-300 active:shadow-none xl:flex"
             title={`${currentTeam.name} - Usage this month`}
           >
             <span className="text-xs font-bold text-black">{planLabel}</span>
@@ -297,9 +297,9 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="group flex h-9 max-w-full items-center gap-2 border-2 border-black bg-white px-2 py-1 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo active:translate-y-0 active:shadow-none focus:outline-none"
+            className="group flex h-9 max-w-full items-center gap-2 border border-slate-200 bg-white px-2 py-1 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:shadow-none focus:outline-none"
           >
-            <div className="w-5 h-5 bg-black flex items-center justify-center text-white">
+            <div className="w-5 h-5 bg-slate-700 flex items-center justify-center text-white rounded-sm">
               <UserIcon className="w-3.5 h-3.5 stroke-[3]" />
             </div>
             <div className="hidden min-w-0 md:block">
@@ -311,8 +311,8 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
           {showUserMenu && (
             <>
               <div className="fixed inset-0 z-[90]" onClick={() => setShowUserMenu(false)} />
-              <div className="absolute right-0 top-full mt-2 bg-white border-2 border-black p-1 shadow-neo-lg z-[100] w-56 animate-in fade-in zoom-in-95 duration-100">
-                <div className="mb-1 border-b-2 border-black bg-[#f8fafc] px-4 py-3">
+              <div className="absolute right-0 top-full mt-2 bg-white border border-slate-200 p-1 shadow-lg rounded-md z-[100] w-56 animate-in fade-in zoom-in-95 duration-100">
+                <div className="mb-1 border-b border-slate-100 bg-slate-50 px-4 py-3 rounded-t-sm">
                   <div className="truncate text-xs font-bold text-black">{displayLabel}</div>
                   <div className="text-[10px] text-slate-500 truncate font-mono">{userEmail}</div>
                 </div>

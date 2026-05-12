@@ -1,5 +1,5 @@
 {
-  "originHash" : "27ee86b565f084b702e43b1758f3b8c4b9cf9bfea503b092994ae680c6cdd61f",
+  "originHash" : "063296c31aed36c273b31d67f5c729085ec08692186ed588d9ea12f6e6c423b6",
   "pins" : [
     {
       "identity" : "environmentoverrides",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "d0b763a678d254e51c74c48e83119bd063250ba3",
         "version" : "0.0.4"
-      }
-    },
-    {
-      "identity" : "rejourney",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/rejourneyco/rejourney",
-      "state" : {
-        "revision" : "b356bb46a2c307b0421754511ee62bf9a54044a2",
-        "version" : "0.1.1"
       }
     },
     {

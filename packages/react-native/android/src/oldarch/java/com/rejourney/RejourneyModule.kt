@@ -214,11 +214,39 @@ class RejourneyModule(reactContext: ReactApplicationContext) :
         rejourneyEnabled: Boolean,
         recordingEnabled: Boolean,
         sampleRate: Double,
+        isSampledIn: Boolean,
         maxRecordingMinutes: Double,
         promise: Promise
     ) {
         try {
-            impl.setRemoteConfig(rejourneyEnabled, recordingEnabled, sampleRate, maxRecordingMinutes, promise)
+            impl.setRemoteConfig(rejourneyEnabled, recordingEnabled, sampleRate, isSampledIn, maxRecordingMinutes, promise)
+        } catch (e: Exception) {
+            promise.resolve(createErrorMap("Module initialization failed: ${e.message}"))
+        }
+    }
+
+    @ReactMethod
+    fun setCachedRemoteConfig(publicKey: String, configJson: String, promise: Promise) {
+        try {
+            impl.setCachedRemoteConfig(publicKey, configJson, promise)
+        } catch (e: Exception) {
+            promise.resolve(createErrorMap("Module initialization failed: ${e.message}"))
+        }
+    }
+
+    @ReactMethod
+    fun getCachedRemoteConfig(publicKey: String, promise: Promise) {
+        try {
+            impl.getCachedRemoteConfig(publicKey, promise)
+        } catch (e: Exception) {
+            promise.resolve(null)
+        }
+    }
+
+    @ReactMethod
+    fun clearCachedRemoteConfig(publicKey: String, promise: Promise) {
+        try {
+            impl.clearCachedRemoteConfig(publicKey, promise)
         } catch (e: Exception) {
             promise.resolve(createErrorMap("Module initialization failed: ${e.message}"))
         }

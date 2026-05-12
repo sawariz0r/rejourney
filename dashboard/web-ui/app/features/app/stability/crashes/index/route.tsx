@@ -175,9 +175,6 @@ export const CrashesList: React.FC = () => {
                   className="w-full rounded-md border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
                 />
               </div>
-              <NeoButton variant="secondary" size="sm" leftIcon={<Filter size={14} />}>
-                Filter
-              </NeoButton>
             </div>
             <div className="flex items-center text-sm font-medium text-slate-500 gap-4">
                <span>{filteredCrashGroups.length} Issues</span>

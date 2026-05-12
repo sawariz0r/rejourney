@@ -11,6 +11,7 @@ export const endSessionSchema = z.object({
     totalBackgroundTimeMs: z.number().optional(), // Background time in milliseconds for billing exclusion
     endReason: z.string().min(1).max(64).optional(), // Optional lifecycle reason (v2+ SDKs)
     lifecycleVersion: z.number().int().min(1).optional(), // Optional lifecycle contract version
+    isSampledIn: z.boolean().optional(),
     metrics: z.object({
         totalEvents: z.number().int().optional(),
         touchCount: z.number().int().optional(),

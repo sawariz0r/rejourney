@@ -136,6 +136,7 @@ interface FullSession {
     hierarchySnapshots?: {
         timestamp: number;
         screenName: string | null;
+        screen?: { width?: number; height?: number; scale?: number };
         rootElement: any;
     }[];
     crashes?: {
@@ -179,9 +180,16 @@ interface FullSession {
             failed: number;
             avgDuration: number;
         };
+        totalSizeBytes?: number;
+        eventsSizeBytes?: number;
+        screenshotSizeBytes?: number;
+        hierarchySizeBytes?: number;
+        networkSizeBytes?: number;
         totalSizeKB?: string;
         eventsSizeKB?: string;
         screenshotSizeKB?: string;
+        hierarchySizeKB?: string;
+        networkSizeKB?: string;
         screenshotSegmentCount?: number;
     };
     screenCount?: number;
@@ -294,11 +302,51 @@ const percentile = (values: number[], percentileValue: number): number => {
     return sorted[Math.max(0, index)];
 };
 
+const getOrdinal = (n: number): string => {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+};
+
 const formatBytesToHuman = (bytes: number): string => {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
     const kb = bytes / 1024;
     if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
     return `${kb.toFixed(1)} KB`;
+};
+
+const parseKilobytesToBytes = (value: unknown): number | null => {
+    const kb = typeof value === 'number' ? value : typeof value === 'string' ? Number.parseFloat(value) : NaN;
+    return Number.isFinite(kb) && kb >= 0 ? kb * 1024 : null;
+};
+
+const getCompressedStorageBytes = (stats: FullSession['stats'] | undefined): number => {
+    if (!stats) return 0;
+
+    if (typeof stats.totalSizeBytes === 'number' && Number.isFinite(stats.totalSizeBytes)) {
+        return Math.max(0, stats.totalSizeBytes);
+    }
+
+    const totalFromKb = parseKilobytesToBytes(stats.totalSizeKB);
+    if (totalFromKb != null) return totalFromKb;
+
+    const knownKindBytes = [
+        stats.eventsSizeBytes,
+        stats.screenshotSizeBytes,
+        stats.hierarchySizeBytes,
+        stats.networkSizeBytes,
+    ].filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0);
+
+    if (knownKindBytes.length > 0) {
+        return knownKindBytes.reduce((sum, value) => sum + value, 0);
+    }
+
+    return [
+        stats.eventsSizeKB,
+        stats.screenshotSizeKB,
+        stats.hierarchySizeKB,
+        stats.networkSizeKB,
+    ].reduce((sum, value) => sum + (parseKilobytesToBytes(value) ?? 0), 0);
 };
 
 const formatCountCompact = (count: number): string => {
@@ -706,7 +754,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                         if (!rootNode) return null;
                         return {
                             timestamp: snap.timestamp || rootData.timestamp || 0,
-                            screen: rootData.screen || {
+                            screen: snap.screen || rootData.screen || {
                                 width: sessionLike?.deviceInfo?.screenWidth || 375,
                                 height: sessionLike?.deviceInfo?.screenHeight || 812,
                                 scale: 3
@@ -769,6 +817,10 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
                 setFullSession({
                     ...(bootstrapResult.core as any),
+                    deviceInfo: {
+                        ...((bootstrapResult.core as any).deviceInfo || {}),
+                        ...((bootstrapResult.timeline as any).deviceInfo || {}),
+                    },
                     events: bootstrapResult.timeline.events || [],
                     networkRequests: bootstrapResult.timeline.networkRequests || [],
                     crashes: bootstrapResult.timeline.crashes || [],
@@ -1274,6 +1326,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
     const deviceWidth = inferredDimensions.width;
     const deviceHeight = inferredDimensions.height;
+    const replayDeviceFitWidth = `calc(${(deviceWidth / Math.max(1, deviceHeight)) * 100}cqh + 0.25rem)`;
 
     const syncPlaybackChrome = useCallback((timeSeconds: number) => {
         const safeDuration = Math.max(0, durationSeconds);
@@ -1590,8 +1643,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
         const sessionStartTime = fullSession.startTime || 0;
         const currentAbsoluteTime = sessionStartTime + currentPlaybackTime * 1000;
-        const screenWidth = fullSession.deviceInfo?.screenWidth || 375;
-        const screenHeight = fullSession.deviceInfo?.screenHeight || 812;
+        const screenWidth = deviceWidth;
+        const screenHeight = deviceHeight;
 
         const recentTouchEvents = (fullSession.events || [])
             .filter((e) => {
@@ -1648,7 +1701,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
             .filter((e): e is OverlayTouchEvent => e !== null);
 
         setTouchEvents(recentTouchEvents);
-    }, [playbackMode, fullSession, currentPlaybackTime, showTouchOverlay, detectedRageTaps]);
+    }, [playbackMode, fullSession, currentPlaybackTime, showTouchOverlay, detectedRageTaps, deviceWidth, deviceHeight]);
 
     const drawScreenshotFrame = useCallback((frameIndex: number) => {
         if (playbackMode !== 'screenshots' || !canvasRef.current || screenshotFrames.length === 0) {
@@ -2205,6 +2258,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         const responseBytes = request.responseBodySize ?? request.responseSize ?? 0;
         return sum + requestBytes + responseBytes;
     }, 0);
+    const compressedStorageBytes = getCompressedStorageBytes(fullSession?.stats);
+    const compressedStorageLabel = formatBytesToHuman(compressedStorageBytes);
     const apiVolumePerMinute = durationSeconds > 0 ? networkRequests.length / Math.max(1, durationSeconds / 60) : 0;
 
     const endpointPerfRows = networkRequests
@@ -2566,9 +2621,6 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                             Next
                             <ChevronRight className="h-3.5 w-3.5" />
                         </button>
-                        <span className={`border-2 border-black px-3 py-1 text-center text-xs font-black uppercase shadow-neo-sm ${sessionRiskStyle.badge}`}>
-                            {sessionRiskLabel}
-                        </span>
                     </div>
                 </div>
             </div>
@@ -2595,20 +2647,30 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                             ? `Frame ${Math.min(currentFrameIndex + 1, screenshotFrames.length)}/${screenshotFrames.length}`
                                             : `${displayedFrameCount} FR`}
                                     </span>
-                                    <span className="border border-black bg-[#f8fafc] px-2 py-1">{allTimelineEvents.length} EV</span>
-                                    <span className="border border-black bg-[#f8fafc] px-2 py-1">
-                                        {visualReplayPreparing
-                                            ? 'Preparing'
-                                            : playbackMode === 'screenshots'
-                                                ? 'Visual'
-                                                : 'No Visual'}
+                                    <span
+                                        className="border border-black bg-[#f8fafc] px-2 py-1"
+                                        title="Compressed S3 storage for this session"
+                                    >
+                                        {compressedStorageLabel}
                                     </span>
+                                    {(() => {
+                                        const visitNum = (fullSession as any)?.visitorSessionNumber;
+                                        if (!visitNum) return null;
+                                        return (
+                                            <span className="border border-black bg-[#f8fafc] px-2 py-1">
+                                                {getOrdinal(visitNum)} Visit
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
 
                         <div className="replay-theater-stage relative border-b border-black bg-white px-3 py-5 sm:px-5 sm:py-7 xl:flex xl:min-h-0 xl:flex-1 xl:items-center xl:justify-center xl:overflow-hidden xl:px-4 xl:py-3">
-                            <div className="mx-auto flex w-full max-w-[360px] items-center justify-center xl:h-full xl:min-h-0 xl:max-w-none">
+                            <div
+                                className="mx-auto flex w-full max-w-[360px] items-center justify-center xl:h-full xl:min-h-0 xl:max-w-none"
+                                style={{ '--replay-device-fit-width': replayDeviceFitWidth } as React.CSSProperties}
+                            >
                                 {(isReplayExpired || replayUnavailableReason || !hasRecording) ? (
                                     <div className="replay-device-placeholder flex aspect-[9/18.5] w-full max-w-[320px] flex-col items-center justify-center border-2 border-dashed border-black bg-white p-6 text-center shadow-neo-sm">
                                         <VideoOff className="h-10 w-10 text-slate-400" />
@@ -2628,12 +2690,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                         )}
                                     </div>
                                 ) : (
-                                    <div
-                                        className="replay-device-shell relative flex w-full justify-center xl:h-full xl:min-h-0 xl:items-center"
-                                        style={{
-                                            '--replay-device-fit-width': `calc(${(deviceWidth / Math.max(1, deviceHeight)) * 100}cqh - 0.875rem)`,
-                                        } as React.CSSProperties}
-                                    >
+                                    <div className="replay-device-shell relative flex w-full justify-center xl:h-full xl:min-h-0 xl:items-center">
                                         <div className="replay-device-frame relative overflow-hidden rounded-[2rem] border border-slate-950 bg-[#070b14] p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.18)]">
                                             <div className="rounded-[1.75rem] bg-slate-900 p-1">
                                                 <div
@@ -2708,39 +2765,39 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
                         {playbackMode === 'screenshots' ? (
                             <>
-                                <div className="border-b-2 border-black bg-white px-3 py-3 sm:px-6 sm:py-4 xl:shrink-0 xl:px-4 xl:py-2">
-                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between xl:gap-2">
+                                <div className="border-b-2 border-black bg-white px-3 py-2 xl:shrink-0 xl:px-4 xl:py-1.5">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                         {/* Primary Controls */}
-                                        <div className="replay-controls-primary flex items-center justify-center gap-2 sm:justify-start">
+                                        <div className="replay-controls-primary flex items-center justify-center gap-1.5 sm:justify-start">
                                             <button
                                                 onClick={restart}
                                                 onMouseDown={(event) => event.preventDefault()}
                                                 disabled={playbackDisabled}
-                                                className={`flex h-10 w-10 items-center justify-center border-2 transition ${playbackDisabled
+                                                className={`flex h-7 w-7 items-center justify-center border-2 transition ${playbackDisabled
                                                     ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
                                                     : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                     }`}
                                                 title="Restart"
                                             >
-                                                <RotateCcw className="h-4 w-4" />
+                                                <RotateCcw className="h-3 w-3" />
                                             </button>
                                             <button
                                                 onClick={() => skip(-5)}
                                                 onMouseDown={(event) => event.preventDefault()}
                                                 disabled={playbackDisabled}
-                                                className={`flex h-10 w-10 items-center justify-center border-2 transition ${playbackDisabled
+                                                className={`flex h-7 w-7 items-center justify-center border-2 transition ${playbackDisabled
                                                     ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
                                                     : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                     }`}
                                                 title="Back 5s"
                                             >
-                                                <SkipBack className="h-4 w-4" />
+                                                <SkipBack className="h-3 w-3" />
                                             </button>
                                             <button
                                                 onClick={togglePlayPause}
                                                 onMouseDown={(event) => event.preventDefault()}
                                                 disabled={playbackDisabled}
-                                                className={`flex h-12 w-12 items-center justify-center border-2 border-black text-black shadow-neo-sm transition-all ${playbackDisabled
+                                                className={`flex h-8 w-8 items-center justify-center border-2 border-black text-black shadow-neo-sm transition-all ${playbackDisabled
                                                     ? 'cursor-not-allowed bg-slate-300 text-slate-200'
                                                     : isPlaying
                                                         ? 'bg-[#f9a8d4] hover:-translate-y-0.5 hover:shadow-neo'
@@ -2748,37 +2805,37 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     }`}
                                                 title={isPlaying ? 'Pause' : 'Play'}
                                             >
-                                                {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="ml-0.5 h-6 w-6" />}
+                                                {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-3.5 w-3.5" />}
                                             </button>
                                             <button
                                                 onClick={() => skip(5)}
                                                 onMouseDown={(event) => event.preventDefault()}
                                                 disabled={playbackDisabled}
-                                                className={`flex h-10 w-10 items-center justify-center border-2 transition ${playbackDisabled
+                                                className={`flex h-7 w-7 items-center justify-center border-2 transition ${playbackDisabled
                                                     ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
                                                     : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                     }`}
                                                 title="Forward 5s"
                                             >
-                                                <SkipForward className="h-4 w-4" />
+                                                <SkipForward className="h-3 w-3" />
                                             </button>
                                         </div>
 
                                         {/* Secondary Controls */}
-                                        <div className="replay-controls-secondary flex flex-wrap items-center justify-center gap-2 sm:justify-end">
-                                            <span className="inline-flex items-center border-2 border-black bg-[#f8fafc] px-3 py-2 font-mono text-xs font-black text-black shadow-neo-sm">
+                                        <div className="replay-controls-secondary flex flex-wrap items-center justify-center gap-1.5 sm:justify-end">
+                                            <span className="inline-flex items-center border-2 border-black bg-[#f8fafc] px-2 py-0.5 font-mono text-xs font-black text-black shadow-neo-sm">
                                                 <span ref={progressTimeRef}>{formatPlaybackTime(currentPlaybackTime)}</span> / {formatPlaybackTime(effectiveDuration)}
                                             </span>
 
                                             <button
                                                 onClick={() => setShowTouchOverlay(!showTouchOverlay)}
                                                 onMouseDown={(event) => event.preventDefault()}
-                                                className={`flex h-10 items-center gap-1.5 border-2 px-3 text-xs font-bold uppercase transition ${showTouchOverlay
+                                                className={`flex h-7 items-center gap-1 border-2 px-2 text-xs font-bold uppercase transition ${showTouchOverlay
                                                     ? 'border-black bg-[#67e8f9] text-black shadow-neo-sm'
                                                     : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
                                                     }`}
                                             >
-                                                <Hand className="h-3.5 w-3.5" />
+                                                <Hand className="h-3 w-3" />
                                                 <span className="hidden xs:inline">Touches</span>
                                             </button>
 
@@ -2786,7 +2843,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 <button
                                                     onClick={() => setShowSpeedMenu(!showSpeedMenu)}
                                                     onMouseDown={(event) => event.preventDefault()}
-                                                    className="flex h-10 items-center border-2 border-black bg-white px-4 font-mono text-xs font-black text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
+                                                    className="flex h-7 items-center border-2 border-black bg-white px-3 font-mono text-xs font-black text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
                                                 >
                                                     {playbackRate}x
                                                 </button>
@@ -2794,7 +2851,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 {showSpeedMenu && (
                                                     <>
                                                         <div className="fixed inset-0 z-40" onClick={() => setShowSpeedMenu(false)} />
-                                                        <div className="absolute right-0 top-full z-50 mt-2 min-w-[92px] overflow-hidden border-2 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                                                        <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[92px] overflow-hidden border-2 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                                                             {[0.5, 1, 1.5, 2, 4].map((rate) => (
                                                                 <button
                                                                     key={rate}
@@ -2819,19 +2876,19 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                     </div>
                                 </div>
 
-                                <div className="bg-[#f8fafc] px-3 py-3 sm:px-6 xl:shrink-0 xl:px-4 xl:py-2">
-                                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 xl:mb-1">
-                                        <div className="flex items-center gap-4 text-[10px] font-black uppercase text-black">
-                                            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 border border-black bg-[#67e8f9]" />Touches</span>
-                                            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 border border-black bg-[#86efac]" />API</span>
-                                            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 border border-black bg-[#fb7185]" />Issues</span>
+                                <div className="bg-[#f8fafc] px-3 py-2 xl:shrink-0 xl:px-4 xl:py-1.5">
+                                    <div className="mb-1 flex flex-wrap items-center justify-between gap-1">
+                                        <div className="flex items-center gap-3 text-[9px] font-black uppercase text-black">
+                                            <span className="flex items-center gap-1"><span className="h-2 w-2 border border-black bg-[#67e8f9]" />Touches</span>
+                                            <span className="flex items-center gap-1"><span className="h-2 w-2 border border-black bg-[#86efac]" />API</span>
+                                            <span className="flex items-center gap-1"><span className="h-2 w-2 border border-black bg-[#fb7185]" />Issues</span>
                                         </div>
-                                        <span className="text-[10px] font-bold uppercase text-slate-600">
+                                        <span className="text-[9px] font-bold uppercase text-slate-600">
                                             Drag timeline or click markers to seek
                                         </span>
                                     </div>
 
-                                    <svg viewBox="0 0 1000 50" preserveAspectRatio="none" className="h-11 w-full xl:h-7">
+                                    <svg viewBox="0 0 1000 50" preserveAspectRatio="none" className="h-7 w-full xl:h-5">
                                         <defs>
                                             <linearGradient id="touchGradNew" x1="0%" y1="0%" x2="0%" y2="100%">
                                                 <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
@@ -2904,7 +2961,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
                                     <div
                                         ref={progressRef}
-                                        className="group relative mt-1 h-10 cursor-pointer touch-none xl:h-7"
+                                        className="group relative mt-1 h-6 cursor-pointer touch-none xl:h-5"
                                         onMouseDown={handleProgressMouseDown}
                                         onTouchStart={handleProgressTouchStart}
                                     >
@@ -2970,7 +3027,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
                                         <div
                                             ref={progressThumbRef}
-                                            className={`absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 border-2 border-black bg-[#67e8f9] shadow transition-transform ${isDragging ? 'scale-110' : 'group-hover:scale-105'
+                                            className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 border-2 border-black bg-[#67e8f9] shadow transition-transform ${isDragging ? 'scale-110' : 'group-hover:scale-105'
                                                 }`}
                                             style={{ left: `${progressPercent}%`, willChange: 'left' }}
                                         />
@@ -3015,50 +3072,50 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                         <div className="relative flex min-h-0 flex-1 flex-col bg-white">
                             {activeWorkbenchTab === 'timeline' && (
                                 <div className="absolute inset-0 flex flex-col">
-                                    <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-3">
+                                    <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
                                         <div className="replay-panel-header flex items-center justify-between gap-2">
                                             <div>
-                                                <p className="text-[10px] font-black uppercase text-slate-600">Activity Stream</p>
-                                                <h3 className="text-sm font-bold text-slate-900">All actions, logs, and failures in one timeline</h3>
+                                                <p className="text-[10px] font-semibold uppercase text-slate-400 tracking-wide">Activity Stream</p>
+                                                <h3 className="text-xs font-semibold text-slate-700">All actions, logs, and failures in one timeline</h3>
                                             </div>
-                                            <div className="replay-panel-actions flex items-center gap-2">
+                                            <div className="replay-panel-actions flex items-center gap-1.5">
                                                 <button
                                                     onClick={copyTimelineEvents}
                                                     disabled={allTimelineEvents.length === 0}
-                                                    className={`flex h-8 items-center gap-1.5 border-2 px-2 text-[11px] font-semibold transition ${allTimelineEvents.length === 0
-                                                        ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
+                                                    className={`flex h-6 items-center gap-1 border px-2 text-[10px] font-semibold rounded transition ${allTimelineEvents.length === 0
+                                                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300'
                                                         : timelineCopied
-                                                            ? 'border-black bg-[#86efac] text-black'
-                                                            : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
+                                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
                                                         }`}
                                                     title={allTimelineEvents.length > 0 ? 'Copy all timeline events' : 'No events available'}
                                                 >
-                                                    {timelineCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                                                    {timelineCopied ? 'Copied' : 'COPY'}
+                                                    {timelineCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                                    {timelineCopied ? 'Copied' : 'Copy'}
                                                 </button>
                                                 <button
                                                     onClick={downloadTimelineEvents}
                                                     disabled={allTimelineEvents.length === 0}
-                                                    className={`flex h-8 items-center gap-1.5 border-2 px-2 text-[11px] font-semibold transition ${allTimelineEvents.length === 0
-                                                        ? 'cursor-not-allowed border-black bg-slate-100 text-slate-400'
-                                                        : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
+                                                    className={`flex h-6 items-center gap-1 border px-2 text-[10px] font-semibold rounded transition ${allTimelineEvents.length === 0
+                                                        ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300'
+                                                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
                                                         }`}
                                                     title={allTimelineEvents.length > 0 ? 'Download all timeline events' : 'No events available'}
                                                 >
-                                                    <Download className="h-3.5 w-3.5" />
-                                                    EXPORT
+                                                    <Download className="h-3 w-3" />
+                                                    Export
                                                 </button>
                                             </div>
                                         </div>
 
-                                        <div className="mt-3">
+                                        <div className="mt-2">
                                             <div className="relative">
                                                 <input
                                                     type="text"
                                                     value={activitySearch}
                                                     onChange={(event) => setActivitySearch(event.target.value)}
                                                     placeholder="Search events, targets, messages, or endpoints"
-                                                    className="h-9 w-full border-2 border-black rounded-none bg-white px-3 pr-8 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-black/20"
+                                                    className="h-7 w-full border border-slate-200 rounded bg-white px-3 pr-8 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300 focus:border-slate-300"
                                                 />
                                                 {activitySearch.trim() && (
                                                     <button
@@ -3073,18 +3130,18 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 )}
                                             </div>
 
-                                            <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+                                            <div className="mt-1.5 flex gap-1 overflow-x-auto pb-0.5">
                                                 {activityTabs.map((filter) => (
                                                     <button
                                                         key={filter.id}
                                                         onClick={() => setActivityFilter(filter.id)}
-                                                        className={`shrink-0 border-2 px-2 py-1 text-[11px] font-semibold transition ${activityFilter === filter.id
-                                                            ? 'border-black bg-black text-white'
-                                                            : 'border-black bg-white text-slate-700 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                                        className={`shrink-0 border px-2 py-0.5 text-[10px] font-semibold rounded transition ${activityFilter === filter.id
+                                                            ? 'border-slate-700 bg-slate-800 text-white'
+                                                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:border-slate-300'
                                                             }`}
                                                     >
                                                         {filter.label}
-                                                        <span className="ml-1 rounded bg-slate-900/10 px-1 py-0.5 text-[10px] font-bold">
+                                                        <span className="ml-1 rounded bg-slate-900/10 px-1 py-0.5 text-[9px] font-bold">
                                                             {formatCountCompact(filter.count)}
                                                         </span>
                                                     </button>
@@ -3327,8 +3384,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 hierarchySnapshots={hierarchySnapshots}
                                                 currentTime={currentPlaybackTime}
                                                 sessionStartTime={fullSession?.startTime || 0}
-                                                deviceWidth={fullSession?.deviceInfo?.screenWidth || 375}
-                                                deviceHeight={fullSession?.deviceInfo?.screenHeight || 812}
+                                                deviceWidth={deviceWidth}
+                                                deviceHeight={deviceHeight}
                                                 className="h-full"
                                             />
                                         ) : (

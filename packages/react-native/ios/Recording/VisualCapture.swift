@@ -139,6 +139,9 @@ public final class VisualCapture: NSObject {
         }
         
         _startCaptureTimer()
+        DispatchQueue.main.async { [weak self] in
+            self?._captureFrame(forced: true)
+        }
     }
     
     @objc public func halt(expectedGeneration: Int = -1) {
@@ -267,7 +270,8 @@ public final class VisualCapture: NSObject {
             guard !bounds.width.isNaN && !bounds.height.isNaN else { return }
             guard bounds.width.isFinite && bounds.height.isFinite else { return }
             
-            let redactRects = _redactionMask.computeRects()
+            let captureWindows = _captureWindows(primary: window)
+            let redactionRegions = _redactionMask.computeRegions(windows: captureWindows)
             let scale = max(1.0, captureScale)
             let scaledSize = CGSize(width: bounds.width / scale, height: bounds.height / scale)
             guard scaledSize.width >= 1, scaledSize.height >= 1 else {
@@ -280,18 +284,25 @@ public final class VisualCapture: NSObject {
                 return
             }
             context.scaleBy(x: 1.0 / scale, y: 1.0 / scale)
-            window.drawHierarchy(in: bounds, afterScreenUpdates: false)
+            for captureWindow in captureWindows {
+                let drawRect = captureWindow === window ? bounds : captureWindow.frame
+                captureWindow.drawHierarchy(in: drawRect, afterScreenUpdates: false)
+            }
             
             // Apply redactions inline while context is open
-            if !redactRects.isEmpty {
+            if !redactionRegions.isEmpty {
                 // Use fully opaque black for privacy masks (no transparency)
                 context.setFillColor(UIColor.black.cgColor)
-                for r in redactRects {
+                for region in redactionRegions {
+                    let r = region.rect
                     // Skip invalid rects that could cause CoreGraphics errors
                     guard r.width > 0 && r.height > 0 else { continue }
                     guard r.origin.x.isFinite && r.origin.y.isFinite && r.width.isFinite && r.height.isFinite else { continue }
                     guard !r.origin.x.isNaN && !r.origin.y.isNaN && !r.width.isNaN && !r.height.isNaN else { continue }
                     context.fill(r)
+                    if region.kind == .camera {
+                        _drawCameraMaskIndicator(in: r, context: context)
+                    }
                 }
             }
             
@@ -329,7 +340,7 @@ public final class VisualCapture: NSObject {
                 self._screenshots.append((data, captureTs))
                 self._enforceScreenshotCaps()
                 let count = self._screenshots.count
-                let shouldSend = count >= self._uploadBatchSize
+                let shouldSend = forced || count >= self._uploadBatchSize
                 // Time-based flush: if frames have been sitting for longer than one full
                 // batch interval, send regardless of count. This ensures sessions that end
                 // before reaching uploadBatchSize frames (very short sessions) still ship
@@ -350,7 +361,98 @@ public final class VisualCapture: NSObject {
             }
         }
     }
-    
+
+    private func _captureWindows(primary: UIWindow) -> [UIWindow] {
+        guard ReplayOrchestrator.shared.captureNativeSheets else {
+            return [primary]
+        }
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .filter { window in
+                if window.isHidden || window.alpha <= 0.01 || window.bounds.width <= 0 || window.bounds.height <= 0 {
+                    return false
+                }
+                if window === primary {
+                    return true
+                }
+                let className = String(describing: type(of: window))
+                if ReplayOrchestrator.shared.maskTextInputsByDefault && _isKeyboardOrTextInputWindow(className) {
+                    return false
+                }
+                return window.screen == primary.screen
+            }
+            .sorted { lhs, rhs in
+                if lhs.windowLevel == rhs.windowLevel {
+                    return lhs === primary
+                }
+                return lhs.windowLevel.rawValue < rhs.windowLevel.rawValue
+            }
+        return windows.contains(where: { $0 === primary }) ? windows : [primary] + windows
+    }
+
+    private func _isKeyboardOrTextInputWindow(_ className: String) -> Bool {
+        className.contains("UIRemoteKeyboardWindow") ||
+        className.contains("UITextEffectsWindow") ||
+        className.contains("UIInputSetHostView") ||
+        className.contains("UIKeyboard")
+    }
+
+    private func _drawCameraMaskIndicator(in rect: CGRect, context: CGContext) {
+        let minSide = min(rect.width, rect.height)
+        guard minSide >= 44 else { return }
+
+        let iconSize = min(CGFloat(64), max(CGFloat(28), minSide * 0.24))
+        let bodyWidth = iconSize
+        let bodyHeight = iconSize * 0.62
+        let body = CGRect(
+            x: rect.midX - bodyWidth / 2,
+            y: rect.midY - bodyHeight / 2,
+            width: bodyWidth,
+            height: bodyHeight
+        )
+        let lineWidth = max(CGFloat(2), iconSize * 0.06)
+        let strokeColor = UIColor.white.withAlphaComponent(0.82)
+
+        context.saveGState()
+        strokeColor.setStroke()
+        strokeColor.setFill()
+
+        let bodyPath = UIBezierPath(roundedRect: body, cornerRadius: max(CGFloat(4), iconSize * 0.1))
+        bodyPath.lineWidth = lineWidth
+        bodyPath.stroke()
+
+        let bump = CGRect(
+            x: body.minX + iconSize * 0.18,
+            y: body.minY - iconSize * 0.13,
+            width: iconSize * 0.24,
+            height: iconSize * 0.18
+        )
+        let bumpPath = UIBezierPath(roundedRect: bump, cornerRadius: max(CGFloat(2), iconSize * 0.04))
+        bumpPath.lineWidth = lineWidth
+        bumpPath.stroke()
+
+        let lensRadius = iconSize * 0.16
+        let lens = CGRect(
+            x: rect.midX - lensRadius,
+            y: rect.midY - lensRadius,
+            width: lensRadius * 2,
+            height: lensRadius * 2
+        )
+        let lensPath = UIBezierPath(ovalIn: lens)
+        lensPath.lineWidth = lineWidth
+        lensPath.stroke()
+
+        let dotRadius = max(CGFloat(1.6), iconSize * 0.035)
+        let dot = CGRect(
+            x: body.maxX - iconSize * 0.2 - dotRadius,
+            y: body.minY + iconSize * 0.16 - dotRadius,
+            width: dotRadius * 2,
+            height: dotRadius * 2
+        )
+        UIBezierPath(ovalIn: dot).fill()
+        context.restoreGState()
+    }
 
     
     /// Enforce memory caps to prevent unbounded growth (industry standard backpressure)
@@ -583,6 +685,16 @@ private final class CaptureStateMachine {
     }
 }
 
+private enum RedactionMaskKind {
+    case generic
+    case camera
+}
+
+private struct RedactionRegion {
+    let rect: CGRect
+    let kind: RedactionMaskKind
+}
+
 private final class RedactionMask {
     private var _explicitViews = NSHashTable<UIView>.weakObjects()
     private let _lock = NSLock()
@@ -592,7 +704,7 @@ private final class RedactionMask {
     // on every view in the key window, which is expensive in React Native
     // hierarchies (thousands of views). Caching for ~1s is safe because
     // sensitive views (text inputs, cameras) don't appear/disappear at 3fps.
-    private var _cachedAutoRects: [CGRect] = []
+    private var _cachedAutoRegions: [RedactionRegion] = []
     private var _lastScanTime: CFAbsoluteTime = 0
     private let _scanCacheDurationSec: CFAbsoluteTime = 0.5
     
@@ -618,13 +730,16 @@ private final class RedactionMask {
     }
     
     // View class names that should always be masked (privacy sensitive)
-    private let _sensitiveClassNames: Set<String> = [
+    private let _alwaysSensitiveClassNames: Set<String> = [
         // Camera views
         "AVCaptureVideoPreviewLayer",
         "CameraView",
         "RCTCameraView",
         "ExpoCamera",
         "EXCameraView",
+    ]
+
+    private let _textInputClassNames: Set<String> = [
         // React Native text inputs (internal class names)
         "RCTSinglelineTextInputView",
         "RCTMultilineTextInputView", 
@@ -647,18 +762,18 @@ private final class RedactionMask {
         _explicitViews.remove(view)
     }
     
-    func computeRects() -> [CGRect] {
+    func computeRegions(windows: [UIWindow]? = nil) -> [RedactionRegion] {
         _lock.lock()
         let explicitViews = _explicitViews.allObjects
         _lock.unlock()
         
-        var rects: [CGRect] = []
-        rects.reserveCapacity(explicitViews.count + 20)
+        var regions: [RedactionRegion] = []
+        regions.reserveCapacity(explicitViews.count + 20)
         
         // 1. Add explicitly registered views (always fresh — these are few)
         for v in explicitViews {
             if let rect = _viewRect(v) {
-                rects.append(rect)
+                regions.append(RedactionRegion(rect: rect, kind: .generic))
             }
         }
         
@@ -668,26 +783,27 @@ private final class RedactionMask {
         //    are always re-evaluated, so newly focused inputs still get masked.
         let now = CFAbsoluteTimeGetCurrent()
         if now - _lastScanTime >= _scanCacheDurationSec {
-            _cachedAutoRects.removeAll()
-            if let window = _keyWindow() {
-                _scanForSensitiveViews(in: window, rects: &_cachedAutoRects)
+            _cachedAutoRegions.removeAll()
+            let scanWindows = windows ?? _keyWindow().map { [$0] } ?? []
+            for window in scanWindows {
+                _scanForSensitiveViews(in: window, regions: &_cachedAutoRegions)
             }
             _lastScanTime = now
         }
-        rects.append(contentsOf: _cachedAutoRects)
+        regions.append(contentsOf: _cachedAutoRegions)
         
-        return rects
+        return regions
     }
     
     private func _viewRect(_ v: UIView) -> CGRect? {
         guard let w = v.window else { return nil }
         
-        // Skip views in non-key windows (keyboard windows, system windows).
+        // Skip non-key windows unless native sheet capture is explicitly enabled.
         // These have transitional layer transforms during animation that cause
         // UIView.convert() to pass NaN to CoreGraphics internally, producing
         // "invalid numeric value (NaN)" errors that we cannot catch because
         // CoreGraphics logs the error before the return value is available.
-        if !w.isKeyWindow { return nil }
+        if !w.isKeyWindow && !ReplayOrchestrator.shared.captureNativeSheets { return nil }
         
         // Guard against views with invalid bounds before conversion
         let viewBounds = v.bounds
@@ -727,7 +843,10 @@ private final class RedactionMask {
         guard r.width > 0 && r.height > 0 else { return nil }
         guard !r.origin.x.isNaN && !r.origin.y.isNaN && !r.width.isNaN && !r.height.isNaN else { return nil }
         guard r.origin.x.isFinite && r.origin.y.isFinite && r.width.isFinite && r.height.isFinite else { return nil }
-        return r
+        if w.isKeyWindow {
+            return r
+        }
+        return r.offsetBy(dx: w.frame.origin.x, dy: w.frame.origin.y)
     }
     
     /// Fallback rect computation for views that have active CoreAnimation keys.
@@ -762,7 +881,7 @@ private final class RedactionMask {
             .first { $0.isKeyWindow }
     }
     
-    private func _scanForSensitiveViews(in view: UIView, rects: inout [CGRect], depth: Int = 0) {
+    private func _scanForSensitiveViews(in view: UIView, regions: inout [RedactionRegion], depth: Int = 0) {
         // Limit recursion depth to avoid scanning deep hierarchies.
         // Expo Router + React Navigation stack/tab navigators create 25+ levels
         // before reaching screen content, so 20 was too shallow to find Mask wrappers.
@@ -790,69 +909,90 @@ private final class RedactionMask {
         // of whether we can compute its rect — we never want to expose child content
         // of a Mask wrapper (e.g. when the view has active animation keys during map
         // loading or a screen transition).
-        if _shouldMask(view) {
+        if let maskKind = _maskKind(view) {
             // Primary: full validation path (skips views with active animation keys)
             if let rect = _viewRect(view) {
-                rects.append(rect)
+                regions.append(RedactionRegion(rect: rect, kind: maskKind))
             } else if let rect = _viewRectAnimationSafe(view) {
                 // Fallback for views currently animating (e.g. Mask wrapper on a map
                 // page where map load triggers CoreAnimation layout updates on parent
                 // views). Uses CALayer.presentation() for the current rendered frame
                 // instead of skipping the view entirely.
-                rects.append(rect)
+                regions.append(RedactionRegion(rect: rect, kind: maskKind))
             }
             return // Always stop — never recurse into children of a masked view
         }
 
         // Recurse into subviews
         for subview in view.subviews {
-            _scanForSensitiveViews(in: subview, rects: &rects, depth: depth + 1)
+            _scanForSensitiveViews(in: subview, regions: &regions, depth: depth + 1)
         }
     }
     
-    private func _shouldMask(_ view: UIView) -> Bool {
+    private func _maskKind(_ view: UIView) -> RedactionMaskKind? {
         if view.accessibilityHint == "rejourney_occlude" {
-            return true
+            return .generic
         }
         // Fallback: nativeID maps to accessibilityIdentifier and is always set
         // regardless of the accessible prop. Covers RN New Architecture / Bridgeless
         // mode where accessibilityHint may not be propagated when accessible={false}.
         if view.accessibilityIdentifier?.hasPrefix("rj_occlude") == true {
-            return true
+            return .generic
         }
         
+        // Secure fields are always masked, even when ordinary text input masking is relaxed.
+        if let textField = view as? UITextField, textField.isSecureTextEntry {
+            return .generic
+        }
+
         // 1. Mask ALL text input fields by default (privacy first)
         // This includes password fields, instructions, notes, etc.
         if view is UITextField {
-            return true
+            return ReplayOrchestrator.shared.maskTextInputsByDefault ? .generic : nil
         }
         
         // 2. Mask ALL text views (multiline inputs like instructions, notes, etc.)
         if view is UITextView {
-            return true
+            return ReplayOrchestrator.shared.maskTextInputsByDefault ? .generic : nil
         }
         
         // 3. Check class name against known sensitive types
         let className = String(describing: type(of: view))
-        if _sensitiveClassNames.contains(className) {
+        if _alwaysSensitiveClassNames.contains(className) {
+            return _isCameraView(view, className: className) ? .camera : .generic
+        }
+        if ReplayOrchestrator.shared.maskTextInputsByDefault && _textInputClassNames.contains(className) {
+            return .generic
+        }
+
+        // 4. Check camera previews separately so the replay can annotate them.
+        if _isCameraView(view, className: className) {
+            return .camera
+        }
+
+        return nil
+    }
+
+    private func _isCameraView(_ view: UIView, className: String? = nil) -> Bool {
+        let resolvedClassName = className ?? String(describing: type(of: view))
+        if _alwaysSensitiveClassNames.contains(resolvedClassName) {
             return true
         }
-        
-        // 4. Check if class name contains camera-related keywords
-        let lowerClassName = className.lowercased()
+
+        let lowerClassName = resolvedClassName.lowercased()
         if lowerClassName.contains("camera") || lowerClassName.contains("preview") {
             // Verify it's actually a camera preview, not just any view with "camera" in name
-            if lowerClassName.contains("video") || lowerClassName.contains("capture") || 
-               lowerClassName.contains("avcapture") || view.layer is AVCaptureVideoPreviewLayer {
+            if lowerClassName.contains("video") || lowerClassName.contains("capture") ||
+                lowerClassName.contains("avcapture") || view.layer is AVCaptureVideoPreviewLayer {
                 return true
             }
         }
-        
-        // 5. Check layer type for camera preview layers
+
+        // Check layer type for camera preview layers
         if view.layer.sublayers?.contains(where: { $0 is AVCaptureVideoPreviewLayer }) == true {
             return true
         }
-        
+
         return false
     }
 }

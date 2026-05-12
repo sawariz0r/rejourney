@@ -33,6 +33,10 @@ Rejourney.start();
 
 Requires no provider wrapping. Recording starts immediately.
 
+## Remote Recording Settings
+
+Project Settings can control React Native recording defaults without shipping a new app build. Supported SDK versions read the remote recording FPS setting on session start; the default is 1 FPS, and project admins can choose 1, 2, or 3 FPS. If the remote config is unavailable, the SDK falls back to local/default capture behavior.
+
 ## Screen Tracking
 
 Rejourney automatically tracks screen changes so you can see where users are in your app during replays. Choose the setup that matches your navigation library:
@@ -217,7 +221,9 @@ Rejourney.setMetadata({
 
 ## Privacy Controls
 
-Text inputs and camera views are automatically masked. To manually hide additional sensitive UI, wrap components in the `Mask` component:
+Text inputs and camera views are automatically masked by default. Project admins can change the default text input masking level in Project Settings for supported SDK versions; older SDK versions ignore that remote setting and keep their existing masking behavior. Secure/password fields, camera views, and explicit masks remain protected.
+
+To manually hide additional sensitive UI, wrap components in the `Mask` component:
 
 ```javascript
 import { Mask } from '@rejourneyco/react-native';
@@ -273,6 +279,16 @@ IP-derived geolocation (country, region, city) is collected by default. When `co
 
 ```javascript
 Rejourney.init('pk_live_your_public_key', { collectGeoLocation: false });
+```
+
+#### Native sheets
+
+Native sheet capture is enabled by default (`captureNativeSheets: true`) for supported SDK versions. This allows app-owned native sheets and dialogs, such as payment authorization modals, to appear in debugging replays when the OS permits capture. Keyboard/text-input system sheets are excluded when text inputs are masked by default. When text input masking is set to secure fields only, keyboards are best-effort only and cannot be reliably captured, especially when the OS renders them as protected or remote surfaces. OS share sheets are also best-effort only and cannot be reliably captured when the system renders them as protected or remote surfaces.
+
+Disable native sheet capture if you want visual replay to stay limited to the main app window:
+
+```javascript
+Rejourney.init('pk_live_your_public_key', { captureNativeSheets: false });
 ```
 
 #### Observe-Only Mode (No Visual Recording)

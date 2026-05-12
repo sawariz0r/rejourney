@@ -17,6 +17,10 @@ export interface NativeStartOptions {
   captureLogs?: boolean;
   /** When false, suppresses IP geolocation lookup for this session */
   collectGeoLocation?: boolean;
+  /** Remote text input masking policy. Unknown native versions ignore this. */
+  textInputMasking?: 'all' | 'secure_only';
+  /** Capture eligible native sheets/dialog windows (default: true). */
+  captureNativeSheets?: boolean;
   /**
    * Native flag consumed by ReplayOrchestrator._applySettings().
    * When false, visualCaptureEnabled stays false and VisualCapture never starts.
@@ -66,19 +70,33 @@ export function buildNativeStartOptions(
   config: RejourneyConfig | null,
   userId: string,
   apiUrl: string = config?.apiUrl || DEFAULT_API_URL,
-  publicKey: string = config?.publicRouteKey || ''
+  publicKey: string = config?.publicRouteKey || '',
+  effectiveOptions: {
+    captureScreen?: boolean;
+    textInputMasking?: 'all' | 'secure_only';
+    recordingFps?: number;
+  } = {}
 ): NativeStartOptions {
   const options: NativeStartOptions = {
     userId,
     apiUrl,
     publicKey,
+    captureNativeSheets: config?.captureNativeSheets ?? true,
   };
+
+  if (typeof effectiveOptions.captureScreen === 'boolean') {
+    options.captureScreen = effectiveOptions.captureScreen;
+  }
+
+  if (effectiveOptions.textInputMasking) {
+    options.textInputMasking = effectiveOptions.textInputMasking;
+  }
 
   if (config?.debug) {
     options.debug = true;
   }
 
-  const normalizedFps = normalizeCaptureFps(config?.captureFPS);
+  const normalizedFps = normalizeCaptureFps(effectiveOptions.recordingFps ?? config?.captureFPS);
   if (normalizedFps !== undefined) {
     options.fps = normalizedFps;
   }

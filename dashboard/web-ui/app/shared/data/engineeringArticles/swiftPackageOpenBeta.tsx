@@ -165,10 +165,9 @@ DispatchQueue.global(qos: .utility).async {
             <p className="mt-6">
                 Sample rate enforcement happens in <code>RejourneySessionPolicy.derive</code>. It draws
                 a <code>Double.random(in: 0..&lt;100)</code> and compares it against the remote{" "}
-                <code>sampleRate</code> integer. Sessions that are sampled out still start
-                in <code>observeOnly</code> mode — telemetry and ANR detection run, visual capture
-                does not. The <code>RejourneyStartResult</code> carries a <code>telemetryOnly: Bool</code>
-                flag so the host app can branch on it.
+                <code>sampleRate</code> integer. Sessions that are sampled out return before replay,
+                network interception, or capture is started, so the SDK avoids the native recording
+                path for that launch.
             </p>
         </div>
 
@@ -427,7 +426,7 @@ let stopResult = await Rejourney.stop()`}</pre>
             </ul>
             <p className="mt-6">
                 Native iOS versioning is independent from the React Native package. Tags follow plain
-                semver (<code>v0.1.1</code>). A CI check validates that{" "}
+                semver (<code>v0.2.0</code>). A CI check validates that{" "}
                 <code>packages/ios/VERSION</code> and <code>RejourneySDKInfo.version</code> are in
                 sync before a tag is created.
             </p>

@@ -32,6 +32,8 @@ export const demoProjects: Project[] = [
         publicKey: 'pk_demo_XXXXXXXX',
         rejourneyEnabled: true,
         recordingEnabled: true,
+        recordingFps: 1,
+        sampleRate: 100,
         maxRecordingMinutes: 1000,
         createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
         sessionsLast7Days: 1247,

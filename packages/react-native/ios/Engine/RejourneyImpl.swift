@@ -21,7 +21,7 @@ import CommonCrypto
 @objc(RejourneyImpl)
 public final class RejourneyImpl: NSObject {
     @objc public static let shared = RejourneyImpl()
-    @objc public static var sdkVersion = "1.1.0"
+    @objc public static var sdkVersion = "1.2.0"
 
     // MARK: - State Machine
 
@@ -51,6 +51,7 @@ public final class RejourneyImpl: NSObject {
 
     private let userIdentityKey = "com.rejourney.user.identity"
     private let anonymousIdentityKey = "com.rejourney.anonymous.identity"
+    private let remoteConfigCachePrefix = "com.rejourney.remote_config."
 
     public override init() {
         super.init()
@@ -355,6 +356,8 @@ public final class RejourneyImpl: NSObject {
         if let val = options["captureLogs"] as? Bool { config["captureLogs"] = val }
         if let val = options["collectGeoLocation"] as? Bool { config["collectGeoLocation"] = val }
         if let val = options["observeOnly"] as? Bool { config["observeOnly"] = val }
+        if let val = options["textInputMasking"] as? String { config["textInputMasking"] = val }
+        if let val = options["captureNativeSheets"] as? Bool { config["captureNativeSheets"] = val }
 
         if let fps = options["fps"] as? Int {
             config["captureRate"] = 1.0 / Double(max(1, min(fps, 30)))
@@ -549,6 +552,48 @@ public final class RejourneyImpl: NSObject {
         resolve(stored)
     }
 
+    @objc(setCachedRemoteConfig:configJson:resolve:reject:)
+    public func setCachedRemoteConfig(
+        _ publicKey: String,
+        configJson: String,
+        resolve: @escaping RCTPromiseResolveBlock,
+        reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard !publicKey.isEmpty else {
+            resolve(["success": false])
+            return
+        }
+        UserDefaults.standard.set(configJson, forKey: remoteConfigCachePrefix + publicKey)
+        resolve(["success": true])
+    }
+
+    @objc(getCachedRemoteConfig:resolve:reject:)
+    public func getCachedRemoteConfig(
+        _ publicKey: String,
+        resolve: @escaping RCTPromiseResolveBlock,
+        reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard !publicKey.isEmpty else {
+            resolve(nil)
+            return
+        }
+        resolve(UserDefaults.standard.string(forKey: remoteConfigCachePrefix + publicKey))
+    }
+
+    @objc(clearCachedRemoteConfig:resolve:reject:)
+    public func clearCachedRemoteConfig(
+        _ publicKey: String,
+        resolve: @escaping RCTPromiseResolveBlock,
+        reject: @escaping RCTPromiseRejectBlock
+    ) {
+        guard !publicKey.isEmpty else {
+            resolve(["success": false])
+            return
+        }
+        UserDefaults.standard.removeObject(forKey: remoteConfigCachePrefix + publicKey)
+        resolve(["success": true])
+    }
+
     @objc(logEvent:details:resolve:reject:)
     public func logEvent(
         _ eventType: String,
@@ -730,21 +775,23 @@ public final class RejourneyImpl: NSObject {
         resolve(["success": true])
     }
 
-    @objc(setRemoteConfigWithRejourneyEnabled:recordingEnabled:sampleRate:maxRecordingMinutes:resolve:reject:)
+    @objc(setRemoteConfigWithRejourneyEnabled:recordingEnabled:sampleRate:isSampledIn:maxRecordingMinutes:resolve:reject:)
     public func setRemoteConfig(
         rejourneyEnabled: Bool,
         recordingEnabled: Bool,
         sampleRate: Int,
+        isSampledIn: Bool,
         maxRecordingMinutes: Int,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
-        DiagnosticLog.trace("[Rejourney] setRemoteConfig: rejourneyEnabled=\(rejourneyEnabled), recordingEnabled=\(recordingEnabled), sampleRate=\(sampleRate), maxRecording=\(maxRecordingMinutes)min")
+        DiagnosticLog.trace("[Rejourney] setRemoteConfig: rejourneyEnabled=\(rejourneyEnabled), recordingEnabled=\(recordingEnabled), sampleRate=\(sampleRate), isSampledIn=\(isSampledIn), maxRecording=\(maxRecordingMinutes)min")
 
         ReplayOrchestrator.shared.setRemoteConfig(
             rejourneyEnabled: rejourneyEnabled,
             recordingEnabled: recordingEnabled,
             sampleRate: sampleRate,
+            isSampledIn: isSampledIn,
             maxRecordingMinutes: maxRecordingMinutes
         )
 

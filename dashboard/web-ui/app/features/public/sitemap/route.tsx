@@ -45,7 +45,6 @@ export async function loader() {
         { path: "/dashboard", priority: "0.9", changefreq: "daily" },
         { path: "/pricing", priority: "0.8", changefreq: "weekly" },
         { path: "/engineering", priority: "0.9", changefreq: "weekly" },
-        { path: "/changelog", priority: "0.8", changefreq: "weekly" },
     ];
 
     const docRoutes: SitemapRoute[] = Object.keys(DOCS_MAP).map(slug => ({

@@ -37,6 +37,9 @@ export interface Project {
   publicKey: string;
   rejourneyEnabled?: boolean;
   recordingEnabled: boolean;
+  textInputMasking?: 'all' | 'secure_only';
+  recordingFps?: number;
+  sampleRate?: number;
   maxRecordingMinutes?: number;
   createdAt: string;
   sessionsLast7Days: number;

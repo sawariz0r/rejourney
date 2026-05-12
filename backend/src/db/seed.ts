@@ -208,6 +208,8 @@ async function main() {
                 publicKey: randomUUID(),
                 rejourneyEnabled: true,
                 recordingEnabled: true,
+                textInputMasking: 'all',
+                recordingFps: 1,
                 sampleRate: 100,
                 maxRecordingMinutes: 10,
             }).returning();

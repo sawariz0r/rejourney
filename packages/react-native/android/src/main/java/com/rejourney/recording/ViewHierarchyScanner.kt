@@ -24,6 +24,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import java.lang.ref.WeakReference
+import kotlin.math.roundToInt
 
 /**
  * View hierarchy scanning and serialization
@@ -62,16 +63,17 @@ class ViewHierarchyScanner private constructor() {
     fun serializeWindow(window: View, activity: Activity): Map<String, Any> {
         val ts = System.currentTimeMillis()
         val displayMetrics = activity.resources.displayMetrics
+        val density = displayMetrics.density.takeIf { it > 0f } ?: 1f
         val bounds = Rect().also { window.getWindowVisibleDisplayFrame(it) }
         val startTime = SystemClock.elapsedRealtime()
         
-        val root = serializeView(window, 0, startTime) ?: emptyMap()
+        val root = serializeView(window, 0, startTime, density) ?: emptyMap()
         
         val result = mutableMapOf<String, Any>(
             "timestamp" to ts,
             "screen" to mapOf(
-                "width" to bounds.width(),
-                "height" to bounds.height(),
+                "width" to (bounds.width() / density).roundToInt(),
+                "height" to (bounds.height() / density).roundToInt(),
                 "scale" to displayMetrics.density
             ),
             "root" to root
@@ -84,7 +86,7 @@ class ViewHierarchyScanner private constructor() {
         return result
     }
     
-    private fun serializeView(view: View, depth: Int, startTime: Long): Map<String, Any>? {
+    private fun serializeView(view: View, depth: Int, startTime: Long, density: Float): Map<String, Any>? {
         if (depth > maxDepth) return null
         if (SystemClock.elapsedRealtime() - startTime > timeBudgetMs) {
             return mapOf("type" to view.javaClass.simpleName, "bailout" to true)
@@ -99,10 +101,10 @@ class ViewHierarchyScanner private constructor() {
         val location = IntArray(2)
         view.getLocationInWindow(location)
         node["frame"] = mapOf(
-            "x" to location[0],
-            "y" to location[1],
-            "w" to view.width,
-            "h" to view.height
+            "x" to location[0] / density,
+            "y" to location[1] / density,
+            "w" to view.width / density,
+            "h" to view.height / density
         )
         
         if (!view.isShown) node["hidden"] = true
@@ -135,15 +137,15 @@ class ViewHierarchyScanner private constructor() {
             }
         }
         
+        val sensitive = isSensitive(view)
         if (includeTextContent) {
             when (view) {
                 is TextView -> {
                     val text = view.text?.toString() ?: ""
-                    node["text"] = maskText(text)
+                    node["text"] = if (sensitive) "***" else maskText(text)
                     node["textLength"] = text.length
                     
                     if (view is EditText) {
-                        node["text"] = "***"
                         view.hint?.toString()?.let { node["placeholder"] = it }
                     }
                 }
@@ -174,8 +176,8 @@ class ViewHierarchyScanner private constructor() {
         if (view is ScrollView || view is HorizontalScrollView) {
             node["scrollEnabled"] = true
             node["contentOffset"] = mapOf<String, Any>(
-                "x" to ((view as? HorizontalScrollView)?.scrollX ?: (view as? ScrollView)?.scrollX ?: 0),
-                "y" to ((view as? HorizontalScrollView)?.scrollY ?: (view as? ScrollView)?.scrollY ?: 0)
+                "x" to (((view as? HorizontalScrollView)?.scrollX ?: (view as? ScrollView)?.scrollX ?: 0) / density),
+                "y" to (((view as? HorizontalScrollView)?.scrollY ?: (view as? ScrollView)?.scrollY ?: 0) / density)
             )
         }
         
@@ -189,7 +191,7 @@ class ViewHierarchyScanner private constructor() {
             for (i in 0 until view.childCount) {
                 val child = view.getChildAt(i)
                 if (child.isShown && child.alpha > 0.01f) {
-                    serializeView(child, depth + 1, startTime)?.let {
+                    serializeView(child, depth + 1, startTime, density)?.let {
                         children.add(it)
                     }
                 }
@@ -219,8 +221,17 @@ class ViewHierarchyScanner private constructor() {
                 inputType and android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD != 0) {
                 return true
             }
+            return ReplayOrchestrator.shared?.maskTextInputsByDefault ?: true
         }
+        if ((ReplayOrchestrator.shared?.maskTextInputsByDefault ?: true) && isTextInputClass(view)) return true
         return false
+    }
+
+    private fun isTextInputClass(view: View): Boolean {
+        val className = view.javaClass.simpleName
+        return className == "ReactEditText" ||
+            className == "RCTEditText" ||
+            className.contains("TextInput", ignoreCase = true)
     }
     
     private fun isInteractive(view: View): Boolean {

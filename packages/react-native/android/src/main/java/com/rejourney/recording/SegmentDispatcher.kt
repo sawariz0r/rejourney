@@ -239,7 +239,8 @@ class SegmentDispatcher private constructor() {
             rangeStart = startMs,
             rangeEnd = endMs,
             itemCount = frameCount,
-            attempt = 0
+            attempt = 0,
+            isSampledIn = isSampledIn
         )
         scheduleUpload(upload, completion)
     }
@@ -262,7 +263,8 @@ class SegmentDispatcher private constructor() {
             rangeStart = timestampMs,
             rangeEnd = timestampMs,
             itemCount = 1,
-            attempt = 0
+            attempt = 0,
+            isSampledIn = isSampledIn
         )
         scheduleUpload(upload, completion)
     }
@@ -279,10 +281,11 @@ class SegmentDispatcher private constructor() {
             return
         }
 
+        val sampledIn = isSampledIn
         pendingUploadsCount.incrementAndGet()
         scope.launch {
             try {
-                executeEventBatchUpload(sid, payload, batchNumber, eventCount, completion)
+                executeEventBatchUpload(sid, payload, batchNumber, eventCount, sampledIn, completion)
             } finally {
                 pendingUploadsCount.decrementAndGet()
             }
@@ -303,10 +306,11 @@ class SegmentDispatcher private constructor() {
         batchSeqNumber++
         val seq = batchSeqNumber
 
+        val sampledIn = isSampledIn
         pendingUploadsCount.incrementAndGet()
         scope.launch {
             try {
-                executeEventBatchUpload(replayId, eventPayload, seq, eventCount, completion)
+                executeEventBatchUpload(replayId, eventPayload, seq, eventCount, sampledIn, completion)
             } finally {
                 pendingUploadsCount.decrementAndGet()
             }
@@ -331,6 +335,7 @@ class SegmentDispatcher private constructor() {
             put("sessionId", replayId)
             put("endedAt", concludedAt)
             put("sdkVersion", RejourneySdkInfo.sdkVersion)
+            put("isSampledIn", isSampledIn)
             if (backgroundDurationMs > 0) put("totalBackgroundTimeMs", backgroundDurationMs)
             metrics?.let { put("metrics", JSONObject(it)) }
             put("sdkTelemetry", buildSdkTelemetry(currentQueueDepth))
@@ -498,11 +503,11 @@ class SegmentDispatcher private constructor() {
             put("sessionId", upload.sessionId)
             put("sizeBytes", upload.payload.size)
             put("sdkVersion", RejourneySdkInfo.sdkVersion)
+            put("isSampledIn", upload.isSampledIn)
             
             if (upload.contentType == "events") {
                 put("contentType", "events")
                 put("batchNumber", upload.batchNumber)
-                put("isSampledIn", isSampledIn)  // Server-side enforcement
             } else {
                 put("kind", upload.contentType)
                 put("startTime", upload.rangeStart)
@@ -617,6 +622,7 @@ class SegmentDispatcher private constructor() {
         payload: ByteArray,
         batchNum: Int,
         eventCount: Int,
+        isSampledIn: Boolean,
         completion: ((Boolean) -> Unit)?
     ) {
         val upload = PendingUpload(
@@ -627,7 +633,8 @@ class SegmentDispatcher private constructor() {
             rangeEnd = 0,
             itemCount = eventCount,
             attempt = 0,
-            batchNumber = batchNum
+            batchNumber = batchNum,
+            isSampledIn = isSampledIn
         )
         if (isUploadForClosedSession(upload.sessionId)) {
             DiagnosticLog.trace("[SegmentDispatcher] Dropping stale events upload for closed session ${upload.sessionId.take(20)}")
@@ -820,7 +827,8 @@ private data class PendingUpload(
     val rangeEnd: Long,
     val itemCount: Int,
     val attempt: Int,
-    val batchNumber: Int = 0
+    val batchNumber: Int = 0,
+    val isSampledIn: Boolean
 )
 
 private data class PresignResponse(

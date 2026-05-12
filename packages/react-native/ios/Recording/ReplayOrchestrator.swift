@@ -44,6 +44,8 @@ public final class ReplayOrchestrator: NSObject {
     @objc public var faultTrackingEnabled: Bool = true
     @objc public var responsivenessCaptureEnabled: Bool = true
     @objc public var consoleCaptureEnabled: Bool = true
+    @objc public var maskTextInputsByDefault: Bool = true
+    @objc public var captureNativeSheets: Bool = true
     @objc public var wifiRequired: Bool = false
     @objc public var hierarchyCaptureEnabled: Bool = true
     @objc public var hierarchyCaptureInterval: Double = 2.0
@@ -259,6 +261,7 @@ public final class ReplayOrchestrator: NSObject {
         rejourneyEnabled: Bool,
         recordingEnabled: Bool,
         sampleRate: Int,
+        isSampledIn: Bool,
         maxRecordingMinutes: Int
     ) {
         self.remoteRejourneyEnabled = rejourneyEnabled
@@ -266,9 +269,9 @@ public final class ReplayOrchestrator: NSObject {
         self.remoteSampleRate = sampleRate
         self.remoteMaxRecordingMinutes = maxRecordingMinutes
 
-        // Set isSampledIn for server-side enforcement
-        // recordingEnabled=false means either dashboard disabled OR session sampled out by JS
-        TelemetryPipeline.shared.isSampledIn = recordingEnabled
+        // Set isSampledIn for server-side enforcement. This tracks sampling only;
+        // recordingEnabled=false can also mean observe-only/debug telemetry.
+        TelemetryPipeline.shared.isSampledIn = isSampledIn
 
         // Apply recording settings immediately
         // If recording is disabled, disable visual capture
@@ -282,7 +285,7 @@ public final class ReplayOrchestrator: NSObject {
             _startDurationLimitTimer()
         }
 
-        DiagnosticLog.trace("[ReplayOrchestrator] Remote config applied: rejourneyEnabled=\(rejourneyEnabled), recordingEnabled=\(recordingEnabled), sampleRate=\(sampleRate)%, maxRecording=\(maxRecordingMinutes)min, isSampledIn=\(recordingEnabled)")
+        DiagnosticLog.trace("[ReplayOrchestrator] Remote config applied: rejourneyEnabled=\(rejourneyEnabled), recordingEnabled=\(recordingEnabled), sampleRate=\(sampleRate)%, maxRecording=\(maxRecordingMinutes)min, isSampledIn=\(isSampledIn)")
     }
 
     @objc public func attachAttribute(key: String, value: String) {
@@ -459,13 +462,15 @@ public final class ReplayOrchestrator: NSObject {
 
     private func _applySettings(_ cfg: [String: Any]?) {
         guard let cfg else { return }
-        snapshotInterval = cfg["captureRate"] as? Double ?? 0.33
+        snapshotInterval = cfg["captureRate"] as? Double ?? 1.0
         compressionLevel = cfg["imgCompression"] as? Double ?? 0.5
         visualCaptureEnabled = cfg["captureScreen"] as? Bool ?? true
         interactionCaptureEnabled = cfg["captureAnalytics"] as? Bool ?? true
         faultTrackingEnabled = cfg["captureCrashes"] as? Bool ?? true
         responsivenessCaptureEnabled = cfg["captureANR"] as? Bool ?? true
         consoleCaptureEnabled = cfg["captureLogs"] as? Bool ?? true
+        maskTextInputsByDefault = (cfg["textInputMasking"] as? String) != "secure_only"
+        captureNativeSheets = cfg["captureNativeSheets"] as? Bool ?? true
         wifiRequired = cfg["wifiOnly"] as? Bool ?? false
         frameBundleSize = cfg["screenshotBatchSize"] as? Int ?? 3
         SegmentDispatcher.shared.collectGeoLocation = cfg["collectGeoLocation"] as? Bool ?? true
@@ -547,8 +552,7 @@ public final class ReplayOrchestrator: NSObject {
         SegmentDispatcher.shared.activate()
         TelemetryPipeline.shared.activate()
 
-        let renderCfg = _computeRender(fps: 1, tier: "standard")
-        VisualCapture.shared.configure(snapshotInterval: renderCfg.interval, jpegQuality: renderCfg.quality, uploadBatchSize: frameBundleSize)
+        VisualCapture.shared.configure(snapshotInterval: snapshotInterval, jpegQuality: compressionLevel, uploadBatchSize: frameBundleSize)
 
         if visualCaptureEnabled { VisualCapture.shared.beginCapture(sessionOrigin: replayStartMs) }
         if interactionCaptureEnabled { InteractionRecorder.shared.activate() }

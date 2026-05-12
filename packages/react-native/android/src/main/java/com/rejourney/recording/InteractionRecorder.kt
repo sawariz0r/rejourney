@@ -63,6 +63,28 @@ class InteractionRecorder private constructor(private val context: Context) {
     private val lastInteractionTimestampMs = AtomicLong(0L)
     
     internal var currentActivity: WeakReference<Activity>? = null
+
+    private fun coordinateDensity(): Float {
+        val density = currentActivity?.get()?.resources?.displayMetrics?.density
+            ?: context.resources.displayMetrics.density
+        return density.takeIf { it > 0f } ?: 1f
+    }
+
+    internal fun screenToCapturePoint(x: Float, y: Float): PointF {
+        val decorView = currentActivity?.get()?.window?.decorView ?: return PointF(x, y)
+        val density = coordinateDensity()
+        val loc = IntArray(2)
+        decorView.getLocationOnScreen(loc)
+        return PointF((x - loc[0]) / density, (y - loc[1]) / density)
+    }
+
+    internal fun captureToScreenPoint(point: PointF): PointF {
+        val decorView = currentActivity?.get()?.window?.decorView ?: return point
+        val density = coordinateDensity()
+        val loc = IntArray(2)
+        decorView.getLocationOnScreen(loc)
+        return PointF(point.x * density + loc[0], point.y * density + loc[1])
+    }
     
     fun setCurrentActivity(activity: Activity?) {
         val oldActivity = currentActivity?.get()
@@ -286,6 +308,8 @@ private class GestureAggregator(
     // Track multi-touch for rotation
     private var previousAngle: Double? = null
     private var isMultiTouch = false
+    private var windowToRawOffsetX: Float = 0f
+    private var windowToRawOffsetY: Float = 0f
     
     init {
         gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
@@ -297,14 +321,14 @@ private class GestureAggregator(
             }
             
             override fun onSingleTapUp(e: MotionEvent): Boolean {
-                val loc = PointF(e.rawX, e.rawY)
+                val loc = capturePointFromEvent(e)
                 val target = resolveTarget(loc)
                 handleTap(loc, target)
                 return true
             }
             
             override fun onLongPress(e: MotionEvent) {
-                val loc = PointF(e.rawX, e.rawY)
+                val loc = capturePointFromEvent(e)
                 val target = resolveTarget(loc)
                 recorder.reportLongPress(loc, target)
             }
@@ -316,7 +340,7 @@ private class GestureAggregator(
                 distanceY: Float
             ): Boolean {
                 isScrolling = true
-                val loc = PointF(e2.rawX, e2.rawY)
+                val loc = capturePointFromEvent(e2)
                 lastScrollLocation = loc
                 val now = System.currentTimeMillis()
                 if (now - lastThrottleTime >= throttleInterval) {
@@ -334,7 +358,7 @@ private class GestureAggregator(
                 velocityY: Float
             ): Boolean {
                 flingDetected = true
-                val loc = PointF(e2.rawX, e2.rawY)
+                val loc = capturePointFromEvent(e2)
                 val target = resolveTarget(loc)
                 val direction = classifyDirection(velocityX, velocityY)
                 recorder.reportSwipe(loc, direction, target)
@@ -346,7 +370,7 @@ private class GestureAggregator(
         scaleDetector = ScaleGestureDetector(context,
             object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                 override fun onScale(detector: ScaleGestureDetector): Boolean {
-                    val loc = PointF(detector.focusX, detector.focusY)
+                    val loc = capturePointFromWindow(detector.focusX, detector.focusY)
                     val now = System.currentTimeMillis()
                     if (now - lastThrottleTime >= throttleInterval) {
                         lastThrottleTime = now
@@ -357,7 +381,7 @@ private class GestureAggregator(
                 }
                 
                 override fun onScaleEnd(detector: ScaleGestureDetector) {
-                    val loc = PointF(detector.focusX, detector.focusY)
+                    val loc = capturePointFromWindow(detector.focusX, detector.focusY)
                     val target = resolveTarget(loc)
                     recorder.reportPinch(loc, detector.scaleFactor.toDouble(), target)
                 }
@@ -366,6 +390,8 @@ private class GestureAggregator(
     }
     
     fun processTouchEvent(event: MotionEvent) {
+        windowToRawOffsetX = event.rawX - event.x
+        windowToRawOffsetY = event.rawY - event.y
         scaleDetector.onTouchEvent(event)
         gestureDetector.onTouchEvent(event)
         processRotation(event)
@@ -374,7 +400,7 @@ private class GestureAggregator(
             MotionEvent.ACTION_UP -> {
                 // If we were scrolling but no fling (swipe) was detected, emit scroll
                 if (isScrolling && !flingDetected) {
-                    val loc = lastScrollLocation ?: PointF(event.rawX, event.rawY)
+                    val loc = lastScrollLocation ?: capturePointFromEvent(event)
                     val target = resolveTarget(loc)
                     recorder.reportScroll(loc, target)
                 }
@@ -382,6 +408,16 @@ private class GestureAggregator(
             }
             MotionEvent.ACTION_CANCEL -> resetState()
         }
+    }
+
+    private fun capturePointFromEvent(event: MotionEvent, pointerIndex: Int = 0): PointF {
+        val rawX = event.rawX + (event.getX(pointerIndex) - event.x)
+        val rawY = event.rawY + (event.getY(pointerIndex) - event.y)
+        return recorder.screenToCapturePoint(rawX, rawY)
+    }
+
+    private fun capturePointFromWindow(x: Float, y: Float): PointF {
+        return recorder.screenToCapturePoint(x + windowToRawOffsetX, y + windowToRawOffsetY)
     }
     
     private fun resetState() {
@@ -411,7 +447,7 @@ private class GestureAggregator(
                         if (abs(delta) > 0.01) {
                             val cx = (event.getX(0) + event.getX(1)) / 2
                             val cy = (event.getY(0) + event.getY(1)) / 2
-                            val loc = PointF(cx, cy)
+                            val loc = capturePointFromWindow(cx, cy)
                             val now = System.currentTimeMillis()
                             if (now - lastThrottleTime >= throttleInterval) {
                                 lastThrottleTime = now
@@ -494,7 +530,8 @@ private class GestureAggregator(
         
         val activity = recorder.currentActivity?.get() ?: return false
         val decorView = activity.window?.decorView ?: return false
-        val hit = findViewAt(decorView, location.x.toInt(), location.y.toInt()) ?: return false
+        val screenLocation = recorder.captureToScreenPoint(location)
+        val hit = findViewAt(decorView, screenLocation.x.toInt(), screenLocation.y.toInt()) ?: return false
         
         // Check the hit view itself
         if (isSingleViewInteractive(hit)) return true

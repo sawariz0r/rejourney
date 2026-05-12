@@ -159,6 +159,8 @@ export const projects = pgTable(
         sampleRate: integer('sample_rate').default(100).notNull(),
         rejourneyEnabled: boolean('rejourney_enabled').default(true).notNull(),
         recordingEnabled: boolean('recording_enabled').default(true).notNull(),
+        textInputMasking: varchar('text_input_masking', { length: 32 }).default('all').notNull(),
+        recordingFps: integer('recording_fps').default(1).notNull(),
         maxRecordingMinutes: integer('max_recording_minutes').default(10).notNull(),
         deletedAt: timestamp('deleted_at'),
         createdAt: timestamp('created_at').defaultNow().notNull(),

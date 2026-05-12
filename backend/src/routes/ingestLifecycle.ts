@@ -33,6 +33,23 @@ router.post(
     asyncHandler(async (req, res) => {
         const data = req.body;
         const projectId = req.project!.id;
+
+        if (data.isSampledIn === false) {
+            logger.info(
+                {
+                    event: 'ingest.session_end_ignored',
+                    route: '/api/ingest/session/end',
+                    projectId,
+                    sessionId: data.sessionId,
+                    reason: 'client_sampled_out',
+                    ...getRedisDiagnosticsForLog(),
+                },
+                'Ignoring sampled-out session during /session/end',
+            );
+            res.json({ success: true, ignored: true, reason: 'client_sampled_out' });
+            return;
+        }
+
         const lifecycle = await resolveLifecycleSession(projectId, data.sessionId, req, {
             deviceId: extractDeviceIdFromUploadToken(req) || undefined,
         });

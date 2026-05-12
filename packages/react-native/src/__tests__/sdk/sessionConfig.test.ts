@@ -63,6 +63,7 @@ describe('sessionConfig', () => {
         userId: 'user_123',
         apiUrl: 'https://api.example.com',
         publicKey: 'pk_test_123',
+        captureNativeSheets: true,
         debug: true,
         fps: 2,
       });
@@ -73,6 +74,7 @@ describe('sessionConfig', () => {
         userId: 'anon_1',
         apiUrl: 'https://api.rejourney.co',
         publicKey: '',
+        captureNativeSheets: true,
       });
     });
 
@@ -91,6 +93,7 @@ describe('sessionConfig', () => {
         userId: 'u1',
         apiUrl: 'https://api.rejourney.co',
         publicKey: 'pk_x',
+        captureNativeSheets: true,
         wifiOnly: true,
         quality: 'high',
         captureLogs: false,
@@ -104,6 +107,7 @@ describe('sessionConfig', () => {
         userId: 'u1',
         apiUrl: 'https://api.rejourney.co',
         publicKey: '',
+        captureNativeSheets: true,
         collectGeoLocation: false,
       });
     });
@@ -127,6 +131,33 @@ describe('sessionConfig', () => {
     it('omits captureLogs when trackConsoleLogs is not set', () => {
       const opts = buildNativeStartOptions({}, 'u1');
       expect(opts).not.toHaveProperty('captureLogs');
+    });
+
+    it('forwards effective recording and text masking options to native', () => {
+      expect(
+        buildNativeStartOptions({}, 'u1', undefined, undefined, {
+          captureScreen: false,
+          textInputMasking: 'secure_only',
+          recordingFps: 3,
+        })
+      ).toMatchObject({
+        captureScreen: false,
+        textInputMasking: 'secure_only',
+        fps: 3,
+      });
+    });
+
+    it('lets remote FPS override the local capture FPS when provided', () => {
+      expect(
+        buildNativeStartOptions({ captureFPS: 2 }, 'u1', undefined, undefined, {
+          recordingFps: 3,
+        })
+      ).toMatchObject({ fps: 3 });
+    });
+
+    it('defaults native sheet capture to true and forwards explicit false', () => {
+      expect(buildNativeStartOptions({}, 'u1')).toMatchObject({ captureNativeSheets: true });
+      expect(buildNativeStartOptions({ captureNativeSheets: false }, 'u1')).toMatchObject({ captureNativeSheets: false });
     });
   });
 

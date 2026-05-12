@@ -66,6 +66,32 @@ function logIngestPresignSkip(meta: {
     );
 }
 
+function isProjectSampledOut(project: { sampleRate?: number | null }): boolean {
+    const sampleRate = typeof project.sampleRate === 'number' && Number.isFinite(project.sampleRate)
+        ? Math.max(0, Math.min(100, Math.round(project.sampleRate)))
+        : 100;
+    return sampleRate <= 0;
+}
+
+function samplingSkipReason(project: { sampleRate?: number | null; recordingEnabled?: boolean | null }, data: any, req: any): string | null {
+    if (isProjectSampledOut(project)) {
+        return 'project_sample_rate_zero';
+    }
+
+    // New SDKs can send isSampledIn=false as a last-resort server-side guard.
+    // Older SDKs used the same flag for dashboard recording-disabled telemetry,
+    // so keep those observe-only/event-only paths intact.
+    if (
+        data?.isSampledIn === false &&
+        project.recordingEnabled !== false &&
+        req?.headers?.['x-rj-observe-only'] !== '1'
+    ) {
+        return 'client_sampled_out';
+    }
+
+    return null;
+}
+
 async function findExistingProjectSession(projectId: string, sessionId?: string | null) {
     if (!sessionId) {
         return null;
@@ -175,6 +201,22 @@ router.post(
 
         if (!project.rejourneyEnabled) {
             throw ApiError.forbidden('Rejourney is disabled for this project');
+        }
+
+        const sampleSkipReason = samplingSkipReason(project, data, req);
+        if (sampleSkipReason) {
+            logIngestPresignSkip({
+                route: '/api/ingest/presign',
+                projectId,
+                reason: sampleSkipReason,
+                sessionId,
+            });
+            res.json({
+                skipUpload: true,
+                sessionId,
+                reason: 'Session sampled out - recording disabled for this session',
+            });
+            return;
         }
 
         if (!existingSession) {
@@ -454,6 +496,23 @@ router.post(
 
         if (!project.rejourneyEnabled) {
             throw ApiError.forbidden('Rejourney is disabled for this project');
+        }
+
+        const sampleSkipReason = samplingSkipReason(project, data, req);
+        if (sampleSkipReason) {
+            logIngestPresignSkip({
+                route: '/api/ingest/segment/presign',
+                projectId,
+                reason: sampleSkipReason,
+                sessionId: data.sessionId,
+                kind: data.kind,
+            });
+            res.json({
+                skipUpload: true,
+                sessionId: data.sessionId,
+                reason: 'Session sampled out - recording disabled for this session',
+            });
+            return;
         }
 
         if (!project.recordingEnabled && data.kind === 'screenshots') {

@@ -31,6 +31,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import kotlin.math.roundToInt
 
 /**
  * Event pipeline for telemetry collection and upload
@@ -398,6 +399,7 @@ class TelemetryPipeline private constructor(private val context: Context) {
         }
         
         val displayMetrics = context.resources.displayMetrics
+        val density = displayMetrics.density.takeIf { it > 0f } ?: 1f
         val orchestrator = ReplayOrchestrator.shared
         
         val meta = JSONObject().apply {
@@ -412,9 +414,13 @@ class TelemetryPipeline private constructor(private val context: Context) {
             put("appVersion", getAppVersion())
             put("sdkVersion", RejourneySdkInfo.sdkVersion)
             put("appId", context.packageName)
-            put("screenWidth", displayMetrics.widthPixels)
-            put("screenHeight", displayMetrics.heightPixels)
-            put("screenScale", displayMetrics.density.toInt())
+            put("screenWidth", (displayMetrics.widthPixels / density).roundToInt())
+            put("screenHeight", (displayMetrics.heightPixels / density).roundToInt())
+            put("screenWidthPixels", displayMetrics.widthPixels)
+            put("screenHeightPixels", displayMetrics.heightPixels)
+            put("screenScale", density.toDouble())
+            put("pixelRatio", density.toDouble())
+            put("coordinateSpace", "dp")
             put("systemName", "Android")
             put("name", Build.DEVICE)
         }

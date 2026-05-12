@@ -23,13 +23,13 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.EditText
 import com.rejourney.engine.DiagnosticLog
 import com.rejourney.utility.gzipCompress
@@ -42,6 +42,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Screen capture and frame packaging
@@ -146,6 +148,7 @@ class VisualCapture private constructor(private val context: Context) {
         
         DiagnosticLog.trace("[VisualCapture] Starting capture timer with interval=${snapshotInterval}s")
         startCaptureTimer()
+        mainHandler.post { captureFrame(force = true) }
     }
     
     fun halt(expectedGeneration: Int = -1) {
@@ -256,10 +259,6 @@ class VisualCapture private constructor(private val context: Context) {
             DiagnosticLog.trace("[VisualCapture] captureFrame skipped - no activity")
             return
         }
-        if (!activity.hasWindowFocus()) {
-            DiagnosticLog.trace("[VisualCapture] captureFrame skipped - activity not in foreground")
-            return
-        }
         
         // Refresh map detection state (very cheap shallow walk)
         SpecialCases.shared.refreshMapState(activity)
@@ -281,14 +280,20 @@ class VisualCapture private constructor(private val context: Context) {
         try {
             val window = activity.window ?: return
             val decorView = window.decorView
+            val captureRoots = captureRoots(activity, decorView)
+            if (!activity.hasWindowFocus() && !hasCapturableNativeSheetRoot(decorView, captureRoots)) {
+                DiagnosticLog.trace("[VisualCapture] captureFrame skipped - activity not in foreground")
+                return
+            }
             val bounds = Rect()
             decorView.getWindowVisibleDisplayFrame(bounds)
             
             if (bounds.width() <= 0 || bounds.height() <= 0) return
             
-            val redactRects = redactionMask.computeRects(decorView)
+            val redactionRegions = redactionMask.computeRegions(decorViews = captureRoots)
             
-            val screenScale = 1.25f
+            val pixelDensity = activity.resources.displayMetrics.density.takeIf { it > 0f } ?: 1f
+            val screenScale = 1.25f * pixelDensity
             val scaledWidth = (bounds.width() / screenScale).toInt()
             val scaledHeight = (bounds.height() / screenScale).toInt()
             
@@ -297,17 +302,74 @@ class VisualCapture private constructor(private val context: Context) {
             val canvas = Canvas(bitmap)
             canvas.scale(1f / screenScale, 1f / screenScale)
             decorView.draw(canvas)
+            for (root in captureRoots) {
+                if (root === decorView) continue
+                val offset = rootOffsetFromDecor(decorView, root)
+                canvas.save()
+                canvas.translate(offset.first.toFloat(), offset.second.toFloat())
+                root.draw(canvas)
+                canvas.restore()
+            }
             
             // 2. Composite GPU surfaces (TextureView/SurfaceView) on top.
             //    decorView.draw() renders these as black; we grab their pixels
             //    directly and paint them at the correct position.
-            compositeGpuSurfaces(decorView, canvas, screenScale)
+            for (root in captureRoots) {
+                val offset = rootOffsetFromDecor(decorView, root)
+                compositeGpuSurfaces(root, canvas, screenScale, offset.first, offset.second)
+            }
             
-            processCapture(bitmap, redactRects, screenScale, frameStart, force)
+            processCapture(bitmap, redactionRegions, screenScale, frameStart, force)
             
         } catch (e: Exception) {
             DiagnosticLog.fault("Frame capture failed: ${e.message}")
         }
+    }
+
+    private fun captureRoots(activity: Activity, decorView: View): List<View> {
+        val orchestrator = ReplayOrchestrator.shared
+        if (orchestrator?.captureNativeSheets == false) return listOf(decorView)
+
+        val roots = mutableListOf(decorView)
+        try {
+            val globalClass = Class.forName("android.view.WindowManagerGlobal")
+            val instance = globalClass.getMethod("getInstance").invoke(null)
+            val viewsField = globalClass.getDeclaredField("mViews")
+            viewsField.isAccessible = true
+            val views = viewsField.get(instance) as? List<*> ?: return roots
+            for (candidate in views) {
+                val root = candidate as? View ?: continue
+                if (root === decorView || !root.isShown || root.width <= 0 || root.height <= 0) continue
+                if (root.context?.packageName != activity.packageName) continue
+                if (orchestrator?.maskTextInputsByDefault != false && isKeyboardRoot(root)) continue
+                roots.add(root)
+            }
+        } catch (e: Exception) {
+            DiagnosticLog.trace("[VisualCapture] Native sheet root discovery unavailable: ${e.message}")
+        }
+        return roots.distinct()
+    }
+
+    private fun hasCapturableNativeSheetRoot(decorView: View, roots: List<View>): Boolean {
+        return roots.any { root ->
+            root !== decorView && root.isShown && root.width > 0 && root.height > 0
+        }
+    }
+
+    private fun isKeyboardRoot(view: View): Boolean {
+        val name = view.javaClass.name.lowercase(java.util.Locale.US)
+        return name.contains("inputmethod") ||
+            name.contains("keyboard") ||
+            name.contains("ime")
+    }
+
+    private fun rootOffsetFromDecor(decorView: View, root: View): Pair<Int, Int> {
+        if (root === decorView) return 0 to 0
+        val decorLoc = IntArray(2)
+        val rootLoc = IntArray(2)
+        decorView.getLocationOnScreen(decorLoc)
+        root.getLocationOnScreen(rootLoc)
+        return (rootLoc[0] - decorLoc[0]) to (rootLoc[1] - decorLoc[1])
     }
     
     /**
@@ -318,33 +380,39 @@ class VisualCapture private constructor(private val context: Context) {
      * Mapbox uses SurfaceView by default, so we use MapView.snapshot() to capture
      * the map and composite it at the correct position.
      */
-    private fun compositeGpuSurfaces(root: View, canvas: Canvas, screenScale: Float) {
+    private fun compositeGpuSurfaces(
+        root: View,
+        canvas: Canvas,
+        screenScale: Float,
+        offsetX: Int = 0,
+        offsetY: Int = 0
+    ) {
         findTextureViews(root) { tv ->
             try {
                 val tvBitmap = tv.bitmap ?: return@findTextureViews
                 val loc = IntArray(2)
                 tv.getLocationInWindow(loc)
-                canvas.drawBitmap(tvBitmap, loc[0].toFloat(), loc[1].toFloat(), null)
+                canvas.drawBitmap(tvBitmap, (offsetX + loc[0]).toFloat(), (offsetY + loc[1]).toFloat(), null)
                 tvBitmap.recycle()
             } catch (_: Exception) {
                 // Safety: never crash if TextureView.getBitmap() fails
             }
         }
-        compositeMapboxSnapshot(root, canvas)
+        compositeMapboxSnapshot(root, canvas, offsetX, offsetY)
     }
 
     /**
      * Mapbox MapView uses SurfaceView; decorView.draw() renders it black.
      * Use MapView.snapshot() (Mapbox SDK API) to capture the map and composite it.
      */
-    private fun compositeMapboxSnapshot(root: View, canvas: Canvas) {
+    private fun compositeMapboxSnapshot(root: View, canvas: Canvas, offsetX: Int = 0, offsetY: Int = 0) {
         val mapView = SpecialCases.shared.getMapboxMapViewForSnapshot(root) ?: return
         try {
             val snapshot = mapView.javaClass.getMethod("snapshot").invoke(mapView)
             val bitmap = snapshot as? Bitmap ?: return
             val loc = IntArray(2)
             mapView.getLocationInWindow(loc)
-            canvas.drawBitmap(bitmap, loc[0].toFloat(), loc[1].toFloat(), null)
+            canvas.drawBitmap(bitmap, (offsetX + loc[0]).toFloat(), (offsetY + loc[1]).toFloat(), null)
             bitmap.recycle()
         } catch (e: Exception) {
             DiagnosticLog.trace("[VisualCapture] Mapbox snapshot failed: ${e.message}")
@@ -364,27 +432,31 @@ class VisualCapture private constructor(private val context: Context) {
     
     private fun processCapture(
         bitmap: Bitmap,
-        redactRects: List<Rect>,
+        redactionRegions: List<RedactionRegion>,
         screenScale: Float,
         frameStart: Long,
         force: Boolean
     ) {
         // Apply redactions
-        if (redactRects.isNotEmpty()) {
+        if (redactionRegions.isNotEmpty()) {
             val canvas = Canvas(bitmap)
             val paint = Paint().apply {
                 color = Color.BLACK
                 style = Paint.Style.FILL
             }
-            for (rect in redactRects) {
+            for (region in redactionRegions) {
+                val rect = region.rect
                 if (rect.width() > 0 && rect.height() > 0) {
-                    canvas.drawRect(
+                    val scaledRect = RectF(
                         rect.left / screenScale,
                         rect.top / screenScale,
                         rect.right / screenScale,
-                        rect.bottom / screenScale,
-                        paint
+                        rect.bottom / screenScale
                     )
+                    canvas.drawRect(scaledRect, paint)
+                    if (region.kind == RedactionMaskKind.CAMERA) {
+                        drawCameraMaskIndicator(canvas, scaledRect)
+                    }
                 }
             }
         }
@@ -412,7 +484,7 @@ class VisualCapture private constructor(private val context: Context) {
             screenshots.add(Pair(data, captureTs))
             enforceScreenshotCaps()
             val count = screenshots.size
-            val shouldSend = count >= uploadBatchSize
+            val shouldSend = force || count >= uploadBatchSize
             // Time-based flush: if frames have been sitting for longer than one full
             // batch interval, send regardless of count. This ensures sessions that end
             // before reaching uploadBatchSize frames (very short sessions) still ship
@@ -424,6 +496,51 @@ class VisualCapture private constructor(private val context: Context) {
                 sendScreenshots()
             }
         }
+    }
+
+    private fun drawCameraMaskIndicator(canvas: Canvas, rect: RectF) {
+        val minSide = min(rect.width(), rect.height())
+        if (minSide < 36f) return
+
+        val iconSize = min(64f, max(28f, minSide * 0.24f))
+        val bodyWidth = iconSize
+        val bodyHeight = iconSize * 0.62f
+        val body = RectF(
+            rect.centerX() - bodyWidth / 2f,
+            rect.centerY() - bodyHeight / 2f,
+            rect.centerX() + bodyWidth / 2f,
+            rect.centerY() + bodyHeight / 2f
+        )
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(210, 255, 255, 255)
+            style = Paint.Style.STROKE
+            strokeWidth = max(2f, iconSize * 0.06f)
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(210, 255, 255, 255)
+            style = Paint.Style.FILL
+        }
+
+        val radius = max(4f, iconSize * 0.1f)
+        canvas.drawRoundRect(body, radius, radius, strokePaint)
+
+        val bump = RectF(
+            body.left + iconSize * 0.18f,
+            body.top - iconSize * 0.13f,
+            body.left + iconSize * 0.42f,
+            body.top + iconSize * 0.05f
+        )
+        canvas.drawRoundRect(bump, max(2f, iconSize * 0.04f), max(2f, iconSize * 0.04f), strokePaint)
+
+        canvas.drawCircle(rect.centerX(), rect.centerY(), iconSize * 0.16f, strokePaint)
+        canvas.drawCircle(
+            body.right - iconSize * 0.2f,
+            body.top + iconSize * 0.16f,
+            max(1.6f, iconSize * 0.035f),
+            fillPaint
+        )
     }
     
     private fun enforceScreenshotCaps() {
@@ -604,10 +721,20 @@ private class CaptureStateMachine {
     }
 }
 
+private enum class RedactionMaskKind {
+    GENERIC,
+    CAMERA
+}
+
+private data class RedactionRegion(
+    val rect: Rect,
+    val kind: RedactionMaskKind
+)
+
 private class RedactionMask {
     private val views = CopyOnWriteArrayList<WeakReference<View>>()
     
-    private val cachedAutoRects = mutableListOf<Rect>()
+    private val cachedAutoRegions = mutableListOf<RedactionRegion>()
     private var lastScanTime = 0L
     private val scanCacheDurationMs = 500L
     
@@ -623,27 +750,30 @@ private class RedactionMask {
         lastScanTime = 0L
     }
     
-    fun computeRects(decorView: View? = null): List<Rect> {
-        val rects = mutableListOf<Rect>()
+    fun computeRegions(decorView: View? = null, decorViews: List<View>? = null): List<RedactionRegion> {
+        val regions = mutableListOf<RedactionRegion>()
         views.removeIf { it.get() == null }
         
         for (ref in views) {
             val view = ref.get() ?: continue
             val rect = getViewRect(view)
-            if (rect != null) rects.add(rect)
+            if (rect != null) regions.add(RedactionRegion(rect, RedactionMaskKind.GENERIC))
         }
         
-        if (decorView != null) {
+        val roots = decorViews ?: decorView?.let { listOf(it) }
+        if (roots != null) {
             val now = SystemClock.elapsedRealtime()
             if (now - lastScanTime >= scanCacheDurationMs) {
-                cachedAutoRects.clear()
-                scanForSensitiveViews(decorView, cachedAutoRects)
+                cachedAutoRegions.clear()
+                for (root in roots) {
+                    scanForSensitiveViews(root, cachedAutoRegions)
+                }
                 lastScanTime = now
             }
-            rects.addAll(cachedAutoRects)
+            regions.addAll(cachedAutoRegions)
         }
         
-        return rects
+        return regions
     }
     
     private fun getViewRect(view: View): Rect? {
@@ -660,7 +790,7 @@ private class RedactionMask {
         return null
     }
 
-    private fun scanForSensitiveViews(view: View, rects: MutableList<Rect>, depth: Int = 0) {
+    private fun scanForSensitiveViews(view: View, regions: MutableList<RedactionRegion>, depth: Int = 0) {
         // Expo Router + React Navigation stack/tab navigators create 25+ levels before
         // reaching screen content, so 30 was too shallow to find Mask wrappers.
         if (depth > 60) return
@@ -669,30 +799,31 @@ private class RedactionMask {
         // IMPORTANT: always stop recursing into a masked view's children regardless
         // of whether we can compute its rect — we never want to expose child content
         // of a Mask wrapper (mirrors the iOS fix for map-page animation cases).
-        if (shouldMask(view)) {
+        val maskKind = maskKind(view)
+        if (maskKind != null) {
             val rect = getViewRect(view)
-            if (rect != null) rects.add(rect)
+            if (rect != null) regions.add(RedactionRegion(rect, maskKind))
             return // Always stop — never recurse into children of a masked view
         }
 
         if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
-                scanForSensitiveViews(view.getChildAt(i), rects, depth + 1)
+                scanForSensitiveViews(view.getChildAt(i), regions, depth + 1)
             }
         }
     }
 
-    private fun shouldMask(view: View): Boolean {
+    private fun maskKind(view: View): RedactionMaskKind? {
         // contentDescription is set by React Native's accessibilityLabel prop.
         // We check it first and also check for our explicit Mask signal below.
-        if (view.contentDescription?.toString() == "rejourney_occlude") return true
+        if (view.contentDescription?.toString() == "rejourney_occlude") return RedactionMaskKind.GENERIC
 
         // React Native stores accessibilityHint as a view tag.
         // Try the known RN resource ID first, then fall back to a string-keyed tag
         // lookup for RN versions that use a different internal mechanism.
         try {
             val hint = view.getTag(com.facebook.react.R.id.accessibility_hint) as? String
-            if (hint == "rejourney_occlude") return true
+            if (hint == "rejourney_occlude") return RedactionMaskKind.GENERIC
         } catch (_: Exception) { }
 
         // Extra fallback: iterate all known integer tag slots RN might use.
@@ -701,16 +832,45 @@ private class RedactionMask {
         try {
             // nativeID tag — set by Mask component as a secondary signal
             val nativeId = view.getTag(com.facebook.react.R.id.view_tag_native_id) as? String
-            if (nativeId?.startsWith("rj_occlude") == true) return true
+            if (nativeId?.startsWith("rj_occlude") == true) return RedactionMaskKind.GENERIC
         } catch (_: Exception) { }
         
-        if (view is EditText) return true
-        
-        val className = view.javaClass.simpleName.lowercase(java.util.Locale.US)
-        if (className.contains("camera") || (className.contains("surfaceview") && className.contains("preview"))) {
-            return true
+        if (view is EditText) {
+            return if (isPasswordInput(view) || (ReplayOrchestrator.shared?.maskTextInputsByDefault ?: true)) {
+                RedactionMaskKind.GENERIC
+            } else {
+                null
+            }
+        }
+
+        if ((ReplayOrchestrator.shared?.maskTextInputsByDefault ?: true) && isTextInputClass(view)) {
+            return RedactionMaskKind.GENERIC
         }
         
-        return false
+        val className = view.javaClass.simpleName.lowercase(java.util.Locale.US)
+        if (isCameraClassName(className)) {
+            return RedactionMaskKind.CAMERA
+        }
+        
+        return null
+    }
+
+    private fun isCameraClassName(className: String): Boolean {
+        return className.contains("camera") ||
+            (className.contains("surfaceview") && className.contains("preview"))
+    }
+
+    private fun isPasswordInput(view: EditText): Boolean {
+        val inputType = view.inputType
+        return inputType and android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD != 0 ||
+            inputType and android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD != 0 ||
+            inputType and android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD != 0
+    }
+
+    private fun isTextInputClass(view: View): Boolean {
+        val className = view.javaClass.simpleName
+        return className == "ReactEditText" ||
+            className == "RCTEditText" ||
+            className.contains("TextInput", ignoreCase = true)
     }
 }

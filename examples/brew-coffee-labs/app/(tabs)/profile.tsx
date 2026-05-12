@@ -7,13 +7,14 @@ import {
     TouchableOpacity,
     StyleSheet,
     Alert,
-    Linking,
     ScrollView,
     StatusBar,
     ActivityIndicator,
     Platform,
     KeyboardAvoidingView,
-    NativeModules,
+    Modal,
+    ActionSheetIOS,
+    Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -47,6 +48,8 @@ interface ProfileValidationClientRequest {
     mimeType?: string;    // Optional image mime type
 }
 
+type NativeSheetDemo = 'payment' | 'brew';
+
 export default function ProfileScreen() {
     const [name, setName] = useState<string | null>(null); // Initialize as null for loading state
     const [profileIcon, setProfileIcon] = useState<string | null>(null); // Initialize as null
@@ -61,6 +64,7 @@ export default function ProfileScreen() {
     const [isLoading, setIsLoading] = useState(true); // Start loading initially
     const [isSubmitting, setIsSubmitting] = useState(false); // Separate state for actions like save/upload/logout
     const [loadingMessage, setLoadingMessage] = useState('Loading profile...'); // Keep for logging/debug
+    const [activeNativeSheet, setActiveNativeSheet] = useState<NativeSheetDemo | null>(null);
 
     // --- Refactored Validation Function to use Supabase Edge Function ---
     const validateProfileContentWithEdgeFunction = async (
@@ -560,6 +564,197 @@ export default function ProfileScreen() {
         );
     };
 
+    const logNativeSheetTest = (sheetType: string) => {
+        Rejourney.logEvent('native_sheet_test_opened', {
+            sheetType,
+            screen: 'profile',
+        });
+    };
+
+    const openNativeSheetDemo = (sheet: NativeSheetDemo) => {
+        logNativeSheetTest(sheet);
+        setActiveNativeSheet(sheet);
+    };
+
+    const closeNativeSheetDemo = () => {
+        setActiveNativeSheet(null);
+    };
+
+    const completePaymentDemo = () => {
+        closeNativeSheetDemo();
+        setTimeout(() => {
+            Alert.alert('Payment Authorized', 'Sandbox payment completed.');
+        }, 300);
+    };
+
+    const showNativeAlertDemo = () => {
+        logNativeSheetTest('alert');
+        Alert.alert(
+            'Brew Ready?',
+            'Your tasting room order is ready to confirm.',
+            [
+                { text: 'Later', style: 'cancel' },
+                { text: 'Confirm', onPress: () => Rejourney.logEvent('native_sheet_test_confirmed', { sheetType: 'alert' }) },
+            ]
+        );
+    };
+
+    const showNativeActionSheetDemo = () => {
+        logNativeSheetTest('action_sheet');
+
+        if (Platform.OS === 'ios') {
+            ActionSheetIOS.showActionSheetWithOptions(
+                {
+                    title: 'Choose Brew Action',
+                    message: 'Choose how to handle this sandbox order.',
+                    options: ['Mark as Paid', 'Apply Discount', 'Cancel'],
+                    cancelButtonIndex: 2,
+                    userInterfaceStyle: 'light',
+                },
+                (buttonIndex) => {
+                    if (buttonIndex === 0) {
+                        Alert.alert('Marked Paid', 'The sandbox order was marked as paid.');
+                    } else if (buttonIndex === 1) {
+                        Alert.alert('Discount Applied', 'A sandbox discount was applied.');
+                    }
+                }
+            );
+            return;
+        }
+
+        Alert.alert(
+            'Choose Brew Action',
+            'Choose how to handle this sandbox order.',
+            [
+                { text: 'Mark as Paid' },
+                { text: 'Apply Discount' },
+                { text: 'Cancel', style: 'cancel' },
+            ]
+        );
+    };
+
+    const showNativeShareDemo = async () => {
+        logNativeSheetTest('share_sheet');
+
+        try {
+            await Share.share({
+                title: 'BREW receipt',
+                message: 'BREW Coffee Labs sandbox receipt: Cold Foam Latte, $4.80.',
+            });
+        } catch (error: any) {
+            Alert.alert('Share Error', error.message || 'Could not open the native share sheet.');
+        }
+    };
+
+    const renderNativeSheetModal = () => {
+        const sheet = activeNativeSheet ?? 'payment';
+        const isPaymentSheet = sheet === 'payment';
+
+        return (
+            <Modal
+                visible={activeNativeSheet !== null}
+                animationType="slide"
+                presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
+                onRequestClose={closeNativeSheetDemo}
+            >
+                <SafeAreaView style={styles.nativeSheetContainer} edges={['top', 'bottom']}>
+                    <ScrollView
+                        contentContainerStyle={styles.nativeSheetContent}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <View style={styles.nativeSheetHandle} />
+                        <View style={[styles.nativeSheetIcon, isPaymentSheet ? styles.paymentSheetIcon : styles.brewSheetIcon]}>
+                            <Feather
+                                name={isPaymentSheet ? 'credit-card' : 'coffee'}
+                                size={26}
+                                color={isPaymentSheet ? '#1565C0' : COLORS.coffee}
+                            />
+                        </View>
+                        <Text style={styles.nativeSheetEyebrow}>
+                            {isPaymentSheet ? 'Sandbox Payment' : 'Brew Preferences'}
+                        </Text>
+                        <Text style={styles.nativeSheetTitle}>
+                            {isPaymentSheet ? 'Confirm Latte Pass' : 'Tune Test Brew'}
+                        </Text>
+                        <Text style={styles.nativeSheetBody}>
+                            {isPaymentSheet
+                                ? 'Review the latte pass before authorizing this sandbox order.'
+                                : 'Dial in this saved brew before closing the sheet.'}
+                        </Text>
+
+                        {isPaymentSheet ? (
+                            <>
+                                <View style={styles.paymentSummaryCard}>
+                                    <View>
+                                        <Text style={styles.paymentItemTitle}>Latte Pass</Text>
+                                        <Text style={styles.paymentItemSubtitle}>Monthly sandbox plan</Text>
+                                    </View>
+                                    <Text style={styles.paymentAmount}>$4.80</Text>
+                                </View>
+
+                                <Mask style={styles.paymentFieldGroup}>
+                                    <Text style={styles.paymentLabel}>Card number</Text>
+                                    <TextInput
+                                        style={styles.paymentInput}
+                                        defaultValue="4242 4242 4242 4242"
+                                        keyboardType="number-pad"
+                                        placeholderTextColor={COLORS.darkGray}
+                                    />
+                                    <View style={styles.paymentFieldRow}>
+                                        <View style={styles.paymentHalfField}>
+                                            <Text style={styles.paymentLabel}>Expiry</Text>
+                                            <TextInput style={styles.paymentInput} defaultValue="12/34" keyboardType="number-pad" />
+                                        </View>
+                                        <View style={styles.paymentHalfField}>
+                                            <Text style={styles.paymentLabel}>CVC</Text>
+                                            <TextInput style={styles.paymentInput} defaultValue="123" keyboardType="number-pad" secureTextEntry />
+                                        </View>
+                                    </View>
+                                </Mask>
+
+                                <TouchableOpacity style={styles.nativeSheetPrimaryButton} onPress={completePaymentDemo}>
+                                    <Feather name="lock" size={18} color={COLORS.white} />
+                                    <Text style={styles.nativeSheetPrimaryText}>Authorize Sandbox Payment</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <>
+                                <View style={styles.brewOptionGrid}>
+                                    <View style={styles.brewOptionTile}>
+                                        <Text style={styles.brewOptionValue}>12 oz</Text>
+                                        <Text style={styles.brewOptionLabel}>Cup</Text>
+                                    </View>
+                                    <View style={styles.brewOptionTile}>
+                                        <Text style={styles.brewOptionValue}>Oat</Text>
+                                        <Text style={styles.brewOptionLabel}>Milk</Text>
+                                    </View>
+                                    <View style={styles.brewOptionTile}>
+                                        <Text style={styles.brewOptionValue}>2x</Text>
+                                        <Text style={styles.brewOptionLabel}>Shot</Text>
+                                    </View>
+                                    <View style={styles.brewOptionTile}>
+                                        <Text style={styles.brewOptionValue}>Iced</Text>
+                                        <Text style={styles.brewOptionLabel}>Temp</Text>
+                                    </View>
+                                </View>
+
+                                <TouchableOpacity style={styles.nativeSheetPrimaryButton} onPress={closeNativeSheetDemo}>
+                                    <Feather name="check" size={18} color={COLORS.white} />
+                                    <Text style={styles.nativeSheetPrimaryText}>Save Test Brew</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+
+                        <TouchableOpacity style={styles.nativeSheetSecondaryButton} onPress={closeNativeSheetDemo}>
+                            <Text style={styles.nativeSheetSecondaryText}>Close Sheet</Text>
+                        </TouchableOpacity>
+                    </ScrollView>
+                </SafeAreaView>
+            </Modal>
+        );
+    };
+
     // Determine if showing initial loading skeletons
     // Show ghosts if `isLoading` is true (meaning initial data fetch isn't complete)
     const showInitialLoadGhosts = isLoading;
@@ -689,6 +884,70 @@ export default function ProfileScreen() {
                     )}
 
 
+                    {/* Native Sheet Tests */}
+                    <View style={styles.settingsSection}>
+                        <Text style={styles.sectionTitle}>Native Sheet Tests</Text>
+                        <TouchableOpacity
+                            style={[styles.settingButton, (isSubmitting || isLoading) && styles.disabledItem]}
+                            onPress={() => openNativeSheetDemo('payment')}
+                            disabled={isSubmitting || isLoading}
+                        >
+                            <View style={[styles.settingIconContainer, styles.paymentTestIcon, (isSubmitting || isLoading) && styles.disabledItemVisual]}>
+                                <Feather name="credit-card" size={20} color={(isSubmitting || isLoading) ? COLORS.mediumGray : '#1565C0'} />
+                            </View>
+                            <Text style={[styles.settingText, (isSubmitting || isLoading) && styles.textDisabled]}>Payment Sheet</Text>
+                            <Feather name="chevron-right" size={18} color={(isSubmitting || isLoading) ? COLORS.mediumGray : COLORS.darkGray} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.settingButton, (isSubmitting || isLoading) && styles.disabledItem]}
+                            onPress={() => openNativeSheetDemo('brew')}
+                            disabled={isSubmitting || isLoading}
+                        >
+                            <View style={[styles.settingIconContainer, styles.brewTestIcon, (isSubmitting || isLoading) && styles.disabledItemVisual]}>
+                                <Feather name="coffee" size={20} color={(isSubmitting || isLoading) ? COLORS.mediumGray : COLORS.coffee} />
+                            </View>
+                            <Text style={[styles.settingText, (isSubmitting || isLoading) && styles.textDisabled]}>Brew Sheet</Text>
+                            <Feather name="chevron-right" size={18} color={(isSubmitting || isLoading) ? COLORS.mediumGray : COLORS.darkGray} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.settingButton, (isSubmitting || isLoading) && styles.disabledItem]}
+                            onPress={showNativeActionSheetDemo}
+                            disabled={isSubmitting || isLoading}
+                        >
+                            <View style={[styles.settingIconContainer, (isSubmitting || isLoading) && styles.disabledItemVisual]}>
+                                <Feather name="list" size={20} color={(isSubmitting || isLoading) ? COLORS.mediumGray : COLORS.black} />
+                            </View>
+                            <Text style={[styles.settingText, (isSubmitting || isLoading) && styles.textDisabled]}>Action Sheet</Text>
+                            <Feather name="chevron-right" size={18} color={(isSubmitting || isLoading) ? COLORS.mediumGray : COLORS.darkGray} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.settingButton, (isSubmitting || isLoading) && styles.disabledItem]}
+                            onPress={showNativeShareDemo}
+                            disabled={isSubmitting || isLoading}
+                        >
+                            <View style={[styles.settingIconContainer, (isSubmitting || isLoading) && styles.disabledItemVisual]}>
+                                <Feather name="share-2" size={20} color={(isSubmitting || isLoading) ? COLORS.mediumGray : COLORS.black} />
+                            </View>
+                            <Text style={[styles.settingText, (isSubmitting || isLoading) && styles.textDisabled]}>Share Sheet</Text>
+                            <Feather name="chevron-right" size={18} color={(isSubmitting || isLoading) ? COLORS.mediumGray : COLORS.darkGray} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.settingButton, (isSubmitting || isLoading) && styles.disabledItem]}
+                            onPress={showNativeAlertDemo}
+                            disabled={isSubmitting || isLoading}
+                        >
+                            <View style={[styles.settingIconContainer, (isSubmitting || isLoading) && styles.disabledItemVisual]}>
+                                <Feather name="message-square" size={20} color={(isSubmitting || isLoading) ? COLORS.mediumGray : COLORS.black} />
+                            </View>
+                            <Text style={[styles.settingText, (isSubmitting || isLoading) && styles.textDisabled]}>Alert Dialog</Text>
+                            <Feather name="chevron-right" size={18} color={(isSubmitting || isLoading) ? COLORS.mediumGray : COLORS.darkGray} />
+                        </TouchableOpacity>
+                    </View>
+
                     {/* Account Settings */}
                     <View style={styles.settingsSection}>
                         <Text style={styles.sectionTitle}>Account</Text>
@@ -759,6 +1018,7 @@ export default function ProfileScreen() {
 
                     <View style={styles.bottomPadding} />
                 </ScrollView>
+                {renderNativeSheetModal()}
             </View>
         </KeyboardAvoidingView>
     );
@@ -1021,6 +1281,171 @@ const styles = StyleSheet.create({
     },
     disabledItemVisual: {
         // backgroundColor: COLORS.lightGray, // Example: Change background of icon container when disabled
+    },
+    paymentTestIcon: {
+        backgroundColor: '#E3F2FD',
+    },
+    brewTestIcon: {
+        backgroundColor: '#F3ECE6',
+    },
+    nativeSheetContainer: {
+        flex: 1,
+        backgroundColor: COLORS.white,
+    },
+    nativeSheetContent: {
+        paddingHorizontal: 24,
+        paddingTop: 12,
+        paddingBottom: 28,
+    },
+    nativeSheetHandle: {
+        width: 44,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: COLORS.mediumGray,
+        alignSelf: 'center',
+        marginBottom: 24,
+    },
+    nativeSheetIcon: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 18,
+    },
+    paymentSheetIcon: {
+        backgroundColor: '#E3F2FD',
+    },
+    brewSheetIcon: {
+        backgroundColor: '#F3ECE6',
+    },
+    nativeSheetEyebrow: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: COLORS.darkGray,
+        textTransform: 'uppercase',
+        marginBottom: 6,
+    },
+    nativeSheetTitle: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: COLORS.black,
+        marginBottom: 8,
+    },
+    nativeSheetBody: {
+        fontSize: 15,
+        lineHeight: 21,
+        color: COLORS.darkGray,
+        marginBottom: 22,
+    },
+    paymentSummaryCard: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: COLORS.offWhite,
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 18,
+    },
+    paymentItemTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: COLORS.black,
+    },
+    paymentItemSubtitle: {
+        fontSize: 13,
+        color: COLORS.darkGray,
+        marginTop: 4,
+    },
+    paymentAmount: {
+        fontSize: 22,
+        fontWeight: '800',
+        color: COLORS.black,
+    },
+    paymentFieldGroup: {
+        marginBottom: 20,
+    },
+    paymentLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: COLORS.darkGray,
+        marginBottom: 6,
+        textTransform: 'uppercase',
+    },
+    paymentInput: {
+        backgroundColor: COLORS.offWhite,
+        borderWidth: 1,
+        borderColor: COLORS.lightGray,
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        paddingVertical: Platform.OS === 'ios' ? 13 : 10,
+        fontSize: 16,
+        color: COLORS.black,
+        marginBottom: 14,
+    },
+    paymentFieldRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    paymentHalfField: {
+        flex: 1,
+    },
+    nativeSheetPrimaryButton: {
+        minHeight: 52,
+        borderRadius: 10,
+        backgroundColor: COLORS.black,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 10,
+        paddingHorizontal: 18,
+        marginBottom: 12,
+    },
+    nativeSheetPrimaryText: {
+        color: COLORS.white,
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    brewOptionGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 22,
+    },
+    brewOptionTile: {
+        width: '47%',
+        backgroundColor: COLORS.offWhite,
+        borderRadius: 12,
+        paddingVertical: 18,
+        paddingHorizontal: 14,
+        borderWidth: 1,
+        borderColor: COLORS.lightGray,
+    },
+    brewOptionValue: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: COLORS.black,
+        marginBottom: 4,
+    },
+    brewOptionLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: COLORS.darkGray,
+        textTransform: 'uppercase',
+    },
+    nativeSheetSecondaryButton: {
+        minHeight: 48,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: COLORS.mediumGray,
+        backgroundColor: COLORS.white,
+    },
+    nativeSheetSecondaryText: {
+        color: COLORS.black,
+        fontSize: 15,
+        fontWeight: '700',
     },
     bottomPadding: {
         height: 40,

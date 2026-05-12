@@ -60,6 +60,14 @@ export interface RejourneyConfig {
    * Set to `false` to suppress geolocation collection entirely.
    */
   collectGeoLocation?: boolean;
+  /**
+   * Capture eligible app-owned native sheets/dialog windows in visual replays (default: true).
+   *
+   * Set to `false` to restrict visual capture to the main React Native app window.
+   * This is useful for privacy-sensitive apps that do not want native payment,
+   * dialog, or popup surfaces included in replay screenshots.
+   */
+  captureNativeSheets?: boolean;
 
   // ========================================================================
   // Authentication Callbacks

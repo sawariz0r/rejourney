@@ -156,7 +156,7 @@ const SummaryCard: React.FC<SummaryCardProps> = ({ label, value, detail, icon: I
                 <Icon className="h-5 w-5 text-black" />
             </div>
         </div>
-        <div className="mt-3 border-2 border-black bg-white px-2 py-1 text-xs font-black uppercase text-slate-700 shadow-neo-sm">
+        <div className="mt-3 text-xs font-semibold uppercase text-slate-500">
             {detail}
         </div>
     </div>
@@ -506,7 +506,6 @@ export const Devices: React.FC = () => {
         <div className="min-h-screen bg-transparent pb-12 font-sans text-slate-900">
             <DashboardPageHeader
                 title="Devices"
-                subtitle="Business behavior and technical friction by device model."
                 icon={<Smartphone className="h-6 w-6" />}
                 iconColor="bg-[#e0e7ff]"
             >

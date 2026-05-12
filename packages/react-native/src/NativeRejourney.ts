@@ -179,8 +179,15 @@ export interface Spec extends TurboModule {
     rejourneyEnabled: boolean,
     recordingEnabled: boolean,
     sampleRate: number,
+    isSampledIn: boolean,
     maxRecordingMinutes: number
   ): Promise<{ success: boolean }>;
+
+  setCachedRemoteConfig(publicKey: string, configJson: string): Promise<{ success: boolean }>;
+
+  getCachedRemoteConfig(publicKey: string): Promise<string | null>;
+
+  clearCachedRemoteConfig(publicKey: string): Promise<{ success: boolean }>;
 
   getDeviceInfo(): Promise<Object>;
 }

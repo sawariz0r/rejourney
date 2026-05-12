@@ -59,6 +59,7 @@ import {
   DEFAULT_REMOTE_CONFIG,
   deriveRemoteStartState,
   evaluateInitAttempt,
+  normalizeRemoteConfig,
   type RemoteConfig,
 } from './sdk/runtimeState';
 import { buildNativeStartOptions, shouldStartWithConfig } from './sdk/sessionConfig';
@@ -264,7 +265,47 @@ type ConfigFetchResult =
   | { status: 'access_denied'; httpStatus: number };  // Abort recording (fail-closed)
 
 let _remoteConfig: RemoteConfig | null = null;
-let _sessionSampledOut: boolean = false; // True = telemetry only, no visual replay capture
+let _sessionSampledOut: boolean = false; // True = no native session/capture for this start
+const REMOTE_CONFIG_TIMEOUT_MS = 1000;
+
+type NativeRemoteConfigCache = Spec & {
+  setCachedRemoteConfig?: (publicKey: string, configJson: string) => Promise<{ success: boolean }>;
+  getCachedRemoteConfig?: (publicKey: string) => Promise<string | null>;
+  clearCachedRemoteConfig?: (publicKey: string) => Promise<{ success: boolean }>;
+};
+
+async function persistRemoteConfig(nativeModule: Spec, publicKey: string, config: RemoteConfig): Promise<void> {
+  const cache = nativeModule as NativeRemoteConfigCache;
+  if (typeof cache.setCachedRemoteConfig !== 'function') return;
+  try {
+    await cache.setCachedRemoteConfig(publicKey, JSON.stringify(config));
+  } catch (error) {
+    getLogger().debug('Failed to persist remote config cache:', error);
+  }
+}
+
+async function loadCachedRemoteConfig(nativeModule: Spec, publicKey: string): Promise<RemoteConfig | null> {
+  const cache = nativeModule as NativeRemoteConfigCache;
+  if (typeof cache.getCachedRemoteConfig !== 'function') return null;
+  try {
+    const cached = await cache.getCachedRemoteConfig(publicKey);
+    if (!cached) return null;
+    return normalizeRemoteConfig(JSON.parse(cached));
+  } catch (error) {
+    getLogger().debug('Failed to load remote config cache:', error);
+    return null;
+  }
+}
+
+async function clearCachedRemoteConfig(nativeModule: Spec, publicKey: string): Promise<void> {
+  const cache = nativeModule as NativeRemoteConfigCache;
+  if (typeof cache.clearCachedRemoteConfig !== 'function') return;
+  try {
+    await cache.clearCachedRemoteConfig(publicKey);
+  } catch (error) {
+    getLogger().debug('Failed to clear remote config cache:', error);
+  }
+}
 
 /**
  * Fetch project configuration from backend
@@ -300,10 +341,23 @@ async function fetchRemoteConfig(apiUrl: string, publicKey: string): Promise<Con
     if (bundleId) headers['x-bundle-id'] = bundleId;
     if (packageName) headers['x-package-name'] = packageName;
 
-    const response = await fetch(`${apiUrl}/api/sdk/config`, {
+    const requestInit: RequestInit = {
       method: 'GET',
       headers,
-    });
+    };
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    if (typeof AbortController !== 'undefined') {
+      const controller = new AbortController();
+      requestInit.signal = controller.signal;
+      timeout = setTimeout(() => controller.abort(), REMOTE_CONFIG_TIMEOUT_MS);
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${apiUrl}/api/sdk/config`, requestInit);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       // 401/403/404 = access denied (invalid key, project disabled, deleted, etc) - STOP recording
@@ -316,9 +370,9 @@ async function fetchRemoteConfig(apiUrl: string, publicKey: string): Promise<Con
       return { status: 'network_error' };
     }
 
-    const config = await response.json();
+    const config = normalizeRemoteConfig(await response.json());
     getLogger().debug('Remote config:', JSON.stringify(config));
-    return { status: 'success', config: config as RemoteConfig };
+    return { status: 'success', config };
   } catch (error) {
     // Network timeout, no connectivity, etc - proceed with defaults
     getLogger().warn('Failed to fetch remote config:', error);
@@ -542,13 +596,16 @@ export const Rejourney: RejourneyAPI = {
       // =========================================================
       if (configResult.status === 'access_denied') {
         getLogger().info(`Recording disabled - access denied (${configResult.httpStatus})`);
+        await clearCachedRemoteConfig(nativeModule, publicKey);
         return false;
       }
 
-      // For success, keep the server config. For network errors, explicitly reset
-      // session-scoped remote settings so stale native sampling state cannot leak
-      // across restarts.
-      _remoteConfig = configResult.status === 'success' ? configResult.config : null;
+      if (configResult.status === 'success') {
+        await persistRemoteConfig(nativeModule, publicKey, configResult.config);
+        _remoteConfig = configResult.config;
+      } else {
+        _remoteConfig = await loadCachedRemoteConfig(nativeModule, publicKey);
+      }
       const remoteStartState = deriveRemoteStartState(_remoteConfig, shouldRecordSession);
       _sessionSampledOut = remoteStartState.sessionSampledOut;
 
@@ -570,21 +627,33 @@ export const Rejourney: RejourneyAPI = {
           getLogger().warn(`Recording blocked: ${_remoteConfig.billingReason || 'billing issue'}`);
           return false;
         }
+
+        // =========================================================
+        // CASE 3: Session sampled out - abort before native session start
+        // =========================================================
         if (_sessionSampledOut) {
-          getLogger().info(`Session sampled out (rate: ${_remoteConfig.sampleRate}%) - telemetry only, no visual replay capture`);
+          await nativeModule.setRemoteConfig(
+            remoteStartState.effectiveRemoteConfig.rejourneyEnabled,
+            false,
+            remoteStartState.effectiveRemoteConfig.sampleRate,
+            false,
+            remoteStartState.effectiveRemoteConfig.maxRecordingMinutes
+          );
+          getLogger().info(`Session sampled out (rate: ${_remoteConfig.sampleRate}%) - no native session or capture started`);
+          return false;
         }
 
       } else {
-        // Network error (not access denied) - proceed with defaults
-        // This is "fail-open" behavior for temporary network issues
-        getLogger().debug('Remote config unavailable (network issue), proceeding with defaults');
+        // Network error (not access denied) and no cached settings - proceed with
+        // privacy-preserving defaults.
+        getLogger().debug('Remote config unavailable and no cached config found, proceeding with defaults');
       }
 
       // CASE 4: recordingEnabled=false in dashboard - telemetry only.
-      // Effective recording = chosen config AND not sampled out AND not observeOnly locally.
+      // Effective recording = chosen config AND not observeOnly locally.
       const effectiveRemoteConfig = remoteStartState.effectiveRemoteConfig ?? DEFAULT_REMOTE_CONFIG;
       const localObserveOnly = _storedConfig.observeOnly === true;
-      const effectiveRecordingEnabled = effectiveRemoteConfig.recordingEnabled && !_sessionSampledOut && !localObserveOnly;
+      const effectiveRecordingEnabled = effectiveRemoteConfig.recordingEnabled && !localObserveOnly;
       if (localObserveOnly) {
         getLogger().info('observeOnly: visual recording disabled by local SDK configuration — telemetry still active');
       }
@@ -595,6 +664,7 @@ export const Rejourney: RejourneyAPI = {
         effectiveRemoteConfig.rejourneyEnabled,
         effectiveRecordingEnabled,
         effectiveRemoteConfig.sampleRate,
+        !remoteStartState.sessionSampledOut,
         effectiveRemoteConfig.maxRecordingMinutes
       );
 
@@ -619,7 +689,11 @@ export const Rejourney: RejourneyAPI = {
 
       const result = typeof startSessionWithOptions === 'function'
         ? await startSessionWithOptions(
-          buildNativeStartOptions(_storedConfig, userId, apiUrl, publicKey)
+          buildNativeStartOptions(_storedConfig, userId, apiUrl, publicKey, {
+            captureScreen: effectiveRecordingEnabled,
+            textInputMasking: effectiveRemoteConfig.textInputMasking,
+            recordingFps: _remoteConfig ? effectiveRemoteConfig.recordingFps : undefined,
+          })
         )
         : await nativeModule.startSession(userId, apiUrl, publicKey);
       getLogger().debug('Native session start returned:', JSON.stringify(result));

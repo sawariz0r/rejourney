@@ -55,6 +55,7 @@ import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import kotlin.math.roundToInt
 
 /**
  * Session state machine
@@ -74,7 +75,7 @@ class RejourneyModuleImpl(
 
     companion object {
         const val NAME = "Rejourney"
-        var sdkVersion = "1.1.0"
+        var sdkVersion = "1.2.0"
         
         private const val SESSION_TIMEOUT_MS = 60_000L // 60 seconds
         private const val SESSION_ROLLOVER_GRACE_MS = 2_000L
@@ -82,6 +83,7 @@ class RejourneyModuleImpl(
         private const val PREFS_NAME = "com.rejourney.prefs"
         private const val KEY_USER_IDENTITY = "user_identity"
         private const val KEY_ANONYMOUS_ID = "anonymous_id"
+        private const val KEY_REMOTE_CONFIG_PREFIX = "remote_config_"
     }
 
     // State machine
@@ -505,6 +507,8 @@ class RejourneyModuleImpl(
         if (options.hasKey("captureLogs")) config["captureLogs"] = options.getBoolean("captureLogs")
         if (options.hasKey("collectGeoLocation")) config["collectGeoLocation"] = options.getBoolean("collectGeoLocation")
         if (options.hasKey("observeOnly")) config["observeOnly"] = options.getBoolean("observeOnly")
+        if (options.hasKey("textInputMasking")) config["textInputMasking"] = options.getString("textInputMasking") ?: "all"
+        if (options.hasKey("captureNativeSheets")) config["captureNativeSheets"] = options.getBoolean("captureNativeSheets")
         
         if (options.hasKey("fps")) {
             val fps = options.getInt("fps").coerceIn(1, 30)
@@ -732,6 +736,49 @@ class RejourneyModuleImpl(
         }
     }
 
+    fun setCachedRemoteConfig(publicKey: String, configJson: String, promise: Promise) {
+        try {
+            if (publicKey.isBlank()) {
+                promise.resolve(createResultMap(false, error = "publicKey is required"))
+                return
+            }
+            val prefs = reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putString(KEY_REMOTE_CONFIG_PREFIX + publicKey, configJson).apply()
+            promise.resolve(createResultMap(true))
+        } catch (e: Exception) {
+            DiagnosticLog.fault("[Rejourney] Failed to persist remote config: ${e.message}")
+            promise.resolve(createResultMap(false, error = "Failed to persist remote config"))
+        }
+    }
+
+    fun getCachedRemoteConfig(publicKey: String, promise: Promise) {
+        try {
+            if (publicKey.isBlank()) {
+                promise.resolve(null)
+                return
+            }
+            val prefs = reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            promise.resolve(prefs.getString(KEY_REMOTE_CONFIG_PREFIX + publicKey, null))
+        } catch (_: Exception) {
+            promise.resolve(null)
+        }
+    }
+
+    fun clearCachedRemoteConfig(publicKey: String, promise: Promise) {
+        try {
+            if (publicKey.isBlank()) {
+                promise.resolve(createResultMap(false, error = "publicKey is required"))
+                return
+            }
+            val prefs = reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().remove(KEY_REMOTE_CONFIG_PREFIX + publicKey).apply()
+            promise.resolve(createResultMap(true))
+        } catch (e: Exception) {
+            DiagnosticLog.fault("[Rejourney] Failed to clear remote config: ${e.message}")
+            promise.resolve(createResultMap(false, error = "Failed to clear remote config"))
+        }
+    }
+
     fun logEvent(eventType: String, details: ReadableMap, promise: Promise) {
         // Handle network_request events specially
         if (eventType == "network_request") {
@@ -869,6 +916,7 @@ class RejourneyModuleImpl(
         rejourneyEnabled: Boolean,
         recordingEnabled: Boolean,
         sampleRate: Double,
+        isSampledIn: Boolean,
         maxRecordingMinutes: Double,
         promise: Promise
     ) {
@@ -877,9 +925,10 @@ class RejourneyModuleImpl(
                 rejourneyEnabled = rejourneyEnabled,
                 recordingEnabled = recordingEnabled,
                 sampleRate = sampleRate.toInt(),
+                isSampledIn = isSampledIn,
                 maxRecordingMinutes = maxRecordingMinutes.toInt()
             )
-            DiagnosticLog.notice("[Rejourney] Remote config applied: rejourneyEnabled=$rejourneyEnabled, recordingEnabled=$recordingEnabled, sampleRate=$sampleRate%, maxRecording=${maxRecordingMinutes}min")
+            DiagnosticLog.notice("[Rejourney] Remote config applied: rejourneyEnabled=$rejourneyEnabled, recordingEnabled=$recordingEnabled, sampleRate=$sampleRate%, isSampledIn=$isSampledIn, maxRecording=${maxRecordingMinutes}min")
             promise.resolve(createResultMap(true))
         } catch (e: Exception) {
             DiagnosticLog.fault("[Rejourney] Failed to set remote config: ${e.message}")
@@ -926,15 +975,21 @@ class RejourneyModuleImpl(
 
     fun getDeviceInfo(promise: Promise) {
         val deviceHash = computeDeviceHash()
+        val displayMetrics = reactContext.resources.displayMetrics
+        val density = displayMetrics.density.takeIf { it > 0f } ?: 1f
         
         promise.resolve(Arguments.createMap().apply {
             putString("platform", "android")
             putString("osVersion", Build.VERSION.RELEASE)
             putString("model", Build.MODEL)
             putString("brand", Build.MANUFACTURER)
-            putInt("screenWidth", reactContext.resources.displayMetrics.widthPixels)
-            putInt("screenHeight", reactContext.resources.displayMetrics.heightPixels)
-            putDouble("screenScale", reactContext.resources.displayMetrics.density.toDouble())
+            putInt("screenWidth", (displayMetrics.widthPixels / density).roundToInt())
+            putInt("screenHeight", (displayMetrics.heightPixels / density).roundToInt())
+            putInt("screenWidthPixels", displayMetrics.widthPixels)
+            putInt("screenHeightPixels", displayMetrics.heightPixels)
+            putDouble("screenScale", density.toDouble())
+            putDouble("pixelRatio", density.toDouble())
+            putString("coordinateSpace", "dp")
             putString("deviceHash", deviceHash)
             putString("bundleId", reactContext.packageName ?: "unknown")
         })

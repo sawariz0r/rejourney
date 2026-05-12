@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createProjectSchema } from '../validation/projects.js';
+import { createProjectSchema, updateProjectSchema } from '../validation/projects.js';
 
 describe('Project Validation', () => {
     describe('App Identifier Validation (bundleId / packageName)', () => {
@@ -71,6 +71,61 @@ describe('Project Validation', () => {
                 const result = createProjectSchema.safeParse({ name: 'Test', packageName });
                 expect(result.success).toBe(false);
             });
+        });
+    });
+
+    describe('Text input masking', () => {
+        it('defaults new projects to masking all text inputs', () => {
+            const result = createProjectSchema.parse({ name: 'Test' });
+            expect(result.textInputMasking).toBe('all');
+        });
+
+        it('accepts secure-only masking for project create and update', () => {
+            expect(createProjectSchema.safeParse({ name: 'Test', textInputMasking: 'secure_only' }).success).toBe(true);
+            expect(updateProjectSchema.safeParse({ textInputMasking: 'secure_only' }).success).toBe(true);
+        });
+
+        it('rejects unknown text masking values', () => {
+            expect(createProjectSchema.safeParse({ name: 'Test', textInputMasking: 'none' }).success).toBe(false);
+            expect(updateProjectSchema.safeParse({ textInputMasking: 'none' }).success).toBe(false);
+        });
+    });
+
+    describe('Recording FPS', () => {
+        it('defaults new projects to 1 FPS', () => {
+            const result = createProjectSchema.parse({ name: 'Test' });
+            expect(result.recordingFps).toBe(1);
+        });
+
+        it('accepts 1-3 FPS for project create and update', () => {
+            [1, 2, 3].forEach((recordingFps) => {
+                expect(createProjectSchema.safeParse({ name: 'Test', recordingFps }).success).toBe(true);
+                expect(updateProjectSchema.safeParse({ recordingFps }).success).toBe(true);
+            });
+        });
+
+        it('rejects FPS values outside the remote range', () => {
+            expect(createProjectSchema.safeParse({ name: 'Test', recordingFps: 0 }).success).toBe(false);
+            expect(updateProjectSchema.safeParse({ recordingFps: 4 }).success).toBe(false);
+        });
+    });
+
+    describe('Sample rate', () => {
+        it('defaults new projects to 100 percent sampling', () => {
+            const result = createProjectSchema.parse({ name: 'Test' });
+            expect(result.sampleRate).toBe(100);
+        });
+
+        it('accepts 0-100 percent sample rates for project create and update', () => {
+            [0, 50, 100].forEach((sampleRate) => {
+                expect(createProjectSchema.safeParse({ name: 'Test', sampleRate }).success).toBe(true);
+                expect(updateProjectSchema.safeParse({ sampleRate }).success).toBe(true);
+            });
+        });
+
+        it('rejects sample rates outside the remote range', () => {
+            expect(createProjectSchema.safeParse({ name: 'Test', sampleRate: -1 }).success).toBe(false);
+            expect(updateProjectSchema.safeParse({ sampleRate: 101 }).success).toBe(false);
         });
     });
 });

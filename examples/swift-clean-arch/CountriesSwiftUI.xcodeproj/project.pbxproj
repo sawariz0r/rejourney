@@ -164,7 +164,7 @@
 			packageReferences = (
 				4819F10C2CDF5819003CA0AE /* XCRemoteSwiftPackageReference "EnvironmentOverrides" */,
 				4819F1152CDF6DD4003CA0AE /* XCRemoteSwiftPackageReference "ViewInspector" */,
-				88E85BAA8B4E4787A16CAEE1 /* XCRemoteSwiftPackageReference "rejourney" */,
+				88E85BAA8B4E4787A16CAEE1 /* XCLocalSwiftPackageReference "../.." */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 488734182CDCA2DB00B400A3 /* Products */;
@@ -480,6 +480,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		88E85BAA8B4E4787A16CAEE1 /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../..;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -499,20 +503,12 @@
 				minimumVersion = 0.10.0;
 			};
 		};
-		88E85BAA8B4E4787A16CAEE1 /* XCRemoteSwiftPackageReference "rejourney" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/rejourneyco/rejourney";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.1.1;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		43614116D192424492145488 /* Rejourney */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 88E85BAA8B4E4787A16CAEE1 /* XCRemoteSwiftPackageReference "rejourney" */;
+			package = 88E85BAA8B4E4787A16CAEE1 /* XCLocalSwiftPackageReference "../.." */;
 			productName = Rejourney;
 		};
 		4819F10D2CDF5819003CA0AE /* EnvironmentOverrides */ = {

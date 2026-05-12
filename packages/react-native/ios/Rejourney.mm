@@ -336,9 +336,10 @@ RCT_EXPORT_METHOD(setDebugMode : (BOOL)enabled resolve : (
 
 RCT_EXPORT_METHOD(setRemoteConfig : (BOOL)rejourneyEnabled recordingEnabled : (
     BOOL)recordingEnabled sampleRate : (double)
-                      sampleRate maxRecordingMinutes : (double)
-                          maxRecordingMinutes resolve : (RCTPromiseResolveBlock)
-                              resolve reject : (RCTPromiseRejectBlock)reject) {
+                      sampleRate isSampledIn : (BOOL)
+                          isSampledIn maxRecordingMinutes : (double)
+                              maxRecordingMinutes resolve : (RCTPromiseResolveBlock)
+                                  resolve reject : (RCTPromiseRejectBlock)reject) {
   RejourneyImpl *impl = [self ensureImpl];
   if (!impl) {
     resolve(@{@"success" : @NO});
@@ -347,9 +348,41 @@ RCT_EXPORT_METHOD(setRemoteConfig : (BOOL)rejourneyEnabled recordingEnabled : (
   [impl setRemoteConfigWithRejourneyEnabled:rejourneyEnabled
                            recordingEnabled:recordingEnabled
                                  sampleRate:(NSInteger)sampleRate
+                                isSampledIn:isSampledIn
                         maxRecordingMinutes:(NSInteger)maxRecordingMinutes
                                     resolve:resolve
                                      reject:reject];
+}
+
+RCT_EXPORT_METHOD(setCachedRemoteConfig : (NSString *)publicKey configJson : (
+    NSString *)configJson resolve : (RCTPromiseResolveBlock)
+                      resolve reject : (RCTPromiseRejectBlock)reject) {
+  RejourneyImpl *impl = [self ensureImpl];
+  if (!impl) {
+    resolve(@{@"success" : @NO});
+    return;
+  }
+  [impl setCachedRemoteConfig:publicKey configJson:configJson resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(getCachedRemoteConfig : (NSString *)publicKey resolve : (
+    RCTPromiseResolveBlock)resolve reject : (RCTPromiseRejectBlock)reject) {
+  RejourneyImpl *impl = [self ensureImpl];
+  if (!impl) {
+    resolve(nil);
+    return;
+  }
+  [impl getCachedRemoteConfig:publicKey resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(clearCachedRemoteConfig : (NSString *)publicKey resolve : (
+    RCTPromiseResolveBlock)resolve reject : (RCTPromiseRejectBlock)reject) {
+  RejourneyImpl *impl = [self ensureImpl];
+  if (!impl) {
+    resolve(@{@"success" : @NO});
+    return;
+  }
+  [impl clearCachedRemoteConfig:publicKey resolve:resolve reject:reject];
 }
 
 RCT_EXPORT_METHOD(getSDKMetrics : (RCTPromiseResolveBlock)

@@ -15,14 +15,14 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/nalexn/EnvironmentOverrides", from: "0.0.4"),
         .package(url: "https://github.com/nalexn/ViewInspector", from: "0.10.0"),
-        .package(url: "https://github.com/rejourneyco/rejourney", from: "0.1.1")
+        .package(path: "../..")
     ],
     targets: [
         .target(
             name: "CountriesSwiftUI",
             dependencies: [
                 .product(name: "EnvironmentOverrides", package: "EnvironmentOverrides"),
-                .product(name: "Rejourney", package: "rejourney")
+                .product(name: "Rejourney", package: "Rejourney")
             ],
             path: "CountriesSwiftUI",
             exclude: [

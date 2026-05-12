@@ -430,8 +430,9 @@ private final class InputEndObserver: NSObject {
     
     @objc private func editingEnded() {
         guard let f = field else { return }
-        let value = f.isSecureTextEntry ? "***" : (f.text ?? "")
-        recorder?.reportInput(value: value, masked: f.isSecureTextEntry, hint: f.placeholder ?? "")
+        let masked = f.isSecureTextEntry || ReplayOrchestrator.shared.maskTextInputsByDefault
+        let value = masked ? "***" : (f.text ?? "")
+        recorder?.reportInput(value: value, masked: masked, hint: f.placeholder ?? "")
     }
 }
 

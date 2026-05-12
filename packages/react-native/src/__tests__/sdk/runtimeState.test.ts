@@ -3,6 +3,7 @@ import {
   DEFAULT_REMOTE_CONFIG,
   deriveRemoteStartState,
   evaluateInitAttempt,
+  normalizeRemoteConfig,
 } from '../../sdk/runtimeState';
 
 describe('runtimeState', () => {
@@ -17,13 +18,15 @@ describe('runtimeState', () => {
       });
     });
 
-    it('marks sampled-out sessions without mutating the effective config', () => {
+    it('marks sampled-out sessions so start can abort before native capture', () => {
       expect(
         deriveRemoteStartState(
           {
             projectId: 'project_1',
             rejourneyEnabled: true,
             recordingEnabled: true,
+            textInputMasking: 'all',
+            recordingFps: 1,
             sampleRate: 0,
             maxRecordingMinutes: 1,
           },
@@ -34,12 +37,29 @@ describe('runtimeState', () => {
           projectId: 'project_1',
           rejourneyEnabled: true,
           recordingEnabled: true,
+          textInputMasking: 'all',
+          recordingFps: 1,
           sampleRate: 0,
           maxRecordingMinutes: 1,
         },
         sessionSampledOut: true,
         blockedReason: null,
       });
+    });
+
+    it('uses the per-session sampling decision for partial sample rates', () => {
+      const config = {
+        projectId: 'project_1',
+        rejourneyEnabled: true,
+        recordingEnabled: true,
+        textInputMasking: 'all' as const,
+        recordingFps: 1,
+        sampleRate: 50,
+        maxRecordingMinutes: 1,
+      };
+
+      expect(deriveRemoteStartState(config, () => false).sessionSampledOut).toBe(true);
+      expect(deriveRemoteStartState(config, () => true).sessionSampledOut).toBe(false);
     });
 
     it('surfaces disabled and billing-blocked configs as blockers', () => {
@@ -49,6 +69,8 @@ describe('runtimeState', () => {
             projectId: 'project_1',
             rejourneyEnabled: false,
             recordingEnabled: true,
+            textInputMasking: 'all',
+            recordingFps: 1,
             sampleRate: 100,
             maxRecordingMinutes: 10,
           },
@@ -62,6 +84,8 @@ describe('runtimeState', () => {
             projectId: 'project_1',
             rejourneyEnabled: true,
             recordingEnabled: true,
+            textInputMasking: 'all',
+            recordingFps: 1,
             sampleRate: 100,
             maxRecordingMinutes: 10,
             billingBlocked: true,
@@ -69,6 +93,46 @@ describe('runtimeState', () => {
           () => true
         ).blockedReason
       ).toBe('billingBlocked');
+    });
+  });
+
+  describe('normalizeRemoteConfig', () => {
+    it('normalizes legacy configs without textInputMasking to privacy-preserving defaults', () => {
+      expect(
+        normalizeRemoteConfig({
+          projectId: 'project_1',
+          rejourneyEnabled: true,
+          recordingEnabled: false,
+          sampleRate: 50,
+          maxRecordingMinutes: 3,
+        })
+      ).toEqual({
+        projectId: 'project_1',
+        rejourneyEnabled: true,
+        recordingEnabled: false,
+        textInputMasking: 'all',
+        recordingFps: 1,
+        sampleRate: 50,
+        maxRecordingMinutes: 3,
+        billingBlocked: undefined,
+        billingReason: undefined,
+      });
+    });
+
+    it('accepts secure-only text input masking and clamps numeric fields', () => {
+      expect(
+        normalizeRemoteConfig({
+          textInputMasking: 'secure_only',
+          recordingFps: 99,
+          sampleRate: 500,
+          maxRecordingMinutes: 99,
+        })
+      ).toMatchObject({
+        textInputMasking: 'secure_only',
+        recordingFps: 3,
+        sampleRate: 100,
+        maxRecordingMinutes: 10,
+      });
     });
   });
 

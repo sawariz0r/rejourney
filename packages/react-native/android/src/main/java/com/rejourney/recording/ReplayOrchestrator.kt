@@ -94,6 +94,8 @@ class ReplayOrchestrator private constructor(private val context: Context) {
     var faultTrackingEnabled: Boolean = true
     var responsivenessCaptureEnabled: Boolean = true
     var consoleCaptureEnabled: Boolean = true
+    var maskTextInputsByDefault: Boolean = true
+    var captureNativeSheets: Boolean = true
     var wifiRequired: Boolean = false
     var hierarchyCaptureEnabled: Boolean = true
     var hierarchyCaptureInterval: Double = 2.0
@@ -301,6 +303,7 @@ class ReplayOrchestrator private constructor(private val context: Context) {
         rejourneyEnabled: Boolean,
         recordingEnabled: Boolean,
         sampleRate: Int,
+        isSampledIn: Boolean,
         maxRecordingMinutes: Int
     ) {
         this.remoteRejourneyEnabled = rejourneyEnabled
@@ -308,9 +311,9 @@ class ReplayOrchestrator private constructor(private val context: Context) {
         this.remoteSampleRate = sampleRate
         this.remoteMaxRecordingMinutes = maxRecordingMinutes
 
-        // Set isSampledIn for server-side enforcement
-        // recordingEnabled=false means either dashboard disabled OR session sampled out by JS
-        TelemetryPipeline.shared?.isSampledIn = recordingEnabled
+        // Set isSampledIn for server-side enforcement. This tracks sampling only;
+        // recordingEnabled=false can also mean observe-only/debug telemetry.
+        TelemetryPipeline.shared?.isSampledIn = isSampledIn
 
         // Apply recording settings immediately
         // If recording is disabled, disable visual capture
@@ -324,7 +327,7 @@ class ReplayOrchestrator private constructor(private val context: Context) {
             startDurationLimitTimer()
         }
 
-        DiagnosticLog.trace("[ReplayOrchestrator] Remote config applied: rejourneyEnabled=$rejourneyEnabled, recordingEnabled=$recordingEnabled, sampleRate=$sampleRate%, maxRecording=${maxRecordingMinutes}min, isSampledIn=$recordingEnabled")
+        DiagnosticLog.trace("[ReplayOrchestrator] Remote config applied: rejourneyEnabled=$rejourneyEnabled, recordingEnabled=$recordingEnabled, sampleRate=$sampleRate%, maxRecording=${maxRecordingMinutes}min, isSampledIn=$isSampledIn")
     }
 
     fun unredactView(view: View) {
@@ -534,13 +537,15 @@ class ReplayOrchestrator private constructor(private val context: Context) {
 
     private fun applySettings(cfg: Map<String, Any>?) {
         if (cfg == null) return
-        snapshotInterval = (cfg["captureRate"] as? Double) ?: 0.33
+        snapshotInterval = (cfg["captureRate"] as? Double) ?: 1.0
         compressionLevel = (cfg["imgCompression"] as? Double) ?: 0.5
         visualCaptureEnabled = (cfg["captureScreen"] as? Boolean) ?: true
         interactionCaptureEnabled = (cfg["captureAnalytics"] as? Boolean) ?: true
         faultTrackingEnabled = (cfg["captureCrashes"] as? Boolean) ?: true
         responsivenessCaptureEnabled = (cfg["captureANR"] as? Boolean) ?: true
         consoleCaptureEnabled = (cfg["captureLogs"] as? Boolean) ?: true
+        maskTextInputsByDefault = (cfg["textInputMasking"] as? String) != "secure_only"
+        captureNativeSheets = (cfg["captureNativeSheets"] as? Boolean) ?: true
         wifiRequired = (cfg["wifiOnly"] as? Boolean) ?: false
         frameBundleSize = (cfg["screenshotBatchSize"] as? Int) ?: 3
         SegmentDispatcher.shared.collectGeoLocation = (cfg["collectGeoLocation"] as? Boolean) ?: true
@@ -650,9 +655,8 @@ class ReplayOrchestrator private constructor(private val context: Context) {
         SegmentDispatcher.shared.activate()
         TelemetryPipeline.shared?.activate()
 
-        val renderCfg = computeRender(1, "standard")
         DiagnosticLog.trace("[ReplayOrchestrator] VisualCapture.shared=${VisualCapture.shared != null}, visualCaptureEnabled=$visualCaptureEnabled")
-        VisualCapture.shared?.configure(renderCfg.first, renderCfg.second, frameBundleSize)
+        VisualCapture.shared?.configure(snapshotInterval, compressionLevel, frameBundleSize)
 
         if (visualCaptureEnabled) {
             DiagnosticLog.trace("[ReplayOrchestrator] Starting VisualCapture")

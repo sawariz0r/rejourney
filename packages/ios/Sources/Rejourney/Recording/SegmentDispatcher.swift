@@ -142,7 +142,8 @@ final class SegmentDispatcher {
             rangeEnd: endMs,
             itemCount: frameCount,
             attempt: 0,
-            batchNumber: 0
+            batchNumber: 0,
+            isSampledIn: isSampledIn
         )
         scheduleUpload(upload, completion: completion)
     }
@@ -161,7 +162,8 @@ final class SegmentDispatcher {
             rangeEnd: timestampMs,
             itemCount: 1,
             attempt: 0,
-            batchNumber: 0
+            batchNumber: 0,
+            isSampledIn: isSampledIn
         )
         scheduleUpload(upload, completion: completion)
     }
@@ -172,8 +174,9 @@ final class SegmentDispatcher {
             return
         }
         
+        let sampledIn = isSampledIn
         workerQueue.addOperation { [weak self] in
-            self?.executeEventBatchUpload(sessionId: sid, payload: payload, batchNum: batchNumber, eventCount: eventCount, completion: completion)
+            self?.executeEventBatchUpload(sessionId: sid, payload: payload, batchNum: batchNumber, eventCount: eventCount, isSampledIn: sampledIn, completion: completion)
         }
     }
     
@@ -186,8 +189,9 @@ final class SegmentDispatcher {
         batchSeqNumber += 1
         let seq = batchSeqNumber
         
+        let sampledIn = isSampledIn
         workerQueue.addOperation { [weak self] in
-            self?.executeEventBatchUpload(sessionId: replayId, payload: eventPayload, batchNum: seq, eventCount: eventCount, completion: completion)
+            self?.executeEventBatchUpload(sessionId: replayId, payload: eventPayload, batchNum: seq, eventCount: eventCount, isSampledIn: sampledIn, completion: completion)
         }
     }
     
@@ -216,7 +220,8 @@ final class SegmentDispatcher {
         var body: [String: Any] = [
             "sessionId": replayId,
             "endedAt": concludedAt,
-            "sdkVersion": RejourneySDKInfo.version
+            "sdkVersion": RejourneySDKInfo.version,
+            "isSampledIn": isSampledIn
         ]
         if backgroundDurationMs > 0 { body["totalBackgroundTimeMs"] = backgroundDurationMs }
         if let m = metrics { body["metrics"] = m }
@@ -402,13 +407,13 @@ final class SegmentDispatcher {
         var body: [String: Any] = [
             "sessionId": upload.sessionId,
             "sizeBytes": upload.payload.count,
-            "sdkVersion": RejourneySDKInfo.version
+            "sdkVersion": RejourneySDKInfo.version,
+            "isSampledIn": upload.isSampledIn
         ]
         
         if upload.contentType == "events" {
             body["contentType"] = "events"
             body["batchNumber"] = upload.batchNumber
-            body["isSampledIn"] = isSampledIn  // Server-side enforcement
         } else {
             body["kind"] = upload.contentType
             body["startTime"] = upload.rangeStart
@@ -529,7 +534,7 @@ final class SegmentDispatcher {
         }.resume()
     }
     
-    private func executeEventBatchUpload(sessionId: String, payload: Data, batchNum: Int, eventCount: Int, completion: ((Bool) -> Void)?) {
+    private func executeEventBatchUpload(sessionId: String, payload: Data, batchNum: Int, eventCount: Int, isSampledIn: Bool, completion: ((Bool) -> Void)?) {
         let upload = PendingUpload(
             sessionId: sessionId,
             contentType: "events",
@@ -538,7 +543,8 @@ final class SegmentDispatcher {
             rangeEnd: 0,
             itemCount: eventCount,
             attempt: 0,
-            batchNumber: batchNum
+            batchNumber: batchNum,
+            isSampledIn: isSampledIn
         )
         if isUploadForClosedSession(upload.sessionId) {
             DiagnosticLog.trace("[SegmentDispatcher] Dropping stale events upload for closed session \(upload.sessionId.prefix(20))")
@@ -680,6 +686,7 @@ private struct PendingUpload {
     let itemCount: Int
     var attempt: Int
     let batchNumber: Int
+    let isSampledIn: Bool
 }
 
 private struct PresignResponse {

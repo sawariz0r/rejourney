@@ -51,6 +51,8 @@ function getProjectAuditState(project: {
     webDomain?: string | null;
     rejourneyEnabled?: boolean | null;
     recordingEnabled?: boolean | null;
+    textInputMasking?: string | null;
+    recordingFps?: number | null;
     sampleRate?: number | null;
     maxRecordingMinutes?: number | null;
 }): Record<string, unknown> {
@@ -62,6 +64,8 @@ function getProjectAuditState(project: {
         webDomain: project.webDomain ?? null,
         rejourneyEnabled: project.rejourneyEnabled ?? null,
         recordingEnabled: project.recordingEnabled ?? null,
+        textInputMasking: project.textInputMasking ?? 'all',
+        recordingFps: project.recordingFps ?? 1,
         sampleRate: project.sampleRate ?? null,
         maxRecordingMinutes: project.maxRecordingMinutes ?? null,
     };
@@ -88,6 +92,7 @@ type QueryBuilderProjectContext = {
     sampleRate: number;
     recordingEnabled: boolean;
     rejourneyEnabled: boolean;
+    recordingFps: number;
     maxRecordingMinutes: number;
 };
 
@@ -579,6 +584,7 @@ async function loadQueryBuilderProjectContext(projectId: string): Promise<QueryB
             sampleRate: projects.sampleRate,
             recordingEnabled: projects.recordingEnabled,
             rejourneyEnabled: projects.rejourneyEnabled,
+            recordingFps: projects.recordingFps,
             maxRecordingMinutes: projects.maxRecordingMinutes,
         })
         .from(projects)
@@ -778,7 +784,17 @@ function computeHealthScore(input: {
 }
 
 function buildProjectListCacheKey(userId: string): string {
-    return `projects:list:user:${userId}:v2`;
+    return `projects:list:user:${userId}:v4`;
+}
+
+async function invalidateProjectListCacheForUser(userId: string | null | undefined): Promise<void> {
+    if (!userId) return;
+
+    try {
+        await getRedis().del(buildProjectListCacheKey(userId));
+    } catch (err) {
+        logger.warn({ err, userId }, 'Failed to invalidate project list cache for user');
+    }
 }
 
 async function invalidateProjectListCacheForTeam(teamId: string | null | undefined): Promise<void> {
@@ -1033,6 +1049,8 @@ router.post(
                     publicKey,
                     rejourneyEnabled: data.rejourneyEnabled ?? true,
                     recordingEnabled: data.recordingEnabled ?? true,
+                    textInputMasking: data.textInputMasking ?? 'all',
+                    recordingFps: data.recordingFps ?? 1,
                     sampleRate: data.sampleRate ?? 100,
                     maxRecordingMinutes: data.maxRecordingMinutes ?? 10,
                 }).returning();
@@ -1052,7 +1070,10 @@ router.post(
 
         logger.info({ projectId: project.id, userId: req.user!.id }, 'Project created');
 
-        await invalidateProjectListCacheForTeam(teamId);
+        await Promise.all([
+            invalidateProjectListCacheForUser(req.user!.id),
+            invalidateProjectListCacheForTeam(teamId),
+        ]);
 
         // Create default alert settings for the project
         await db.insert(alertSettings).values({
@@ -1199,6 +1220,8 @@ router.put(
         if (data.webDomain !== undefined) updateData.webDomain = data.webDomain;
         if (data.rejourneyEnabled !== undefined) updateData.rejourneyEnabled = data.rejourneyEnabled;
         if (data.recordingEnabled !== undefined) updateData.recordingEnabled = data.recordingEnabled;
+        if (data.textInputMasking !== undefined) updateData.textInputMasking = data.textInputMasking;
+        if (data.recordingFps !== undefined) updateData.recordingFps = data.recordingFps;
         if (data.sampleRate !== undefined) updateData.sampleRate = data.sampleRate;
         if (data.maxRecordingMinutes !== undefined) updateData.maxRecordingMinutes = data.maxRecordingMinutes;
 
@@ -1210,18 +1233,21 @@ router.put(
         const shouldInvalidateConfig =
             data.sampleRate !== undefined ||
             data.maxRecordingMinutes !== undefined ||
+            data.recordingFps !== undefined ||
             data.recordingEnabled !== undefined ||
-            data.rejourneyEnabled !== undefined;
+            data.rejourneyEnabled !== undefined ||
+            data.textInputMasking !== undefined;
 
         if (shouldInvalidateConfig) {
             try {
-                await getRedis().del(`sdk:config:${project.publicKey}`);
+                await getRedis().del(`sdk:config:${project.publicKey}`, `sdk:config:v2:${project.publicKey}`, `sdk:config:v3:${project.publicKey}`);
             } catch {
                 // ignore cache errors
             }
         }
 
         await Promise.all([
+            invalidateProjectListCacheForUser(req.user!.id),
             invalidateProjectListCacheForTeam(currentProject.teamId),
             data.teamId && data.teamId !== currentProject.teamId
                 ? invalidateProjectListCacheForTeam(data.teamId)
@@ -1374,12 +1400,15 @@ router.delete(
         });
 
         try {
-            await getRedis().del(`sdk:config:${projectResult.project.publicKey}`);
+            await getRedis().del(`sdk:config:${projectResult.project.publicKey}`, `sdk:config:v2:${projectResult.project.publicKey}`, `sdk:config:v3:${projectResult.project.publicKey}`);
         } catch {
             // ignore cache errors
         }
 
-        await invalidateProjectListCacheForTeam(projectResult.project.teamId);
+        await Promise.all([
+            invalidateProjectListCacheForUser(req.user!.id),
+            invalidateProjectListCacheForTeam(projectResult.project.teamId),
+        ]);
 
         logger.info({ projectId, userId: req.user!.id }, 'Project deleted (hard delete)');
 

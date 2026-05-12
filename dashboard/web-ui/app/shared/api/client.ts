@@ -167,6 +167,7 @@ const WORKSPACE_CACHE_TTL = 120000; // 2 minutes - workspace rarely changes
 const ANALYTICS_BOOTSTRAP_CACHE_TTL = 60000;
 const ARCHIVE_CACHE_TTL = 30000;
 const SESSION_BOOTSTRAP_CACHE_TTL = 15000;
+const SESSION_DETAIL_CACHE_VERSION = 'v2';
 
 /**
  * Fetch with caching and error handling
@@ -269,10 +270,17 @@ export interface ApiSession {
     durationMinutes: string;
     eventCount: number;
     screenshotSegmentCount?: number;
+    totalSizeBytes?: number;
+    eventsSizeBytes?: number;
+    screenshotSizeBytes?: number;
+    hierarchySizeBytes?: number;
+    networkSizeBytes?: number;
     totalSizeKB: string;
     kbPerMinute: string;
     eventsSizeKB: string;
     screenshotSizeKB?: string;
+    hierarchySizeKB?: string;
+    networkSizeKB?: string;
     networkStats: {
       total: number;
       successful: number;
@@ -400,6 +408,7 @@ export interface ApiSessionTimeline {
   networkRequests: any[];
   crashes: any[];
   anrs: any[];
+  deviceInfo?: Record<string, any> | null;
 }
 
 export interface ApiSessionHierarchy {
@@ -460,7 +469,7 @@ export async function getSessionBootstrap(
   const params = new URLSearchParams();
   if (options?.frameUrlMode) params.set('frameUrlMode', options.frameUrlMode);
   const suffix = params.toString() ? `?${params.toString()}` : '';
-  const cacheKey = `session:bootstrap:${sessionId}:${options?.frameUrlMode || 'default'}`;
+  const cacheKey = `session:bootstrap:${SESSION_DETAIL_CACHE_VERSION}:${sessionId}:${options?.frameUrlMode || 'default'}`;
   return fetchWithCache<ApiSessionBootstrapResponse>(
     `/api/session/${sessionId}/bootstrap${suffix}`,
     {},
@@ -499,7 +508,11 @@ export async function getSessionTimeline(sessionId: string): Promise<ApiSessionT
       anrs: demo.anrs || [],
     };
   }
-  return fetchWithCache<ApiSessionTimeline>(`/api/session/${sessionId}/timeline`);
+  return fetchWithCache<ApiSessionTimeline>(
+    `/api/session/${sessionId}/timeline`,
+    {},
+    `session:timeline:${SESSION_DETAIL_CACHE_VERSION}:${sessionId}`,
+  );
 }
 
 export async function getSessionHierarchy(sessionId: string): Promise<ApiSessionHierarchy> {
@@ -509,7 +522,11 @@ export async function getSessionHierarchy(sessionId: string): Promise<ApiSession
       hierarchySnapshots: demo.hierarchySnapshots || [],
     };
   }
-  return fetchWithCache<ApiSessionHierarchy>(`/api/session/${sessionId}/hierarchy`);
+  return fetchWithCache<ApiSessionHierarchy>(
+    `/api/session/${sessionId}/hierarchy`,
+    {},
+    `session:hierarchy:${SESSION_DETAIL_CACHE_VERSION}:${sessionId}`,
+  );
 }
 
 export async function getSessionStats(sessionId: string): Promise<ApiSessionStats> {
@@ -1012,6 +1029,8 @@ export interface ApiProject {
   publicKey: string;
   rejourneyEnabled?: boolean;
   recordingEnabled: boolean;
+  textInputMasking?: 'all' | 'secure_only';
+  recordingFps?: number;
   sampleRate: number;
   maxRecordingMinutes?: number;
   sessionsTotal?: number;
@@ -1038,6 +1057,8 @@ export interface CreateProjectRequest {
   platforms?: string[];
   rejourneyEnabled?: boolean;
   recordingEnabled?: boolean;
+  textInputMasking?: 'all' | 'secure_only';
+  recordingFps?: number;
   sampleRate?: number;
   maxRecordingMinutes?: number;
 }
@@ -1093,7 +1114,7 @@ export async function getProject(projectId: string): Promise<ApiProject> {
 /**
  * Update a project
  */
-export async function updateProject(projectId: string, data: { name?: string; maxRecordingMinutes?: number; recordingEnabled?: boolean; rejourneyEnabled?: boolean; bundleId?: string; packageName?: string }): Promise<ApiProject> {
+export async function updateProject(projectId: string, data: { name?: string; maxRecordingMinutes?: number; sampleRate?: number; recordingFps?: number; recordingEnabled?: boolean; rejourneyEnabled?: boolean; textInputMasking?: 'all' | 'secure_only'; bundleId?: string; packageName?: string }): Promise<ApiProject> {
   const response = await fetchJson<{ project: ApiProject }>(`/api/projects/${projectId}`, {
     method: 'PUT',
     body: JSON.stringify(data),

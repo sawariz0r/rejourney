@@ -93,14 +93,24 @@ import UIKit
         if view.alpha < 1.0 { node["alpha"] = view.alpha }
         if let aid = view.accessibilityIdentifier, !aid.isEmpty { node["testID"] = aid }
         if let lbl = view.accessibilityLabel, !lbl.isEmpty { node["label"] = lbl }
-        if _isSensitive(view) { node["masked"] = true }
+        let sensitive = _isSensitive(view)
+        if sensitive { node["masked"] = true }
         
         if includeVisualProperties, let bg = view.backgroundColor, bg != .clear { node["bg"] = _hexColor(bg) }
         
         if includeTextContent {
-            if let tv = view as? UITextView { node["text"] = "***"; node["textLength"] = tv.text?.count ?? 0 }
+            if let tv = view as? UITextView {
+                let text = tv.text ?? ""
+                node["text"] = sensitive ? "***" : _mask(text)
+                node["textLength"] = text.count
+            }
             else if let lb = view as? UILabel { node["text"] = _mask(lb.text ?? ""); node["textLength"] = lb.text?.count ?? 0 }
-            else if let tf = view as? UITextField { node["text"] = "***"; node["textLength"] = tf.text?.count ?? 0; node["placeholder"] = tf.placeholder }
+            else if let tf = view as? UITextField {
+                let text = tf.text ?? ""
+                node["text"] = sensitive ? "***" : _mask(text)
+                node["textLength"] = text.count
+                node["placeholder"] = tf.placeholder
+            }
         }
         
         if _isInteractive(view) {
@@ -138,11 +148,19 @@ import UIKit
     private func _isSensitive(_ v: UIView) -> Bool {
         if v.accessibilityHint == "rejourney_occlude" { return true }
         if v.accessibilityIdentifier?.hasPrefix("rj_occlude") == true { return true }
-        // Mask all text inputs by default — matches React Native SDK behavior.
-        // A per-view opt-out can be added via accessibilityHint="rejourney_reveal" in future.
-        if v is UITextField { return true }
-        if v is UITextView { return true }
+        if let tf = v as? UITextField, tf.isSecureTextEntry { return true }
+        if ReplayOrchestrator.shared.maskTextInputsByDefault && (v is UITextField || v is UITextView) { return true }
+        if ReplayOrchestrator.shared.maskTextInputsByDefault && _isTextInputClass(_typeName(v)) { return true }
         return false
+    }
+
+    private func _isTextInputClass(_ className: String) -> Bool {
+        className == "RCTSinglelineTextInputView" ||
+        className == "RCTMultilineTextInputView" ||
+        className == "RCTTextInput" ||
+        className == "RCTBaseTextInputView" ||
+        className == "RCTUITextField" ||
+        className == "EXTextInput"
     }
     
     private func _isInteractive(_ v: UIView) -> Bool {

@@ -292,10 +292,6 @@ final class VisualCapture: NSObject {
         // Skip capture if app is not in foreground (prevents "not in visible window" warnings)
         guard UIApplication.shared.applicationState == .active else { return }
 
-        // Skip capture while text input is active. drawHierarchy can force
-        // UIKit keyboard/layout work and make typing feel broken.
-        guard !_keyboardCaptureSuspended else { return }
-        
         let frameStart = CFAbsoluteTimeGetCurrent()
         
         // Refresh map detection state (very cheap shallow walk)
@@ -335,9 +331,9 @@ final class VisualCapture: NSObject {
             guard bounds.width > 0, bounds.height > 0 else { return }
             guard !bounds.width.isNaN && !bounds.height.isNaN else { return }
             guard bounds.width.isFinite && bounds.height.isFinite else { return }
-            guard !_containsActiveTextInput(in: window) else { return }
-            
-            let redactRects = _redactionMask.computeRects()
+
+            let captureWindows = _captureWindows(primary: window)
+            let redactRects = _redactionMask.computeRects(windows: captureWindows)
             let scale = max(1.0, captureScale)
             let scaledSize = CGSize(width: bounds.width / scale, height: bounds.height / scale)
             guard scaledSize.width >= 1, scaledSize.height >= 1 else {
@@ -350,7 +346,10 @@ final class VisualCapture: NSObject {
                 return
             }
             context.scaleBy(x: 1.0 / scale, y: 1.0 / scale)
-            window.drawHierarchy(in: bounds, afterScreenUpdates: false)
+            for captureWindow in captureWindows {
+                let drawRect = captureWindow === window ? bounds : captureWindow.frame
+                captureWindow.drawHierarchy(in: drawRect, afterScreenUpdates: false)
+            }
             
             // Apply redactions inline while context is open
             if !redactRects.isEmpty {
@@ -361,9 +360,7 @@ final class VisualCapture: NSObject {
                     guard r.width > 0 && r.height > 0 else { continue }
                     guard r.origin.x.isFinite && r.origin.y.isFinite && r.width.isFinite && r.height.isFinite else { continue }
                     guard !r.origin.x.isNaN && !r.origin.y.isNaN && !r.width.isNaN && !r.height.isNaN else { continue }
-                    let clipped = r.intersection(bounds)
-                    guard !clipped.isNull, clipped.width > 0, clipped.height > 0 else { continue }
-                    context.fill(clipped)
+                    context.fill(r)
                 }
             }
             
@@ -401,7 +398,7 @@ final class VisualCapture: NSObject {
                 self._screenshots.append((data, captureTs))
                 self._enforceScreenshotCaps()
                 let count = self._screenshots.count
-                let shouldSend = count >= self._uploadBatchSize
+                let shouldSend = forced || count >= self._uploadBatchSize
                 // Time-based flush: if frames have been sitting for longer than one full
                 // batch interval, send regardless of count. This ensures sessions that end
                 // before reaching uploadBatchSize frames (very short sessions) still ship
@@ -423,24 +420,52 @@ final class VisualCapture: NSObject {
         }
     }
 
-    private var _keyboardCaptureSuspended: Bool {
-        _isKeyboardTransitioning ||
-            _isKeyboardVisible ||
-            CFAbsoluteTimeGetCurrent() < _keyboardCaptureResumeTime
+    private func _captureWindows(primary: UIWindow) -> [UIWindow] {
+        guard ReplayOrchestrator.shared.captureNativeSheets else {
+            return [primary]
+        }
+
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .filter { window in
+                if window.isHidden || window.alpha <= 0.01 || window.bounds.width <= 0 || window.bounds.height <= 0 {
+                    return false
+                }
+                if window === primary {
+                    return true
+                }
+                let className = String(describing: type(of: window))
+                if ReplayOrchestrator.shared.maskTextInputsByDefault && _isKeyboardOrTextInputWindow(className) {
+                    return false
+                }
+                return window.screen == primary.screen
+            }
+            .sorted { lhs, rhs in
+                if lhs === rhs {
+                    return false
+                }
+                if lhs === primary {
+                    return true
+                }
+                if rhs === primary {
+                    return false
+                }
+                if lhs.windowLevel == rhs.windowLevel {
+                    return ObjectIdentifier(lhs).hashValue < ObjectIdentifier(rhs).hashValue
+                }
+                return lhs.windowLevel.rawValue < rhs.windowLevel.rawValue
+            }
+
+        return windows.contains(where: { $0 === primary }) ? windows : [primary] + windows
     }
 
-    private func _containsActiveTextInput(in view: UIView) -> Bool {
-        if view.isFirstResponder {
-            return view is UITextField || view is UITextView || view is UISearchBar || (view as? UITextInput) != nil
-        }
-        for subview in view.subviews {
-            if _containsActiveTextInput(in: subview) {
-                return true
-            }
-        }
-        return false
+    private func _isKeyboardOrTextInputWindow(_ className: String) -> Bool {
+        className.contains("UIRemoteKeyboardWindow") ||
+        className.contains("UITextEffectsWindow") ||
+        className.contains("UIInputSetHostView") ||
+        className.contains("UIKeyboard")
     }
-    
 
     
     /// Enforce memory caps to prevent unbounded growth (industry standard backpressure)
@@ -708,13 +733,16 @@ final class RedactionMask {
     }
     
     // View class names that should always be masked (privacy sensitive)
-    private let _sensitiveClassNames: Set<String> = [
+    private let _alwaysSensitiveClassNames: Set<String> = [
         // Camera views
         "AVCaptureVideoPreviewLayer",
         "CameraView",
         "RCTCameraView",
         "ExpoCamera",
         "EXCameraView",
+    ]
+
+    private let _textInputClassNames: Set<String> = [
         // React Native text inputs (internal class names)
         "RCTSinglelineTextInputView",
         "RCTMultilineTextInputView", 
@@ -737,7 +765,7 @@ final class RedactionMask {
         _explicitViews.remove(view)
     }
     
-    func computeRects(in rootView: UIView? = nil) -> [CGRect] {
+    func computeRects(windows: [UIWindow]? = nil) -> [CGRect] {
         _lock.lock()
         let explicitViews = _explicitViews.allObjects
         _lock.unlock()
@@ -759,9 +787,8 @@ final class RedactionMask {
         let now = CFAbsoluteTimeGetCurrent()
         if now - _lastScanTime >= _scanCacheDurationSec {
             _cachedAutoRects.removeAll()
-            if let rootView {
-                _scanForSensitiveViews(in: rootView, rects: &_cachedAutoRects)
-            } else if let window = _keyWindow() {
+            let scanWindows = windows ?? _keyWindow().map { [$0] } ?? []
+            for window in scanWindows {
                 _scanForSensitiveViews(in: window, rects: &_cachedAutoRects)
             }
             _lastScanTime = now
@@ -774,12 +801,12 @@ final class RedactionMask {
     private func _viewRect(_ v: UIView) -> CGRect? {
         guard let w = v.window else { return nil }
         
-        // Skip views in non-key windows (keyboard windows, system windows).
+        // Skip non-key windows unless native sheet capture is explicitly enabled.
         // These have transitional layer transforms during animation that cause
         // UIView.convert() to pass NaN to CoreGraphics internally, producing
         // "invalid numeric value (NaN)" errors that we cannot catch because
         // CoreGraphics logs the error before the return value is available.
-        if !w.isKeyWindow { return nil }
+        if !w.isKeyWindow && !ReplayOrchestrator.shared.captureNativeSheets { return nil }
         
         // Guard against views with invalid bounds before conversion
         let viewBounds = v.bounds
@@ -819,7 +846,10 @@ final class RedactionMask {
         guard r.width > 0 && r.height > 0 else { return nil }
         guard !r.origin.x.isNaN && !r.origin.y.isNaN && !r.width.isNaN && !r.height.isNaN else { return nil }
         guard r.origin.x.isFinite && r.origin.y.isFinite && r.width.isFinite && r.height.isFinite else { return nil }
-        return r
+        if w.isKeyWindow {
+            return r
+        }
+        return r.offsetBy(dx: w.frame.origin.x, dy: w.frame.origin.y)
     }
     
     /// Fallback rect computation for views that have active CoreAnimation keys.
@@ -893,11 +923,21 @@ final class RedactionMask {
             return true
         }
         
-        if view is UITextField { return true }
-        if view is UITextView { return true }
+        if let textField = view as? UITextField, textField.isSecureTextEntry {
+            return true
+        }
+        if view is UITextField {
+            return ReplayOrchestrator.shared.maskTextInputsByDefault
+        }
+        if view is UITextView {
+            return ReplayOrchestrator.shared.maskTextInputsByDefault
+        }
 
         let className = String(describing: type(of: view))
-        if _sensitiveClassNames.contains(className) {
+        if _alwaysSensitiveClassNames.contains(className) {
+            return true
+        }
+        if ReplayOrchestrator.shared.maskTextInputsByDefault && _textInputClassNames.contains(className) {
             return true
         }
 

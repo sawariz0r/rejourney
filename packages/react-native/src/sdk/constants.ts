@@ -38,6 +38,7 @@ export const DEFAULT_CONFIG = {
   debug: false,
   collectDeviceInfo: true,
   collectGeoLocation: true,
+  captureNativeSheets: true,
 } as const;
 
 /** Event type constants */

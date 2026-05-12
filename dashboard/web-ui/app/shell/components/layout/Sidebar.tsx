@@ -356,7 +356,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
         )}
         {/* Brand & Team Switcher */}
-        <div className={`border-b-2 border-black bg-[#f8fafc] ${collapsedDesktop ? 'p-2' : 'p-4'}`}>
+        <div className={`border-b border-slate-200 bg-slate-50 ${collapsedDesktop ? 'p-2' : 'p-4'}`}>
           {collapsedDesktop ? (
             <Link
               to={warehousePath}
@@ -366,9 +366,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 setShowAppSelector(false);
                 setIsMobileOpen(false);
               }}
-              className={`mb-3 flex h-10 w-full items-center justify-center border-2 transition-all ${isWarehouseActive
-                ? 'border-black bg-black text-white shadow-neo-sm'
-                : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
+              className={`mb-3 flex h-10 w-full items-center justify-center border transition-all rounded-sm ${isWarehouseActive
+                ? 'border-slate-300 bg-slate-800 text-white shadow-sm'
+                : 'border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300'
                 }`}
             >
               <Database className="h-4 w-4" />
@@ -381,9 +381,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 setShowAppSelector(false);
                 setIsMobileOpen(false);
               }}
-              className={`mb-3 flex w-full items-center justify-between border-2 px-3 py-2 text-[11px] font-extrabold transition-all ${isWarehouseActive
-                ? 'border-black bg-black text-white shadow-neo-sm'
-                : 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo'
+              className={`mb-3 flex w-full items-center justify-between border px-3 py-2 text-[11px] font-semibold transition-all rounded-sm ${isWarehouseActive
+                ? 'border-slate-300 bg-slate-800 text-white shadow-sm'
+                : 'border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300'
                 }`}
             >
               <span className="inline-flex items-center gap-2">
@@ -402,10 +402,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 setShowTeamSelector(!showTeamSelector);
                 setShowAppSelector(false);
               }}
-              className={`w-full flex bg-white border-2 border-black hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo-sm text-black transition-all text-sm font-semibold ${collapsedDesktop ? 'justify-center px-2 py-2.5' : 'items-center justify-between px-3 py-2'}`}
+              className={`w-full flex bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-800 transition-all text-sm font-semibold rounded-sm shadow-sm ${collapsedDesktop ? 'justify-center px-2 py-2.5' : 'items-center justify-between px-3 py-2'}`}
             >
               <div className={`flex min-w-0 items-center overflow-hidden ${collapsedDesktop ? '' : 'gap-2'}`}>
-                <div className="w-5 h-5 bg-[#67e8f9] border border-black flex items-center justify-center text-black font-bold text-xs shrink-0">
+                <div className="w-5 h-5 bg-cyan-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs shrink-0 rounded-sm">
                   {currentTeam?.name?.[0] || 'R'}
                 </div>
                 {!collapsedDesktop && (
@@ -418,8 +418,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             {showTeamSelector && (
-              <div className={`absolute top-full mt-2 bg-white border-2 border-black shadow-neo z-50 animate-in fade-in zoom-in-95 duration-100 ${collapsedDesktop ? 'left-0 w-64' : 'left-0 right-0'}`}>
-                <div className="border-b-2 border-black bg-[#f8fafc] px-3 py-2 text-xs font-bold text-black">
+              <div className={`absolute top-full mt-2 bg-white border border-slate-200 shadow-lg rounded-md z-50 animate-in fade-in zoom-in-95 duration-100 ${collapsedDesktop ? 'left-0 w-64' : 'left-0 right-0'}`}>
+                <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 rounded-t-md">
                   Switch Team
                 </div>
                 <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
@@ -437,16 +437,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         setIsMobileOpen(false);
                         navigate(p('/general'));
                       }}
-                      className={`w-full text-left px-3 py-2 text-sm font-semibold hover:bg-[#ecfeff] flex items-center justify-between gap-2 group border-b border-black/10 last:border-0 ${currentTeam?.id === team.id ? 'bg-[#67e8f9] text-black font-extrabold' : 'text-black'}`}
+                      className={`w-full text-left px-3 py-2 text-sm font-semibold hover:bg-slate-50 flex items-center justify-between gap-2 group border-b border-slate-100 last:border-0 ${currentTeam?.id === team.id ? 'bg-cyan-50 text-slate-900 font-bold' : 'text-slate-700'}`}
                     >
                       <span className="truncate">
                         {team.name || `Team ${team.id.slice(0, 8)}...`}
                       </span>
-                      {currentTeam?.id === team.id && <Check className="w-4 h-4 text-black" />}
+                      {currentTeam?.id === team.id && <Check className="w-4 h-4 text-slate-600" />}
                     </button>
                   ))}
                 </div>
-                <div className="border-t-2 border-black p-2 bg-[#f8fafc]">
+                <div className="border-t border-slate-100 p-2 bg-slate-50 rounded-b-md">
                   <button
                     onClick={() => {
                       setShowTeamSelector(false);
@@ -474,10 +474,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 setShowAppSelector(!showAppSelector);
                 setShowTeamSelector(false);
               }}
-              className={`w-full flex bg-white border-2 border-black transition-all text-sm ${loading ? 'cursor-wait opacity-80' : 'hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo-sm'} ${showAppSelector ? 'bg-[#ecfeff] shadow-neo-sm' : 'shadow-neo-sm'} ${collapsedDesktop ? 'justify-center px-2 py-2.5' : 'items-center justify-between px-3 py-2'}`}
+              className={`w-full flex bg-white border border-slate-200 transition-all text-sm rounded-sm shadow-sm ${loading ? 'cursor-wait opacity-80' : 'hover:bg-slate-50 hover:border-slate-300'} ${showAppSelector ? 'bg-slate-50 border-slate-300' : ''} ${collapsedDesktop ? 'justify-center px-2 py-2.5' : 'items-center justify-between px-3 py-2'}`}
             >
               {collapsedDesktop ? (
-                <span className="flex h-6 w-6 items-center justify-center border border-black bg-[#86efac] text-[11px] font-bold text-black">
+                <span className="flex h-6 w-6 items-center justify-center border border-slate-200 bg-emerald-50 text-[11px] font-bold text-slate-700 rounded-sm">
                   {(currentProject?.name || 'P').slice(0, 1).toUpperCase()}
                 </span>
               ) : (
@@ -491,15 +491,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             {showAppSelector && (
-              <div className={`absolute top-full mt-2 bg-white border-2 border-black shadow-neo z-50 animate-in fade-in zoom-in-95 duration-100 ${collapsedDesktop ? 'left-0 w-64' : 'left-0 right-0'}`}>
-                <div className="border-b-2 border-black bg-[#f8fafc] px-3 py-2 text-xs font-bold text-black">
+              <div className={`absolute top-full mt-2 bg-white border border-slate-200 shadow-lg rounded-md z-50 animate-in fade-in zoom-in-95 duration-100 ${collapsedDesktop ? 'left-0 w-64' : 'left-0 right-0'}`}>
+                <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 rounded-t-md">
                   Projects
                 </div>
                 <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                   {loading ? (
                     <div className="space-y-2 p-3">
                       {Array.from({ length: 3 }).map((_, index) => (
-                        <div key={index} className="h-9 animate-pulse border-2 border-black bg-[#f8fafc]" />
+                        <div key={index} className="h-9 animate-pulse border border-slate-200 bg-slate-50 rounded-sm" />
                       ))}
                     </div>
                   ) : projects.length > 0 ? (
@@ -511,11 +511,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           setShowAppSelector(false);
                           setIsMobileOpen(false);
                         }}
-                        className={`w-full text-left px-3 py-2 text-sm font-semibold flex items-center justify-between gap-2 border-b border-black/10 last:border-0 ${currentProject?.id === project.id ? 'bg-[#67e8f9] text-black font-extrabold' : 'text-black hover:bg-[#ecfeff]'
+                        className={`w-full text-left px-3 py-2 text-sm font-semibold flex items-center justify-between gap-2 border-b border-slate-100 last:border-0 ${currentProject?.id === project.id ? 'bg-cyan-50 text-slate-900 font-bold' : 'text-slate-700 hover:bg-slate-50'
                           }`}
                       >
                         <span className="truncate">{project.name}</span>
-                        {currentProject?.id === project.id && <Check className="w-4 h-4 text-black" />}
+                        {currentProject?.id === project.id && <Check className="w-4 h-4 text-slate-600" />}
                       </button>
                     ))
                   ) : (
@@ -524,7 +524,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   )}
                 </div>
-                <div className="border-t-2 border-black p-2 bg-[#f8fafc]">
+                <div className="border-t border-slate-100 p-2 bg-slate-50 rounded-b-md">
                   <button
                     onClick={() => {
                       setShowAppSelector(false);
@@ -561,11 +561,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onMouseEnter={() => prefetchPath(item.path)}
                       onFocus={() => prefetchPath(item.path)}
                       className={`
-                        dashboard-nav-item flex items-center text-[0.83rem] font-semibold transition-colors border-2
-                        ${collapsedDesktop ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'}
+                        dashboard-nav-item flex items-center text-[0.83rem] font-semibold transition-colors rounded-sm
+                        ${collapsedDesktop ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'}
                         ${isActive(item.path)
-                          ? 'border-black bg-black text-white shadow-neo-sm'
-                          : 'border-transparent text-slate-700 hover:border-slate-300 hover:bg-[#ecfeff] hover:text-slate-950 hover:shadow-neo-sm'
+                          ? 'bg-slate-900 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                         }
                       `}
                     >
@@ -580,11 +580,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {isDesktop && (
-          <div className="mt-auto border-t-2 border-black bg-[#f8fafc] p-2">
+          <div className="mt-auto border-t border-slate-200 bg-slate-50 p-2">
             <button
               type="button"
               onClick={() => setCollapsed((c) => !c)}
-              className="flex w-full items-center justify-center gap-2 border-2 border-transparent py-2 text-slate-600 transition-all hover:border-black hover:bg-[#ecfeff] hover:text-black hover:shadow-neo-sm"
+              className="flex w-full items-center justify-center gap-2 rounded-sm py-2 text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-700"
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-expanded={!collapsed}
             >

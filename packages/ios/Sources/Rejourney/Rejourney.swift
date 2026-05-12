@@ -85,6 +85,7 @@ public struct RejourneyOptions: Sendable, Equatable {
     public var trackConsoleLogs: Bool
     public var collectGeoLocation: Bool
     public var autoTrackNetwork: Bool
+    public var captureNativeSheets: Bool
     public var debug: Bool
 
     public init(
@@ -102,6 +103,7 @@ public struct RejourneyOptions: Sendable, Equatable {
         trackConsoleLogs: Bool = true,
         collectGeoLocation: Bool = true,
         autoTrackNetwork: Bool = true,
+        captureNativeSheets: Bool = true,
         debug: Bool = false
     ) {
         self.apiURL = apiURL
@@ -118,6 +120,7 @@ public struct RejourneyOptions: Sendable, Equatable {
         self.trackConsoleLogs = trackConsoleLogs
         self.collectGeoLocation = collectGeoLocation
         self.autoTrackNetwork = autoTrackNetwork
+        self.captureNativeSheets = captureNativeSheets
         self.debug = debug
     }
 }
@@ -365,9 +368,12 @@ final class RejourneyNativeController: NSObject {
             return RejourneyStartResult(success: false, sessionId: nil, error: blockedReason.rawValue)
         }
 
+        if startState.sessionSampledOut {
+            return RejourneyStartResult(success: false, sessionId: nil, error: "sampled_out")
+        }
+
         let effectiveRemoteConfig = startState.effectiveRemoteConfig
         let recordingEnabled = effectiveRemoteConfig.recordingEnabled
-            && !startState.sessionSampledOut
             && !options.observeOnly
             && options.captureScreen
 
@@ -375,6 +381,7 @@ final class RejourneyNativeController: NSObject {
             rejourneyEnabled: effectiveRemoteConfig.rejourneyEnabled,
             recordingEnabled: recordingEnabled,
             sampleRate: effectiveRemoteConfig.sampleRate,
+            isSampledIn: !startState.sessionSampledOut,
             maxRecordingMinutes: effectiveRemoteConfig.maxRecordingMinutes
         )
 
@@ -395,7 +402,9 @@ final class RejourneyNativeController: NSObject {
 
         let captureSettings = RejourneyCaptureSettings(
             options: options,
-            recordingEnabled: recordingEnabled
+            recordingEnabled: recordingEnabled,
+            textInputMasking: effectiveRemoteConfig.textInputMasking,
+            recordingFps: remoteConfig == nil ? nil : effectiveRemoteConfig.recordingFps
         ).nativeDictionary
 
         if let existingCredential = DeviceRegistrar.shared.uploadCredential,
@@ -708,6 +717,8 @@ struct RejourneyRemoteConfig: Codable, Equatable, Sendable {
     let projectId: String
     let rejourneyEnabled: Bool
     let recordingEnabled: Bool
+    let textInputMasking: String
+    let recordingFps: Int
     let sampleRate: Int
     let maxRecordingMinutes: Int
     let billingBlocked: Bool
@@ -717,6 +728,8 @@ struct RejourneyRemoteConfig: Codable, Equatable, Sendable {
         projectId: "default",
         rejourneyEnabled: true,
         recordingEnabled: true,
+        textInputMasking: "all",
+        recordingFps: 1,
         sampleRate: 100,
         maxRecordingMinutes: 10,
         billingBlocked: false,
@@ -727,6 +740,8 @@ struct RejourneyRemoteConfig: Codable, Equatable, Sendable {
         case projectId
         case rejourneyEnabled
         case recordingEnabled
+        case textInputMasking
+        case recordingFps
         case sampleRate
         case maxRecordingMinutes
         case billingBlocked
@@ -737,6 +752,8 @@ struct RejourneyRemoteConfig: Codable, Equatable, Sendable {
         projectId: String,
         rejourneyEnabled: Bool,
         recordingEnabled: Bool,
+        textInputMasking: String = "all",
+        recordingFps: Int = 1,
         sampleRate: Int,
         maxRecordingMinutes: Int,
         billingBlocked: Bool,
@@ -745,6 +762,8 @@ struct RejourneyRemoteConfig: Codable, Equatable, Sendable {
         self.projectId = projectId
         self.rejourneyEnabled = rejourneyEnabled
         self.recordingEnabled = recordingEnabled
+        self.textInputMasking = textInputMasking == "secure_only" ? "secure_only" : "all"
+        self.recordingFps = min(3, max(1, recordingFps))
         self.sampleRate = min(100, max(0, sampleRate))
         self.maxRecordingMinutes = max(1, maxRecordingMinutes)
         self.billingBlocked = billingBlocked
@@ -757,6 +776,8 @@ struct RejourneyRemoteConfig: Codable, Equatable, Sendable {
             projectId: (try? container.decode(String.self, forKey: .projectId)) ?? "default",
             rejourneyEnabled: (try? container.decode(Bool.self, forKey: .rejourneyEnabled)) ?? true,
             recordingEnabled: (try? container.decode(Bool.self, forKey: .recordingEnabled)) ?? true,
+            textInputMasking: (try? container.decode(String.self, forKey: .textInputMasking)) ?? "all",
+            recordingFps: Self.decodeInt(container, .recordingFps, defaultValue: 1),
             sampleRate: Self.decodeInt(container, .sampleRate, defaultValue: 100),
             maxRecordingMinutes: Self.decodeInt(container, .maxRecordingMinutes, defaultValue: 10),
             billingBlocked: (try? container.decode(Bool.self, forKey: .billingBlocked)) ?? false,
@@ -906,7 +927,12 @@ struct RejourneyRemoteConfigClient {
 struct RejourneyCaptureSettings: Equatable {
     let nativeDictionary: [String: Any]
 
-    init(options: RejourneyOptions, recordingEnabled: Bool) {
+    init(
+        options: RejourneyOptions,
+        recordingEnabled: Bool,
+        textInputMasking: String = "all",
+        recordingFps: Int? = nil
+    ) {
         var settings: [String: Any] = [
             "captureScreen": recordingEnabled && options.captureScreen,
             "captureAnalytics": options.captureAnalytics,
@@ -915,10 +941,12 @@ struct RejourneyCaptureSettings: Equatable {
             "wifiOnly": options.wifiOnly,
             "captureLogs": options.trackConsoleLogs,
             "collectGeoLocation": options.collectGeoLocation,
+            "captureNativeSheets": options.captureNativeSheets,
+            "textInputMasking": textInputMasking == "secure_only" ? "secure_only" : "all",
             "observeOnly": options.observeOnly || !recordingEnabled
         ]
 
-        if let fps = options.normalizedCaptureFPS {
+        if let fps = recordingFps ?? options.normalizedCaptureFPS {
             settings["captureRate"] = 1.0 / Double(fps)
         }
 

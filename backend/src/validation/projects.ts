@@ -44,6 +44,9 @@ const appIdentifierSchema = z
         (val) => ({ message: validateAppIdentifier(val) || 'Invalid identifier' })
     );
 
+const textInputMaskingSchema = z.enum(['all', 'secure_only']);
+const recordingFpsSchema = z.number().int().min(1).max(3);
+
 export const createProjectSchema = z.object({
     name: z.string().min(1).max(100),
     bundleId: appIdentifierSchema.optional(),
@@ -53,6 +56,8 @@ export const createProjectSchema = z.object({
     platforms: z.array(z.enum(['ios', 'android', 'web', 'react-native'])).optional(),
     rejourneyEnabled: z.boolean().optional().default(true),
     recordingEnabled: z.boolean().optional().default(true),
+    textInputMasking: textInputMaskingSchema.optional().default('all'),
+    recordingFps: recordingFpsSchema.optional().default(1),
     sampleRate: z.number().int().min(0).max(100).optional().default(100),
     maxRecordingMinutes: z.number().int().min(1).max(10).optional().default(10),
 });
@@ -65,6 +70,8 @@ export const updateProjectSchema = z.object({
     webDomain: z.string().url().nullable().optional(),
     rejourneyEnabled: z.boolean().optional(),
     recordingEnabled: z.boolean().optional(),
+    textInputMasking: textInputMaskingSchema.optional(),
+    recordingFps: recordingFpsSchema.optional(),
     sampleRate: z.number().int().min(0).max(100).optional(),
     maxRecordingMinutes: z.number().int().min(1).max(10).optional(),
 });

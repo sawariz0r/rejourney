@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { useSessionData } from '~/shared/providers/SessionContext';
@@ -11,7 +11,7 @@ import { Input } from '~/shared/ui/core/Input';
 import { Modal } from '~/shared/ui/core/Modal';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
-import { Copy, Plus, Trash2, Key, AlertTriangle, CheckCircle, Shield, Info, Check, Settings, Save, AlertOctagon, Smartphone, Clock } from 'lucide-react';
+import { Copy, Plus, Trash2, Key, AlertTriangle, CheckCircle, Shield, Info, Check, Settings, Save, AlertOctagon, Smartphone, Clock, Percent } from 'lucide-react';
 import { getAndroidPackageError, getIosBundleIdError } from '~/shared/lib/validation';
 import {
   getProject,
@@ -29,8 +29,30 @@ interface SettingsProps {
   projectId?: string;
 }
 
+type TextInputMasking = 'all' | 'secure_only';
+type RecordingFps = 1 | 2 | 3;
+
+const normalizeTextInputMasking = (value: unknown): TextInputMasking => (
+  value === 'secure_only' ? 'secure_only' : 'all'
+);
+
+const normalizeRecordingFps = (value: unknown): RecordingFps => {
+  const numericValue = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : 1;
+  return Math.min(3, Math.max(1, numericValue)) as RecordingFps;
+};
+
+const normalizeMaxRecordingMinutes = (value: unknown): number => {
+  const numericValue = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : 10;
+  return Math.min(10, Math.max(1, numericValue));
+};
+
+const normalizeSampleRate = (value: unknown): number => {
+  const numericValue = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : 100;
+  return Math.min(100, Math.max(0, numericValue));
+};
+
 export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjectId }) => {
-  const { projects, refreshSessions, selectedProject } = useSessionData();
+  const { projects, refreshSessions, selectedProject, setSelectedProject } = useSessionData();
   const { currentTeam, teamMembers } = useTeam();
   const { user } = useAuth();
   const isSelfHosted = !!user?.isSelfHosted;
@@ -67,16 +89,36 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
   // Form state
   const [appName, setAppName] = useState('');
   const [maxRecordingMinutes, setMaxRecordingMinutes] = useState<number>(10);
+  const [maxRecordingMinutesDraft, setMaxRecordingMinutesDraft] = useState<number | null>(null);
+  const [sampleRate, setSampleRate] = useState<number>(100);
+  const [sampleRateDraft, setSampleRateDraft] = useState<number | null>(null);
+  const [recordingFps, setRecordingFps] = useState<RecordingFps>(1);
+  const [recordingFpsDraft, setRecordingFpsDraft] = useState<RecordingFps | null>(null);
+  const [recordingFpsConfirmation, setRecordingFpsConfirmation] = useState<RecordingFps | null>(null);
   const [rejourneyEnabled, setRejourneyEnabled] = useState<boolean>(true);
   const [recordingEnabled, setRecordingEnabled] = useState<boolean>(true);
+  const [textInputMasking, setTextInputMasking] = useState<TextInputMasking>('all');
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingDuration, setIsSavingDuration] = useState(false);
+  const [isSavingSampleRate, setIsSavingSampleRate] = useState(false);
+  const [isSavingRecordingFps, setIsSavingRecordingFps] = useState(false);
   const [isSavingRejourney, setIsSavingRejourney] = useState(false);
   const [isSavingRecording, setIsSavingRecording] = useState(false);
+  const [isSavingMasking, setIsSavingMasking] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [durationSaveError, setDurationSaveError] = useState<string | null>(null);
+  const [sampleRateSaveError, setSampleRateSaveError] = useState<string | null>(null);
+  const [recordingFpsSaveError, setRecordingFpsSaveError] = useState<string | null>(null);
   const [rejourneySaveError, setRejourneySaveError] = useState<string | null>(null);
   const [recordingSaveError, setRecordingSaveError] = useState<string | null>(null);
+  const [maskingSaveError, setMaskingSaveError] = useState<string | null>(null);
+  const pendingMaxRecordingMinutesRef = useRef<number | null>(null);
+  const pendingSampleRateRef = useRef<number | null>(null);
+  const pendingTextInputMaskingRef = useRef<TextInputMasking | null>(null);
+  const pendingRecordingFpsRef = useRef<RecordingFps | null>(null);
+  const maxRecordingMinutesDraftRef = useRef<number | null>(null);
+  const sampleRateDraftRef = useRef<number | null>(null);
+  const recordingFpsDraftRef = useRef<RecordingFps | null>(null);
 
   // API Key state
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -99,6 +141,21 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
   // Copy state
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  const setRecordingFpsDraftValue = (fps: RecordingFps | null) => {
+    recordingFpsDraftRef.current = fps;
+    setRecordingFpsDraft(fps);
+  };
+
+  const setMaxRecordingMinutesDraftValue = (minutes: number | null) => {
+    maxRecordingMinutesDraftRef.current = minutes;
+    setMaxRecordingMinutesDraft(minutes);
+  };
+
+  const setSampleRateDraftValue = (rate: number | null) => {
+    sampleRateDraftRef.current = rate;
+    setSampleRateDraft(rate);
+  };
+
   const handleCopy = async (text: string, field: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -107,6 +164,58 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
     } catch (err) {
       console.error('Failed to copy:', err);
     }
+  };
+
+  const applyProjectToForm = (nextProject: any) => {
+    const sourceMasking = normalizeTextInputMasking(nextProject?.textInputMasking);
+    const pendingMasking = pendingTextInputMaskingRef.current;
+    const masking = pendingMasking && sourceMasking !== pendingMasking ? pendingMasking : sourceMasking;
+    if (pendingMasking && sourceMasking === pendingMasking) {
+      pendingTextInputMaskingRef.current = null;
+    }
+    const sourceMaxRecordingMinutes = normalizeMaxRecordingMinutes(nextProject?.maxRecordingMinutes);
+    const pendingMaxRecordingMinutes = pendingMaxRecordingMinutesRef.current;
+    const resolvedMaxRecordingMinutes = pendingMaxRecordingMinutes && sourceMaxRecordingMinutes !== pendingMaxRecordingMinutes
+      ? pendingMaxRecordingMinutes
+      : sourceMaxRecordingMinutes;
+    if (pendingMaxRecordingMinutes && sourceMaxRecordingMinutes === pendingMaxRecordingMinutes) {
+      pendingMaxRecordingMinutesRef.current = null;
+    }
+    const sourceSampleRate = normalizeSampleRate(nextProject?.sampleRate);
+    const pendingSampleRate = pendingSampleRateRef.current;
+    const resolvedSampleRate = pendingSampleRate !== null && pendingSampleRate !== undefined && sourceSampleRate !== pendingSampleRate
+      ? pendingSampleRate
+      : sourceSampleRate;
+    if (pendingSampleRate !== null && pendingSampleRate !== undefined && sourceSampleRate === pendingSampleRate) {
+      pendingSampleRateRef.current = null;
+    }
+    const sourceRecordingFps = normalizeRecordingFps(nextProject?.recordingFps);
+    const pendingRecordingFps = pendingRecordingFpsRef.current;
+    const resolvedRecordingFps = pendingRecordingFps && sourceRecordingFps !== pendingRecordingFps
+      ? pendingRecordingFps
+      : sourceRecordingFps;
+    if (pendingRecordingFps && sourceRecordingFps === pendingRecordingFps) {
+      pendingRecordingFpsRef.current = null;
+    }
+
+    setProject({
+      ...nextProject,
+      textInputMasking: masking,
+      maxRecordingMinutes: resolvedMaxRecordingMinutes,
+      sampleRate: resolvedSampleRate,
+      recordingFps: resolvedRecordingFps,
+    });
+    setAppName(nextProject.name);
+    setMaxRecordingMinutes(resolvedMaxRecordingMinutes);
+    setMaxRecordingMinutesDraftValue(null);
+    setSampleRate(resolvedSampleRate);
+    setSampleRateDraftValue(null);
+    setRecordingFps(resolvedRecordingFps);
+    setRecordingFpsDraftValue(null);
+    setRecordingFpsConfirmation(null);
+    setRejourneyEnabled((nextProject as any).rejourneyEnabled ?? true);
+    setRecordingEnabled(nextProject.recordingEnabled ?? true);
+    setTextInputMasking(masking);
   };
 
   // Find project from context or fetch it
@@ -123,28 +232,17 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
         setLoading(true);
         setError(null);
 
-        // Try to find in context first
+        // Try to find in context first for fast paint, then verify from the
+        // single-project endpoint so stale bootstrap/project-list cache cannot
+        // reset newer settings such as recordingFps on refresh.
         const contextProject = projects.find(a => a.id === projectId);
         if (contextProject) {
-          setProject(contextProject);
-          setAppName(contextProject.name);
-          setMaxRecordingMinutes(contextProject.maxRecordingMinutes ?? 10);
-          setRejourneyEnabled((contextProject as any).rejourneyEnabled ?? true);
-          setRecordingEnabled(contextProject.recordingEnabled ?? true);
+          applyProjectToForm(contextProject);
           setLoading(false);
-          return;
         }
 
-        // Only fetch from API if projects are loaded but project not found in context
-        // This prevents fetching while context is still loading
-        if (projects.length > 0 || projectId) {
-          const fetchedProject = await getProject(projectId);
-          setProject(fetchedProject);
-          setAppName(fetchedProject.name);
-          setMaxRecordingMinutes(fetchedProject.maxRecordingMinutes ?? 10);
-          setRejourneyEnabled((fetchedProject as any).rejourneyEnabled ?? true);
-          setRecordingEnabled(fetchedProject.recordingEnabled ?? true);
-        }
+        const fetchedProject = await getProject(projectId);
+        applyProjectToForm(fetchedProject);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load project');
       } finally {
@@ -204,29 +302,213 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
     }
   };
 
-  const handleSaveDuration = async () => {
+  const handleMaxRecordingMinutesChange = async (minutes: number): Promise<boolean> => {
     if (!project) {
       setDurationSaveError('Project not loaded');
-      return;
+      return false;
     }
-    const clamped = Math.min(10, Math.max(1, maxRecordingMinutes || 0));
-    if (clamped !== maxRecordingMinutes) {
-      setMaxRecordingMinutes(clamped);
+    const clamped = normalizeMaxRecordingMinutes(minutes);
+    if (clamped === maxRecordingMinutes) {
+      return false;
     }
-    if (clamped === project.maxRecordingMinutes) {
-      return;
-    }
+    const previous = maxRecordingMinutes;
     try {
       setIsSavingDuration(true);
       setDurationSaveError(null);
-      await updateProject(project.id, { maxRecordingMinutes: clamped });
+      pendingMaxRecordingMinutesRef.current = clamped;
+      setMaxRecordingMinutes(clamped);
+      const updatedProject = await updateProject(project.id, { maxRecordingMinutes: clamped });
+      const confirmedMinutes = normalizeMaxRecordingMinutes(updatedProject.maxRecordingMinutes ?? clamped);
+      pendingMaxRecordingMinutesRef.current = confirmedMinutes;
+      setProject({ ...project, ...updatedProject, maxRecordingMinutes: confirmedMinutes });
+      setMaxRecordingMinutes(confirmedMinutes);
+      const currentSelectedProject = selectedProject?.id === project.id ? selectedProject : null;
+      if (currentSelectedProject) {
+        setSelectedProject({
+          ...currentSelectedProject,
+          ...(updatedProject as any),
+          maxRecordingMinutes: confirmedMinutes,
+          platforms: currentSelectedProject.platforms,
+          bundleId: updatedProject.bundleId || currentSelectedProject.bundleId,
+          createdAt: updatedProject.createdAt || currentSelectedProject.createdAt,
+          sessionsLast7Days: currentSelectedProject.sessionsLast7Days,
+          errorsLast7Days: currentSelectedProject.errorsLast7Days,
+        });
+      }
       await refreshSessions();
-      setProject({ ...project, maxRecordingMinutes: clamped });
+      return true;
     } catch (err) {
+      pendingMaxRecordingMinutesRef.current = null;
       setDurationSaveError(err instanceof Error ? err.message : 'Failed to update max recording duration');
+      setMaxRecordingMinutes(previous);
+      return false;
     } finally {
       setIsSavingDuration(false);
     }
+  };
+
+  const handleMaxRecordingMinutesDraftChange = (minutes: number) => {
+    setDurationSaveError(null);
+    setMaxRecordingMinutesDraftValue(normalizeMaxRecordingMinutes(minutes));
+  };
+
+  const commitMaxRecordingMinutesDraft = async () => {
+    const nextMinutes = maxRecordingMinutesDraftRef.current;
+    if (isSavingDuration) {
+      return;
+    }
+    if (!nextMinutes || nextMinutes === maxRecordingMinutes) {
+      setMaxRecordingMinutesDraftValue(null);
+      return;
+    }
+    setMaxRecordingMinutesDraftValue(null);
+    await handleMaxRecordingMinutesChange(nextMinutes);
+  };
+
+  const handleSampleRateChange = async (rate: number): Promise<boolean> => {
+    if (!project) {
+      setSampleRateSaveError('Project not loaded');
+      return false;
+    }
+    const clamped = normalizeSampleRate(rate);
+    if (clamped === sampleRate) {
+      return false;
+    }
+    const previous = sampleRate;
+    try {
+      setIsSavingSampleRate(true);
+      setSampleRateSaveError(null);
+      pendingSampleRateRef.current = clamped;
+      setSampleRate(clamped);
+      const updatedProject = await updateProject(project.id, { sampleRate: clamped });
+      if (typeof updatedProject.sampleRate !== 'number') {
+        throw new Error('Sample rate was not confirmed by the API.');
+      }
+      const confirmedRate = normalizeSampleRate(updatedProject.sampleRate);
+      pendingSampleRateRef.current = confirmedRate;
+      setProject({ ...project, ...updatedProject, sampleRate: confirmedRate });
+      setSampleRate(confirmedRate);
+      const currentSelectedProject = selectedProject?.id === project.id ? selectedProject : null;
+      if (currentSelectedProject) {
+        setSelectedProject({
+          ...currentSelectedProject,
+          ...(updatedProject as any),
+          sampleRate: confirmedRate,
+          platforms: currentSelectedProject.platforms,
+          bundleId: updatedProject.bundleId || currentSelectedProject.bundleId,
+          createdAt: updatedProject.createdAt || currentSelectedProject.createdAt,
+          sessionsLast7Days: currentSelectedProject.sessionsLast7Days,
+          errorsLast7Days: currentSelectedProject.errorsLast7Days,
+        });
+      }
+      await refreshSessions();
+      return true;
+    } catch (err) {
+      pendingSampleRateRef.current = null;
+      setSampleRateSaveError(err instanceof Error ? err.message : 'Failed to update sample rate');
+      setSampleRate(previous);
+      return false;
+    } finally {
+      setIsSavingSampleRate(false);
+    }
+  };
+
+  const handleSampleRateDraftChange = (rate: number) => {
+    setSampleRateSaveError(null);
+    setSampleRateDraftValue(normalizeSampleRate(rate));
+  };
+
+  const commitSampleRateDraft = async () => {
+    const nextRate = sampleRateDraftRef.current;
+    if (isSavingSampleRate) {
+      return;
+    }
+    if (nextRate === null || nextRate === sampleRate) {
+      setSampleRateDraftValue(null);
+      return;
+    }
+    setSampleRateDraftValue(null);
+    await handleSampleRateChange(nextRate);
+  };
+
+  const handleRecordingFpsChange = async (fps: RecordingFps): Promise<boolean> => {
+    if (!project || fps === recordingFps) {
+      return false;
+    }
+    const previous = recordingFps;
+    try {
+      setIsSavingRecordingFps(true);
+      setRecordingFpsSaveError(null);
+      pendingRecordingFpsRef.current = fps;
+      setRecordingFps(fps);
+      const updatedProject = await updateProject(project.id, { recordingFps: fps });
+      if (typeof updatedProject.recordingFps !== 'number') {
+        throw new Error('Recording FPS was not confirmed by the API.');
+      }
+      const confirmedFps = normalizeRecordingFps(updatedProject.recordingFps);
+      pendingRecordingFpsRef.current = confirmedFps;
+      setProject({ ...project, ...updatedProject, recordingFps: confirmedFps });
+      setRecordingFps(confirmedFps);
+      const currentSelectedProject = selectedProject?.id === project.id ? selectedProject : null;
+      if (currentSelectedProject) {
+        setSelectedProject({
+          ...currentSelectedProject,
+          ...(updatedProject as any),
+          recordingFps: confirmedFps,
+          platforms: currentSelectedProject.platforms,
+          bundleId: updatedProject.bundleId || currentSelectedProject.bundleId,
+          createdAt: updatedProject.createdAt || currentSelectedProject.createdAt,
+          sessionsLast7Days: currentSelectedProject.sessionsLast7Days,
+          errorsLast7Days: currentSelectedProject.errorsLast7Days,
+        });
+      }
+      await refreshSessions();
+      return true;
+    } catch (err) {
+      pendingRecordingFpsRef.current = null;
+      setRecordingFpsSaveError(err instanceof Error ? err.message : 'Failed to update recording FPS');
+      setRecordingFps(previous);
+      return false;
+    } finally {
+      setIsSavingRecordingFps(false);
+    }
+  };
+
+  const handleRecordingFpsDraftChange = (fps: RecordingFps) => {
+    setRecordingFpsSaveError(null);
+    setRecordingFpsDraftValue(fps);
+  };
+
+  const commitRecordingFpsDraft = async () => {
+    const nextFps = recordingFpsDraftRef.current;
+    if (isSavingRecordingFps || recordingFpsConfirmation) {
+      return;
+    }
+    if (!nextFps || nextFps === recordingFps) {
+      setRecordingFpsDraftValue(null);
+      return;
+    }
+    if (nextFps > recordingFps) {
+      setRecordingFpsConfirmation(nextFps);
+      return;
+    }
+    setRecordingFpsDraftValue(null);
+    await handleRecordingFpsChange(nextFps);
+  };
+
+  const handleConfirmRecordingFpsChange = async () => {
+    if (!recordingFpsConfirmation) return;
+    const saved = await handleRecordingFpsChange(recordingFpsConfirmation);
+    if (saved) {
+      setRecordingFpsDraftValue(null);
+      setRecordingFpsConfirmation(null);
+    }
+  };
+
+  const handleCancelRecordingFpsChange = () => {
+    if (isSavingRecordingFps) return;
+    setRecordingFpsDraftValue(null);
+    setRecordingFpsConfirmation(null);
   };
 
   const handleToggleRecording = async (enabled: boolean) => {
@@ -268,6 +550,31 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
       setRejourneyEnabled(!enabled);
     } finally {
       setIsSavingRejourney(false);
+    }
+  };
+
+  const handleTextInputMaskingChange = async (mode: TextInputMasking) => {
+    if (!project || mode === textInputMasking) {
+      return;
+    }
+    const previous = textInputMasking;
+    try {
+      setIsSavingMasking(true);
+      setMaskingSaveError(null);
+      pendingTextInputMaskingRef.current = mode;
+      setTextInputMasking(mode);
+      const updatedProject = await updateProject(project.id, { textInputMasking: mode });
+      const confirmedMode = normalizeTextInputMasking(updatedProject.textInputMasking ?? mode);
+      pendingTextInputMaskingRef.current = confirmedMode;
+      setProject({ ...project, ...updatedProject, textInputMasking: confirmedMode });
+      setTextInputMasking(confirmedMode);
+      await refreshSessions();
+    } catch (err) {
+      pendingTextInputMaskingRef.current = null;
+      setMaskingSaveError(err instanceof Error ? err.message : 'Failed to update text input masking');
+      setTextInputMasking(previous);
+    } finally {
+      setIsSavingMasking(false);
     }
   };
 
@@ -381,6 +688,10 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
       </div>
     );
   }
+
+  const displayedMaxRecordingMinutes = maxRecordingMinutesDraft ?? maxRecordingMinutes;
+  const displayedSampleRate = sampleRateDraft ?? sampleRate;
+  const displayedRecordingFps = recordingFpsDraft ?? recordingFpsConfirmation ?? recordingFps;
 
   return (
     <div className="flex min-h-screen flex-col bg-transparent font-sans text-slate-900">
@@ -542,77 +853,128 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             <section className="space-y-4">
               <h2 className="text-xl font-semibold uppercase tracking-tight">Remote Observability Toggles</h2>
 
-              <NeoCard className="p-6">
-                <div className="flex items-start justify-between gap-6">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-bold uppercase">Rejourney SDK Master Switch</h3>
-                      <NeoBadge variant={rejourneyEnabled ? 'success' : 'neutral'}>
-                        {rejourneyEnabled ? 'Active' : 'Disabled'}
-                      </NeoBadge>
+              <NeoCard className="p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="text-sm font-bold uppercase tracking-tight">Rejourney SDK</h3>
+                      <span className={`text-[10px] font-black uppercase tracking-wide ${rejourneyEnabled ? 'text-emerald-700' : 'text-slate-400'}`}>
+                        {isSavingRejourney ? 'Saving…' : rejourneyEnabled ? 'Active' : 'Disabled'}
+                      </span>
                     </div>
-                    <p className="text-sm text-slate-600 mb-4 font-medium">
+                    <p className="text-xs text-slate-500 font-medium leading-snug">
                       {rejourneyEnabled
-                        ? 'Rejourney is enabled. The SDK will initialize normally and collect observability data for this project.'
-                        : 'Rejourney is completely disabled. The SDK will not initialize, and no data will be collected or sent from the device.'}
+                        ? 'SDK initializes and collects observability data.'
+                        : 'SDK disabled — no data collected or sent from device.'}
                     </p>
-                    {!rejourneyEnabled && (
-                      <div className="bg-rose-50 text-rose-800 text-[10px] font-bold uppercase p-2 border border-rose-200 inline-flex items-center gap-1 tracking-wide">
-                        <Info className="w-3 h-3" /> Observability minutes will not be counted.
-                      </div>
-                    )}
                     {rejourneySaveError && (
-                      <p className="text-xs text-red-600 mt-2 font-bold uppercase">{rejourneySaveError}</p>
+                      <p className="text-[10px] text-red-600 mt-1 font-bold uppercase">{rejourneySaveError}</p>
                     )}
                   </div>
                   {canEdit && (
-                    <NeoButton
-                      variant={rejourneyEnabled ? 'danger' : 'primary'}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={rejourneyEnabled}
                       onClick={() => handleToggleRejourney(!rejourneyEnabled)}
                       disabled={isSavingRejourney}
-                      size="sm"
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center border-2 border-slate-900 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${rejourneyEnabled ? 'bg-emerald-500' : 'bg-slate-200'}`}
                     >
-                      {rejourneyEnabled ? 'Disable Rejourney' : 'Enable Rejourney'}
-                    </NeoButton>
+                      <span className={`inline-block h-4 w-4 border-2 border-slate-900 bg-white shadow transition-transform ${rejourneyEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  )}
+                </div>
+              </NeoCard>
+
+              <NeoCard className="p-4 mt-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="text-sm font-bold uppercase tracking-tight">Session Recording</h3>
+                      <span className={`text-[10px] font-black uppercase tracking-wide ${recordingEnabled && rejourneyEnabled ? 'text-emerald-700' : 'text-slate-400'}`}>
+                        {isSavingRecording ? 'Saving…' : recordingEnabled ? 'Enabled' : 'Observe Only'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium leading-snug">
+                      {recordingEnabled
+                        ? 'Session replays are captured and uploaded. Toggle off to enable Observe Only mode.'
+                        : 'Observe Only mode — analytics and issues tracked, no replays captured. Since analytics is still collected, each session still counts towards usage.'}
+                    </p>
+                    {!rejourneyEnabled && (
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Overridden by SDK toggle above.</p>
+                    )}
+                  </div>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={recordingEnabled}
+                      onClick={() => handleToggleRecording(!recordingEnabled)}
+                      disabled={isSavingRecording || !rejourneyEnabled}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center border-2 border-slate-900 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${recordingEnabled && rejourneyEnabled ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 border-2 border-slate-900 bg-white shadow transition-transform ${recordingEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
                   )}
                 </div>
               </NeoCard>
 
               <NeoCard className="p-6 mt-4">
-                <div className="flex items-start justify-between gap-6">
+                <div className="space-y-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-bold uppercase">Observe Only Mode</h3>
-                      <NeoBadge variant={!recordingEnabled ? 'success' : 'neutral'}>
-                        {!recordingEnabled ? 'Active' : 'Disabled'}
+                    <div className="flex items-center gap-3 mb-1">
+                      <Shield className="w-5 h-5 text-slate-900" />
+                      <h3 className="text-lg font-bold uppercase">Text Input Privacy</h3>
+                      <NeoBadge variant={textInputMasking === 'all' ? 'success' : 'warning'}>
+                        {isSavingMasking ? 'Saving' : textInputMasking === 'all' ? 'Privacy First' : 'Debug Detail'}
                       </NeoBadge>
                     </div>
-                    <p className="text-sm text-slate-600 mb-4 font-medium">
-                      {recordingEnabled
-                        ? 'Session replays will be captured and uploaded for this project.'
-                        : 'Observe Only Mode is active. Recording is disabled. Replays will not be captured, but each session is observed for analytics and issues.'}
-                    </p>
-                    {!recordingEnabled && (
-                      <div className="bg-rose-50 text-rose-800 text-[10px] font-bold uppercase p-2 border border-rose-200 inline-flex items-center gap-1 tracking-wide">
-                        <Info className="w-3 h-3" /> Replays unavailable.
-                      </div>
-                    )}
-                    {!rejourneyEnabled && (
-                      <div className="bg-slate-50 text-slate-700 text-[10px] font-bold uppercase p-2 border border-slate-200 inline-flex items-center gap-1 mt-2 tracking-wide ml-2">
-                        <Info className="w-3 h-3" /> Disabled via Rejourney.
-                      </div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Swift Package 0.2.0+ · React Native 1.2.0+</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 max-w-2xl">
+                      <button
+                        type="button"
+                        onClick={() => handleTextInputMaskingChange('all')}
+                        disabled={!canEdit || isSavingMasking}
+                        className={`text-left border-2 p-3 transition-all disabled:cursor-not-allowed disabled:opacity-60 ${textInputMasking === 'all' ? 'border-black bg-emerald-50 shadow-[3px_3px_0_0_#000]' : 'border-slate-200 bg-white hover:border-slate-400'}`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-[10px] font-black uppercase text-slate-500">All Inputs</span>
+                          {textInputMasking === 'all' && <CheckCircle className="w-4 h-4 text-emerald-700" />}
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-3 w-24 max-w-full bg-slate-900" />
+                          <div className="h-3 w-36 max-w-full bg-slate-900" />
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTextInputMaskingChange('secure_only')}
+                        disabled={!canEdit || isSavingMasking}
+                        className={`text-left border-2 p-3 transition-all disabled:cursor-not-allowed disabled:opacity-60 ${textInputMasking === 'secure_only' ? 'border-black bg-amber-50 shadow-[3px_3px_0_0_#000]' : 'border-slate-200 bg-white hover:border-slate-400'}`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-[10px] font-black uppercase text-slate-500">Secure Only</span>
+                          {textInputMasking === 'secure_only' && <CheckCircle className="w-4 h-4 text-amber-700" />}
+                        </div>
+                        <div className="space-y-2">
+                          <div className="border border-slate-300 bg-white p-2">
+                            <div className="mb-1 text-[10px] font-black uppercase text-slate-400">Name</div>
+                            <div className="truncate font-mono text-xs font-bold text-slate-800">Alex Morgan</div>
+                          </div>
+                          <div className="border border-slate-300 bg-white p-2">
+                            <div className="mb-1 text-[10px] font-black uppercase text-slate-400">Password</div>
+                            <div className="h-3 w-24 max-w-full bg-slate-900" />
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold uppercase text-slate-500">
+                      <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3" /> Secure fields stay masked</span>
+                    </div>
+                    {maskingSaveError && (
+                      <p className="text-xs text-red-600 mt-2 font-bold uppercase">{maskingSaveError}</p>
                     )}
                   </div>
-                  {canEdit && (
-                    <NeoButton
-                      variant={recordingEnabled ? "danger" : "primary"}
-                      onClick={() => handleToggleRecording(!recordingEnabled)}
-                      disabled={isSavingRecording || !rejourneyEnabled}
-                      size="sm"
-                    >
-                      {recordingEnabled ? 'Disable Recording' : 'Enable Recording'}
-                    </NeoButton>
-                  )}
                 </div>
               </NeoCard>
             </section>
@@ -702,47 +1064,156 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             <section className="space-y-4">
               <h2 className="text-xl font-semibold uppercase tracking-tight">Configuration</h2>
               <NeoCard className="p-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-semibold uppercase text-slate-900 block mb-3 tracking-wide flex items-center gap-2">
-                      <Clock className="w-4 h-4" />
-                      Max Observeability Duration
-                    </label>
-                    <div className="bg-slate-50 border-2 border-slate-900 p-4">
-                      <div className="flex gap-2 items-end">
-                        <div className="flex-1">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={10}
-                            value={maxRecordingMinutes.toString()}
-                            onChange={(e) => {
-                              setMaxRecordingMinutes(Number(e.target.value));
-                              setDurationSaveError(null);
-                            }}
-                            disabled={!canEdit}
-                            className="font-mono font-bold text-base border border-slate-100/80"
-                          />
-                        </div>
-                        <span className="text-sm font-semibold uppercase text-slate-700 mb-1">MIN</span>
-                        {canEdit && (
-                          <NeoButton
-                            variant="primary"
-                            size="sm"
-                            onClick={handleSaveDuration}
-                            disabled={isSavingDuration || maxRecordingMinutes === (project?.maxRecordingMinutes || 10)}
-                            leftIcon={<Save className="w-3 h-3" />}
-                          >
-                            Save
-                          </NeoButton>
-                        )}
+                <div className="divide-y divide-slate-200">
+                  <div className="pb-6">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <label className="text-sm font-semibold uppercase text-slate-900 tracking-wide flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Max Observability Duration
+                        {isSavingDuration && <NeoBadge variant="neutral" size="sm">Saving</NeoBadge>}
+                      </label>
+                      <span className="font-mono text-sm font-black text-slate-900">{displayedMaxRecordingMinutes} min</span>
+                    </div>
+                    <div className="space-y-3">
+                      <input
+                        type="range"
+                        min={1}
+                        max={10}
+                        step={1}
+                        value={displayedMaxRecordingMinutes}
+                        onChange={(e) => {
+                          handleMaxRecordingMinutesDraftChange(Number(e.target.value));
+                        }}
+                        onPointerUp={() => {
+                          void commitMaxRecordingMinutesDraft();
+                        }}
+                        onMouseUp={() => {
+                          void commitMaxRecordingMinutesDraft();
+                        }}
+                        onTouchEnd={() => {
+                          void commitMaxRecordingMinutesDraft();
+                        }}
+                        onKeyUp={(e) => {
+                          if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+                            void commitMaxRecordingMinutesDraft();
+                          }
+                        }}
+                        onBlur={() => {
+                          void commitMaxRecordingMinutesDraft();
+                        }}
+                        disabled={!canEdit || isSavingDuration}
+                        className="h-2 w-full cursor-pointer accent-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wide text-slate-400">
+                        <span>1 min</span>
+                        <span>10 min</span>
                       </div>
-                      <p className="text-[10px] uppercase font-bold text-slate-500 mt-3 tracking-wide">
-                        Maximum length per session observability. Range: 1-10 minutes.
-                      </p>
                       {durationSaveError && (
                         <p className="text-xs font-bold text-red-600 mt-2 uppercase flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3" /> {durationSaveError}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-6">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <label className="text-sm font-semibold uppercase text-slate-900 tracking-wide flex items-center gap-2">
+                          <Percent className="w-4 h-4" />
+                          Sample Rate
+                          {isSavingSampleRate && <NeoBadge variant="neutral" size="sm">Saving</NeoBadge>}
+                        </label>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">Swift Package 0.2.0+ · React Native 1.2.0+</p>
+                      </div>
+                      <span className="font-mono text-sm font-black text-cyan-900">{displayedSampleRate}%</span>
+                    </div>
+                    <div className="space-y-3">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={displayedSampleRate}
+                        onChange={(e) => {
+                          handleSampleRateDraftChange(Number(e.target.value));
+                        }}
+                        onPointerUp={() => {
+                          void commitSampleRateDraft();
+                        }}
+                        onMouseUp={() => {
+                          void commitSampleRateDraft();
+                        }}
+                        onTouchEnd={() => {
+                          void commitSampleRateDraft();
+                        }}
+                        onKeyUp={(e) => {
+                          if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+                            void commitSampleRateDraft();
+                          }
+                        }}
+                        onBlur={() => {
+                          void commitSampleRateDraft();
+                        }}
+                        disabled={!canEdit || isSavingSampleRate}
+                        className="h-2 w-full cursor-pointer accent-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wide text-slate-400">
+                        <span>0%</span>
+                        <span>100%</span>
+                      </div>
+                      {sampleRateSaveError && (
+                        <p className="text-xs font-bold text-red-600 uppercase flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> {sampleRateSaveError}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-6">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <label className="text-sm font-semibold uppercase text-slate-900 tracking-wide flex items-center gap-2">
+                          Recording FPS
+                          {isSavingRecordingFps && <NeoBadge variant="neutral" size="sm">Saving</NeoBadge>}
+                        </label>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">Swift Package 0.2.0+ · React Native 1.2.0+</p>
+                      </div>
+                      <span className="font-mono text-sm font-black text-cyan-900">{displayedRecordingFps} fps</span>
+                    </div>
+                    <div className="space-y-3">
+                      <input
+                        type="range"
+                        min={1}
+                        max={3}
+                        step={1}
+                        value={displayedRecordingFps}
+                        onChange={(e) => {
+                          handleRecordingFpsDraftChange(normalizeRecordingFps(Number(e.target.value)));
+                        }}
+                        onPointerUp={() => {
+                          void commitRecordingFpsDraft();
+                        }}
+                        onMouseUp={() => {
+                          void commitRecordingFpsDraft();
+                        }}
+                        onTouchEnd={() => {
+                          void commitRecordingFpsDraft();
+                        }}
+                        onKeyUp={(e) => {
+                          if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+                            void commitRecordingFpsDraft();
+                          }
+                        }}
+                        onBlur={() => {
+                          void commitRecordingFpsDraft();
+                        }}
+                        disabled={!canEdit || isSavingRecordingFps || Boolean(recordingFpsConfirmation)}
+                        className="h-2 w-full cursor-pointer accent-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      {recordingFpsSaveError && (
+                        <p className="text-xs font-bold text-red-600 uppercase flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> {recordingFpsSaveError}
                         </p>
                       )}
                     </div>
@@ -814,6 +1285,48 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
 
           </div>
         </div>
+
+        {/* Recording FPS Confirmation Modal */}
+        <Modal
+          isOpen={recordingFpsConfirmation !== null}
+          onClose={handleCancelRecordingFpsChange}
+          title="Confirm Recording FPS"
+          footer={
+            <div className="flex gap-2">
+              <NeoButton
+                variant="secondary"
+                onClick={handleCancelRecordingFpsChange}
+                disabled={isSavingRecordingFps}
+              >
+                Cancel
+              </NeoButton>
+              <NeoButton
+                variant="primary"
+                onClick={handleConfirmRecordingFpsChange}
+                disabled={isSavingRecordingFps}
+              >
+                {isSavingRecordingFps ? 'Saving...' : 'OK'}
+              </NeoButton>
+            </div>
+          }
+        >
+          <div className="space-y-4 py-2">
+            <div className="flex gap-3 border border-amber-200 bg-amber-50 p-4 text-amber-900">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div className="space-y-2 text-sm font-bold">
+                <p>
+                  Increasing capture FPS may result in performance issues and higher battery usage.
+                </p>
+                <p>
+                  The safest and most tested setting is 1 FPS. If 1 FPS looks good, it is highly recommended to not change it.
+                </p>
+              </div>
+            </div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Change recording from {recordingFps} FPS to {recordingFpsConfirmation ?? recordingFps} FPS?
+            </p>
+          </div>
+        </Modal>
 
         {/* Create Key Modal */}
         <Modal

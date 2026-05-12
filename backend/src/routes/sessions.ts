@@ -474,6 +474,7 @@ const SESSION_DETAIL_CACHE_TTL_SECONDS = Number(process.env.RJ_SESSION_DETAIL_CA
 const SESSION_BOOTSTRAP_CACHE_TTL_SECONDS = Number(process.env.RJ_SESSION_BOOTSTRAP_CACHE_TTL_SECONDS ?? 15);
 const FRAME_AUTH_CACHE_TTL_SECONDS = Number(process.env.RJ_FRAME_AUTH_CACHE_TTL_SECONDS ?? 60);
 const SESSION_BOOTSTRAP_CACHE_CONTROL = 'private, max-age=15, stale-while-revalidate=45';
+const SESSION_DETAIL_CACHE_VERSION = 'v2';
 
 function resolveFrameUrlMode(raw: unknown): ScreenshotFrameUrlMode {
     if (typeof raw !== 'string') return DEFAULT_FRAME_URL_MODE;
@@ -483,9 +484,9 @@ function resolveFrameUrlMode(raw: unknown): ScreenshotFrameUrlMode {
 }
 
 function buildSessionDetailCacheKey(kind: 'bootstrap' | 'core' | 'timeline' | 'hierarchy', sessionId: string): string {
-    if (kind === 'bootstrap') return `session_bootstrap:${sessionId}`;
-    if (kind === 'core') return `session_core:${sessionId}`;
-    return `session_${kind}:${sessionId}`;
+    if (kind === 'bootstrap') return `${SESSION_DETAIL_CACHE_VERSION}:session_bootstrap:${sessionId}`;
+    if (kind === 'core') return `${SESSION_DETAIL_CACHE_VERSION}:session_core:${sessionId}`;
+    return `${SESSION_DETAIL_CACHE_VERSION}:session_${kind}:${sessionId}`;
 }
 
 async function readCachedSessionDetail(kind: 'bootstrap' | 'core' | 'timeline' | 'hierarchy', sessionId: string): Promise<string | null> {
@@ -830,6 +831,11 @@ async function computeSessionStats(
         duration: String(session.durationSeconds ?? 0),
         durationMinutes: String(((session.durationSeconds ?? 0) / 60).toFixed(2)),
         eventCount: metrics?.totalEvents ?? 0,
+        totalSizeBytes: totalBytes,
+        eventsSizeBytes: bytesByKind.events || 0,
+        screenshotSizeBytes: bytesByKind.screenshots || 0,
+        hierarchySizeBytes: bytesByKind.hierarchy || 0,
+        networkSizeBytes: bytesByKind.network || 0,
         totalSizeKB: String(totalBytes / 1024),
         eventsSizeKB: String((bytesByKind.events || 0) / 1024),
         screenshotSizeKB: String((bytesByKind.screenshots || 0) / 1024),
@@ -1101,13 +1107,15 @@ async function loadTimelinePayload(session: any, artifactsList: any[]) {
         mapWithConcurrency(eventsArtifacts, DETAIL_FETCH_CONCURRENCY, async (artifact) => {
             try {
                 const data = await downloadFromS3ForArtifact(session.projectId, artifact.s3ObjectKey, artifact.endpointId);
-                if (!data) return [] as any[];
+                if (!data) return { events: [] as any[], deviceInfo: null as any };
                 const parsed = JSON.parse(data.toString());
-                if (Array.isArray(parsed)) return parsed;
-                if (Array.isArray(parsed?.events)) return parsed.events;
-                return [] as any[];
+                if (Array.isArray(parsed)) return { events: parsed, deviceInfo: null as any };
+                if (Array.isArray(parsed?.events)) {
+                    return { events: parsed.events, deviceInfo: parsed.deviceInfo ?? null };
+                }
+                return { events: [] as any[], deviceInfo: parsed?.deviceInfo ?? null };
             } catch {
-                return [] as any[];
+                return { events: [] as any[], deviceInfo: null as any };
             }
         }),
         mapWithConcurrency(networkArtifacts, DETAIL_FETCH_CONCURRENCY, async (artifact) => {
@@ -1125,7 +1133,10 @@ async function loadTimelinePayload(session: any, artifactsList: any[]) {
     ]);
 
     // Core Telemetry events from artifacts
-    const artifactEvents = parsedEventsBatches.flat();
+    const artifactEvents = parsedEventsBatches.flatMap((batch) => batch.events);
+    const timelineDeviceInfo = parsedEventsBatches
+        .map((batch) => batch.deviceInfo)
+        .find((deviceInfo) => deviceInfo?.screenWidth && deviceInfo?.screenHeight) ?? null;
 
     // Custom app-level events persisted on the session record (sessions.events JSONB).
     // These typically come from Rejourney.logEvent() and are not always included in
@@ -1230,6 +1241,7 @@ async function loadTimelinePayload(session: any, artifactsList: any[]) {
         networkRequests,
         crashes: mapCrashRowsForPayload(sessionCrashes),
         anrs: mapAnrRowsForPayload(sessionAnrs),
+        deviceInfo: timelineDeviceInfo,
     };
 }
 
@@ -1245,11 +1257,23 @@ async function loadHierarchyPayload(session: any, artifactsList: any[]) {
             try {
                 const data = await downloadFromS3ForArtifact(session.projectId, artifact.s3ObjectKey, artifact.endpointId);
                 if (!data) return null;
-                const parsed = JSON.parse(data.toString());
+                const parsed = (() => {
+                    const isGzipped = (data.length > 2 && data[0] === 0x1f && data[1] === 0x8b) ||
+                        artifact.s3ObjectKey.endsWith('.gz');
+                    if (isGzipped) {
+                        try {
+                            return JSON.parse(gunzipSync(data).toString());
+                        } catch {
+                            return JSON.parse(data.toString());
+                        }
+                    }
+                    return JSON.parse(data.toString());
+                })();
                 const rootElement = parsed.rootElement || parsed.root || parsed;
                 return {
                     timestamp: artifact.timestamp || parsed.timestamp || 0,
                     screenName: parsed.screenName || null,
+                    screen: parsed.screen || rootElement?.screen || null,
                     rootElement,
                 };
             } catch {
@@ -1259,7 +1283,7 @@ async function loadHierarchyPayload(session: any, artifactsList: any[]) {
     );
 
     return snapshots
-        .filter((snapshot): snapshot is { timestamp: number; screenName: string | null; rootElement: any } => Boolean(snapshot))
+        .filter((snapshot): snapshot is { timestamp: number; screenName: string | null; rootElement: any; screen: any } => Boolean(snapshot))
         .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 }
 
@@ -1826,8 +1850,9 @@ router.get(
         const eventsUrls: string[] = [];
         const allEvents: any[] = [];
         const allNetwork: any[] = [];
+        let artifactDeviceInfo: any = null;
 
-        const hierarchySnapshots: { timestamp: number; screenName: string | null; rootElement: any }[] = [];
+        const hierarchySnapshots: { timestamp: number; screenName: string | null; rootElement: any; screen?: any }[] = [];
 
         // Session data artifacts are loaded when present. Retention can purge all
         // artifact rows later while keeping the session row and metrics intact.
@@ -1872,6 +1897,9 @@ router.get(
                     const parsed = JSON.parse(data.toString());
                     if (parsed.events) {
                         allEvents.push(...parsed.events);
+                        if (!artifactDeviceInfo && parsed.deviceInfo?.screenWidth && parsed.deviceInfo?.screenHeight) {
+                            artifactDeviceInfo = parsed.deviceInfo;
+                        }
                     } else if (Array.isArray(parsed)) {
                         allEvents.push(...parsed);
                     }
@@ -1981,6 +2009,7 @@ router.get(
                     hierarchySnapshots.push({
                         timestamp: artifact.timestamp || parsed.timestamp || 0,
                         screenName: parsed.screenName || null,
+                        screen: parsed.screen || rootElement?.screen || null,
                         rootElement,
                     });
                 }
@@ -2104,6 +2133,7 @@ router.get(
                 os: session.platform,
                 systemVersion: session.osVersion,
                 appVersion: session.appVersion,
+                ...(artifactDeviceInfo ?? {}),
             },
             osVersion: session.osVersion,
             geoLocation: session.geoCity
@@ -2215,6 +2245,11 @@ router.get(
                 duration: String(session.durationSeconds ?? 0),
                 durationMinutes: String(((session.durationSeconds ?? 0) / 60).toFixed(2)),
                 eventCount: metrics?.totalEvents ?? 0,
+                totalSizeBytes: totalBytes,
+                eventsSizeBytes: bytesByKind.events || 0,
+                screenshotSizeBytes: bytesByKind.screenshots || 0,
+                hierarchySizeBytes: bytesByKind.hierarchy || 0,
+                networkSizeBytes: bytesByKind.network || 0,
                 totalSizeKB: String(totalBytes / 1024),
                 eventsSizeKB: String((bytesByKind.events || 0) / 1024),
                 screenshotSizeKB: String((bytesByKind.screenshots || 0) / 1024),
@@ -2299,11 +2334,14 @@ router.get(
 
         const [timeline, stats] = await Promise.all([
             loadTimelinePayload(session, artifactsList),
-            computeSessionStats(session, metrics, artifactsList, false),
+            computeSessionStats(session, metrics, artifactsList, true),
         ]);
 
         const core = {
             ...basePayload,
+            deviceInfo: timeline.deviceInfo
+                ? { ...basePayload.deviceInfo, ...timeline.deviceInfo }
+                : basePayload.deviceInfo,
             hasRecording: replayBootstrap.hasRecording,
             playbackMode: replayBootstrap.playbackMode,
             screenshotFrames: replayBootstrap.screenshotFrames,

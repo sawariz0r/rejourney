@@ -356,7 +356,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
 
     return (
         <div
-            className="dashboard-tabbar flex min-w-0 items-end border-b border-slate-200 bg-[#fbfdff]"
+            className="dashboard-tabbar flex min-w-0 items-end border-b border-slate-200 bg-slate-50"
             onClick={() => setContextMenu(null)}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -371,7 +371,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
             <div className="min-w-0 flex-1 overflow-hidden">
                 <div
                     ref={tabScrollRef}
-                    className="flex w-full items-end gap-[2px] overflow-x-auto overflow-y-hidden custom-scrollbar px-2 pt-2 pb-1"
+                    className="flex w-full items-end gap-[2px] overflow-x-auto overflow-y-hidden no-scrollbar px-2 pt-1 pb-0"
                     onWheel={handleTabStripWheel}
                 >
                     {groupTabs.map((tab, index) => {
@@ -384,8 +384,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                             backgroundColor: isDraggingOver ? theme.idleHoverBg : isActive ? '#ffffff' : theme.idleBg,
                             color: isActive ? '#0f172a' : theme.badgeText,
                             borderTopColor: theme.accent,
-                            borderTopWidth: '4px',
-                            boxShadow: isActive ? `0 -1px 0 0 ${theme.accent} inset` : undefined,
+                            borderTopWidth: '2px',
                         };
 
                         return (
@@ -403,10 +402,10 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                                 onClick={() => handleTabClick(tab)}
                                 onContextMenu={(e) => handleContextMenu(e, tab.id)}
                                 className={[
-                                    'group relative flex min-w-[120px] max-w-[220px] shrink-0 cursor-pointer select-none items-center gap-2 px-3 py-2 text-xs transition-all border-2 border-black border-b-0 -mb-[2px]',
+                                    'group relative flex min-w-[120px] max-w-[220px] shrink-0 cursor-pointer select-none items-center gap-2 px-3 py-1 text-xs transition-all border border-slate-200 border-b-0 -mb-[1px] rounded-t-sm',
                                     isActive
-                                        ? 'z-10 shadow-neo-sm translate-y-0.5 pb-[10px]'
-                                        : 'z-0 opacity-95 hover:-translate-y-px hover:brightness-[0.98]',
+                                        ? 'z-10 shadow-sm translate-y-0.5 pb-[6px] bg-white border-slate-300'
+                                        : 'z-0 hover:bg-white',
                                 ].join(' ')}
                                 style={tabStyle}
                                 title={`Project: ${projectLabel}\n${tab.title}`}
@@ -414,9 +413,9 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                                 <div className="min-w-0 flex flex-1 items-center gap-2">
                                     <TabIcon
                                         className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'stroke-[2.8]' : 'stroke-[2.3]'}`}
-                                        style={{ color: theme.accent }}
+                                        style={{ color: isActive ? theme.accent : '#64748b' }}
                                     />
-                                    <div className={`truncate text-xs ${isActive ? 'font-extrabold text-slate-900' : 'font-semibold'}`}>
+                                    <div className={`truncate text-xs ${isActive ? 'font-extrabold text-slate-900' : 'font-semibold text-slate-600'}`}>
                                         {tab.title}
                                     </div>
                                 </div>

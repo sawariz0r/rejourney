@@ -225,11 +225,33 @@ class RejourneyModule(reactContext: ReactApplicationContext) :
         rejourneyEnabled: Boolean,
         recordingEnabled: Boolean,
         sampleRate: Double,
+        isSampledIn: Boolean,
         maxRecordingMinutes: Double,
         promise: Promise
     ) {
            val instance = getImplOrReject(promise) ?: return
-           instance.setRemoteConfig(rejourneyEnabled, recordingEnabled, sampleRate, maxRecordingMinutes, promise)
+           instance.setRemoteConfig(rejourneyEnabled, recordingEnabled, sampleRate, isSampledIn, maxRecordingMinutes, promise)
+    }
+
+    @ReactMethod
+    @DoNotStrip
+    override fun setCachedRemoteConfig(publicKey: String, configJson: String, promise: Promise) {
+           val instance = getImplOrReject(promise) ?: return
+           instance.setCachedRemoteConfig(publicKey, configJson, promise)
+    }
+
+    @ReactMethod
+    @DoNotStrip
+    override fun getCachedRemoteConfig(publicKey: String, promise: Promise) {
+           val instance = getImplOrReject(promise) ?: return
+           instance.getCachedRemoteConfig(publicKey, promise)
+    }
+
+    @ReactMethod
+    @DoNotStrip
+    override fun clearCachedRemoteConfig(publicKey: String, promise: Promise) {
+           val instance = getImplOrReject(promise) ?: return
+           instance.clearCachedRemoteConfig(publicKey, promise)
     }
 
         private fun createErrorMap(error: String): WritableMap {

@@ -698,7 +698,7 @@
   align-items: center;
   justify-content: center;
   color: var(--dashboard-page-header-accent);
-  opacity: 0.78;
+  opacity: 1;
 }
 
 .dashboard-page-header .dashboard-page-header-mark svg {
@@ -924,11 +924,11 @@
   }
 
   .replay-theater-stage > div {
+    container-type: size;
     max-height: 100%;
   }
 
   .replay-device-shell {
-    container-type: size;
     height: 100%;
     min-height: 0;
   }
@@ -936,21 +936,21 @@
   .replay-device-frame {
     flex: 0 0 auto;
     max-height: 100%;
-    width: min(clamp(220px, 42cqw, 430px), max(96px, var(--replay-device-fit-width, 430px)));
+    width: min(clamp(240px, 56cqw, 520px), var(--replay-device-fit-width, 520px));
   }
 
   .replay-device-placeholder {
-    max-width: min(clamp(220px, 42cqw, 430px), max(96px, var(--replay-device-fit-width, 430px))) !important;
+    max-width: min(clamp(240px, 56cqw, 520px), var(--replay-device-fit-width, 520px)) !important;
   }
 }
 
 @media (min-width: 1280px) and (max-height: 860px) {
   .replay-device-frame {
-    width: min(clamp(190px, 40cqw, 380px), max(88px, var(--replay-device-fit-width, 380px)));
+    width: min(clamp(210px, 54cqw, 460px), var(--replay-device-fit-width, 460px));
   }
 
   .replay-device-placeholder {
-    max-width: min(clamp(190px, 40cqw, 380px), max(88px, var(--replay-device-fit-width, 380px))) !important;
+    max-width: min(clamp(210px, 54cqw, 460px), var(--replay-device-fit-width, 460px)) !important;
   }
 
   .replay-workbench-tabs button {

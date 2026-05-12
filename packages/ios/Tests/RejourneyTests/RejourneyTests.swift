@@ -10,6 +10,8 @@ final class RejourneyTests: XCTestCase {
           "projectId": "proj_123",
           "rejourneyEnabled": true,
           "recordingEnabled": false,
+          "textInputMasking": "secure_only",
+          "recordingFps": 3,
           "sampleRate": 25,
           "maxRecordingMinutes": 7
         }
@@ -37,6 +39,8 @@ final class RejourneyTests: XCTestCase {
 
         XCTAssertEqual(config.projectId, "proj_123")
         XCTAssertFalse(config.recordingEnabled)
+        XCTAssertEqual(config.textInputMasking, "secure_only")
+        XCTAssertEqual(config.recordingFps, 3)
         XCTAssertEqual(config.sampleRate, 25)
         XCTAssertEqual(config.maxRecordingMinutes, 7)
     }
@@ -106,6 +110,39 @@ final class RejourneyTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testSampledOutStartReturnsBeforeNativeSession() async {
+        let body = """
+        {
+          "projectId": "proj_123",
+          "rejourneyEnabled": true,
+          "recordingEnabled": true,
+          "sampleRate": 0,
+          "maxRecordingMinutes": 10
+        }
+        """.data(using: .utf8)!
+
+        let session = MockURLSession(
+            data: body,
+            statusCode: 200,
+            url: URL(string: "https://api.rejourney.co/api/sdk/config")!
+        )
+        let controller = RejourneyNativeController(
+            remoteConfigClient: RejourneyRemoteConfigClient(session: session)
+        )
+        controller.configure(
+            publicKey: "pk_test",
+            options: RejourneyOptions(autoTrackNetwork: false)
+        )
+
+        let result = await controller.start()
+
+        XCTAssertFalse(result.success)
+        XCTAssertNil(result.sessionId)
+        XCTAssertEqual(result.error, "sampled_out")
+        XCTAssertFalse(result.telemetryOnly)
+    }
+
     func testCaptureSettingsNormalizeOptions() {
         let settings = RejourneyCaptureSettings(
             options: RejourneyOptions(
@@ -113,16 +150,21 @@ final class RejourneyTests: XCTestCase {
                 captureQuality: .high,
                 wifiOnly: true,
                 trackConsoleLogs: false,
-                collectGeoLocation: false
+                collectGeoLocation: false,
+                captureNativeSheets: false
             ),
-            recordingEnabled: true
+            recordingEnabled: true,
+            textInputMasking: "secure_only",
+            recordingFps: 3
         ).nativeDictionary
 
-        XCTAssertEqual(settings["captureRate"] as? Double ?? -1, 1.0 / 30.0, accuracy: 0.0001)
+        XCTAssertEqual(settings["captureRate"] as? Double ?? -1, 1.0 / 3.0, accuracy: 0.0001)
         XCTAssertEqual(settings["imgCompression"] as? Double, 0.7)
         XCTAssertEqual(settings["wifiOnly"] as? Bool, true)
         XCTAssertEqual(settings["captureLogs"] as? Bool, false)
         XCTAssertEqual(settings["collectGeoLocation"] as? Bool, false)
+        XCTAssertEqual(settings["captureNativeSheets"] as? Bool, false)
+        XCTAssertEqual(settings["textInputMasking"] as? String, "secure_only")
         XCTAssertEqual(settings["observeOnly"] as? Bool, false)
 
         let telemetryOnlySettings = RejourneyCaptureSettings(
@@ -215,7 +257,7 @@ final class RejourneyTests: XCTestCase {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
 
-        let rects = RedactionMask().computeRects(in: window)
+        let rects = RedactionMask().computeRects(windows: [window])
 
         XCTAssertTrue(rects.contains { $0.intersects(field.frame) })
     }
@@ -232,7 +274,7 @@ final class RejourneyTests: XCTestCase {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
 
-        let rects = RedactionMask().computeRects(in: window)
+        let rects = RedactionMask().computeRects(windows: [window])
 
         XCTAssertTrue(rects.isEmpty)
     }

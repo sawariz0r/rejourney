@@ -1,25 +1,18 @@
 # Security Policy
 
-## Supported Pacakge Versions
+## Supported Package Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security updates are provided for the currently maintained SDK release lines below.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.0.7   | :white_check_mark: |
-| 1.0.8   | :white_check_mark: |
-| 1.0.9   | :white_check_mark: |
-| 1.0.10  | :white_check_mark: |
-| 1.0.11  | :white_check_mark: |
-| 1.0.12  | :white_check_mark: |
-| 1.0.13  | :white_check_mark: |
-| 1.0.14  | :white_check_mark: |
-
-
+| Package | Version | Supported |
+| ------- | ------- | --------- |
+| React Native SDK (`@rejourneyco/react-native`) | `1.2.x` | :white_check_mark: |
+| Native iOS Swift Package (`Rejourney`) | `0.2.x` | :white_check_mark: |
+| React Native SDK (`@rejourneyco/react-native`) | `1.1.x` and earlier | :x: |
+| Native iOS Swift Package (`Rejourney`) | `0.1.x` and earlier | :x: |
 
 ## Reporting a Vulnerability
 
-Please contact us via contact@rejourney.co
-Up to a 3 buissness day response while we test and
-confrim your report. 
+Please contact us at contact@rejourney.co.
+
+We aim to respond within 3 business days while we test and confirm your report.

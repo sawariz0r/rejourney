@@ -41,6 +41,7 @@ describe('constants', () => {
       expect(DEFAULT_CONFIG).toHaveProperty('maxSessionDuration');
       expect(DEFAULT_CONFIG).toHaveProperty('collectDeviceInfo');
       expect(DEFAULT_CONFIG).toHaveProperty('collectGeoLocation');
+      expect(DEFAULT_CONFIG).toHaveProperty('captureNativeSheets');
     });
 
     it('should have valid default values', () => {
@@ -49,6 +50,7 @@ describe('constants', () => {
       expect(DEFAULT_CONFIG.maxSessionDuration).toBeGreaterThan(0);
       expect(DEFAULT_CONFIG.collectDeviceInfo).toBe(true);
       expect(DEFAULT_CONFIG.collectGeoLocation).toBe(true);
+      expect(DEFAULT_CONFIG.captureNativeSheets).toBe(true);
     });
   });
 

@@ -17,7 +17,7 @@ Or add it directly to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/rejourneyco/rejourney", from: "0.1.1")
+    .package(url: "https://github.com/rejourneyco/rejourney", from: "0.2.0")
 ],
 targets: [
     .target(
@@ -86,6 +86,17 @@ if result.success, let sessionId = result.sessionId {
     print("Recording started — session: \(sessionId)")
 }
 ```
+
+## Remote Recording Settings
+
+Project Settings can control Swift recording defaults without shipping a new app build. Supported SDK versions read these settings when `start()` is called:
+
+| Setting | Behavior |
+|---|---|
+| Sample rate | Defaults to `100%`. Sampled-in sessions capture normally. Sampled-out sessions return before replay capture, network interception, uploads, or other package work starts. |
+| Max observability duration | Limits the maximum length of each observability session. |
+| Recording FPS | Defaults to `1 FPS`. Project admins can choose `1`, `2`, or `3 FPS`. If remote config is unavailable, the SDK falls back to local/default capture behavior. |
+| Text input privacy | Defaults to masking all text inputs. Secure-only mode keeps password/secure fields masked and allows other text inputs to appear in debugging replays. |
 
 ## Screen Tracking
 
@@ -238,7 +249,9 @@ Custom events are stored per-session and visible in two places:
 
 ## Privacy Controls
 
-Text inputs are automatically masked by the SDK. To hide additional sensitive views, use the `mask` and `unmask` APIs:
+Text inputs and camera views are automatically masked by default. Project admins can change the default text input masking level in Project Settings for supported SDK versions. Secure/password fields, camera views, and explicit masks remain protected.
+
+To hide additional sensitive views, use the `mask` and `unmask` APIs:
 
 ```swift
 import UIKit
@@ -252,6 +265,19 @@ Rejourney.unmask(balanceLabel)
 ```
 
 For SwiftUI, get the underlying `UIView` via a `UIViewRepresentable` wrapper or `introspect`.
+
+#### Native sheets
+
+Native sheet capture is enabled by default (`captureNativeSheets: true`). This allows app-owned native sheets and dialogs, such as payment authorization modals, to appear in debugging replays when the OS permits capture. Keyboard/text-input system sheets are excluded when text inputs are masked by default. When text input masking is set to secure fields only, keyboards are best-effort only and cannot be reliably captured because iOS may render them as protected or remote system surfaces. OS share sheets are also best-effort only and cannot be reliably captured when the system renders them as protected or remote surfaces.
+
+Disable native sheet capture if you want visual replay to stay limited to the main app window:
+
+```swift
+Rejourney.configure(
+    publicKey: "rj_your_public_key",
+    options: RejourneyOptions(captureNativeSheets: false)
+)
+```
 
 ### User Consent & GDPR
 
@@ -343,15 +369,20 @@ Rejourney.configure(
     publicKey: "rj_your_public_key",
     options: RejourneyOptions(
         apiURL:             URL(string: "https://api.rejourney.co")!,
+        userId:             nil,
         enabled:            true,
         observeOnly:        false,
+        captureFPS:         nil,
+        captureQuality:     .medium,
         wifiOnly:           false,
         captureScreen:      true,
         captureAnalytics:   true,
         captureCrashes:     true,
         captureANR:         true,
+        trackConsoleLogs:   true,
         collectGeoLocation: true,
         autoTrackNetwork:   true,
+        captureNativeSheets: true,
         debug:              false
     )
 )
@@ -360,15 +391,20 @@ Rejourney.configure(
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `apiURL` | `URL` | `https://api.rejourney.co` | Override for self-hosted deployments |
+| `userId` | `String?` | `nil` | Optional initial internal user ID |
 | `enabled` | `Bool` | `true` | Master kill switch — set to `false` to disable the SDK entirely |
 | `observeOnly` | `Bool` | `false` | Collect telemetry only, no visual recording |
+| `captureFPS` | `Int?` | `nil` | Optional local capture FPS fallback. Remote Project Settings recording FPS takes precedence when available |
+| `captureQuality` | `RejourneyCaptureQuality` | `.medium` | JPEG capture quality (`.low`, `.medium`, `.high`) |
 | `wifiOnly` | `Bool` | `false` | Only upload session data on Wi-Fi |
 | `captureScreen` | `Bool` | `true` | Enable/disable visual screen capture |
 | `captureAnalytics` | `Bool` | `true` | Enable/disable analytics event collection |
 | `captureCrashes` | `Bool` | `true` | Enable/disable crash reporting |
 | `captureANR` | `Bool` | `true` | Enable/disable ANR (App Not Responding) detection |
+| `trackConsoleLogs` | `Bool` | `true` | Capture console logs for the session |
 | `collectGeoLocation` | `Bool` | `true` | Collect IP-derived geolocation |
 | `autoTrackNetwork` | `Bool` | `true` | Intercept `URLSession` requests for network capture |
+| `captureNativeSheets` | `Bool` | `true` | Include app-owned native sheet/dialog windows in visual replay when iOS permits capture. OS share sheets and keyboards may be protected or remote surfaces and cannot be reliably captured |
 | `debug` | `Bool` | `false` | Print verbose SDK logs to the console |
 
 ## Stopping Recording

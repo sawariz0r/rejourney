@@ -24,7 +24,7 @@ export const Footer: React.FC = () => {
           <span className="hidden sm:inline">•</span>
           <Link to="/engineering" className="hover:text-black transition-colors">{copy.engineering}</Link>
           <span className="hidden sm:inline">•</span>
-          <Link to="/changelog" className="hover:text-black transition-colors">{copy.changelog}</Link>
+          <a href="https://github.com/rejourneyco/rejourney/releases" target="_blank" rel="noopener noreferrer" className="hover:text-black transition-colors">{copy.changelog}</a>
           <span className="hidden sm:inline">•</span>
           <Link to="/pricing" className="hover:text-black transition-colors">{copy.pricing}</Link>
           <span className="hidden sm:inline">•</span>

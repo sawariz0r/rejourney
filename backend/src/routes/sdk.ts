@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm';
 import { db, projects } from '../db/client.js';
 import { getRedis } from '../db/redis.js';
 import { asyncHandler, ApiError } from '../middleware/index.js';
+import { buildSdkConfigResponse } from '../services/sdkConfig.js';
 
 
 const router = Router();
@@ -30,7 +31,7 @@ router.get(
         }
 
         // Find project by public key (cached)
-        const cacheKey = `sdk:config:${publicKey}`;
+        const cacheKey = `sdk:config:v3:${publicKey}`;
         let project:
             | {
                 id: string;
@@ -38,6 +39,9 @@ router.get(
                 name: string;
                 rejourneyEnabled: boolean;
                 recordingEnabled: boolean;
+                textInputMasking?: string | null;
+                recordingFps: number;
+                sampleRate: number;
                 maxRecordingMinutes: number;
                 deletedAt: Date | null;
             }
@@ -60,6 +64,9 @@ router.get(
                     name: projects.name,
                     rejourneyEnabled: projects.rejourneyEnabled,
                     recordingEnabled: projects.recordingEnabled,
+                    textInputMasking: projects.textInputMasking,
+                    recordingFps: projects.recordingFps,
+                    sampleRate: projects.sampleRate,
                     maxRecordingMinutes: projects.maxRecordingMinutes,
                     deletedAt: projects.deletedAt,
                 })
@@ -90,23 +97,9 @@ router.get(
             throw ApiError.unauthorized('Invalid public key');
         }
 
-        const sampleRate = 100;
-        const maxRecordingMinutes = Math.max(
-            1,
-            Math.min(10, project.maxRecordingMinutes ?? 10)
-        );
-
-
-
         // If Rejourney is disabled, return early with disabled flag
         if (!project.rejourneyEnabled) {
-            res.json({
-                projectId: project.id,
-                rejourneyEnabled: false,
-                recordingEnabled: false,
-                disabled: true,
-                reason: 'Rejourney disabled by project admin',
-            });
+            res.json(buildSdkConfigResponse(project));
             return;
         }
 
@@ -155,17 +148,10 @@ router.get(
             }
         }
 
-        res.json({
-            projectId: project.id,
-            teamId: project.teamId,
-            name: project.name,
-            rejourneyEnabled: project.rejourneyEnabled,
-            recordingEnabled: project.recordingEnabled,
-            maxRecordingMinutes,
-            sampleRate,
+        res.json(buildSdkConfigResponse(project, {
             billingBlocked,
             billingReason,
-        });
+        }));
     })
 );
 
