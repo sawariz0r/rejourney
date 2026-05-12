@@ -1,6 +1,6 @@
 # All Things Cloud
 
-Last updated: 2026-05-06
+Last updated: 2026-05-12
 
 Operator-facing map of production: traffic path, pod placement, storage, HA failover, and the reasoning behind every architectural decision.
 
@@ -34,12 +34,14 @@ graph TD
 
     subgraph FSN1["FSN1 — Falkenstein · rejourney-fsn1-1"]
         TR["Traefik\n(sole ingress in normal operation)"]
-        SERVICES["api · web · ingest-upload\npostgres primary · redis master\npgbouncer · monitoring"]
+        APIING["api-ingest\n/api/ingest/* · /api/sdk/config\ncolocated with primary"]
+        FSN1_SVC["ingest-upload · web · monitoring\npostgres primary · redis master\npgbouncer (rw)"]
     end
 
     subgraph HEL1["HEL1 — Helsinki · worker-1 + quorum-1"]
+        APIDASH["api-dashboard\neverything else\nuses dbRead for analytics"]
         WORKERS["ingest-worker · replay-worker\nalert-worker · session-lifecycle-worker\nretention-worker · stripe-sync-worker"]
-        STANDBY["postgres standby · redis replicas\npgbouncer replicas"]
+        STANDBY["postgres standby · redis replicas\npgbouncer (rw replicas)\npgbouncer-ro → standby"]
     end
 
     S3["Hetzner Object Storage\nlive session artifacts"]
@@ -48,11 +50,15 @@ graph TD
     USER --> CF
     CF --> LB
     LB -->|"ETP:Local → FSN1 nodeport only"| TR
-    TR --> SERVICES
-    SERVICES -->|"WAL stream · sync replication"| STANDBY
-    SERVICES --> S3
-    SERVICES -->|"WAL archive"| R2
-    WORKERS --> SERVICES
+    TR -->|"/api/ingest/* · /api/sdk/config"| APIING
+    TR -->|"everything else"| APIDASH
+    APIING --> FSN1_SVC
+    APIDASH -->|"writes (rare): pgbouncer → primary"| FSN1_SVC
+    APIDASH -->|"reads (heavy): pgbouncer-ro → standby"| STANDBY
+    FSN1_SVC -->|"WAL stream · sync replication"| STANDBY
+    FSN1_SVC --> S3
+    FSN1_SVC -->|"WAL archive"| R2
+    WORKERS --> FSN1_SVC
     WORKERS --> S3
 
     classDef dc fill:#1a2a3a,stroke:#4fc3f7,color:#fff
@@ -72,54 +78,61 @@ graph LR
     subgraph fsn1["rejourney-fsn1-1 · CPX52 · 12 vCPU / 24 GB · FSN1"]
         direction TB
         TR0["Traefik ×1\npreferred FSN1"]
-        API["api ×3–6\nHPA · preferred FSN1\nall serial DB calls local"]
+        APIING["api-ingest ×3–6\nHPA · required affinity to primary\nall serial DB calls local"]
         WEB0["web ×1"]
         U0["ingest-upload ×1–2\nHPA"]
         PG1["postgres-local-1\nCNPG primary"]
         RD0["redis-node-0\nSentinel master"]
-        PGB0["pgbouncer\npool 60"]
+        PGB0["pgbouncer (rw)\npool 60"]
         MON["victoria-metrics · grafana\ngatus · pushgateway\nnode-exporter · cadvisor\nkube-state-metrics · postgres-exporter"]
     end
 
     subgraph worker1["rejourney-hel1-worker-1 · CX43 · 8 vCPU / 16 GB · HEL1"]
         direction TB
+        APIDASH1["api-dashboard ×1\nHPA 2–5 · preferred HEL1\nuses dbRead for analytics"]
         IW1["ingest-worker ×bulk\nHPA 5–12 · preferred HEL1"]
         RW1["replay-worker ×bulk\nHPA 1–10 · preferred HEL1"]
         U1["ingest-upload overflow"]
         PG2["postgres-local-2\nCNPG sync standby"]
         RD2["redis-node-2\nSentinel replica"]
-        PGB1["pgbouncer\npool 60"]
+        PGB1["pgbouncer (rw)\npool 60"]
+        PGBRO1["pgbouncer-ro ×1\n→ postgres-local-ro\n(standby only)"]
     end
 
     subgraph quorum1["rejourney-hel1-quorum-1 · CX43 · 8 vCPU / 16 GB · HEL1 · excluded from LB"]
         direction TB
+        APIDASH2["api-dashboard ×1\nHPA · preferred HEL1"]
         IW2["ingest-worker ×bulk\nHPA · preferred HEL1"]
         RW2["replay-worker ×bulk\nHPA · preferred HEL1"]
         AW["alert-worker ×1\npreferred HEL1"]
         SLC["session-lifecycle-worker ×1\npreferred HEL1"]
         WEB1["web ×1"]
         RD1["redis-node-1\nSentinel replica"]
-        PGB2["pgbouncer\npool 60"]
+        PGB2["pgbouncer (rw)\npool 60"]
+        PGBRO2["pgbouncer-ro ×1\n→ postgres-local-ro"]
         CRON["retention-worker CronJob\nstripe-sync-worker CronJob"]
         ETCD["etcd quorum voter"]
     end
 
     classDef pinned fill:#1a3a1a,stroke:#4caf50,color:#fff
+    classDef dash fill:#1f2a3f,stroke:#7e8aff,color:#fff
     classDef data fill:#1a1a3a,stroke:#5c6bc0,color:#fff
     classDef worker fill:#2a1a1a,stroke:#ef5350,color:#fff
     classDef ingress fill:#1a2a2a,stroke:#26c6da,color:#fff
     classDef mon fill:#2a2a1a,stroke:#ffa726,color:#fff
 
-    class API pinned
-    class PG1,PG2,PGB0,PGB1,PGB2,RD0,RD1,RD2 data
+    class APIING pinned
+    class APIDASH1,APIDASH2 dash
+    class PG1,PG2,PGB0,PGB1,PGB2,PGBRO1,PGBRO2,RD0,RD1,RD2 data
     class IW1,IW2,RW1,RW2,AW,SLC,CRON worker
     class TR0 ingress
     class MON mon
 ```
 
 **Color key:**
-- **Green** — API pods: pinned to FSN1 (preferred affinity, weight 100). Cross-DC adds 25ms per DB call; all 5–10 serial calls per request stay local.
-- **Blue** — Data: CNPG primary + Redis master on FSN1, standbys/replicas on HEL1. pgbouncer on all three nodes.
+- **Green** — `api-ingest` pods (SDK traffic only): required pod affinity to the CNPG primary node, preferred FSN1. All serial DB calls stay local. Isolated from dashboard traffic so a slow dashboard aggregation can never starve the SDK event loop.
+- **Indigo** — `api-dashboard` pods (operator UI + everything else): preferred HEL1 next to the read replica. Writes go to the primary via pgbouncer (rw); heavy reads (`dbRead`) go to the standby via pgbouncer-ro — local-DC for both because writes are rare on this path.
+- **Blue** — Data: CNPG primary + Redis master on FSN1, standby + replicas on HEL1. pgbouncer (rw) on all three nodes; pgbouncer-ro only on HEL1 (next to standby).
 - **Red** — Workers: prefer HEL1 (preferred affinity, weight 100), fall back to FSN1 only when HEL1 is full. DB latency is acceptable for async processing; ingest/replay writes use `SET LOCAL synchronous_commit = local` to skip the 25ms SyncRep wait.
 - **Cyan** — Ingress: Traefik single replica on FSN1. quorum-1 excluded from LB entirely.
 - **Orange** — Monitoring: all on FSN1 for simplicity. Goes dark if FSN1 fails — acceptable gap.
@@ -133,32 +146,33 @@ graph LR
     subgraph fsn1_1["rejourney-fsn1-1 · existing"]
         direction TB
         TR1["Traefik replica-1"]
-        API1["api ×all\nHPA · colocated with primary"]
+        API1["api-ingest ×all\nHPA · colocated with primary"]
         PG1F["postgres-local-1\nCNPG primary"]
         RD0F["redis-node-0"]
-        PGB0F["pgbouncer"]
+        PGB0F["pgbouncer (rw)"]
         MONF["monitoring stack"]
     end
 
     subgraph fsn1_2["rejourney-fsn1-2 · NEW CPX41 or CX32"]
         direction TB
         TR2["Traefik replica-2"]
-        PGB3["pgbouncer (new replica-3)"]
+        PGB3["pgbouncer (rw) replica-4"]
     end
 
     subgraph hel1["HEL1 — worker-1 + quorum-1 · unchanged"]
         direction TB
+        APIDASHF["api-dashboard ×2\nunchanged, HEL1"]
         WK["all workers\n(preferred HEL1, same as today)"]
-        DB2["postgres standby · redis replicas\npgbouncer replicas"]
+        DB2["postgres standby · redis replicas\npgbouncer (rw) replicas\npgbouncer-ro replicas"]
     end
 
     classDef new fill:#1a3a2a,stroke:#66bb6a,color:#fff
     classDef existing fill:#1a3a1a,stroke:#4caf50,color:#fff
     classDef hel fill:#2a1a1a,stroke:#ef5350,color:#fff
 
-    class fsn1_2,TR2,API2,PGB3 new
+    class fsn1_2,TR2,PGB3 new
     class fsn1_1,TR1,API1,PG1F,RD0F,PGB0F,MONF existing
-    class hel1,WK,DB2 hel
+    class hel1,APIDASHF,WK,DB2 hel
 ```
 
 See [Compute Scaling Plan](#compute-scaling-plan) for the exact steps.
@@ -181,14 +195,35 @@ See [Compute Scaling Plan](#compute-scaling-plan) for the exact steps.
 - Middlewares: `https-redirect`, `http-www-redirect`, `www-redirect`, `security-headers`, `rate-limit-api` (1 000 req/min, burst 5 000), `rate-limit-ingest` (20 000 req/min, burst 40 000).
 - Metrics on a separate `metrics` entry point, scraped by VictoriaMetrics.
 
-### API
+### API (split into `api-ingest` and `api-dashboard`)
 
-- **Required pod affinity to the current CNPG primary hostname** (`cnpg.io/cluster=postgres-local`, `cnpg.io/instanceRole=primary`). API response time regresses sharply when serial DB calls cross nodes/DCs, so new API pods must schedule on the same node as the writable Postgres pod.
-- **Preferred FSN1, weight 100** (`rejourney.co/datacenter=fsn1`). This is secondary to primary-node colocation and preserves normal placement while `postgres-local-1` is primary.
+Background: a single `api` deployment served both SDK ingest (~500 req/min/pod) and the operator dashboard (~10 req/min/pod). Same Node.js event loop, same pgbouncer pool. A heavy dashboard aggregation could block ingest writes behind it, and an ingest spike could push dashboard clicks past 3s. Split into two deployments running the same image with different routing and placement (May 2026).
+
+Both deployments expose port 3000 and load the same Express app — the difference is purely traffic routing at the ingress and pod placement.
+
+A backward-compat `api` Service still exists and aliases `api-ingest` so anything inside the cluster that hardcodes `api:3000` (gatus, monitoring, etc.) keeps working.
+
+#### `api-ingest` — SDK traffic only
+- Routed by ingress for `/api/ingest/*` and `/api/sdk/config` on `api.rejourney.co`, and everything on `ingest.rejourney.co` except `/upload`.
+- **Required pod affinity to the current CNPG primary hostname** (`cnpg.io/cluster=postgres-local`, `cnpg.io/instanceRole=primary`). Ingest response time regresses sharply when serial DB calls cross nodes/DCs, so new ingest pods must schedule on the same node as the writable Postgres pod.
+- **Preferred FSN1, weight 100** (`rejourney.co/datacenter=fsn1`). Secondary to primary-node colocation; preserves normal placement while `postgres-local-1` is primary.
 - **No `topologySpreadConstraints`** — tested: `maxSkew:1 ScheduleAnyway` overrides a weight-80 preference and spreads pods to HEL1, causing 6–11s p50.
-- **HPA: min 3, max 6, target 65% CPU.** Min 3 fits entirely on FSN1 in normal operation.
-- **Continuous colocation guard** (`api-postgres-colocator` CronJob): every minute, checks the CNPG primary node and evicts at most one healthy API pod if it is not colocated. It only acts when the API Deployment is fully ready and uses the Eviction API, so the API PDB keeps one-at-a-time movement.
-- **Post-deploy colocation check** in CI (`pin_deployment_to_postgres_primary` in `scripts/k8s/deploy-release.sh`): after every rollout, evicts any API pods not on the CNPG primary node one at a time and waits for replacements. This fixes rollout-time drift immediately; the CronJob handles later CNPG primary movement.
+- **HPA `api-ingest`: min 3, max 6, target 65% CPU.** Min 3 fits entirely on FSN1 in normal operation.
+- **Continuous colocation guard** (`api-postgres-colocator` CronJob): every minute, checks the CNPG primary node and evicts at most one healthy `api-ingest` pod if it is not colocated. It only acts when the deployment is fully ready and uses the Eviction API, so the PDB keeps one-at-a-time movement. The CronJob's `API_DEPLOYMENT` env is set to `api-ingest`.
+- **Post-deploy colocation check** in CI (`pin_deployment_to_postgres_primary api-ingest` in `scripts/k8s/deploy-release.sh`): after every rollout, evicts any `api-ingest` pods not on the CNPG primary node one at a time and waits for replacements. Fixes rollout-time drift immediately; the CronJob handles later CNPG primary movement.
+
+#### `api-dashboard` — operator UI + everything else
+- Routed by ingress for everything else on `api.rejourney.co` (`/`, dashboard, analytics, auth, webhooks, etc.).
+- **Preferred HEL1, weight 100** — colocated with the Postgres read replica so heavy analytics aggregations are local-DC.
+- **`podAntiAffinity` (preferred) on hostname** — spreads the two replicas across different HEL1 nodes so a single-node loss doesn't take both pods.
+- **No required affinity to the primary** — most queries on this deployment use `dbRead` (read replica). The occasional write (login, settings, Stripe webhook) goes through `pgbouncer` (rw) → primary, which crosses 25ms cross-DC, acceptable at that frequency.
+- **HPA `api-dashboard`: min 2, max 5, target 60% CPU.**
+- Sets the `DATABASE_URL_READ` env var (interpolated from `POSTGRES_*` secrets — those keys must be declared before `DATABASE_URL_READ` in the env list because Kubernetes `$(VAR)` interpolation only resolves vars listed earlier in the same container).
+
+#### Read replica path (`dbRead`)
+- `backend/src/db/client.ts` exports `db` (primary) and `dbRead`. `dbRead` uses `DATABASE_URL_READ` if set, otherwise falls back to `db`. Writes via `dbRead` would fail at the standby with `cannot execute INSERT in a read-only transaction` — that's the intentional guardrail.
+- `api-ingest` does not set `DATABASE_URL_READ`, so its `dbRead` aliases `db`. Tests, local dev, and the legacy `api` Service backers all use the same fallback path.
+- Today only the two heaviest aggregations in `dashboardOverview.ts` (`loadUserFirstSeenMap`, `loadTopUsersPreview`) use `dbRead`. Other dashboard reads are still on `db` — incremental migration is safe to do later.
 
 ### `ingest-worker`, `replay-worker`
 
@@ -217,7 +252,7 @@ See [Compute Scaling Plan](#compute-scaling-plan) for the exact steps.
 
 - 2 replicas, no affinity. Static/SSR, no DB calls.
 
-### pgbouncer
+### pgbouncer (rw)
 
 - **3 replicas, one per node, pool 60 connections each.** Total: 180 server connections, under `max_connections: 200`.
 - All connect to `postgres-app-rw` (CNPG label selector `cnpg.io/instanceRole: primary`) — always resolves to current primary after failover.
@@ -225,6 +260,14 @@ See [Compute Scaling Plan](#compute-scaling-plan) for the exact steps.
 - **`required` anti-affinity on hostname** — exactly one per node, always. Do not change to `preferred` and do not add `maxSurge: 1`. With 3 nodes, a surge pod has nowhere to go and deadlocks the rollout.
 - Rolling update: `maxSurge: 0, maxUnavailable: 1`.
 - **When adding a node, bump replicas to match new node count before deploying.** Also raise `max_connections` if total pool × 60 approaches 200.
+
+### pgbouncer-ro (read replica pool)
+
+- **2 replicas, preferred HEL1**, pool 30 connections each. Fronts the Postgres standby for dashboard analytics reads.
+- Connects to `postgres-local-ro` — **not** `postgres-app-ro`. See operational gotcha #14: `postgres-app-ro` is a custom alias in this cluster with a broken selector that matches both primary AND standby, so it round-robins between them. The CNPG-default `postgres-local-ro` correctly filters by `cnpg.io/instanceRole=replica`.
+- `trafficDistribution: PreferClose` — `api-dashboard` pods on HEL1 hit the local pgbouncer-ro pod; FSN1 pod is only used as a fallback.
+- Soft anti-affinity on hostname — preferred spread, but doesn't block scheduling if HEL1 is full (one replica may end up on FSN1 during rollout; that's fine — the cross-DC hop only matters when HEL1 is unavailable).
+- Used only by `api-dashboard` via the `DATABASE_URL_READ` env var → `dbRead` Drizzle client.
 
 ### CNPG (postgres-local)
 
@@ -275,15 +318,16 @@ See [Compute Scaling Plan](#compute-scaling-plan) for the exact steps.
 
 | Failure | What happens |
 |---|---|
-| FSN1 API pods | Reschedule to HEL1. Slower until postgres/Redis failover completes (~30s). |
-| CNPG primary | `postgres-local-2` auto-promotes. `postgres-app-rw` selector follows new primary. pgbouncer on HEL1 reconnects to local primary. |
+| FSN1 `api-ingest` pods | Reschedule to HEL1 (the required affinity follows the promoted primary, so they land wherever Postgres lands). Slower until postgres/Redis failover completes (~30s). |
+| HEL1 `api-dashboard` pods | Reschedule to whichever HEL1 node is still up; if both HEL1 nodes are gone, spill to FSN1. `dbRead` queries still work because `pgbouncer-ro` follows the standby — on full HEL1 loss, the standby itself is gone, so `dbRead` queries error until CNPG promotes and a new standby is rebuilt. Mitigation: `dbRead` falls back gracefully only via app retry; consider switching `DATABASE_URL_READ=DATABASE_URL` during prolonged standby outages. |
+| CNPG primary | `postgres-local-2` auto-promotes. `postgres-app-rw` selector follows new primary. pgbouncer (rw) on HEL1 reconnects to local primary. `postgres-local-ro` momentarily has zero endpoints until CNPG rebuilds the standby — `dbRead` queries error during that window. |
 | In-flight writes at crash | Postgres writes: no data loss — `remote_write` means every committed write was already buffered on standby. BullMQ jobs that were active at crash time are detected as stalled after `stalledInterval = 30s` and automatically re-queued. Relay uploads already ACKed to the SDK depend on the Redis `artifact:buf:{artifactId}` key surviving until flush; buffered flush jobs are recoverable while that 30-minute key exists. Artifact processing is idempotent — safe to reprocess. |
 | Redis master | Sentinel elects new master within seconds. |
 | Traefik | Reschedules to `worker-1` (~90s). LB detects `worker-1` nodeport healthy and resumes routing. |
 | CoreDNS | Second replica on HEL1 keeps DNS alive. |
 | Monitoring | victoria-metrics, Grafana, Gatus go offline. Accepted gap. |
 
-**Post-failover:** once CNPG promotes (~30s) and Redis elects master (~5s), HEL1 API pods hit local pgbouncer → local postgres → local Redis. Latency recovers close to FSN1 levels.
+**Post-failover:** once CNPG promotes (~30s) and Redis elects master (~5s), `api-ingest` pods reschedule onto whatever node now holds the primary and hit local pgbouncer → local postgres → local Redis. Latency recovers close to FSN1 levels. The dashboard read path is degraded until the new standby finishes initial sync (minutes); during that window dashboard queries should be temporarily routed back to the primary (set `DATABASE_URL_READ=` on `api-dashboard`).
 
 ---
 
@@ -294,11 +338,13 @@ See [Compute Scaling Plan](#compute-scaling-plan) for the exact steps.
 | `rejourney.co` | `/` | `web:80` | security-headers |
 | `www.rejourney.co` | `/` HTTP | — | http-www-redirect |
 | `www.rejourney.co` | `/` HTTPS | `web:80` | www-redirect |
-| `api.rejourney.co` | `/api/ingest`, `/api/sdk/config` | `api:3000` | security-headers, rate-limit-ingest |
-| `api.rejourney.co` | `/` | `api:3000` | security-headers, rate-limit-api |
+| `api.rejourney.co` | `/api/ingest`, `/api/sdk/config` | `api-ingest:3000` | security-headers, rate-limit-ingest |
+| `api.rejourney.co` | `/` | `api-dashboard:3000` | security-headers, rate-limit-api |
 | `ingest.rejourney.co` | `/upload` | `ingest-upload:3001` | security-headers, rate-limit-ingest |
-| `ingest.rejourney.co` | `/` | `api:3000` | security-headers, rate-limit-ingest |
+| `ingest.rejourney.co` | `/` | `api-ingest:3000` | security-headers, rate-limit-ingest |
 | `*.rejourney.co` HTTP | `/` | — | https-redirect |
+
+The `api-ingest` ingress carries priority `110` so the more-specific paths win against the catch-all `/` route on `api.rejourney.co` (priority `10`) which goes to `api-dashboard`.
 
 ---
 
@@ -306,9 +352,9 @@ See [Compute Scaling Plan](#compute-scaling-plan) for the exact steps.
 
 1. **Never rename a Hetzner server without a coordinated k3s migration.** CCM matches Hetzner server names to k8s node names. Mismatch → `network-unavailable:NoSchedule` taint → no pods schedule there. Also breaks PV nodeAffinity (immutable field — must delete/recreate PVs). Requires: k3s `node-name` config change on all nodes, cluster-reset if etcd gets corrupted, flannel FDB repopulation (k3s restart on all nodes), PV rebuild.
 
-2. **API and Traefik affinity use `rejourney.co/datacenter=fsn1`.** New nodes must be labelled on join. Workers use `rejourney.co/datacenter=hel1`.
+2. **API and Traefik affinity use `rejourney.co/datacenter=fsn1`.** New nodes must be labelled on join. Workers and `api-dashboard` use `rejourney.co/datacenter=hel1`.
 
-3. **Do not add `topologySpreadConstraints` to the API deployment.** `maxSkew:1 ScheduleAnyway` overrides the preferred affinity and spreads pods to HEL1, causing 6–11s p50 response times.
+3. **Do not add `topologySpreadConstraints` to `api-ingest`.** `maxSkew:1 ScheduleAnyway` overrides the preferred affinity and spreads pods to HEL1, causing 6–11s p50 response times. (Same constraint previously applied to the unified `api` deployment.) Workers had a similar issue with topologySpread fighting the HEL1 affinity and overflowing to FSN1; both were removed in May 2026.
 
 4. **Do not change `externalTrafficPolicy` back to `Cluster`.** Adds an invisible 25ms kube-proxy VXLAN hop before every Traefik request.
 
@@ -320,7 +366,7 @@ See [Compute Scaling Plan](#compute-scaling-plan) for the exact steps.
 
 8. **HPA undershoots for IO-bound workers.** `ingest-worker` and `replay-worker` stay at 30–40% CPU while waiting on S3 and DB. If the BullMQ queue grows, HPA won't fire — CPU is the wrong signal. Monitor queue depth: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, and `LLEN bull:rj-replay-artifacts:wait` in Redis. If any are non-zero and growing, manually scale: `kubectl scale deployment ingest-worker --replicas=12`, patch HPA max first.
 
-9. **API/Postgres colocation is enforced twice.** API has required pod affinity to the current CNPG primary, CI auto-corrects via `pin_deployment_to_postgres_primary`, and the `api-postgres-colocator` CronJob handles later failovers. If you see slow API: compare `kubectl get pods -n rejourney -l app=api -o wide` with `kubectl get pods -n rejourney -l cnpg.io/cluster=postgres-local,cnpg.io/instanceRole=primary -o wide`, then inspect `kubectl get jobs -n rejourney -l app=api-postgres-colocator`.
+9. **`api-ingest`/Postgres colocation is enforced twice.** `api-ingest` has required pod affinity to the current CNPG primary, CI auto-corrects via `pin_deployment_to_postgres_primary api-ingest`, and the `api-postgres-colocator` CronJob handles later failovers (its `API_DEPLOYMENT` env is set to `api-ingest`). `api-dashboard` does NOT colocate with the primary — it lives on HEL1. If you see slow ingest: compare `kubectl get pods -n rejourney -l app=api-ingest -o wide` with `kubectl get pods -n rejourney -l cnpg.io/cluster=postgres-local,cnpg.io/instanceRole=primary -o wide`, then inspect `kubectl get jobs -n rejourney -l app=api-postgres-colocator`.
 
 10. **SyncRep is the write throughput ceiling.** Every committed write waits ~25ms for standby ACK. For any new write-heavy path that becomes slow: check `pg_stat_activity WHERE wait_event = 'SyncRep'` first, then add `SET LOCAL synchronous_commit = local` if the path is safe to skip (idempotent retries are acceptable). The BullMQ migration eliminated the former hottest path (`ingest_jobs` INSERT/UPDATE churn) — artifact job dispatch now goes through Redis, and only the `recording_artifacts` status update remains in Postgres.
 
@@ -330,40 +376,48 @@ See [Compute Scaling Plan](#compute-scaling-plan) for the exact steps.
 
 13. **Cloudflare WAF silently blocks ingest PUT requests.** No logs, no 4xx to the client — Cloudflare drops the request without notifying you. If ingest stops working and the API/ingest-upload pods look healthy: add a custom WAF pass-rule for PUT on `ingest.rejourney.co` first, before touching anything else. There are zero logs until that rule is in place.
 
+14. **`postgres-app-ro` is broken in this cluster — use `postgres-local-ro` for read-only traffic.** The `postgres-app-*` services were configured as custom aliases at some point and `postgres-app-ro` has selector `cnpg.io/podRole=instance`, which matches BOTH primary and standby — so it round-robins between them and is NOT actually read-only. The CNPG-default `postgres-local-ro` has the correct selector (`cnpg.io/instanceRole=replica`) and only routes to the standby. `pgbouncer-ro` points at `postgres-local-ro` for this reason. Verify any new read pool with `kubectl get endpoints postgres-local-ro` (should be exactly one IP — the standby).
+
+15. **`DATABASE_URL_READ` env var ordering matters.** On `api-dashboard`, `DATABASE_URL_READ` is interpolated from `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` via `$(VAR)` syntax. Kubernetes only resolves `$(VAR)` against env vars that appear EARLIER in the same container's env list. If you reorder env entries and put `DATABASE_URL_READ` before its inputs, the value becomes the literal string `postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@pgbouncer-ro:5432/$(POSTGRES_DB)` and Postgres connections fail with cryptic auth errors.
+
+16. **API split: `api` Service is a backward-compat alias for `api-ingest`.** Anything cluster-internal that hardcoded `api:3000` (gatus, monitoring scrapes) keeps working because the `api` Service still exists with selector `app: api-ingest`. Don't delete it. The colocator and the deploy script reference `api-ingest` directly, not `api`. Ingest traffic goes to `api-ingest`; dashboard/auth/everything-else goes to `api-dashboard`.
+
+17. **`api-dashboard` does writes too — don't assume it's read-only.** Login creates `user_sessions` rows, settings saves, Stripe webhooks (`/api/webhooks/*`) all run on `api-dashboard` and write to the primary via the regular `db` client (which uses `DATABASE_URL` → `pgbouncer` → primary). Only the `dbRead` client targets the standby. If you migrate a route to `dbRead`, verify it does not write — writes via `dbRead` will fail at the standby with `cannot execute INSERT in a read-only transaction`. That's the intentional guardrail but it's user-visible.
+
 ---
 
 ## Compute Scaling Plan
 
-Current state: 1 FSN1 node running API, DB primary, and monitoring. Next step is a **second FSN1 node** — more API headroom with local DB latency, not more HEL1 standby capacity.
+Current state: 1 FSN1 node running `api-ingest`, DB primary, ingest-upload, and monitoring; 2 HEL1 nodes running `api-dashboard`, workers, standby, and pgbouncer-ro. Next step is a **second FSN1 node** — more `api-ingest` headroom with local DB latency, not more HEL1 standby capacity.
 
 ### Step 0 — affinity labels ✅ done
 
-All nodes carry `rejourney.co/datacenter`. New FSN1 nodes are immediately eligible for API/Traefik with just:
+All nodes carry `rejourney.co/datacenter`. New FSN1 nodes are immediately eligible for `api-ingest`/Traefik with just:
 ```bash
 kubectl label node <new-node> rejourney.co/datacenter=fsn1
 ```
 
 ### Step 1 — add second FSN1 node
 
-Recommended type: **CPX41** (16 vCPU, 32 GB, ~€33/mo) or **CX32** (8 vCPU, 32 GB, ~€19/mo). Add in FSN1 only. With strict API/Postgres-primary colocation, this node is immediate ingress/pgbouncer/general headroom; API pods only use it if the CNPG primary can also run there. After the node joins:
+Recommended type: **CPX41** (16 vCPU, 32 GB, ~€33/mo) or **CX32** (8 vCPU, 32 GB, ~€19/mo). Add in FSN1 only. With strict `api-ingest`/Postgres-primary colocation, this node is immediate ingress/pgbouncer/general headroom; `api-ingest` pods only use it if the CNPG primary can also run there. After the node joins:
 ```bash
 kubectl label node <new-node> rejourney.co/datacenter=fsn1
 # Remove LB exclusion label if present:
 kubectl label node <new-node> node.kubernetes.io/exclude-from-external-load-balancers-
 ```
 
-### Step 2 — scale pgbouncer to 4
+### Step 2 — scale pgbouncer (rw) to 4
 
-pgbouncer requires one replica per node. With 4 nodes, set replicas = 4 and raise `max_connections` to at least 280 (4 × 60 = 240 connections, need headroom). Update `k8s/pgbouncer.yaml`.
+`pgbouncer` (rw) requires one replica per node. With 4 nodes, set replicas = 4 and raise `max_connections` to at least 280 (4 × 60 = 240 connections, need headroom). Update `k8s/pgbouncer.yaml`. (`pgbouncer-ro` does not need a replica per node — it lives on HEL1 next to the standby.)
 
-### Step 3 — raise API HPA max
+### Step 3 — raise `api-ingest` HPA max
 
 ```yaml
-# k8s/hpa.yaml
+# k8s/hpa.yaml — HorizontalPodAutoscaler/api-ingest
 minReplicas: 3   # unchanged
 maxReplicas: 8   # was 6
 ```
-Only raise this if the Postgres primary node has CPU/memory headroom, or after adding a CNPG instance/primary path on the new FSN1 node. API pods are required to colocate with the writable Postgres pod.
+Only raise this if the Postgres primary node has CPU/memory headroom, or after adding a CNPG instance/primary path on the new FSN1 node. `api-ingest` pods are required to colocate with the writable Postgres pod. `api-dashboard` HPA scales independently and isn't affected.
 
 ### Step 4 — run 2 Traefik replicas across both FSN1 nodes
 
@@ -378,4 +432,5 @@ Add the new FSN1 node as a Hetzner LB backend.
 
 - CNPG: stays 1 primary + 1 standby. More replicas add sync overhead.
 - Redis: stays 3-node Sentinel.
-- HEL1 nodes: unchanged — HA standby and bulk worker capacity.
+- HEL1 nodes: unchanged — HA standby, bulk worker capacity, and `api-dashboard` home.
+- `api-dashboard`: 2 replicas on HEL1 is plenty for current operator load; scale via its own HPA (2–5) if dashboard traffic grows.

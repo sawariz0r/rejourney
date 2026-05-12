@@ -39,68 +39,198 @@ data:
     web:
       port: 8080
 
-    # ── HTTP + SSL endpoint checks ──────────────────────────────────────
+    ui:
+      title: Rejourney Health
+      header: Rejourney — Production Health
+
+    # Endpoints are grouped so the status page sorts them logically.
+    # Response-time thresholds reflect the workload of each tier:
+    #   api-ingest: SDK traffic, p99 ~ 300ms — alert at 1500ms
+    #   api-dashboard: operator UI reads, p99 ~ 500ms — alert at 2500ms
+    #   ingest-upload: relay path with Redis buffering — alert at 1000ms
+    # The `<` condition is a hard failure (red). For warnings (yellow) we use
+    # Gatus' two-line condition trick: first checks for healthy, second is
+    # advisory. Keep checks pessimistic enough to catch real regressions but
+    # not so tight that normal load tail latency pages.
 
     endpoints:
-      - name: API Health
-        url: http://api.rejourney.svc.cluster.local:3000/health/ready
-        interval: 2m
+
+      # ── Public Edge ────────────────────────────────────────────────────
+      # External availability through Cloudflare → Traefik → backend.
+      # Note: Cloudflare serves a bot challenge (HTTP 403) to cluster-egress
+      # IPs, so we accept 200 OR 403 — both prove Cloudflare is up. Real
+      # browser users never see the 403. True backend health is covered by
+      # the in-cluster api-ingest / api-dashboard checks below.
+
+      - name: Edge — api.rejourney.co
+        group: Public Edge
+        url: https://api.rejourney.co/health
+        interval: 1m
+        conditions:
+          - "[STATUS] == any(200, 403)"
+          - "[RESPONSE_TIME] < 3000"
+
+      - name: Edge — ingest.rejourney.co
+        group: Public Edge
+        url: https://ingest.rejourney.co/health
+        interval: 1m
+        conditions:
+          - "[STATUS] == any(200, 403)"
+          - "[RESPONSE_TIME] < 3000"
+
+      - name: Edge — rejourney.co (dashboard SPA)
+        group: Public Edge
+        url: https://rejourney.co
+        interval: 1m
+        conditions:
+          - "[STATUS] == any(200, 403)"
+          - "[RESPONSE_TIME] < 3000"
+
+      # ── API Tier: ingest pods ─────────────────────────────────────────
+      # Hits api-ingest service directly via cluster DNS — bypasses Traefik
+      # so a slow Traefik or LB issue is isolated from API health here.
+      # If these slow down it's the api-ingest pod's event loop or the
+      # Postgres primary that's the problem.
+
+      - name: api-ingest — liveness
+        group: API — Ingest Tier
+        url: http://api-ingest.rejourney.svc.cluster.local:3000/health/live
+        interval: 30s
         conditions:
           - "[STATUS] == 200"
-          - "[RESPONSE_TIME] < 3500"
+          - "[RESPONSE_TIME] < 500"
 
-      - name: API Liveness
-        url: http://api.rejourney.svc.cluster.local:3000/health/live
-        interval: 2m
+      - name: api-ingest — readiness (DB + Redis)
+        group: API — Ingest Tier
+        url: http://api-ingest.rejourney.svc.cluster.local:3000/health/ready
+        interval: 1m
         conditions:
           - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 1500"
 
-      - name: Ingest Health
-        url: http://api.rejourney.svc.cluster.local:3000/health/ingest
-        interval: 2m
+      - name: api-ingest — ingest path
+        group: API — Ingest Tier
+        url: http://api-ingest.rejourney.svc.cluster.local:3000/health/ingest
+        interval: 1m
         conditions:
           - "[STATUS] == 200"
           - "[RESPONSE_TIME] < 1000"
 
-      - name: Dashboard
-        url: http://web.rejourney.svc.cluster.local
-        interval: 2m
+      - name: api-ingest — BullMQ queue
+        group: API — Ingest Tier
+        url: http://api-ingest.rejourney.svc.cluster.local:3000/health/queue
+        interval: 1m
         conditions:
           - "[STATUS] == 200"
+          - "[BODY].status != critical"
+          - "[RESPONSE_TIME] < 1500"
 
-      # TLS cert expiry checks (fires when < 14 days remain). These go through
-      # Cloudflare, so avoid strict HTTP status matching because bot challenges
-      # can legitimately return 403 while the certificate is still healthy.
-      - name: API TLS
-        url: https://api.rejourney.co
-        interval: 1h
+      # ── API Tier: dashboard pods ──────────────────────────────────────
+      # Hits api-dashboard service directly. The readiness probe here also
+      # exercises the dbRead pool (DATABASE_URL_READ → pgbouncer-ro →
+      # postgres-local-ro), so failure surfaces standby/replica problems
+      # that api-ingest pods don't see.
+
+      - name: api-dashboard — liveness
+        group: API — Dashboard Tier
+        url: http://api-dashboard.rejourney.svc.cluster.local:3000/health/live
+        interval: 30s
         conditions:
-          - "[CERTIFICATE_EXPIRATION] > 336h"
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 500"
 
-      - name: Ingest TLS
-        url: https://ingest.rejourney.co
-        interval: 1h
+      - name: api-dashboard — readiness (DB + Redis + dbRead)
+        group: API — Dashboard Tier
+        url: http://api-dashboard.rejourney.svc.cluster.local:3000/health/ready
+        interval: 1m
         conditions:
-          - "[CERTIFICATE_EXPIRATION] > 336h"
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 2500"
 
-      - name: Dashboard TLS
-        url: https://rejourney.co
-        interval: 1h
+      # ── Ingest Upload (relay) ─────────────────────────────────────────
+
+      - name: ingest-upload — relay
+        group: Upload Relay
+        url: http://ingest-upload.rejourney.svc.cluster.local:3001/health
+        interval: 1m
         conditions:
-          - "[CERTIFICATE_EXPIRATION] > 336h"
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 1000"
 
-      # Internal TCP connectivity checks
-      - name: PostgreSQL
+      # ── Web (dashboard SPA backend) ───────────────────────────────────
+
+      - name: web — internal
+        group: Web
+        url: http://web.rejourney.svc.cluster.local
+        interval: 1m
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 1500"
+
+      # ── Data Plane ────────────────────────────────────────────────────
+      # TCP reachability. Distinguishes pgbouncer (rw) from pgbouncer-ro
+      # so we can tell whether the dashboard's read path is broken even
+      # when writes look fine.
+
+      - name: Postgres primary (via pgbouncer rw)
+        group: Data Plane
+        url: tcp://pgbouncer.rejourney.svc.cluster.local:5432
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+
+      - name: Postgres standby (via pgbouncer-ro)
+        group: Data Plane
+        url: tcp://pgbouncer-ro.rejourney.svc.cluster.local:5432
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+
+      - name: CNPG primary (postgres-app-rw)
+        group: Data Plane
         url: tcp://postgres-app-rw.rejourney.svc.cluster.local:5432
         interval: 30s
         conditions:
           - "[CONNECTED] == true"
 
-      - name: Redis
+      - name: CNPG replica (postgres-local-ro)
+        group: Data Plane
+        url: tcp://postgres-local-ro.rejourney.svc.cluster.local:5432
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+
+      - name: Redis (Sentinel master)
+        group: Data Plane
         url: tcp://redis.rejourney.svc.cluster.local:6379
         interval: 30s
         conditions:
           - "[CONNECTED] == true"
+
+      # ── TLS cert expiry ───────────────────────────────────────────────
+      # Fires when < 14 days remain. Cloudflare may legitimately return 403
+      # for bot challenges, so we only assert on the cert here, not the body.
+
+      - name: TLS — api.rejourney.co
+        group: TLS Certificates
+        url: https://api.rejourney.co
+        interval: 1h
+        conditions:
+          - "[CERTIFICATE_EXPIRATION] > 336h"
+
+      - name: TLS — ingest.rejourney.co
+        group: TLS Certificates
+        url: https://ingest.rejourney.co
+        interval: 1h
+        conditions:
+          - "[CERTIFICATE_EXPIRATION] > 336h"
+
+      - name: TLS — rejourney.co
+        group: TLS Certificates
+        url: https://rejourney.co
+        interval: 1h
+        conditions:
+          - "[CERTIFICATE_EXPIRATION] > 336h"
 
 ---
 apiVersion: apps/v1

@@ -111,10 +111,14 @@ spec:
       targetPort: 5432
 
 ---
-# Read-only pgbouncer pool fronting the Postgres standby (postgres-app-ro).
+# Read-only pgbouncer pool fronting the Postgres standby (postgres-local-ro).
 # Used by api-dashboard pods via DATABASE_URL_READ to keep heavy analytics
 # aggregations off the primary. The dashboard runs on HEL1 next to the
 # standby, so reads through this pool are local-DC (no 25ms penalty).
+#
+# IMPORTANT: use postgres-local-ro (CNPG default, filters to replica only),
+# NOT postgres-app-ro — the latter is a misconfigured alias whose selector
+# matches both primary and standby, so it would round-robin between them.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -163,7 +167,7 @@ spec:
             - containerPort: 5432
           env:
             - name: DB_HOST
-              value: postgres-app-ro
+              value: postgres-local-ro
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
