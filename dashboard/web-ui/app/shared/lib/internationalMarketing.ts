@@ -987,6 +987,8 @@ const englishHomeCopy: MarketingHomeCopy = {
     ],
     trustEyebrow: "Team workspace",
     trustHeading: "One room for all.",
+    trustCopy:
+      "PMs, designers, and developers work from the same replay-backed view: metrics on the left, the mobile session in the middle, and timeline/API evidence on the right.",
     trustCards: [
       {
         title: "Developers",
