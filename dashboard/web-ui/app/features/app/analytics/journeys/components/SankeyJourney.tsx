@@ -13,6 +13,8 @@ export interface SankeyFlow {
     health?: 'healthy' | 'degraded' | 'problematic';
     replayCount?: number;
     sampleSessionIds?: string[];
+    isAggregate?: boolean;
+    aggregateFlowCount?: number;
 }
 
 export interface SankeyEvidenceSession {
@@ -27,9 +29,12 @@ interface SankeyNode {
     name: string;
     level: number;
     y: number;
-    height: number;
+    cardY: number;
+    barY: number;
+    barHeight: number;
     outValue: number;
     inValue: number;
+    totalValue: number;
 }
 
 interface SankeyLink {
@@ -48,77 +53,43 @@ interface SankeyJourneyProps {
     width?: number;
     height?: number;
     happyPath?: string[] | null;
-    transitionEvidence?: Record<string, SankeyEvidenceSession[]>;
-    maxEvidenceRows?: number;
     selectedTransitionIds?: string[];
     onFlowToggle?: (flow: SankeyFlow) => void;
 }
 
-const PRIORITY_RANK: Record<'high' | 'medium' | 'low', number> = {
-    high: 3,
-    medium: 2,
-    low: 1,
-};
+const interpolateChannel = (from: number, to: number, amount: number): number => Math.round(from + (to - from) * amount);
 
-const deriveEvidencePriority = (flow: SankeyFlow): 'high' | 'medium' | 'low' => {
-    if (flow.crashCount > 0 || flow.anrCount > 0) return 'high';
-    if (flow.apiErrorRate >= 5 || flow.rageTapCount >= 2) return 'medium';
-    return 'low';
-};
+const volumeColorStops = [
+    { at: 0, rgb: [251, 113, 133] },
+    { at: 0.2, rgb: [251, 146, 60] },
+    { at: 0.42, rgb: [250, 204, 21] },
+    { at: 0.58, rgb: [134, 239, 172] },
+    { at: 1, rgb: [34, 197, 94] },
+] as const;
 
-const deriveEvidenceSignal = (flow: SankeyFlow): string => {
-    if (flow.crashCount > 0 || flow.anrCount > 0) {
-        return `${flow.crashCount} crashes / ${flow.anrCount} ANRs`;
-    }
-    if (flow.apiErrorRate >= 5) {
-        return `${flow.apiErrorRate.toFixed(1)}% API error rate`;
-    }
-    if (flow.rageTapCount > 0) {
-        return `${flow.rageTapCount} rage taps`;
-    }
-    return 'Traffic sample';
-};
+const getVolumeColor = (ratio: number, alpha: number): string => {
+    const normalized = Math.max(0, Math.min(1, ratio));
+    const upperIndex = volumeColorStops.findIndex((stop) => normalized <= stop.at);
+    const upper = volumeColorStops[upperIndex === -1 ? volumeColorStops.length - 1 : upperIndex];
+    const lower = volumeColorStops[Math.max(0, (upperIndex === -1 ? volumeColorStops.length - 1 : upperIndex) - 1)];
+    const span = Math.max(upper.at - lower.at, 0.001);
+    const amount = (normalized - lower.at) / span;
+    const [r1, g1, b1] = lower.rgb;
+    const [r2, g2, b2] = upper.rgb;
 
-const normalizeEvidenceRow = (row: SankeyEvidenceSession, fallbackSignal: string): SankeyEvidenceSession => {
-    const source = row.source?.trim() || 'Journey evidence';
-    const signal = row.signal?.trim() || fallbackSignal;
-    return {
-        sessionId: row.sessionId,
-        source,
-        signal,
-        priority: row.priority || 'medium',
-    };
-};
-
-const formatCompact = (value: number): string => {
-    if (!Number.isFinite(value)) return '0';
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
-    return value.toLocaleString();
+    return `rgba(${interpolateChannel(r1, r2, amount)}, ${interpolateChannel(g1, g2, amount)}, ${interpolateChannel(b1, b2, amount)}, ${alpha})`;
 };
 
 export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
     flows,
     width: propWidth,
-    height = 500,
+    height = 560,
     happyPath,
-    transitionEvidence = {},
-    maxEvidenceRows = 8,
     selectedTransitionIds = [],
     onFlowToggle,
 }) => {
     const [hoveredLinkId, setHoveredLinkId] = useState<string | null>(null);
     const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-
-    const happyTransitionSet = useMemo(() => {
-        const transitions = new Set<string>();
-        if (!happyPath || happyPath.length < 2) return transitions;
-
-        for (let i = 0; i < happyPath.length - 1; i++) {
-            transitions.add(`${happyPath[i]}→${happyPath[i + 1]}`);
-        }
-        return transitions;
-    }, [happyPath]);
 
     const happyNodeSet = useMemo(() => new Set(happyPath || []), [happyPath]);
 
@@ -185,39 +156,70 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
         const nodesByLevel: string[][] = Array.from({ length: maxLevel + 1 }, () => []);
         levels.forEach((level, id) => nodesByLevel[level].push(id));
 
-        const nodeWidth = 156;
-        const nodeHeight = 38;
-        const nodePadding = 16;
-        const padding = 56;
-        const minLevelSpacing = 210;
+        nodesByLevel.forEach((levelNodes) => {
+            levelNodes.sort((a, b) => {
+                const aData = nodeMap.get(a)!;
+                const bData = nodeMap.get(b)!;
+                return Math.max(bData.in, bData.out) - Math.max(aData.in, aData.out);
+            });
+        });
 
-        const calculatedWidth = propWidth || Math.max(1200, padding * 2 + nodeWidth + maxLevel * minLevelSpacing);
-        const levelSpacing = maxLevel > 0 ? (calculatedWidth - padding * 2 - nodeWidth) / maxLevel : 0;
+        const cardHeight = 30;
+        const nodePadding = 34;
+        const paddingX = 44;
+        const paddingY = 52;
+        const barMinHeight = 54;
+        const barMaxHeight = 220;
+        const minLevelSpacing = 360;
+        const maxNodeValue = Math.max(...Array.from(nodeMap.values()).map((node) => Math.max(node.in, node.out)), 1);
+
+        const calculatedWidth = propWidth || Math.max(1120, paddingX * 2 + maxLevel * minLevelSpacing + 260);
 
         const sankeyNodes: SankeyNode[] = [];
         nodesByLevel.forEach((levelNodes, level) => {
-            const totalNodesHeight = levelNodes.length * nodeHeight + (levelNodes.length - 1) * nodePadding;
-            let startY = (height - totalNodesHeight) / 2;
-
-            levelNodes.forEach((id) => {
+            const desiredNodes = levelNodes.map((id) => {
                 const nodeData = nodeMap.get(id)!;
+                const totalValue = Math.max(nodeData.in, nodeData.out);
+                const barHeight = Math.max(
+                    barMinHeight,
+                    Math.min(barMaxHeight, Math.sqrt(totalValue / maxNodeValue) * barMaxHeight),
+                );
+                return { id, nodeData, totalValue, barHeight };
+            });
+            const desiredHeight = desiredNodes.reduce((sum, node) => sum + Math.max(node.barHeight, cardHeight), 0)
+                + Math.max(0, desiredNodes.length - 1) * nodePadding;
+            const availableHeight = Math.max(260, height - paddingY * 2);
+            const scale = desiredHeight > availableHeight ? availableHeight / desiredHeight : 1;
+            const effectivePadding = Math.max(12, nodePadding * scale);
+            const actualHeight = desiredNodes.reduce((sum, node) => sum + Math.max(node.barHeight * scale, cardHeight), 0)
+                + Math.max(0, desiredNodes.length - 1) * effectivePadding;
+            let startY = Math.max(24, (height - actualHeight) / 2);
+
+            desiredNodes.forEach(({ id, nodeData, totalValue, barHeight }) => {
+                const scaledBarHeight = Math.max(barMinHeight * 0.68, barHeight * scale);
+                const slotHeight = Math.max(scaledBarHeight, cardHeight);
+                const barY = startY + (slotHeight - scaledBarHeight) / 2;
+                const cardY = startY + (slotHeight - cardHeight) / 2;
                 sankeyNodes.push({
                     id,
                     name: id.replace(/Activity$/, '').replace(/ViewController$/, '').replace(/Screen$/, ''),
                     level,
                     y: startY,
-                    height: nodeHeight,
+                    cardY,
+                    barY,
+                    barHeight: scaledBarHeight,
                     inValue: nodeData.in,
                     outValue: nodeData.out,
+                    totalValue,
                 });
-                startY += nodeHeight + nodePadding;
+                startY += slotHeight + effectivePadding;
             });
         });
 
         const nodeLookup = new Map(sankeyNodes.map((node) => [node.id, node]));
         const maxFlow = Math.max(...flows.map((flow) => flow.count), 1);
 
-        const sankeyLinks: SankeyLink[] = flows
+        const sankeyLinks = flows
             .map((flow) => {
                 const sourceNode = nodeLookup.get(flow.from);
                 const targetNode = nodeLookup.get(flow.to);
@@ -228,63 +230,76 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                     source: flow.from,
                     target: flow.to,
                     value: flow.count,
-                    ySource: sourceNode.y + sourceNode.height / 2,
-                    yTarget: targetNode.y + targetNode.height / 2,
-                    thickness: Math.max(2, (flow.count / maxFlow) * 22),
+                    ySource: sourceNode.barY + sourceNode.barHeight / 2,
+                    yTarget: targetNode.barY + targetNode.barHeight / 2,
+                    thickness: Math.max(5, Math.sqrt(flow.count / maxFlow) * 42),
                     data: flow,
                 };
             })
             .filter((link): link is SankeyLink => Boolean(link));
 
-        return { nodes: sankeyNodes, links: sankeyLinks, nodeLookup, calculatedWidth };
-    }, [flows, propWidth, height]);
+        const getNodeStackLinks = (nodeId: string, direction: 'source' | 'target') => (
+            sankeyLinks
+                .filter((link) => direction === 'source' ? link.source === nodeId : link.target === nodeId)
+                .sort((a, b) => {
+                    const aOther = nodeLookup.get(direction === 'source' ? a.target : a.source);
+                    const bOther = nodeLookup.get(direction === 'source' ? b.target : b.source);
+                    return (aOther?.barY || 0) - (bOther?.barY || 0);
+                })
+        );
 
-    const evidenceByLink = useMemo(() => {
-        const evidenceMap = new Map<string, SankeyEvidenceSession[]>();
+        for (let pass = 0; pass < 3; pass += 1) {
+            for (const node of sankeyNodes) {
+                for (const direction of ['source', 'target'] as const) {
+                    const nodeLinks = getNodeStackLinks(node.id, direction);
+                    if (nodeLinks.length === 0) continue;
 
-        for (const link of links) {
-            const rows: SankeyEvidenceSession[] = [];
-            const flowSignal = deriveEvidenceSignal(link.data);
-            const flowPriority = deriveEvidencePriority(link.data);
+                    const linkGap = nodeLinks.length > 6 ? 1 : 2;
+                    const totalGap = Math.max(0, nodeLinks.length - 1) * linkGap;
+                    const availableThickness = Math.max(node.barHeight - totalGap, nodeLinks.length * 2.25);
+                    const currentThickness = nodeLinks.reduce((sum, link) => sum + link.thickness, 0);
 
-            for (const sessionId of link.data.sampleSessionIds || []) {
-                rows.push({
-                    sessionId,
-                    source: 'Flow sample',
-                    signal: flowSignal,
-                    priority: flowPriority,
-                });
-            }
-
-            for (const extraRow of transitionEvidence[link.id] || []) {
-                rows.push(normalizeEvidenceRow(extraRow, flowSignal));
-            }
-
-            const deduped = new Map<string, SankeyEvidenceSession>();
-            for (const row of rows) {
-                if (!row.sessionId) continue;
-                const existing = deduped.get(row.sessionId);
-                if (!existing) {
-                    deduped.set(row.sessionId, row);
-                    continue;
-                }
-
-                const existingPriority = PRIORITY_RANK[existing.priority || 'low'];
-                const nextPriority = PRIORITY_RANK[row.priority || 'low'];
-                if (nextPriority >= existingPriority) {
-                    deduped.set(row.sessionId, row);
+                    if (currentThickness > availableThickness) {
+                        const scale = availableThickness / currentThickness;
+                        for (const link of nodeLinks) {
+                            link.thickness = Math.max(2.25, link.thickness * scale);
+                        }
+                    }
                 }
             }
-
-            const compactRows = Array.from(deduped.values())
-                .sort((a, b) => PRIORITY_RANK[b.priority || 'low'] - PRIORITY_RANK[a.priority || 'low'])
-                .slice(0, maxEvidenceRows);
-
-            evidenceMap.set(link.id, compactRows);
         }
 
-        return evidenceMap;
-    }, [links, transitionEvidence, maxEvidenceRows]);
+        const stackLinks = (nodeId: string, direction: 'source' | 'target') => {
+            const node = nodeLookup.get(nodeId);
+            if (!node) return;
+
+            const nodeLinks = getNodeStackLinks(nodeId, direction);
+
+            if (nodeLinks.length === 0) return;
+
+            const linkGap = nodeLinks.length > 6 ? 1 : 2;
+            const totalThickness = nodeLinks.reduce((sum, link) => sum + link.thickness, 0)
+                + Math.max(0, nodeLinks.length - 1) * linkGap;
+            let cursor = node.barY + Math.max(0, (node.barHeight - totalThickness) / 2);
+
+            for (const link of nodeLinks) {
+                const centerY = cursor + link.thickness / 2;
+                if (direction === 'source') {
+                    link.ySource = centerY;
+                } else {
+                    link.yTarget = centerY;
+                }
+                cursor += link.thickness + linkGap;
+            }
+        };
+
+        for (const node of sankeyNodes) {
+            stackLinks(node.id, 'source');
+            stackLinks(node.id, 'target');
+        }
+
+        return { nodes: sankeyNodes, links: sankeyLinks, nodeLookup, calculatedWidth };
+    }, [flows, propWidth, height]);
 
     if (nodes.length === 0) {
         return (
@@ -294,79 +309,78 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
         );
     }
 
-    const nodeWidth = 156;
-    const padding = 56;
+    const cardWidth = 132;
+    const cardHeight = 30;
+    const barWidth = 16;
+    const cardGap = 8;
+    const padding = 44;
     const maxLevel = Math.max(...nodes.map((node) => node.level), 1);
-    const levelSpacing = maxLevel > 0 ? (calculatedWidth - padding * 2 - nodeWidth) / maxLevel : 0;
+    const levelSpacing = maxLevel > 0 ? (calculatedWidth - padding * 2 - cardWidth - barWidth - cardGap) / maxLevel : 0;
+    const maxLinkValue = Math.max(...links.map((link) => link.value), 1);
+
+    const formatCompact = (value: number): string => {
+        if (!Number.isFinite(value)) return '0';
+        if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+        if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+        return value.toLocaleString();
+    };
 
     const getLinkColor = (link: SankeyLink, isHovered: boolean, isSelected: boolean) => {
-        if (isSelected) {
-            return isHovered ? 'rgba(29, 78, 216, 0.96)' : 'rgba(37, 99, 235, 0.84)';
-        }
-        const transitionKey = `${link.source}→${link.target}`;
-        if (happyTransitionSet.has(transitionKey)) {
-            return isHovered ? 'rgba(34, 197, 94, 0.95)' : 'rgba(34, 197, 94, 0.72)';
-        }
-        if (link.data.crashCount > 0 || link.data.anrCount > 0) {
-            return isHovered ? 'rgba(239, 68, 68, 0.86)' : 'rgba(239, 68, 68, 0.46)';
-        }
-        if (link.data.rageTapCount > 0) {
-            return isHovered ? 'rgba(244, 63, 94, 0.78)' : 'rgba(244, 63, 94, 0.38)';
-        }
-        if (link.data.apiErrorRate > 10) {
-            return isHovered ? 'rgba(249, 168, 212, 0.84)' : 'rgba(249, 168, 212, 0.36)';
-        }
-        return isHovered ? 'rgba(37, 99, 235, 0.72)' : 'rgba(37, 99, 235, 0.24)';
+        const ratio = link.value / maxLinkValue;
+        if (isSelected) return getVolumeColor(ratio, isHovered ? 0.98 : 0.9);
+        return getVolumeColor(ratio, isHovered ? 0.9 : 0.58);
+    };
+
+    const getNodeBarColor = (node: SankeyNode, isHovered: boolean, isSelectedNode: boolean, isHappyNode: boolean): string => {
+        if (isSelectedNode) return isHovered ? '#0891b2' : '#67e8f9';
+        if (isHappyNode) return isHovered ? '#22c55e' : '#86efac';
+        return isHovered ? '#5dadec' : '#dbeafe';
     };
 
     const hoveredLink = hoveredLinkId ? links.find((link) => link.id === hoveredLinkId) || null : null;
     const activeLink = hoveredLink;
 
-    const sourceLevel = activeLink ? nodeLookup.get(activeLink.source)?.level || 0 : 0;
-    const targetLevel = activeLink ? nodeLookup.get(activeLink.target)?.level || 0 : 0;
-    const rawLeftPct = maxLevel > 0 ? (((sourceLevel + targetLevel) / 2) / maxLevel) * 100 : 50;
-    const popupLeftPct = Math.max(10, Math.min(88, rawLeftPct));
-    const rawTopPct = activeLink ? ((activeLink.ySource + activeLink.yTarget) / 2 / height) * 100 : 50;
-    const popupTopPct = Math.max(10, Math.min(88, rawTopPct));
-
     const hasSelectedPaths = selectedTransitionSet.size > 0;
 
     return (
-        <div className="relative border-2 border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="border-b border-slate-200 px-5 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                <div className="text-xs font-semibold text-slate-700">
-                    Flow map by transition volume
+        <div className="relative overflow-hidden border-2 border-black bg-white shadow-neo">
+            <div className="flex flex-col gap-2 border-b-2 border-black bg-[#f8fafc] px-5 py-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <div className="text-[11px] font-black uppercase text-black">
+                        Journey lanes
+                    </div>
+                    <div className="mt-0.5 text-xs font-semibold text-slate-500">
+                        Transition volume by screen path
+                    </div>
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="inline-flex items-center self-start border-2 border-black bg-white px-3 py-1.5 text-[10px] font-black uppercase text-black shadow-neo-sm md:self-auto">
                     {hasSelectedPaths
-                        ? `${selectedTransitionSet.size} selected path${selectedTransitionSet.size === 1 ? '' : 's'}. Click a blue path again to remove it.`
-                        : 'Click paths to select them and build a replay query below.'}
+                        ? `${selectedTransitionSet.size} query path${selectedTransitionSet.size === 1 ? '' : 's'}`
+                        : 'No query paths'}
                 </div>
             </div>
 
             <div
-                className="relative overflow-x-auto p-4"
+                className="relative overflow-x-auto bg-white"
             >
-                <div className="absolute inset-0 pointer-events-none opacity-25" style={{
-                    backgroundImage: 'linear-gradient(to right, rgba(148,163,184,0.16) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.16) 1px, transparent 1px)',
-                    backgroundSize: '28px 28px',
-                }} />
+                <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-white via-[#f8fafc] to-white" />
                 <svg width={calculatedWidth} height={height} viewBox={`0 0 ${calculatedWidth} ${height}`} className="relative overflow-visible">
                     <g>
-                        {links.map((link) => {
+                        {[...links].sort((a, b) => b.thickness - a.thickness).map((link) => {
                             const sourceNode = nodeLookup.get(link.source);
                             const targetNode = nodeLookup.get(link.target);
                             if (!sourceNode || !targetNode) return null;
 
-                            const xStart = padding + sourceNode.level * levelSpacing + nodeWidth;
+                            const xStart = padding + sourceNode.level * levelSpacing + barWidth + cardGap + cardWidth;
                             const xEnd = padding + targetNode.level * levelSpacing;
-                            const cp1x = xStart + (xEnd - xStart) * 0.42;
-                            const cp2x = xEnd - (xEnd - xStart) * 0.42;
+                            const cp1x = xStart + Math.max(80, (xEnd - xStart) * 0.46);
+                            const cp2x = xEnd - Math.max(80, (xEnd - xStart) * 0.46);
 
                             const isSelected = selectedTransitionSet.has(link.id);
                             const isHovered = hoveredLinkId === link.id;
                             const hasActiveFocus = Boolean(hoveredLinkId || hasSelectedPaths);
-                            const isOther = hasActiveFocus && !isHovered;
+                            const isOther = hasActiveFocus && !isHovered && !isSelected;
+                            const isAggregate = Boolean(link.data.isAggregate);
 
                             return (
                                 <path
@@ -374,18 +388,21 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                                     d={`M ${xStart} ${link.ySource} C ${cp1x} ${link.ySource}, ${cp2x} ${link.yTarget}, ${xEnd} ${link.yTarget}`}
                                     fill="none"
                                     stroke={getLinkColor(link, isHovered, isSelected)}
-                                    strokeWidth={isSelected ? Math.max(link.thickness + 4, 7) : isHovered ? link.thickness + 2 : link.thickness}
+                                    strokeWidth={isSelected ? Math.max(link.thickness + 6, 14) : isHovered ? link.thickness + 4 : link.thickness}
                                     strokeLinecap="round"
-                                    opacity={isOther && !isSelected ? 0.12 : 1}
+                                    strokeDasharray={isAggregate ? '14 10' : undefined}
+                                    opacity={isOther ? 0.16 : 1}
                                     onMouseEnter={() => setHoveredLinkId(link.id)}
                                     onMouseLeave={() => setHoveredLinkId(null)}
                                     onClick={(event) => {
                                         event.stopPropagation();
-                                        onFlowToggle?.(link.data);
+                                        if (!isAggregate) {
+                                            onFlowToggle?.(link.data);
+                                        }
                                     }}
-                                    className="cursor-pointer"
+                                    className={isAggregate ? 'cursor-default' : 'cursor-pointer'}
                                     style={{
-                                        filter: isHovered ? 'drop-shadow(0 3px 6px rgba(15,23,42,0.14))' : 'none',
+                                        filter: isHovered || isSelected ? 'drop-shadow(0 4px 7px rgba(15,23,42,0.16))' : 'none',
                                         transition: 'opacity 180ms ease, stroke-width 180ms ease, filter 180ms ease',
                                     }}
                                 />
@@ -396,11 +413,13 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                     <g>
                         {nodes.map((node) => {
                             const x = padding + node.level * levelSpacing;
+                            const cardX = x + barWidth + cardGap;
                             const transitionHover = activeLink && (activeLink.source === node.id || activeLink.target === node.id);
                             const isSelectedNode = selectedNodeSet.has(node.id);
                             const isHovered = hoveredNode === node.id || Boolean(transitionHover) || isSelectedNode;
                             const isOther = (hoveredLinkId || hasSelectedPaths) && !isHovered;
                             const isHappyNode = happyNodeSet.has(node.id);
+                            const visibleValue = Math.max(node.inValue, node.outValue);
 
                             return (
                                 <g
@@ -411,29 +430,47 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                                 >
                                     <rect
                                         x={x}
-                                        y={node.y}
-                                        width={nodeWidth}
-                                        height={node.height}
-                                        rx="8"
-                                        fill={isSelectedNode ? '#eff6ff' : isHappyNode ? (isHovered ? '#ecfdf3' : '#f0fdf4') : (isHovered ? '#ffffff' : '#f8fafc')}
-                                        stroke={isSelectedNode ? '#2563eb' : isHappyNode ? (isHovered ? '#16a34a' : '#86efac') : (isHovered ? '#2563eb' : '#cbd5e1')}
-                                        strokeWidth={isHovered ? 2 : 1.2}
-                                        opacity={isOther ? 0.3 : 1}
+                                        y={node.barY}
+                                        width={barWidth}
+                                        height={node.barHeight}
+                                        rx="3"
+                                        fill={getNodeBarColor(node, isHovered, isSelectedNode, isHappyNode)}
+                                        stroke="#0f172a"
+                                        strokeWidth={isHovered || isSelectedNode ? 2 : 1}
+                                        opacity={isOther ? 0.34 : 1}
                                         style={{
-                                            filter: isHovered ? 'drop-shadow(0 6px 8px rgba(15,23,42,0.12))' : 'none',
+                                            filter: isHovered || isSelectedNode ? 'drop-shadow(0 5px 7px rgba(15,23,42,0.14))' : 'none',
                                             transition: 'opacity 180ms ease, stroke 180ms ease, stroke-width 180ms ease, filter 180ms ease, fill 180ms ease',
                                         }}
                                     />
-                                    <foreignObject x={x + 8} y={node.y + 4} width={nodeWidth - 16} height={node.height - 8}>
-                                        <div className="h-full flex flex-col justify-center overflow-hidden">
-                                            <div
-                                                className={`text-[11px] font-semibold truncate leading-tight ${isHappyNode ? 'text-emerald-800' : 'text-slate-700'}`}
-                                                title={node.name}
-                                            >
-                                                {node.name}
-                                            </div>
-                                            <div className={`text-[10px] ${isHappyNode ? 'text-emerald-600' : 'text-slate-500'} font-medium`}>
-                                                {(node.inValue + node.outValue).toLocaleString()} transitions
+                                    <rect
+                                        x={cardX}
+                                        y={node.cardY}
+                                        width={cardWidth}
+                                        height={cardHeight}
+                                        rx="4"
+                                        fill={isSelectedNode ? '#ecfeff' : '#ffffff'}
+                                        stroke={isSelectedNode ? '#0891b2' : isHappyNode ? '#22c55e' : isHovered ? '#5dadec' : '#cbd5e1'}
+                                        strokeWidth={isHovered || isSelectedNode ? 2 : 1}
+                                        opacity={isOther ? 0.36 : 1}
+                                        pointerEvents="none"
+                                        style={{
+                                            filter: isHovered || isSelectedNode ? 'drop-shadow(0 3px 6px rgba(15,23,42,0.14))' : 'drop-shadow(0 2px 4px rgba(15,23,42,0.08))',
+                                            transition: 'opacity 180ms ease, stroke 180ms ease, stroke-width 180ms ease, filter 180ms ease, fill 180ms ease',
+                                        }}
+                                    />
+                                    <foreignObject x={cardX + 8} y={node.cardY + 6} width={cardWidth - 16} height={18} pointerEvents="none">
+                                        <div className="flex h-full min-w-0 items-center overflow-hidden pointer-events-none">
+                                            <div className="flex w-full min-w-0 items-center justify-between gap-2">
+                                                <div
+                                                    className={`min-w-0 truncate text-[10px] font-black leading-tight ${isHappyNode ? 'text-emerald-800' : 'text-slate-800'}`}
+                                                    title={node.name}
+                                                >
+                                                    {node.name}
+                                                </div>
+                                                <div className="shrink-0 font-mono text-[10px] font-black text-slate-700">
+                                                    {formatCompact(visibleValue)}
+                                                </div>
                                             </div>
                                         </div>
                                     </foreignObject>
@@ -443,62 +480,28 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                     </g>
                 </svg>
 
-                {activeLink && (
-                        <div
-                            className="pointer-events-none absolute z-20 w-[260px] border-2 border-black bg-white p-3 text-xs shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                            style={{
-                                left: `calc(${popupLeftPct}% + 42px)`,
-                                top: `${popupTopPct}%`,
-                                transform: 'translate(-50%, -50%)',
-                                transition: 'opacity 180ms ease, transform 180ms ease',
-                            }}
-                            onClick={(event) => event.stopPropagation()}
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <div>
-                                    <div className="font-semibold text-slate-800 mb-0.5">{formatCompact(activeLink.value)} sessions</div>
-                                    <div className="text-slate-600">{activeLink.source} → {activeLink.target}</div>
-                                </div>
-                            </div>
-
-                            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px]">
-                                <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-                                    API err: <span className="font-semibold">{activeLink.data.apiErrorRate.toFixed(1)}%</span>
-                                </div>
-                                <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
-                                    Replays: <span className="font-semibold">{(activeLink.data.replayCount || 0).toLocaleString()}</span>
-                                </div>
-                                <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-rose-700">
-                                    Crashes/ANR: <span className="font-semibold">{activeLink.data.crashCount + activeLink.data.anrCount}</span>
-                                </div>
-                                <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-rose-700">
-                                    Rage taps: <span className="font-semibold">{activeLink.data.rageTapCount.toLocaleString()}</span>
-                                </div>
-                            </div>
-
-                            <div className="mt-2 text-[10px] text-slate-500">
-                                Click to {selectedTransitionSet.has(activeLink.id) ? 'remove this path from' : 'add this path to'} the replay query.
-                            </div>
-                        </div>
-                    )}
             </div>
 
-            <div className="border-t border-slate-200 px-5 py-3 flex flex-wrap items-center gap-4 text-[11px] text-slate-600">
+            <div className="flex flex-wrap items-center gap-4 border-t-2 border-black bg-[#f8fafc] px-5 py-3 text-[11px] font-semibold text-slate-600">
                 <div className="flex items-center gap-2">
-                    <div className="w-3 h-1.5 rounded-full bg-emerald-500/70"></div>
-                    <span>Happy path</span>
+                    <div className="h-2 w-4 border border-black bg-[#86efac]"></div>
+                    <span>Highest volume</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-3 h-1.5 rounded-full bg-red-500/60"></div>
-                    <span>Crash/ANR risk</span>
+                    <div className="h-2 w-4 border border-black bg-[#facc15]"></div>
+                    <span>Mid volume</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-3 h-1.5 rounded-full bg-rose-500/60"></div>
-                    <span>Rage-tap friction</span>
+                    <div className="h-2 w-4 border border-black bg-[#fb923c]"></div>
+                    <span>Thin path</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-3 h-1.5 rounded-full bg-blue-500/35"></div>
-                    <span>Normal traffic</span>
+                    <div className="h-2 w-4 border border-black bg-[#fb7185]"></div>
+                    <span>Lowest volume</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-7 border-t-2 border-dashed border-black"></div>
+                    <span>Aggregated tail</span>
                 </div>
             </div>
         </div>

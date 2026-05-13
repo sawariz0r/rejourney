@@ -12,7 +12,6 @@ import { TrustBanners } from "~/features/public/home/components/TrustBanners";
 import { Header } from "~/shell/components/layout/Header";
 import { Footer } from "~/shell/components/layout/Footer";
 import { EngineeringCTA } from "~/features/public/home/components/EngineeringCTA";
-import { EmbeddedDemoWindow } from "~/features/public/home/components/EmbeddedDemoWindow";
 import { LandingNarrative } from "~/features/public/home/components/LandingNarrative";
 import { PerformanceMetrics } from "~/features/public/home/components/PerformanceMetrics";
 import {
@@ -150,7 +149,6 @@ export default function LandingPage() {
                 <Hero copy={locale.hero} homeCopy={copy.hero} dir={locale.dir} />
                 <TrustBanners copy={copy.trust} />
                 <LandingNarrative copy={copy.narrative} dir={locale.dir} />
-                <EmbeddedDemoWindow copy={copy.demo} />
                 <PerformanceMetrics copy={copy.performance} dir={locale.dir} />
                 <EngineeringCTA copy={copy.engineeringCta} />
             </main>

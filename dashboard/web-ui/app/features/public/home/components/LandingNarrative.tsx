@@ -4,23 +4,21 @@ import {
     ArrowRight,
     Bug,
     CheckCircle2,
+    ClipboardList,
+    Code2,
     Eye,
-    EyeOff,
-    Github,
-    LockKeyhole,
+    Globe2,
     MousePointerClick,
-    Server,
+    Palette,
     TrendingUp,
-    Zap,
 } from 'lucide-react';
-import { EuFlag } from './EuFlag';
-import { MarkExpo, MarkReactNative, MarkSwift } from './PlatformMarks';
 import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
 type SankeyNode = {
     id: string;
     label: string;
     value: string;
+    meta?: string;
     x: number;
     y: number;
     h: number;
@@ -39,44 +37,45 @@ type SankeyFlow = {
     width: number;
     color: string;
     delay: number;
+    sweep?: number;
+    opacity?: number;
 };
 
 const sankeyStages = [
-    { step: '01', label: 'Identify issue', x: 42, width: 350, color: '#2563eb' },
-    { step: '02', label: 'Ship fix', x: 392, width: 388, color: '#f59e0b' },
-    { step: '03', label: 'Measure milestone', x: 780, width: 380, color: '#16a34a' },
+    { step: '01', label: 'Find Revenue blockers', x: 42, width: 365, color: '#2563eb' },
+    { step: '02', label: 'Fix + Ship', x: 430, width: 330, color: '#f59e0b' },
+    { step: '03', label: 'Revenue lift', x: 790, width: 370, color: '#16a34a' },
 ];
 
 const sankeyNodes: SankeyNode[] = [
-    { id: 'launch', label: 'Session scan', value: '2,857', x: 42, y: 58, h: 230, color: '#5dadec', labelX: 62, labelY: 56 },
-    { id: 'home', label: 'Normal flow', value: '2,084', x: 222, y: 54, h: 158, color: '#2f3137', labelX: 242, labelY: 49 },
-    { id: 'first', label: 'First action', value: '492', x: 222, y: 246, h: 62, color: '#60a5fa', labelX: 242, labelY: 247 },
-    { id: 'email', label: 'Top users flagged', value: '42', x: 392, y: 44, h: 54, color: '#10b981', labelX: 412, labelY: 58 },
-    { id: 'detail', label: 'Drop-off issue', value: '545', x: 392, y: 128, h: 112, color: '#6366f1', labelX: 412, labelY: 154 },
-    { id: 'churn', label: 'Churn risk', value: '18', x: 392, y: 276, h: 48, color: '#fb7185', labelX: 412, labelY: 279 },
-    { id: 'cart', label: 'Checkout fix', value: 'scoped', x: 590, y: 118, h: 96, color: '#0f766e', labelX: 610, labelY: 138 },
-    { id: 'replay', label: 'Replay proof', value: '545', x: 590, y: 252, h: 58, color: '#f97316', labelX: 610, labelY: 257 },
-    { id: 'checkout', label: 'Fix shipped', value: '2 days', x: 780, y: 120, h: 86, color: '#f59e0b', labelX: 800, labelY: 141 },
-    { id: 'winback', label: 'Winback sent', value: '64%', x: 780, y: 250, h: 62, color: '#8b5cf6', labelX: 800, labelY: 262 },
-    { id: 'fix', label: 'Funnel improved', value: '+15%', x: 974, y: 124, h: 128, w: 20, color: '#84cc16', labelX: 1006, labelY: 159 },
+    { id: 'scan', label: 'Onboarding', value: '2,857', x: 42, y: 88, h: 258, color: '#5dadec', labelX: 62, labelY: 58 },
+    { id: 'paymentDropoff', label: 'Payment drop-off', value: '545', x: 204, y: 68, h: 62, color: '#6366f1', labelX: 224, labelY: 72 },
+    { id: 'paymentReplay', label: 'Replay', value: 'pay error', x: 420, y: 204, h: 54, color: '#f97316', labelX: 438, labelY: 214 },
+    { id: 'checkoutFix', label: 'Checkout fix', value: 'shipped', x: 636, y: 126, h: 62, color: '#0f766e', labelX: 654, labelY: 130 },
+    { id: 'planExits', label: 'Plan exits', value: '312', x: 232, y: 184, h: 60, color: '#8b5cf6', labelX: 252, labelY: 190 },
+    { id: 'pricingReplay', label: 'Replay', value: 'pricing doubt', x: 386, y: 102, h: 54, color: '#f59e0b', labelX: 404, labelY: 106 },
+    { id: 'paywallFix', label: 'Paywall fix', value: 'shipped', x: 602, y: 252, h: 62, color: '#ca8a04', labelX: 620, labelY: 264 },
+    { id: 'checkoutCrashes', label: 'Checkout crashes', value: '104', x: 214, y: 300, h: 62, color: '#fb7185', labelX: 234, labelY: 306 },
+    { id: 'crashReplay', label: 'Replay', value: 'crash loop', x: 392, y: 326, h: 54, color: '#ef4444', labelX: 410, labelY: 332 },
+    { id: 'crashPatch', label: 'Crash patch', value: 'shipped', x: 664, y: 292, h: 62, color: '#dc2626', labelX: 682, labelY: 300 },
+    { id: 'outcomeRevenue', label: 'Revenue lift', value: '+15%', meta: 'After checkout fix', x: 900, y: 76, h: 62, w: 20, color: '#84cc16', labelX: 934, labelY: 76 },
+    { id: 'outcomeFunnel', label: 'Funnel lift', value: '+20%', meta: 'After paywall fix', x: 900, y: 202, h: 62, w: 20, color: '#22c55e', labelX: 934, labelY: 202 },
+    { id: 'outcomeErrors', label: 'Checkout errors', value: '-28%', meta: 'After crash patch', x: 900, y: 318, h: 62, w: 20, color: '#14b8a6', labelX: 934, labelY: 318 },
 ];
 
 const sankeyFlows: SankeyFlow[] = [
-    { from: 'launch', fromY: 112, to: 'home', toY: 96, width: 48, color: '#5dadec', delay: 80 },
-    { from: 'launch', fromY: 224, to: 'first', toY: 278, width: 20, color: '#5dadec', delay: 130 },
-    { from: 'home', fromY: 76, to: 'email', toY: 66, width: 14, color: '#10b981', delay: 180 },
-    { from: 'home', fromY: 128, to: 'detail', toY: 174, width: 36, color: '#94a3b8', delay: 230 },
-    { from: 'home', fromY: 176, to: 'churn', toY: 300, width: 20, color: '#fb7185', delay: 280 },
-    { from: 'first', fromY: 278, to: 'detail', toY: 218, width: 16, color: '#fbbf24', delay: 330 },
-    { from: 'detail', fromY: 162, to: 'cart', toY: 160, width: 34, color: '#14b8a6', delay: 380 },
-    { from: 'detail', fromY: 218, to: 'replay', toY: 278, width: 18, color: '#f472b6', delay: 430 },
-    { from: 'cart', fromY: 154, to: 'checkout', toY: 154, width: 30, color: '#67e8f9', delay: 480 },
-    { from: 'cart', fromY: 192, to: 'winback', toY: 282, width: 13, color: '#f59e0b', delay: 530 },
-    { from: 'email', fromY: 66, to: 'fix', toY: 162, width: 13, color: '#22c55e', delay: 580 },
-    { from: 'churn', fromY: 300, to: 'replay', toY: 282, width: 16, color: '#f97316', delay: 630 },
-    { from: 'replay', fromY: 282, to: 'winback', toY: 282, width: 15, color: '#8b5cf6', delay: 680 },
-    { from: 'checkout', fromY: 154, to: 'fix', toY: 174, width: 22, color: '#84cc16', delay: 730 },
-    { from: 'winback', fromY: 282, to: 'fix', toY: 204, width: 13, color: '#8b5cf6', delay: 780 },
+    { from: 'scan', fromY: 116, to: 'paymentDropoff', toY: 99, width: 29, color: '#5dadec', delay: 80, sweep: -12, opacity: 0.2 },
+    { from: 'scan', fromY: 218, to: 'planExits', toY: 214, width: 24, color: '#5dadec', delay: 120, sweep: 10, opacity: 0.18 },
+    { from: 'scan', fromY: 326, to: 'checkoutCrashes', toY: 331, width: 18, color: '#5dadec', delay: 160, sweep: 18, opacity: 0.16 },
+    { from: 'paymentDropoff', fromY: 99, to: 'paymentReplay', toY: 231, width: 25, color: '#6366f1', delay: 240, sweep: 32, opacity: 0.27 },
+    { from: 'planExits', fromY: 214, to: 'pricingReplay', toY: 129, width: 22, color: '#8b5cf6', delay: 280, sweep: -30, opacity: 0.25 },
+    { from: 'paymentReplay', fromY: 231, to: 'checkoutFix', toY: 157, width: 23, color: '#f97316', delay: 340, sweep: -24, opacity: 0.26 },
+    { from: 'pricingReplay', fromY: 129, to: 'paywallFix', toY: 283, width: 20, color: '#f59e0b', delay: 380, sweep: 34, opacity: 0.24 },
+    { from: 'checkoutCrashes', fromY: 331, to: 'crashReplay', toY: 353, width: 16, color: '#fb7185', delay: 320, sweep: 22, opacity: 0.22 },
+    { from: 'crashReplay', fromY: 353, to: 'crashPatch', toY: 323, width: 15, color: '#ef4444', delay: 420, sweep: -18, opacity: 0.24 },
+    { from: 'checkoutFix', fromY: 157, to: 'outcomeRevenue', toY: 107, width: 25, color: '#84cc16', delay: 460, sweep: -20, opacity: 0.26 },
+    { from: 'paywallFix', fromY: 283, to: 'outcomeFunnel', toY: 233, width: 21, color: '#22c55e', delay: 500, sweep: -12, opacity: 0.23 },
+    { from: 'crashPatch', fromY: 323, to: 'outcomeErrors', toY: 349, width: 16, color: '#14b8a6', delay: 540, sweep: 20, opacity: 0.23 },
 ];
 
 const nodeById = sankeyNodes.reduce<Record<string, SankeyNode>>((acc, node) => {
@@ -84,25 +83,24 @@ const nodeById = sankeyNodes.reduce<Record<string, SankeyNode>>((acc, node) => {
     return acc;
 }, {});
 
-const ribbonPath = (from: SankeyNode, fromY: number, to: SankeyNode, toY: number, width: number): string => {
+const ribbonPath = (from: SankeyNode, fromY: number, to: SankeyNode, toY: number, sweep = 0): string => {
     const fromX = from.x + (from.w ?? 14);
     const toX = to.x;
     const bend = Math.max(68, (toX - fromX) * 0.46);
-    const half = width / 2;
     return [
-        `M ${fromX} ${fromY - half}`,
-        `C ${fromX + bend} ${fromY - half}, ${toX - bend} ${toY - half}, ${toX} ${toY - half}`,
-        `L ${toX} ${toY + half}`,
-        `C ${toX - bend} ${toY + half}, ${fromX + bend} ${fromY + half}, ${fromX} ${fromY + half}`,
-        'Z',
+        `M ${fromX} ${fromY}`,
+        `C ${fromX + bend} ${fromY + sweep}, ${toX - bend} ${toY - sweep}, ${toX} ${toY}`,
     ].join(' ');
 };
 
 const SankeyLabel: React.FC<{ node: SankeyNode }> = ({ node }) => {
-    if (node.id === 'fix') {
+    if (node.id.startsWith('outcome')) {
         const nodeWidth = node.w ?? 14;
         const cardX = node.labelX;
         const cardY = node.labelY;
+        const cardWidth = 220;
+        const cardHeight = 58;
+        const title = `${node.value} ${node.label}`.toUpperCase();
 
         return (
             <g>
@@ -115,16 +113,16 @@ const SankeyLabel: React.FC<{ node: SankeyNode }> = ({ node }) => {
                     opacity="0.3"
                 />
                 {/* neo-brutalist shadow */}
-                <rect x={cardX + 3} y={cardY + 3} width="188" height="58" fill="#0f172a" />
+                <rect x={cardX + 3} y={cardY + 3} width={cardWidth} height={cardHeight} fill="#0f172a" />
                 {/* card background */}
-                <rect x={cardX} y={cardY} width="188" height="58" fill="white" stroke="#0f172a" strokeWidth="2" />
-                {/* green accent bar */}
-                <rect x={cardX} y={cardY} width="6" height="58" fill="#84cc16" />
-                <text x={cardX + 16} y={cardY + 23} fill="#0f172a" fontSize="15" fontWeight="950" fontFamily="monospace" letterSpacing="0.3">
-                    +15% FUNNEL
+                <rect x={cardX} y={cardY} width={cardWidth} height={cardHeight} fill="white" stroke="#0f172a" strokeWidth="2" />
+                {/* outcome accent bar */}
+                <rect x={cardX} y={cardY} width="6" height={cardHeight} fill={node.color} />
+                <text x={cardX + 16} y={cardY + 23} fill="#0f172a" fontSize="13.5" fontWeight="950" fontFamily="monospace" letterSpacing="0.2">
+                    {title}
                 </text>
-                <text x={cardX + 16} y={cardY + 42} fill="#64748b" fontSize="9.5" fontWeight="800" fontFamily="monospace" letterSpacing="0.8">
-                    MILESTONE · CHECKOUT FIX
+                <text x={cardX + 16} y={cardY + 42} fill="#64748b" fontSize="9.5" fontWeight="800" fontFamily="monospace" letterSpacing="0.7">
+                    {node.meta?.toUpperCase()}
                 </text>
             </g>
         );
@@ -147,7 +145,7 @@ const SankeyLabel: React.FC<{ node: SankeyNode }> = ({ node }) => {
 
 const SankeyDiagram: React.FC<{ active: boolean }> = ({ active }) => (
     <svg
-        viewBox="0 0 1200 360"
+        viewBox="0 0 1200 430"
         className="mx-auto h-auto w-full max-w-[1580px]"
         preserveAspectRatio="xMidYMid meet"
         aria-hidden
@@ -168,14 +166,32 @@ const SankeyDiagram: React.FC<{ active: boolean }> = ({ active }) => (
         {sankeyFlows.map((flow) => {
             const from = nodeById[flow.from];
             const to = nodeById[flow.to];
+            const path = ribbonPath(from, flow.fromY, to, flow.toY, flow.sweep ?? 0);
             return (
-                <path
+                <g
                     key={`${flow.from}-${flow.to}-${flow.toY}`}
-                    d={ribbonPath(from, flow.fromY, to, flow.toY, flow.width)}
-                    fill={flow.color}
-                    opacity={active ? 0.22 : 0}
+                    opacity={active ? 1 : 0}
                     style={{ transition: `opacity 0.45s ${flow.delay}ms ease-out` }}
-                />
+                >
+                    <path
+                        d={path}
+                        fill="none"
+                        stroke="#f8fafc"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={flow.width + 8}
+                        opacity="0.86"
+                    />
+                    <path
+                        d={path}
+                        fill="none"
+                        stroke={flow.color}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={flow.width}
+                        opacity={flow.opacity ?? 0.24}
+                    />
+                </g>
             );
         })}
         {sankeyNodes.map((node) => (
@@ -197,100 +213,74 @@ const SankeyDiagram: React.FC<{ active: boolean }> = ({ active }) => (
     </svg>
 );
 
-const mobileSankeyNodes: SankeyNode[] = [
-    { id: 'launch', label: 'Scan', value: '2.8k', x: 24, y: 54, h: 184, w: 10, color: '#5dadec', labelX: 40, labelY: 44 },
-    { id: 'home', label: 'Flow', value: '2.0k', x: 108, y: 54, h: 134, w: 10, color: '#2f3137', labelX: 124, labelY: 57 },
-    { id: 'first', label: 'First', value: '492', x: 108, y: 226, h: 46, w: 10, color: '#60a5fa', labelX: 124, labelY: 225 },
-    { id: 'email', label: 'Users', value: '42', x: 192, y: 26, h: 42, w: 10, color: '#10b981', labelX: 208, labelY: 27 },
-    { id: 'detail', label: 'Issue', value: '545', x: 192, y: 118, h: 88, w: 10, color: '#6366f1', labelX: 208, labelY: 123 },
-    { id: 'churn', label: 'Risk', value: '18', x: 192, y: 246, h: 42, w: 10, color: '#fb7185', labelX: 208, labelY: 261 },
-    { id: 'checkout', label: 'Fix', value: '2d', x: 278, y: 108, h: 70, w: 10, color: '#f59e0b', labelX: 294, labelY: 108 },
-    { id: 'winback', label: 'Winback', value: '64%', x: 278, y: 224, h: 56, w: 10, color: '#8b5cf6', labelX: 294, labelY: 224 },
-    { id: 'fix', label: 'Funnel', value: '+15%', x: 354, y: 124, h: 80, w: 10, color: '#84cc16', labelX: 376, labelY: 144, labelAnchor: 'end' },
+const mobileJourneyPaths = [
+    {
+        blocker: 'Payment drop-off',
+        metric: '545 sessions',
+        evidence: 'Replay shows pay error',
+        fix: 'Checkout fix shipped',
+        outcome: '+15% revenue increase',
+        color: '#6366f1',
+    },
+    {
+        blocker: 'Plan screen exits',
+        metric: '312 sessions',
+        evidence: 'Replay shows pricing doubt',
+        fix: 'Paywall fix shipped',
+        outcome: '+20% funnel improvement',
+        color: '#8b5cf6',
+    },
+    {
+        blocker: 'Checkout crashes',
+        metric: '104 exits',
+        evidence: 'Replay shows crash loop',
+        fix: 'Crash patch shipped',
+        outcome: '-28% checkout errors',
+        color: '#fb7185',
+    },
 ];
-
-const mobileSankeyFlows: SankeyFlow[] = [
-    { from: 'launch', fromY: 102, to: 'home', toY: 94, width: 32, color: '#5dadec', delay: 80 },
-    { from: 'launch', fromY: 202, to: 'first', toY: 250, width: 16, color: '#5dadec', delay: 130 },
-    { from: 'home', fromY: 74, to: 'email', toY: 48, width: 10, color: '#10b981', delay: 180 },
-    { from: 'home', fromY: 124, to: 'detail', toY: 158, width: 24, color: '#94a3b8', delay: 230 },
-    { from: 'home', fromY: 168, to: 'churn', toY: 268, width: 16, color: '#fb7185', delay: 280 },
-    { from: 'first', fromY: 250, to: 'detail', toY: 188, width: 12, color: '#fbbf24', delay: 330 },
-    { from: 'email', fromY: 48, to: 'fix', toY: 148, width: 9, color: '#22c55e', delay: 380 },
-    { from: 'detail', fromY: 150, to: 'checkout', toY: 142, width: 20, color: '#14b8a6', delay: 430 },
-    { from: 'detail', fromY: 190, to: 'winback', toY: 252, width: 12, color: '#f472b6', delay: 480 },
-    { from: 'checkout', fromY: 142, to: 'fix', toY: 162, width: 16, color: '#84cc16', delay: 530 },
-    { from: 'churn', fromY: 268, to: 'winback', toY: 252, width: 12, color: '#8b5cf6', delay: 580 },
-    { from: 'winback', fromY: 252, to: 'fix', toY: 184, width: 10, color: '#8b5cf6', delay: 630 },
-];
-
-const mobileNodeById = mobileSankeyNodes.reduce<Record<string, SankeyNode>>((acc, node) => {
-    acc[node.id] = node;
-    return acc;
-}, {});
-
-const MobileSankeyLabel: React.FC<{ node: SankeyNode }> = ({ node }) => {
-    if (node.id === 'fix') {
-        return (
-            <g>
-                <rect x="258" y="136" width="118" height="44" rx="3" fill="rgba(255,255,255,0.96)" stroke="#65a30d" strokeWidth="1.4" />
-                <rect x="258" y="136" width="5" height="44" rx="1.5" fill="#84cc16" />
-                <text x="269" y="155" fill="#0f172a" fontSize="13.5" fontWeight="950">
-                    +15% lift
-                </text>
-                <text x="269" y="171" fill="#334155" fontSize="7.5" fontWeight="850">
-                    milestone after fix
-                </text>
-            </g>
-        );
-    }
-
-    const text = `${node.label}: ${node.value}`;
-    const width = Math.max(56, text.length * 5.8 + 13);
-    const x = node.labelAnchor === 'end' ? node.labelX - width : node.labelX;
-    const y = node.labelY;
-
-    return (
-        <g>
-            <rect x={x} y={y} width={width} height="20" rx="2" fill="rgba(255,255,255,0.94)" stroke="rgba(15,23,42,0.18)" />
-            <text x={x + 6} y={y + 13.5} fill="#0f172a" fontSize="9.5" fontWeight="850">
-                {text}
-            </text>
-        </g>
-    );
-};
 
 const MobileSankeyDiagram: React.FC<{ active: boolean }> = ({ active }) => (
-    <svg viewBox="0 0 390 320" className="mx-auto h-auto w-full max-w-[560px]" preserveAspectRatio="xMidYMid meet" aria-hidden>
-        <text x="24" y="18" fill="#2563eb" fontSize="9" fontWeight="900" letterSpacing="0.7">
-            IDENTIFY
-        </text>
-        <text x="192" y="18" fill="#f59e0b" fontSize="9" fontWeight="900" letterSpacing="0.7">
-            FIX
-        </text>
-        <text x="300" y="18" fill="#16a34a" fontSize="9" fontWeight="900" letterSpacing="0.7">
-            MILESTONE
-        </text>
-        {mobileSankeyFlows.map((flow) => {
-            const from = mobileNodeById[flow.from];
-            const to = mobileNodeById[flow.to];
-            return (
-                <path
-                    key={`${flow.from}-${flow.to}-${flow.toY}`}
-                    d={ribbonPath(from, flow.fromY, to, flow.toY, flow.width)}
-                    fill={flow.color}
-                    opacity={active ? 0.24 : 0}
-                    style={{ transition: `opacity 0.4s ${flow.delay}ms ease-out` }}
-                />
-            );
-        })}
-        {mobileSankeyNodes.map((node) => (
-            <g key={node.id}>
-                <rect x={node.x} y={node.y} width={node.w ?? 10} height={node.h} rx="2" fill={node.color} />
-                <MobileSankeyLabel node={node} />
-            </g>
+    <div className="space-y-3" aria-hidden>
+        {mobileJourneyPaths.map((path, index) => (
+            <div
+                key={path.blocker}
+                className="border-2 border-black bg-white p-3 shadow-neo"
+                style={{
+                    opacity: active ? 1 : 0,
+                    transform: active ? 'translateY(0)' : 'translateY(8px)',
+                    transition: `opacity 0.35s ${index * 90}ms ease-out, transform 0.35s ${index * 90}ms ease-out`,
+                }}
+            >
+                <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-black uppercase tracking-[0.06em]" style={{ color: path.color }}>
+                        0{index + 1} / Identify
+                    </span>
+                    <span className="text-right text-[10px] font-black uppercase tracking-[0.06em] text-[#16a34a]">
+                        Outcome
+                    </span>
+                </div>
+                <div className="mt-3 grid grid-cols-[1fr_auto] items-stretch gap-3">
+                    <div className="min-w-0">
+                        <div className="grid grid-cols-[10px_1fr] gap-x-3">
+                            <span className="mt-1 h-2.5 w-2.5 bg-current" style={{ color: path.color }} />
+                            <div>
+                                <p className="break-words text-sm font-black text-slate-950">{path.blocker}</p>
+                                <p className="mt-1 text-xs font-bold text-slate-500">{path.metric}</p>
+                            </div>
+                            <span className="mx-auto my-1 h-8 w-[2px] bg-slate-200" />
+                            <p className="self-center break-words text-sm font-black text-slate-950">{path.evidence}</p>
+                            <span className="mx-auto my-1 h-8 w-[2px] bg-slate-200" />
+                            <p className="self-center break-words text-sm font-black text-slate-950">{path.fix}</p>
+                        </div>
+                    </div>
+                    <div className="flex min-w-[112px] max-w-[132px] items-center border-l-[6px] border-[#84cc16] bg-[#f0fdf4] px-3 py-2">
+                        <p className="break-words text-sm font-black uppercase leading-tight text-slate-950">{path.outcome}</p>
+                    </div>
+                </div>
+            </div>
         ))}
-    </svg>
+    </div>
 );
 
 const JourneyActionLoop: React.FC = () => {
@@ -315,7 +305,7 @@ const JourneyActionLoop: React.FC = () => {
 
     return (
         <div ref={ref} className="relative mt-7 min-w-0 sm:mt-9">
-            <div className="relative hidden overflow-hidden md:block">
+            <div className="relative hidden overflow-hidden md:block" dir="ltr">
                 <SankeyDiagram active={active} />
             </div>
             <div className="relative md:hidden">
@@ -327,6 +317,7 @@ const JourneyActionLoop: React.FC = () => {
 
 const productStories = [
     {
+        copyIndex: 0,
         eyebrow: 'Session recordings',
         title: 'Watch real users move through your app.',
         copy: 'Replay mobile sessions with enough context to answer the question everyone asks first: what actually happened?',
@@ -337,6 +328,7 @@ const productStories = [
         accent: 'bg-[#e8f4ff]',
     },
     {
+        copyIndex: 1,
         eyebrow: 'Heatmaps and journeys',
         title: 'See what grabs attention and where people drop.',
         copy: 'Turn scattered taps, swipes, scrolls, and exits into a map of the screens that help or hurt conversion.',
@@ -347,16 +339,7 @@ const productStories = [
         accent: 'bg-[#ffe4e6]',
     },
     {
-        eyebrow: 'Crashes and ANRs',
-        title: 'Tie broken experiences to the session that caused them.',
-        copy: 'Crash reporting is more useful when it sits beside replay, thread analysis, device details, and the user path.',
-        bullets: ['Crash and ANR detection', 'Main-thread performance clues', 'Incident stream for triage'],
-        image: '/images/anr-issues.png',
-        alt: 'Rejourney ANR and crash detection preview',
-        icon: Bug,
-        accent: 'bg-[#fef9c3]',
-    },
-    {
+        copyIndex: 3,
         eyebrow: 'Growth loops',
         title: 'Connect product quality to retention.',
         copy: 'Measure whether releases are creating better sessions, calmer funnels, and more users who come back.',
@@ -366,57 +349,87 @@ const productStories = [
         icon: TrendingUp,
         accent: 'bg-[#dcfce7]',
     },
+    {
+        eyebrow: 'Geographic analytics',
+        title: 'See API response and sentiment by region.',
+        copy: 'Spot where latency, errors, and user sentiment change across countries before regional issues turn into churn.',
+        bullets: ['API response times by city', 'Regional sentiment signals', 'Geo health and session context'],
+        image: '/images/geo-analytics.png',
+        alt: 'Rejourney geographic analytics globe preview',
+        icon: Globe2,
+        accent: 'bg-[#ccfbf1]',
+    },
+    {
+        copyIndex: 2,
+        eyebrow: 'Crashes and ANRs',
+        title: 'Tie broken experiences to the session that caused them.',
+        copy: 'Crash reporting is more useful when it sits beside replay, thread analysis, device details, and the user path.',
+        bullets: ['Crash and ANR detection', 'Main-thread performance clues', 'Incident stream for triage'],
+        image: '/images/anr-issues.png',
+        alt: 'Rejourney ANR and crash detection preview',
+        icon: Bug,
+        accent: 'bg-[#fef9c3]',
+        imagePanelClassName: 'bg-white p-2 sm:p-3 lg:self-center',
+        imageFrameClassName: 'flex bg-[#fef9c3] p-3 sm:p-4',
+        imageClassName: 'h-auto w-full object-contain object-left-top',
+        technicalLast: true,
+    },
 ];
 
-const trustCards = [
+const workspaceRoles = [
     {
-        title: 'GDPR compliance',
-        copy: 'EU-oriented controls for masking, redaction, data minimization, and optional geolocation collection.',
-        icon: undefined,
-        flag: true,
-        className: 'sm:col-span-2 bg-[#eff6ff]',
+        label: 'PM',
+        icon: ClipboardList,
+        className: 'text-[#f97316]',
     },
     {
-        title: 'Open source',
-        copy: 'Inspect the code, verify the SDK behavior, and keep the roadmap accountable to real mobile teams.',
-        icon: Github,
-        className: 'bg-white',
+        label: 'UX',
+        icon: Palette,
+        className: 'text-[#ec4899]',
     },
     {
-        title: 'Self-hostable',
-        copy: 'Run Rejourney on your own infrastructure when recordings and metadata need to stay under your control.',
-        icon: Server,
-        className: 'bg-white',
+        label: 'DEV',
+        icon: Code2,
+        className: 'text-[#2563eb]',
+    },
+];
+
+const workspaceCursors = [
+    {
+        label: 'PM',
+        color: '#f97316',
+        softColor: 'rgba(249, 115, 22, 0.16)',
+        left: '28.5%',
+        top: '23%',
     },
     {
-        title: 'Privacy controls',
-        copy: 'Mask sensitive UI, redact fields, avoid unnecessary location data, and keep collection intentional.',
-        icon: LockKeyhole,
-        className: 'bg-white',
+        label: 'UX',
+        color: '#ec4899',
+        softColor: 'rgba(236, 72, 153, 0.15)',
+        left: '72%',
+        top: '55%',
     },
     {
-        title: 'Light mobile SDK',
-        copy: "A 13.2 kB gzipped React Native SDK with async capture work kept out of the user's way.",
-        icon: Zap,
-        className: 'bg-white',
-    },
-    {
-        title: 'Observe-only mode',
-        copy: 'Set observeOnly: true to disable visual session replay while still sending anonymized telemetry for errors, crashes, ANRs, network activity, and events.',
-        icon: EyeOff,
-        className: 'sm:col-span-2 bg-[#f8fafc]',
+        label: 'DEV',
+        color: '#2563eb',
+        softColor: 'rgba(93, 173, 236, 0.2)',
+        left: '85%',
+        top: '33%',
     },
 ];
 
 export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; dir?: 'ltr' | 'rtl' }> = ({ copy, dir = 'ltr' }) => {
-    const renderedStories = productStories.map((story, index) => ({
-        ...story,
-        ...(copy.productStories[index] ?? {}),
-    }));
-    const renderedTrustCards = trustCards.map((card, index) => ({
-        ...card,
-        ...(copy.trustCards[index] ?? {}),
-    }));
+    const renderedStories = productStories.map((story) => {
+        const localizedStory = typeof story.copyIndex === 'number' ? copy.productStories[story.copyIndex] : undefined;
+        return {
+            ...story,
+            ...(localizedStory ?? {}),
+        };
+    });
+    const orderedStories = [
+        ...renderedStories.filter((story) => !story.technicalLast),
+        ...renderedStories.filter((story) => story.technicalLast),
+    ];
     const alignClass = dir === 'rtl' ? 'text-right' : 'text-left';
 
     return (
@@ -458,7 +471,7 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
                     </div>
 
                     <div className="space-y-5 lg:space-y-7">
-                        {renderedStories.map((story, index) => {
+                        {orderedStories.map((story, index) => {
                             const Icon = story.icon;
                             const imageOrder = index % 2 === 1 ? 'lg:order-last' : '';
 
@@ -467,12 +480,12 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
                                     key={story.title}
                                     className="grid overflow-hidden bg-white lg:grid-cols-2"
                                 >
-                                    <div className={`min-h-[220px] bg-white p-2 sm:min-h-[260px] sm:p-3 lg:min-h-[420px] ${imageOrder}`}>
-                                        <div className={`flex h-full items-center ${story.accent} p-3`}>
+                                    <div className={`${story.imagePanelClassName ?? 'min-h-[220px] bg-white p-2 sm:min-h-[260px] sm:p-3 lg:min-h-[420px]'} ${imageOrder}`}>
+                                        <div className={story.imageFrameClassName ?? `flex h-full items-center ${story.accent} p-3`}>
                                             <img
                                                 src={story.image}
                                                 alt={story.alt}
-                                                className="h-full max-h-[390px] w-full object-cover object-left-top"
+                                                className={story.imageClassName ?? 'h-full max-h-[390px] w-full object-cover object-left-top'}
                                                 loading="lazy"
                                             />
                                         </div>
@@ -502,57 +515,90 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
                 </div>
             </section>
 
-            <section className="w-full border-t-2 border-b-2 border-black bg-white px-4 py-14 text-slate-950 sm:px-6 sm:py-24 lg:px-8">
-                <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
-                    <div className="min-w-0 lg:sticky lg:top-24">
+            <section className="w-full border-t-2 border-b-2 border-black bg-white px-4 py-14 text-slate-950 sm:px-6 sm:py-20 lg:px-8">
+                <div className="mx-auto grid max-w-[1440px] gap-8 lg:grid-cols-[0.56fr_1.44fr] lg:items-center">
+                    <div className="min-w-0">
                         <p className="mb-4 text-[11px] font-black uppercase text-[#2563eb]">{copy.trustEyebrow}</p>
-                        <h2 className="break-words text-3xl font-black uppercase leading-tight tracking-tight sm:text-6xl">
+                        <h2 className="max-w-lg break-words text-4xl font-black uppercase leading-[0.96] tracking-tight sm:text-5xl">
                             {copy.trustHeading}
                         </h2>
-                        <p className="mt-5 max-w-xl text-base font-bold leading-relaxed text-slate-600">
+                        <p className="mt-5 max-w-md text-base font-bold leading-relaxed text-slate-600">
                             {copy.trustCopy}
                         </p>
 
-                        <div className="mt-7 flex flex-wrap gap-2">
-                            <span className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-2 text-[11px] font-black uppercase shadow-neo-sm">
-                                <MarkExpo className="h-4 w-4" />
-                                Expo
-                            </span>
-                            <span className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-2 text-[11px] font-black uppercase shadow-neo-sm">
-                                <MarkReactNative className="h-4 w-4 text-[#2563eb]" />
-                                React Native
-                            </span>
-                            <span className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-2 text-[11px] font-black uppercase shadow-neo-sm">
-                                <MarkSwift className="h-4 w-4 text-[#f97316]" />
-                                Swift
-                            </span>
+                        <div className="landing-workspace-role-list">
+                            {workspaceRoles.map((role) => {
+                                const Icon = role.icon;
+                                return (
+                                    <span key={role.label} className="landing-workspace-role">
+                                        <Icon className={`landing-workspace-role__icon ${role.className}`} strokeWidth={3} />
+                                        {role.label}
+                                    </span>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                        {renderedTrustCards.map((card) => {
-                            const Icon = card.icon;
-                            const isFeatured = Boolean(card.flag);
-                            return (
-                                <article
-                                    key={card.title}
-                                    className={`${isFeatured ? 'border-2 border-black shadow-neo-sm' : 'border border-slate-200 shadow-none'} p-5 ${card.className}`}
-                                >
-                                    <div className="mb-5 flex items-center gap-3">
-                                        {card.flag && <EuFlag className="h-8 w-12 shrink-0" />}
-                                        {Icon && (
-                                            <span className={`grid h-10 w-10 shrink-0 place-items-center bg-white text-[#2563eb] ${isFeatured ? 'border-2 border-black' : 'border border-slate-200'}`}>
-                                                <Icon className="h-5 w-5" strokeWidth={2.7} />
-                                            </span>
-                                        )}
+                    <div className="min-w-0">
+                        <div className="landing-workspace-frame">
+                            <div className="landing-workspace-frame__mat" aria-hidden>
+                                <div className="landing-workspace-frame__dots">
+                                    <span className="landing-workspace-frame__dot landing-workspace-frame__dot--red" />
+                                    <span className="landing-workspace-frame__dot landing-workspace-frame__dot--yellow" />
+                                    <span className="landing-workspace-frame__dot landing-workspace-frame__dot--green" />
+                                </div>
+                                <div className="landing-workspace-frame__urlbar">
+                                    <span className="landing-workspace-frame__urlbar-dot" />
+                                    <span className="landing-workspace-frame__urlbar-text">rejourney.co/dashboard</span>
+                                </div>
+                            </div>
+                            <div className="landing-workspace-frame__screen">
+                                    <img
+                                        src="/images/team-workspace.png"
+                                        alt="Rejourney team workspace showing analytics, replay workbench, and timeline evidence"
+                                        className="landing-workspace-frame__image"
+                                        loading="lazy"
+                                    />
+                                    <div className="absolute inset-0 pointer-events-none" aria-hidden>
+                                        {workspaceCursors.map((cursor) => (
+                                            <div
+                                                key={cursor.label}
+                                                className="landing-workspace-cursor"
+                                                style={{
+                                                    left: cursor.left,
+                                                    top: cursor.top,
+                                                    '--cursor-color': cursor.color,
+                                                    '--cursor-soft': cursor.softColor,
+                                                } as React.CSSProperties}
+                                            >
+                                                <span className="landing-workspace-cursor__trail" />
+                                                <svg width="42" height="48" viewBox="0 0 42 48" fill="none" className="landing-workspace-cursor__pointer">
+                                                    <path
+                                                        d="M5 3.5L7.1 36.8L16.2 28.1L23.3 43.2L32.5 38.9L25.2 24.6H38.3L5 3.5Z"
+                                                        fill="white"
+                                                        stroke="white"
+                                                        strokeWidth="7"
+                                                        strokeLinejoin="round"
+                                                    />
+                                                    <path
+                                                        d="M5 3.5L7.1 36.8L16.2 28.1L23.3 43.2L32.5 38.9L25.2 24.6H38.3L5 3.5Z"
+                                                        fill={cursor.color}
+                                                        stroke="#020617"
+                                                        strokeWidth="2.5"
+                                                        strokeLinejoin="round"
+                                                    />
+                                                    <path d="M11.2 12.2L12.2 27.2L16.8 22.8" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.78" />
+                                                </svg>
+                                                <span className="landing-workspace-cursor__label">
+                                                    {cursor.label}
+                                                </span>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <h3 className="text-lg font-black uppercase">{card.title}</h3>
-                                    <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-600">{card.copy}</p>
-                                </article>
-                            );
-                        })}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
             </section>
 
             <section className="w-full bg-[#e8f4ff] px-4 py-10 text-slate-950 sm:px-6 lg:px-8">

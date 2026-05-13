@@ -1182,6 +1182,8 @@ export interface TeamUsage {
 }
 
 export interface BillingPlan {
+  priceId?: string;
+  productId?: string;
   name: string;
   displayName: string;
   sessionLimit: number;
@@ -1189,6 +1191,7 @@ export interface BillingPlan {
   videoRetentionDays: number;
   videoRetentionLabel: string;
   priceCents: number;
+  interval?: 'month' | 'year';
   isCustom?: boolean;
 }
 

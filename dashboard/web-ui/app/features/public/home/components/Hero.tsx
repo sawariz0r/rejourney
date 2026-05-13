@@ -516,7 +516,7 @@ export const Hero: React.FC<{ copy: HeroCopy; homeCopy: MarketingHomeCopy['hero'
                         className="public-visual-copy relative hidden animate-fade-in-right opacity-0 lg:flex lg:items-end lg:justify-end"
                         style={{ animationDelay: '0.2s' }}
                     >
-                        <div className="relative h-[610px] w-[760px] origin-right translate-x-16 scale-[0.66] xl:translate-x-14 xl:scale-[0.8] 2xl:translate-x-12 2xl:scale-[0.92]">
+                        <div className={`relative h-[610px] w-[760px] scale-[0.66] xl:scale-[0.8] 2xl:scale-[0.92] ${isRtl ? 'origin-left -translate-x-16 xl:-translate-x-14 2xl:-translate-x-12' : 'origin-right translate-x-16 xl:translate-x-14 2xl:translate-x-12'}`}>
                             <div className="absolute bottom-[88px] left-[9%] right-[9%] h-px bg-gradient-to-r from-transparent via-black/18 to-transparent" />
                             <div className="relative z-10 flex h-full items-end justify-center gap-7 xl:gap-8">
                                 <div className="relative z-10 mb-5 -rotate-[5deg] translate-y-1 transform-gpu">

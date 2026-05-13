@@ -843,17 +843,6 @@ export type MarketingHomeCopy = {
       allFeaturesCopy: string;
     };
   };
-  demo: {
-    ariaLabel: string;
-    heading: string;
-    mobileTitle: string;
-    mobileCopy: string;
-    openDemo: string;
-    liveLabel: string;
-    openInNewTabTitle: string;
-    fullscreen: string;
-    iframeTitle: string;
-  };
   performance: {
     headingPrimary: string;
     headingSecondary: string;
@@ -936,10 +925,9 @@ const englishHomeCopy: MarketingHomeCopy = {
     sdkSize: "13.2 kB",
   },
   narrative: {
-    loopEyebrow: "Issue to milestone journey",
-    loopHeadingLines: ["Identify issues.", "Measure the milestone."],
-    loopIntro:
-      "Follow a problem from end user to replay evidence. Ship the fix. Then watch the result.",
+    loopEyebrow: "Revenue lift loop",
+    loopHeadingLines: ["Find blockers.", "See The Growth."],
+    loopIntro: "Replay the drop-off, ship the fix, prove the lift.",
     tableStep: "Step",
     tableCatches: "What Rejourney catches",
     tableNext: "What the team does next",
@@ -997,34 +985,32 @@ const englishHomeCopy: MarketingHomeCopy = {
         alt: "Rejourney growth analytics preview",
       },
     ],
-    trustEyebrow: "Why teams say yes",
-    trustHeading: "Evidence for every person in the room.",
-    trustCopy:
-      "Adoption is easier when every team gets the same replay-backed source of truth, plus clear answers for performance, privacy, deployment, and mobile stack fit.",
+    trustEyebrow: "Team workspace",
+    trustHeading: "One room for all.",
     trustCards: [
       {
-        title: "GDPR compliance",
-        copy: "EU-oriented controls for masking, redaction, data minimization, and optional geolocation collection.",
+        title: "Developers",
+        copy: "Open console logs, DOM changes, API calls, errors, and device context beside the replay so the failure is reproducible.",
       },
       {
-        title: "Open source",
-        copy: "Inspect the code, verify the SDK behavior, and keep the roadmap accountable to real mobile teams.",
+        title: "PMs",
+        copy: "Start from retention, active users, degraded sessions, and release impact, then jump into the session that explains the metric.",
       },
       {
-        title: "Self-hostable",
-        copy: "Run Rejourney on your own infrastructure when recordings and metadata need to stay under your control.",
+        title: "UX",
+        copy: "Watch the taps, hesitation, screen transitions, and UI state that show where the experience stops making sense.",
       },
       {
-        title: "Privacy controls",
-        copy: "Mask sensitive UI, redact fields, avoid unnecessary location data, and keep collection intentional.",
+        title: "Shared replay room",
+        copy: "Everyone points to the same session UID, frame, timestamp, and event instead of trading separate screenshots.",
       },
       {
-        title: "Light mobile SDK",
-        copy: "A 13.2 kB gzipped React Native SDK with async capture work kept out of the user's way.",
+        title: "Evidence handoff",
+        copy: "PMs flag the pattern, designers mark the confusing interaction, and developers pin the network request that needs work.",
       },
       {
-        title: "Observe-only mode",
-        copy: "Set observeOnly: true to disable visual session replay while still sending anonymized telemetry for errors, crashes, ANRs, network activity, and events.",
+        title: "Decision thread",
+        copy: "Keep the metric, replay, owner, and next action together so a team review turns into a clear fix plan.",
       },
     ],
     stats: {
@@ -1035,18 +1021,6 @@ const englishHomeCopy: MarketingHomeCopy = {
       allFeatures: "All features",
       allFeaturesCopy: "Replay, heatmaps, crashes, journeys",
     },
-  },
-  demo: {
-    ariaLabel: "Interactive Demo",
-    heading: "Walk the product...",
-    mobileTitle: "Full dashboard demo, best opened wide.",
-    mobileCopy:
-      "The live console is a dense desktop workspace, so phones get a fast overview here and a dedicated fullscreen launch.",
-    openDemo: "Open demo",
-    liveLabel: "Live dashboard demo",
-    openInNewTabTitle: "Open in new tab",
-    fullscreen: "Fullscreen",
-    iframeTitle: "Rejourney Dashboard Demo",
   },
   performance: {
     headingPrimary: "Tiny Footprint.",
@@ -1195,34 +1169,34 @@ const arabicHomeCopy: MarketingHomeCopy = {
         alt: "معاينة تحليلات النمو في Rejourney",
       },
     ],
-    trustEyebrow: "لماذا توافق الفرق",
-    trustHeading: "دليل لكل شخص في الغرفة.",
+    trustEyebrow: "مساحة عمل الفريق",
+    trustHeading: "مساحة عمل واحدة لكل غرفة المنتج.",
     trustCopy:
-      "يسهل التبني عندما يحصل كل فريق على مصدر حقيقة واحد مدعوم بإعادة التشغيل، مع إجابات واضحة حول الأداء والخصوصية والنشر وملاءمة حزمة الجوال.",
+      "يمكن لمديري المنتج والمصممين والمطورين العمل من نفس العرض المدعوم بإعادة التشغيل: المقاييس على اليسار، جلسة الجوال في الوسط، وأدلة الخط الزمني وAPI على اليمين.",
     trustCards: [
       {
-        title: "امتثال GDPR",
-        copy: "ضوابط موجهة للاتحاد الأوروبي للإخفاء والتنقيح وتقليل البيانات وجمع الموقع اختياريا.",
+        title: "المطورون",
+        copy: "افتح سجلات الكونسول وتغييرات DOM ونداءات API والأخطاء وسياق الجهاز بجانب إعادة التشغيل حتى يصبح العطل قابلا للإعادة.",
       },
       {
-        title: "مفتوح المصدر",
-        copy: "افحص الكود، وتحقق من سلوك SDK، واجعل خارطة الطريق قابلة للمساءلة أمام فرق الجوال الحقيقية.",
+        title: "مديرو المنتج",
+        copy: "ابدأ من الاحتفاظ والمستخدمين النشطين والجلسات المتدهورة وأثر الإصدار، ثم انتقل إلى الجلسة التي تشرح الرقم.",
       },
       {
-        title: "قابل للاستضافة الذاتية",
-        copy: "شغل Rejourney على بنيتك التحتية عندما يجب أن تبقى التسجيلات والبيانات الوصفية تحت سيطرتك.",
+        title: "المصممون",
+        copy: "شاهد النقرات والتردد وانتقالات الشاشات وحالة الواجهة التي تكشف أين تتوقف التجربة عن الوضوح.",
       },
       {
-        title: "ضوابط الخصوصية",
-        copy: "اخف واجهات حساسة، ونقح الحقول، وتجنب بيانات الموقع غير الضرورية، واجعل الجمع مقصودا.",
+        title: "غرفة إعادة تشغيل مشتركة",
+        copy: "يشير الجميع إلى نفس معرف الجلسة والإطار والطابع الزمني والحدث بدلا من تبادل لقطات شاشة منفصلة.",
       },
       {
-        title: "SDK جوال خفيف",
-        copy: "حجم React Native SDK المضغوط 13.2 kB مع عمل التقاط غير متزامن بعيد عن طريق المستخدم.",
+        title: "تسليم الأدلة",
+        copy: "يحدد مديرو المنتج النمط، ويعلم المصممون لحظة الالتباس، ويثبت المطورون طلب الشبكة الذي يحتاج إلى عمل.",
       },
       {
-        title: "وضع المراقبة فقط",
-        copy: "اضبط observeOnly: true لتعطيل إعادة التشغيل المرئي مع الاستمرار في إرسال قياسات مجهولة للأخطاء والأعطال وANR والشبكة والأحداث.",
+        title: "خيط القرار",
+        copy: "احتفظ بالمقياس وإعادة التشغيل والمالك والخطوة التالية معا حتى يتحول استعراض الفريق إلى خطة إصلاح واضحة.",
       },
     ],
     stats: {
@@ -1233,18 +1207,6 @@ const arabicHomeCopy: MarketingHomeCopy = {
       allFeatures: "كل الميزات",
       allFeaturesCopy: "إعادة التشغيل، الخرائط الحرارية، الأعطال، الرحلات",
     },
-  },
-  demo: {
-    ariaLabel: "عرض تفاعلي",
-    heading: "جرّب المنتج...",
-    mobileTitle: "عرض لوحة التحكم الكامل أفضل على شاشة واسعة.",
-    mobileCopy:
-      "لوحة التحكم مساحة عمل مكتبية كثيفة، لذلك تعرض الهواتف نظرة سريعة هنا مع زر فتح مخصص بملء الشاشة.",
-    openDemo: "افتح العرض",
-    liveLabel: "عرض لوحة التحكم المباشر",
-    openInNewTabTitle: "افتح في تبويب جديد",
-    fullscreen: "ملء الشاشة",
-    iframeTitle: "عرض لوحة تحكم Rejourney",
   },
   performance: {
     headingPrimary: "أثر صغير.",
@@ -1391,34 +1353,34 @@ const spanishHomeCopy: MarketingHomeCopy = {
         alt: "Vista previa de analitica de crecimiento de Rejourney",
       },
     ],
-    trustEyebrow: "Por que los equipos dicen si",
-    trustHeading: "Evidencia para cada persona en la sala.",
+    trustEyebrow: "Workspace compartido",
+    trustHeading: "Un workspace para toda la sala de producto.",
     trustCopy:
-      "La adopcion es mas facil cuando todos tienen la misma fuente de verdad con replay, mas respuestas claras sobre rendimiento, privacidad, despliegue y compatibilidad movil.",
+      "PMs, disenadores y desarrolladores trabajan desde la misma vista con replay: metricas a la izquierda, la sesion movil al centro y evidencia de timeline/API a la derecha.",
     trustCards: [
       {
-        title: "Cumplimiento GDPR",
-        copy: "Controles orientados a la UE para enmascarado, redaccion, minimizacion de datos y geolocalizacion opcional.",
+        title: "Desarrolladores",
+        copy: "Abre logs de consola, cambios DOM, llamadas API, errores y contexto del dispositivo junto al replay para reproducir la falla.",
       },
       {
-        title: "Open source",
-        copy: "Inspecciona el codigo, verifica el comportamiento del SDK y mantén el roadmap responsable ante equipos moviles reales.",
+        title: "PMs",
+        copy: "Empieza por retencion, usuarios activos, sesiones degradadas e impacto de release, y salta a la sesion que explica la metrica.",
       },
       {
-        title: "Autohospedable",
-        copy: "Ejecuta Rejourney en tu propia infraestructura cuando grabaciones y metadata deben permanecer bajo tu control.",
+        title: "Disenadores",
+        copy: "Mira taps, dudas, transiciones de pantalla y estado de UI para ver donde la experiencia deja de tener sentido.",
       },
       {
-        title: "Controles de privacidad",
-        copy: "Enmascara UI sensible, redacta campos, evita datos de ubicacion innecesarios y mantén la recoleccion intencional.",
+        title: "Sala de replay compartida",
+        copy: "Todos senalan la misma sesion, frame, timestamp y evento en lugar de intercambiar capturas separadas.",
       },
       {
-        title: "SDK movil ligero",
-        copy: "Un SDK React Native de 13.2 kB comprimido con gzip, con captura asincrona fuera del camino del usuario.",
+        title: "Handoff con evidencia",
+        copy: "PMs marcan el patron, diseno senala la interaccion confusa y desarrollo fija la solicitud de red que necesita trabajo.",
       },
       {
-        title: "Modo solo observacion",
-        copy: "Usa observeOnly: true para desactivar el replay visual mientras sigues enviando telemetria anonimizada de errores, crashes, ANR, red y eventos.",
+        title: "Hilo de decision",
+        copy: "Guarda metrica, replay, owner y siguiente accion juntos para convertir la revision del equipo en un plan claro.",
       },
     ],
     stats: {
@@ -1429,18 +1391,6 @@ const spanishHomeCopy: MarketingHomeCopy = {
       allFeatures: "Todas las funciones",
       allFeaturesCopy: "Replay, heatmaps, crashes, journeys",
     },
-  },
-  demo: {
-    ariaLabel: "Demo interactiva",
-    heading: "Recorre el producto...",
-    mobileTitle: "La demo completa del panel se ve mejor en pantalla amplia.",
-    mobileCopy:
-      "La consola en vivo es un espacio de escritorio denso, asi que en moviles mostramos una vista rapida y un lanzamiento dedicado en pantalla completa.",
-    openDemo: "Abrir demo",
-    liveLabel: "Demo en vivo del panel",
-    openInNewTabTitle: "Abrir en nueva pestaña",
-    fullscreen: "Pantalla completa",
-    iframeTitle: "Demo del panel de Rejourney",
   },
   performance: {
     headingPrimary: "Huella minima.",
@@ -1587,34 +1537,34 @@ const turkishHomeCopy: MarketingHomeCopy = {
         alt: "Rejourney buyume analitigi onizlemesi",
       },
     ],
-    trustEyebrow: "Ekipler neden evet der",
-    trustHeading: "Odadaki herkes icin kanit.",
+    trustEyebrow: "Ortak ekip workspace'i",
+    trustHeading: "Tum urun odasi icin tek workspace.",
     trustCopy:
-      "Her ekip ayni replay destekli gercek kaynagina, performans, gizlilik, kurulum ve mobil stack uyumu icin net cevaplara sahip oldugunda benimseme kolaylasir.",
+      "PM'ler, tasarimcilar ve gelistiriciler ayni replay destekli gorunumden calisir: solda metrikler, ortada mobil oturum, sagda timeline/API kaniti.",
     trustCards: [
       {
-        title: "GDPR uyumlulugu",
-        copy: "Maskeleme, redaksiyon, veri minimizasyonu ve opsiyonel konum toplama icin AB odakli kontroller.",
+        title: "Gelistiriciler",
+        copy: "Hatayi yeniden uretmek icin console loglari, DOM degisiklikleri, API cagrilari, hatalar ve cihaz baglamini replay'in yaninda ac.",
       },
       {
-        title: "Acik kaynak",
-        copy: "Kodu incele, SDK davranisini dogrula ve yol haritasini gercek mobil ekiplerine karsi hesap verebilir tut.",
+        title: "PM'ler",
+        copy: "Retention, aktif kullanicilar, degrade oturumlar ve release etkisinden basla; metrigi aciklayan oturuma gec.",
       },
       {
-        title: "Self-host edilebilir",
-        copy: "Kayitlar ve metadata kendi kontrolunde kalmaliyken Rejourney'i kendi altyapinda calistir.",
+        title: "Tasarimcilar",
+        copy: "Deneyimin nerede anlamini kaybettigini gormek icin tap'leri, tereddudu, ekran gecislerini ve UI durumunu izle.",
       },
       {
-        title: "Gizlilik kontrolleri",
-        copy: "Hassas UI'i maskele, alanlari redakte et, gereksiz konum verisinden kacin ve veri toplamayi bilincli tut.",
+        title: "Ortak replay odasi",
+        copy: "Ayri ekran goruntuleri yerine herkes ayni oturum UID'sine, frame'e, timestamp'e ve event'e isaret eder.",
       },
       {
-        title: "Hafif mobil SDK",
-        copy: "13.2 kB gzip React Native SDK; async yakalama isi kullanicinin yolundan uzak tutulur.",
+        title: "Kanitli handoff",
+        copy: "PM paterni isaretler, tasarim kafa karistiran etkilesimi belirler, gelistirici calisilacak network istegini pinler.",
       },
       {
-        title: "Sadece gozlem modu",
-        copy: "Gorsel oturum replay'ini kapatirken hata, crash, ANR, ag ve eventler icin anonim telemetri gondermeye devam etmek icin observeOnly: true kullan.",
+        title: "Karar thread'i",
+        copy: "Metrigi, replay'i, owner'i ve sonraki aksiyonu birlikte tut; ekip incelemesi net bir fix planina donussun.",
       },
     ],
     stats: {
@@ -1625,18 +1575,6 @@ const turkishHomeCopy: MarketingHomeCopy = {
       allFeatures: "Tum ozellikler",
       allFeaturesCopy: "Replay, heatmapler, crashler, yolculuklar",
     },
-  },
-  demo: {
-    ariaLabel: "Etkilesimli demo",
-    heading: "Urunu gez...",
-    mobileTitle: "Tam panel demosu genis ekranda daha iyi.",
-    mobileCopy:
-      "Canli konsol yogun bir masaustu calisma alani; bu yuzden telefonda hizli ozet ve tam ekran acilis sunuyoruz.",
-    openDemo: "Demoyu ac",
-    liveLabel: "Canli panel demosu",
-    openInNewTabTitle: "Yeni sekmede ac",
-    fullscreen: "Tam ekran",
-    iframeTitle: "Rejourney panel demosu",
   },
   performance: {
     headingPrimary: "Kucuk iz.",

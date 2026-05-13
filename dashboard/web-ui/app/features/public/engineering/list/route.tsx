@@ -6,14 +6,30 @@
 import type { MetaFunction } from "react-router";
 import { Header } from "~/shell/components/layout/Header";
 import { Footer } from "~/shell/components/layout/Footer";
-import { Activity } from "lucide-react";
 import { ARTICLES } from "~/shared/data/engineering";
 import { Link } from "react-router";
 
 const ENGINEERING_LOG_URL = "https://rejourney.co/engineering";
+const SITE_URL = "https://rejourney.co";
 const ENGINEERING_KEYWORDS = Array.from(
     new Set(ARTICLES.flatMap((article) => article.seo.targetKeywords))
 ).join(", ");
+const ARTICLE_IMAGES: Record<string, string> = {
+    "mobile-session-replay-cost": "/images/session-replay-preview.png",
+    "swift-package-open-beta": "/images/hero-replay-workbench.png",
+    "rejourney-1-3-million-session-replays": "/images/engineering/k3s-cloud-setup.svg",
+    "maps-performance": "/images/geo-intelligence.png",
+    "architecture-deep-dive": "/images/engineering/session-lifecycle.svg",
+};
+
+function getArticleImage(article: (typeof ARTICLES)[number]): string {
+    return ARTICLE_IMAGES[article.id] ?? article.image;
+}
+
+function getArticleImageUrl(article: (typeof ARTICLES)[number]): string {
+    const image = getArticleImage(article);
+    return image.startsWith("/") ? `${SITE_URL}${image}` : image;
+}
 
 export const meta: MetaFunction = () => [
     { title: "Engineering Log — Technical articles | Rejourney" },
@@ -41,7 +57,7 @@ export const meta: MetaFunction = () => [
 
 export default function EngineeringIndexPage() {
     return (
-        <div className="public-readable-scope min-h-screen w-full bg-white text-slate-900 font-sans selection:bg-yellow-200 flex flex-col">
+        <div className="public-readable-scope min-h-screen w-full bg-white text-slate-950 font-sans selection:bg-sky-100 selection:text-slate-950 flex flex-col">
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{
@@ -75,7 +91,7 @@ export default function EngineeringIndexPage() {
                                     url: `${ENGINEERING_LOG_URL}/${article.urlDate}/${article.id}`,
                                     name: article.title,
                                     description: article.seo.metaDescription,
-                                    image: article.image,
+                                    image: getArticleImageUrl(article),
                                     keywords: article.seo.targetKeywords,
                                 })),
                             },
@@ -84,62 +100,48 @@ export default function EngineeringIndexPage() {
                 }}
             />
             <Header />
-            <main className="flex-grow w-full">
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
 
-                    {/* Page Header */}
-                    <div className="mb-20 border-b-8 border-black pb-12">
-                        <h1 className="text-6xl sm:text-7xl lg:text-9xl font-black uppercase tracking-tighter mb-8 leading-[0.85]">
-                            Engineering <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-700 to-gray-400">Log</span>
+            <main className="w-full flex-grow">
+                <section className="mx-auto max-w-7xl px-5 pb-16 pt-12 sm:px-8 sm:pt-16 lg:px-10 lg:pb-24">
+                    <div className="mb-12 sm:mb-14">
+                        <p className="text-base font-semibold text-slate-500">From the dev team</p>
+                        <h1 className="mt-6 max-w-4xl text-4xl font-semibold leading-none tracking-normal text-slate-950 sm:text-5xl lg:text-6xl">
+                            Engineering
                         </h1>
+                        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600 sm:text-xl">
+                            Friendly technical notes from the Rejourney team on mobile replay, SDK architecture, map capture, infrastructure, and performance.
+                        </p>
                     </div>
 
-                    {/* Articles List */}
-                    <div className="space-y-12">
+                    <div className="grid gap-x-10 gap-y-16 md:grid-cols-2 xl:grid-cols-3">
                         {ARTICLES.map((article, index) => (
                             <Link
                                 to={`/engineering/${article.urlDate}/${article.id}`}
                                 key={article.id}
-                                className="group block relative cursor-pointer"
+                                aria-label={`Read ${article.title}`}
+                                className={index < 2 ? "group block md:col-span-1" : "group block"}
                             >
-                                {/* Connector Line */}
-                                {index !== ARTICLES.length - 1 && (
-                                    <div className="absolute left-4 top-full h-12 w-1 bg-gray-200 -ml-[2px] hidden sm:block" />
-                                )}
-
-                                <div className="border-l-4 border-black pl-6 sm:pl-10 relative transition-all duration-300 group-hover:border-blue-600 group-hover:pl-12">
-                                    {/* Hover Indicator */}
-                                    <div className="absolute -left-[5px] top-0 w-2 h-0 bg-blue-600 transition-all duration-300 group-hover:h-full" />
-
-                                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                                        <div>
-                                            <div className="flex items-center gap-3 text-xs font-mono font-black uppercase tracking-widest text-gray-400 mb-3 group-hover:text-blue-600 transition-colors">
-                                                <span>{article.date}</span>
-                                                <span className="w-1 h-1 bg-gray-400 rounded-full group-hover:bg-blue-600" />
-                                                <span>{article.readTime}</span>
-                                                <span className="ml-auto sm:ml-0 inline-block px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] group-hover:bg-blue-100 group-hover:text-blue-700">
-                                                    READ ARTICLE
-                                                </span>
-                                            </div>
-                                            <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-gray-900 group-hover:text-blue-800 transition-colors mb-4">
-                                                {article.title}
-                                            </h2>
-                                            <p className="text-lg sm:text-xl font-medium text-gray-500 max-w-3xl group-hover:text-gray-700 transition-colors">
-                                                {article.subtitle}
-                                            </p>
-
-                                            <div className="flex items-center gap-2 mt-6 text-sm font-bold text-gray-900 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                <span className="text-gray-400 font-normal">By</span>
-                                                <span>{article.author.name}</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div className="aspect-[1.9/1] overflow-hidden rounded-md border border-slate-200 bg-slate-50 shadow-sm">
+                                    <img
+                                        src={getArticleImage(article)}
+                                        alt=""
+                                        className="h-full w-full object-cover brightness-[0.96] saturate-[0.95] transition duration-300 group-hover:scale-[1.015] group-hover:brightness-100 group-hover:saturate-100"
+                                        loading={index < 2 ? "eager" : "lazy"}
+                                    />
                                 </div>
+                                <p className="mt-5 text-base font-semibold text-slate-500">
+                                    {article.date} <span className="px-1.5 text-slate-300">·</span> {article.readTime}
+                                </p>
+                                <h2 className="mt-3 text-2xl font-semibold leading-tight tracking-normal text-slate-950 transition group-hover:text-sky-700 sm:text-3xl">
+                                    {article.title}
+                                </h2>
+                                <p className="mt-3 text-lg leading-relaxed text-slate-600">
+                                    {article.subtitle}
+                                </p>
                             </Link>
                         ))}
                     </div>
-
-                </div>
+                </section>
             </main>
             <Footer />
         </div>

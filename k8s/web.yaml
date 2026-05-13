@@ -10,6 +10,17 @@ metadata:
   labels:
     app: web
     app.kubernetes.io/part-of: rejourney
+  annotations:
+    # During rolling updates, SSR HTML and hashed CSS/JS must come from the
+    # same pod image. Without sticky routing, HTML can be served by the new pod
+    # while /assets/* is routed to an old pod that does not have that hash.
+    traefik.ingress.kubernetes.io/service.sticky.cookie: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.name: "_rj_web_backend"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.secure: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.httponly: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.samesite: "lax"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.maxage: "300"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.path: "/"
 spec:
   type: ClusterIP
   ports:
@@ -112,7 +123,7 @@ spec:
             periodSeconds: 15
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10

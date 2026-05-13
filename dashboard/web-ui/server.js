@@ -12,6 +12,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import { createRequestHandler } from '@react-router/express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { existsSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -22,6 +23,9 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 const API_URL = process.env.API_URL || 'http://api:3000';
 const isProduction = process.env.NODE_ENV === 'production';
+const cachePublicHtmlAtEdge = process.env.WEB_EDGE_HTML_CACHE === 'true';
+const buildClientPath = join(__dirname, 'build', 'client');
+const buildAssetsPath = join(buildClientPath, 'assets');
 let isShuttingDown = false;
 const MARKETING_LOCALE_PATH_PATTERN = /^\/(?:ar|es|tr|pt-br|de|fr|hi|id|ja|ko|zh-cn)$/;
 const EDGE_CACHEABLE_HTML_PATTERNS = [
@@ -40,6 +44,16 @@ const EDGE_CACHEABLE_HTML_PATTERNS = [
 
 function isEdgeCacheableHtmlPath(pathname) {
   return EDGE_CACHEABLE_HTML_PATTERNS.some((pattern) => pattern.test(pathname));
+}
+
+function hasBuiltClientAssets() {
+  try {
+    if (!existsSync(buildClientPath) || !existsSync(buildAssetsPath)) return false;
+    const assetNames = readdirSync(buildAssetsPath);
+    return assetNames.some((name) => name.endsWith('.css')) && assetNames.some((name) => name.endsWith('.js'));
+  } catch {
+    return false;
+  }
 }
 
 // Security headers (fallback if Traefik middleware fails)
@@ -112,6 +126,20 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'web', timestamp: new Date().toISOString() });
 });
 
+app.get('/health/ready', (_req, res) => {
+  if (isShuttingDown) {
+    res.status(503).json({ status: 'draining', service: 'web', timestamp: new Date().toISOString() });
+    return;
+  }
+
+  if (!hasBuiltClientAssets()) {
+    res.status(503).json({ status: 'missing-assets', service: 'web', timestamp: new Date().toISOString() });
+    return;
+  }
+
+  res.json({ status: 'ready', service: 'web', timestamp: new Date().toISOString() });
+});
+
 // Proxy /api/* requests to the backend API server
 app.use('/api', createProxyMiddleware({
   target: API_URL,
@@ -147,12 +175,23 @@ app.use('/api', createProxyMiddleware({
 // Serve static assets from the client build directory
 // These need to be served BEFORE the catch-all SSR handler
 // Using absolute path to ensure correct resolution regardless of working directory
-const buildClientPath = join(__dirname, 'build', 'client');
 app.use(express.static(buildClientPath, {
   maxAge: '1y',
   immutable: true,
   index: false, // Don't serve index.html for directory requests
 }));
+
+app.use('/assets', (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    next();
+    return;
+  }
+
+  res
+    .status(404)
+    .setHeader('Cache-Control', 'no-store, max-age=0');
+  res.type('text/plain').send('Asset not found');
+});
 
 app.use((req, res, next) => {
   if ((req.method !== 'GET' && req.method !== 'HEAD') || req.path.startsWith('/api')) {
@@ -161,7 +200,7 @@ app.use((req, res, next) => {
   }
 
   const acceptsHtml = req.headers.accept?.includes('text/html') ?? false;
-  if (acceptsHtml && isEdgeCacheableHtmlPath(req.path)) {
+  if (acceptsHtml && cachePublicHtmlAtEdge && isEdgeCacheableHtmlPath(req.path)) {
     if (req.path === '/') {
       res.setHeader('Cache-Control', 'private, no-store, max-age=0');
       next();
@@ -170,6 +209,8 @@ app.use((req, res, next) => {
     // Let Cloudflare cache public marketing/login HTML briefly while browsers
     // still revalidate on navigation.
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+  } else if (acceptsHtml) {
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   }
 
   next();
