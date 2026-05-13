@@ -679,6 +679,14 @@
   box-shadow: 0 1px 0 rgba(148, 163, 184, 0.2);
 }
 
+.dashboard-topbar-actions {
+  scrollbar-width: none;
+}
+
+.dashboard-topbar-actions::-webkit-scrollbar {
+  display: none;
+}
+
 .dashboard-tabbar {
   border-bottom: 1px solid var(--dashboard-chrome-border) !important;
   background: var(--dashboard-chrome-bg) !important;

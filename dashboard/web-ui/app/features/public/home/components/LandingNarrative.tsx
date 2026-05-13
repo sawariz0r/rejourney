@@ -10,24 +10,12 @@ import {
     LockKeyhole,
     MousePointerClick,
     Server,
-    ShieldCheck,
     TrendingUp,
     Zap,
 } from 'lucide-react';
+import { EuFlag } from './EuFlag';
 import { MarkExpo, MarkReactNative, MarkSwift } from './PlatformMarks';
 import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
-
-const EuFlag: React.FC<{ className?: string }> = ({ className = '' }) => (
-    <svg viewBox="0 0 48 32" className={className} role="img" aria-label="European Union flag">
-        <rect width="48" height="32" rx="6" fill="#1d4ed8" />
-        {Array.from({ length: 12 }).map((_, index) => {
-            const angle = (index / 12) * Math.PI * 2 - Math.PI / 2;
-            const cx = (24 + Math.cos(angle) * 8.5).toFixed(3);
-            const cy = (16 + Math.sin(angle) * 8.5).toFixed(3);
-            return <circle key={index} cx={cx} cy={cy} r="1.2" fill="#fde047" />;
-        })}
-    </svg>
-);
 
 type SankeyNode = {
     id: string;
@@ -384,7 +372,7 @@ const trustCards = [
     {
         title: 'GDPR compliance',
         copy: 'EU-oriented controls for masking, redaction, data minimization, and optional geolocation collection.',
-        icon: ShieldCheck,
+        icon: undefined,
         flag: true,
         className: 'sm:col-span-2 bg-[#eff6ff]',
     },

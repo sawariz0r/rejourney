@@ -7,7 +7,7 @@ import { useTeam } from '~/shared/providers/TeamContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { clearCache, getTeamBillingUsage, getTeamPlan, TeamUsage } from '~/features/app/billing/api';
 import { clearCacheMatching } from '~/shared/api/client';
-import { RefreshCw, User as UserIcon, LogOut, ChevronDown, CreditCard, Copy, BookOpen, Check, Menu } from 'lucide-react';
+import { RefreshCw, User as UserIcon, LogOut, ChevronDown, CreditCard, Copy, BookOpen, Check, Menu, Mail } from 'lucide-react';
 import { AI_INTEGRATION_PROMPT } from '~/shared/constants/aiPrompts';
 import { DASHBOARD_MANUAL_REFRESH_COMPLETE, DASHBOARD_MANUAL_REFRESH_START } from '~/shared/constants/events';
 
@@ -28,6 +28,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
   const [teamUsage, setTeamUsage] = useState<TeamUsage | null>(null);
   const [teamPlan, setTeamPlan] = useState<{ planName: string; sessionLimit: number; videoRetentionLabel: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
+  const [copiedContactEmail, setCopiedContactEmail] = useState(false);
   const [copiedDocs, setCopiedDocs] = useState(false);
   const refreshPulseTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -183,6 +184,12 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
     setTimeout(() => setCopiedDocs(false), 2000);
   }, []);
 
+  const handleCopyContactEmail = useCallback(() => {
+    navigator.clipboard.writeText('contact@rejourney.co');
+    setCopiedContactEmail(true);
+    setTimeout(() => setCopiedContactEmail(false), 2000);
+  }, []);
+
   // Truncate public key for display
   const truncatedKey = currentProject?.publicKey
     ? `${currentProject.publicKey.slice(0, 8)}...${currentProject.publicKey.slice(-4)}`
@@ -193,8 +200,8 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
     : `Refresh data (last: ${lastRefreshTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})`;
 
   return (
-    <div className="dashboard-topbar relative z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5 sm:px-5">
-      <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+    <div className="dashboard-topbar relative z-10 flex flex-col gap-2 px-3 py-2.5 sm:px-5 lg:flex-row lg:items-center lg:justify-between lg:gap-x-3">
+      <div className="flex w-full min-w-0 flex-1 items-center gap-3 sm:gap-4">
         {/* Mobile Menu Button */}
         <button
           onClick={() => window.dispatchEvent(new CustomEvent('toggleMobileSidebar'))}
@@ -233,13 +240,14 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         )}
       </div>
 
-      <div className="flex w-full min-w-0 flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end sm:flex-nowrap">
+      <div className="dashboard-topbar-actions flex w-full min-w-0 flex-nowrap items-center justify-start gap-1.5 overflow-x-auto pb-0.5 lg:w-auto lg:justify-end lg:gap-2 lg:overflow-visible lg:pb-0">
         {/* Public Key - Truncated & Copyable */}
         {currentProject?.publicKey && (
           <button
             onClick={handleCopyPublicKey}
-            className="group hidden h-9 items-center gap-2 border border-slate-200 bg-white px-3 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:shadow-none md:flex"
+            className="group hidden h-9 shrink-0 items-center gap-2 border border-slate-200 bg-white px-3 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:shadow-none 2xl:flex"
             title={`Copy Public Key: ${currentProject.publicKey}`}
+            aria-label="Copy public key"
           >
             <span className="font-mono text-black font-bold text-xs">{truncatedKey}</span>
             {copiedKey ? (
@@ -250,18 +258,35 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
           </button>
         )}
 
+        {/* Contact Devs Button */}
+        <button
+          onClick={handleCopyContactEmail}
+          className="group flex h-9 shrink-0 items-center gap-2 border border-slate-200 bg-white px-3 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:shadow-none"
+          title="Copy developer contact email: contact@rejourney.co"
+          aria-label="Copy developer contact email"
+        >
+          <Mail className="w-4 h-4 text-black stroke-[2]" />
+          <span className="hidden 2xl:inline text-xs font-bold">Contact Our Devs</span>
+          {copiedContactEmail ? (
+            <Check className="w-4 h-4 text-black stroke-[3]" />
+          ) : (
+            <Copy className="w-4 h-4 text-black group-hover:text-[#5dadec] transition-colors stroke-[2]" />
+          )}
+        </button>
+
         {/* AI Docs Button */}
         <button
           onClick={handleCopyDocsUrl}
-          className="group flex h-9 items-center gap-2 border border-slate-200 bg-white px-3 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:shadow-none"
+          className="group flex h-9 shrink-0 items-center gap-2 border border-slate-200 bg-white px-3 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:shadow-none"
           title="Copy AI Integration Prompt"
+          aria-label="Copy AI integration prompt"
         >
           <BookOpen className="w-4 h-4 text-black stroke-[2]" />
-          <span className="hidden sm:inline text-xs font-bold">AI Docs</span>
+          <span className="hidden xl:inline text-xs font-bold">AI Docs</span>
           {copiedDocs ? (
             <Check className="w-4 h-4 text-black stroke-[3]" />
           ) : (
-             <span />
+            null
           )}
         </button>
 
@@ -269,7 +294,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className={`flex items-center justify-center w-9 h-9 border border-slate-200 shadow-sm transition-all active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${isRefreshing
+          className={`flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 shadow-sm transition-all active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 ${isRefreshing
             ? 'bg-white'
             : refreshCompletedPulse
               ? 'bg-emerald-100 border-emerald-200'
@@ -284,7 +309,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         {user && currentTeam && (
           <Link
             to={`${pathPrefix}/team`}
-            className="hidden h-9 items-center gap-2 border border-slate-200 bg-emerald-50 px-3 shadow-sm transition-all hover:bg-emerald-100 hover:border-slate-300 active:shadow-none xl:flex"
+            className="hidden h-9 shrink-0 items-center gap-2 border border-slate-200 bg-emerald-50 px-3 shadow-sm transition-all hover:bg-emerald-100 hover:border-slate-300 active:shadow-none 2xl:flex"
             title={`${currentTeam.name} - Usage this month`}
           >
             <span className="text-xs font-bold text-black">{planLabel}</span>
@@ -294,7 +319,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         )}
 
         {/* User Menu */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="group flex h-9 max-w-full items-center gap-2 border border-slate-200 bg-white px-2 py-1 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:shadow-none focus:outline-none"
@@ -302,7 +327,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
             <div className="w-5 h-5 bg-slate-700 flex items-center justify-center text-white rounded-sm">
               <UserIcon className="w-3.5 h-3.5 stroke-[3]" />
             </div>
-            <div className="hidden min-w-0 md:block">
+            <div className="hidden min-w-0 xl:block">
               <div className="max-w-[100px] truncate text-xs font-bold text-black">{displayLabel}</div>
             </div>
             <ChevronDown className="w-4 h-4 text-black stroke-[3]" />

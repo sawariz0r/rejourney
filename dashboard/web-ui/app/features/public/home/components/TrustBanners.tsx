@@ -1,5 +1,6 @@
 import React from 'react';
-import { Droplet, ShieldCheck } from 'lucide-react';
+import { Droplet } from 'lucide-react';
+import { EuFlag } from './EuFlag';
 import { MarkExpo, MarkReactNative, MarkSwift } from './PlatformMarks';
 import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
@@ -15,7 +16,7 @@ export const TrustBanners: React.FC<{ copy: MarketingHomeCopy['trust'] }> = ({ c
 <div className="relative mx-auto flex max-w-7xl flex-col items-center gap-2 sm:gap-3">
                 <div className="grid w-full grid-cols-2 items-center justify-center gap-2 min-[460px]:grid-cols-3 sm:flex sm:w-auto sm:flex-wrap sm:gap-3">
                     <span className={`${badgeClass} bg-[#86efac]`}>
-                        <ShieldCheck size={16} strokeWidth={3} />
+                        <EuFlag className="h-5 w-8 shrink-0" />
                         {copy.gdpr}
                     </span>
                     <span className={badgeClass}>
