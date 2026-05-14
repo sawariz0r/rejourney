@@ -357,11 +357,13 @@ wait_for_daemonset() {
 prepull_images() {
   local api_image="ghcr.io/${REPOSITORY}/api:${IMAGE_TAG}"
   local web_image="ghcr.io/${REPOSITORY}/web:${IMAGE_TAG}"
+  local migration_image="ghcr.io/${REPOSITORY}/migration:${IMAGE_TAG}"
   local ds_name="prepull-${IMAGE_TAG:0:12}"
 
   section "Pre-pulling Images on All Nodes"
   log "Images: ${api_image}"
   log "        ${web_image}"
+  log "        ${migration_image}"
 
   # Remove any leftover prepull DaemonSets from a previous failed deploy
   kubectl delete daemonset -n "${NAMESPACE}" \
@@ -403,6 +405,13 @@ spec:
           image: ${web_image}
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-c", "echo 'web image warmed on '\$(hostname)"]
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
+        - name: pull-migration
+          image: ${migration_image}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c", "echo 'migration image warmed on '\$(hostname)"]
           resources:
             requests: { cpu: 10m, memory: 32Mi }
             limits:   { cpu: 200m, memory: 256Mi }
