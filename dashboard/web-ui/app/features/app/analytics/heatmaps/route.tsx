@@ -11,7 +11,7 @@ export const Heatmaps: React.FC = () => {
     const { timeRange, setTimeRange } = useSharedAnalyticsTimeRange(selectedProject?.id);
 
     return (
-        <div className="min-h-screen bg-[#f8fafc] pb-12 font-sans text-slate-900">
+        <div className="firebase-heatmaps-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-slate-900">
             <DashboardPageHeader
                 title="Heatmaps"
                 icon={<MousePointer2 className="w-6 h-6" />}

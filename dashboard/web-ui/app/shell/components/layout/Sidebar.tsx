@@ -561,11 +561,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onMouseEnter={() => prefetchPath(item.path)}
                       onFocus={() => prefetchPath(item.path)}
                       className={`
-                        dashboard-nav-item flex items-center text-[0.82rem] font-semibold transition-colors
-                        ${collapsedDesktop ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'}
+                        dashboard-nav-item flex items-center text-[0.88rem] transition-colors
+                        ${collapsedDesktop ? 'justify-center px-2 py-2' : 'gap-3 px-4 py-2.5'}
                         ${isActive(item.path)
-                          ? 'bg-black text-white border-l-[3px] border-[#5dadec]'
-                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-l-[3px] border-transparent'
+                          ? 'bg-[#f1f3f4] text-[#202124] font-semibold'
+                          : 'text-[#5f6368] font-medium hover:bg-[#f8fafd] hover:text-[#202124]'
                         }
                       `}
                     >

@@ -123,6 +123,13 @@ const getPlatformColor = (platform: string): string => {
     return '#7c3aed';
 };
 
+const getPlatformLabel = (platform: string): string => {
+    const normalized = platform.trim().toLowerCase();
+    if (normalized === 'ios') return 'iOS';
+    if (normalized === 'android') return 'Android';
+    return platform.trim() || 'Unknown';
+};
+
 const isValidDeviceLabel = (value: string | null | undefined): boolean => {
     const normalized = (value || '').trim().toLowerCase();
     return Boolean(normalized) && normalized !== 'unknown' && normalized !== 'unknown device' && normalized !== 'n/a';
@@ -145,18 +152,16 @@ const getMetricToneClass = (tone: RankingCardProps['tone']): string => {
 };
 
 const SummaryCard: React.FC<SummaryCardProps> = ({ label, value, detail, icon: Icon, accentClassName }) => (
-    <div className="dashboard-keep-neo min-w-0 border-2 border-black bg-white p-4 shadow-neo transition-all hover:-translate-y-1 hover:shadow-neo-lg">
-        <div className={`mb-3 h-2 border-2 border-black ${accentClassName}`} />
+    <div className="devices-summary-card dashboard-keep-neo dashboard-kpi-card min-w-0 p-2.5 transition-all hover:-translate-y-0.5 sm:p-4">
+        <div className={`devices-card-accent dashboard-kpi-accent mb-2 h-1 border-2 border-black sm:mb-2.5 sm:h-1.5 ${accentClassName}`} />
         <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-                <div className="break-words text-[10px] font-black uppercase text-slate-700">{label}</div>
-                <div className="mt-2 break-words text-2xl font-black leading-none text-black sm:text-3xl">{value}</div>
+                <div className="dashboard-label break-words text-slate-700">{label}</div>
+                <div className="mt-1.5 break-words text-[1.35rem] font-extrabold leading-none text-black sm:mt-2 sm:text-3xl">{value}</div>
             </div>
-            <div className="shrink-0 border-2 border-black bg-[#f8fafc] p-2 shadow-neo-sm">
-                <Icon className="h-5 w-5 text-black" />
-            </div>
+            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
         </div>
-        <div className="mt-3 text-xs font-semibold uppercase text-slate-500">
+        <div className="mt-2 text-[11px] font-semibold uppercase leading-4 text-slate-500">
             {detail}
         </div>
     </div>
@@ -169,15 +174,15 @@ const Panel: React.FC<{
     children: React.ReactNode;
     className?: string;
 }> = ({ title, subtitle, icon: Icon, children, className = '' }) => (
-    <section className={`dashboard-surface overflow-hidden p-0 ${className}`}>
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
+    <section className={`devices-panel dashboard-surface overflow-hidden p-0 ${className}`}>
+        <div className="devices-panel-header flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
             <div className="min-w-0">
                 <h2 className="text-sm font-black uppercase tracking-wide text-black">{title}</h2>
                 {subtitle && <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{subtitle}</p>}
             </div>
             <Icon className="h-5 w-5 shrink-0 text-slate-700" />
         </div>
-        <div className="p-5">{children}</div>
+        <div className="devices-panel-body p-5">{children}</div>
     </section>
 );
 
@@ -194,11 +199,11 @@ const RankingCard: React.FC<RankingCardProps> = ({
     tone = 'neutral',
 }) => (
     <Panel title={title} subtitle={subtitle} icon={Icon}>
-        <div className={`mb-4 h-1.5 rounded-full ${accentClassName}`} />
+        <div className={`devices-card-accent mb-4 h-1.5 rounded-full ${accentClassName}`} />
         <div className="space-y-2">
             {rows.length > 0 ? rows.slice(0, 6).map((row, index) => (
-                <div key={`${title}-${row.model}`} className="flex items-center gap-3 border border-slate-200 bg-white px-3 py-3 shadow-sm">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center bg-slate-100 text-xs font-black text-slate-600">
+                <div key={`${title}-${row.model}`} className="devices-ranking-row flex items-center gap-3 border border-slate-200 bg-white px-3 py-3 shadow-sm">
+                    <div className="devices-rank-badge flex h-7 w-7 shrink-0 items-center justify-center bg-slate-100 text-xs font-black text-slate-600">
                         {index + 1}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -224,17 +229,16 @@ const TechnicalMetricCard: React.FC<{
     icon: LucideIcon;
     accentClassName: string;
 }> = ({ label, row, value, icon: Icon, accentClassName }) => (
-    <div className="border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="devices-tech-card dashboard-kpi-card p-2.5 transition-all hover:-translate-y-0.5 sm:p-4">
+        <div className={`devices-card-accent dashboard-kpi-accent mb-2 h-1 border-2 border-black sm:mb-2.5 sm:h-1.5 ${accentClassName}`} />
         <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-                <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</div>
-                <div className="mt-2 truncate text-base font-black text-black" title={row?.model || ''}>
+                <div className="dashboard-label text-slate-700">{label}</div>
+                <div className="mt-1.5 truncate text-base font-extrabold text-black" title={row?.model || ''}>
                     {row ? row.displayName : 'No data'}
                 </div>
             </div>
-            <div className={`shrink-0 p-2 ${accentClassName}`}>
-                <Icon className="h-4 w-4 text-black" />
-            </div>
+            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
         </div>
         <div className="mt-3 flex items-end justify-between gap-3">
             <div className="text-2xl font-black text-black">{value}</div>
@@ -245,9 +249,86 @@ const TechnicalMetricCard: React.FC<{
     </div>
 );
 
+const PlatformMixBar: React.FC<{
+    platforms: DeviceSummary['platforms'];
+    totalSessions: number;
+}> = ({ platforms, totalSessions }) => {
+    const platformOrder = new Map([
+        ['ios', 0],
+        ['android', 1],
+    ]);
+    const total = Math.max(totalSessions, 0);
+    const segments = Object.entries(platforms || {})
+        .map(([platform, rawCount]) => {
+            const count = Math.max(Number(rawCount) || 0, 0);
+            const percent = total > 0 ? (count / total) * 100 : 0;
+            return {
+                platform,
+                label: getPlatformLabel(platform),
+                count,
+                percent,
+                color: getPlatformColor(platform),
+            };
+        })
+        .filter((segment) => segment.count > 0)
+        .sort((a, b) => {
+            const aOrder = platformOrder.get(a.platform.toLowerCase()) ?? 99;
+            const bOrder = platformOrder.get(b.platform.toLowerCase()) ?? 99;
+            return aOrder - bOrder || b.count - a.count || a.label.localeCompare(b.label);
+        });
+
+    if (segments.length === 0) {
+        return (
+            <div className="border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                No platform mix available.
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            <div
+                className="devices-platform-track flex h-5 w-full overflow-hidden bg-slate-100"
+                aria-label={`Platform mix: ${segments.map((segment) => `${segment.label} ${formatPercent(segment.percent)}`).join(', ')}`}
+            >
+                {segments.map((segment) => {
+                    const tooltip = `${segment.label}: ${formatPercent(segment.percent)} (${formatCompact(segment.count)} sessions)`;
+                    return (
+                        <div
+                            key={segment.platform}
+                            className="h-full shrink-0 outline-none ring-offset-2 transition-[filter] hover:brightness-95 focus-visible:ring-2 focus-visible:ring-slate-400"
+                            style={{
+                                width: `${Math.min(100, Math.max(0, segment.percent))}%`,
+                                backgroundColor: segment.color,
+                            }}
+                            title={tooltip}
+                            aria-label={tooltip}
+                            tabIndex={0}
+                        />
+                    );
+                })}
+            </div>
+
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
+                {segments.map((segment) => (
+                    <div key={`legend-${segment.platform}`} className="flex min-w-[8rem] items-center gap-2">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
+                        <div className="min-w-0">
+                            <div className="text-sm font-black text-slate-900">{segment.label}</div>
+                            <div className="text-xs font-semibold text-slate-500">
+                                {formatPercent(segment.percent)} · {formatCompact(segment.count)} sessions
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const DeviceTable: React.FC<{ rows: DeviceMetricRow[] }> = ({ rows }) => (
     <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] text-left text-sm">
+        <table className="devices-data-table w-full min-w-[980px] text-left text-sm">
             <thead className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                 <tr>
                     <th className="pb-3 pr-4">Device</th>
@@ -288,7 +369,7 @@ const CohortTable: React.FC<{
     valuePrefix?: string;
 }> = ({ rows, label, valuePrefix = '' }) => (
     <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
+        <table className="devices-data-table w-full min-w-[640px] text-left text-sm">
             <thead className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                 <tr>
                     <th className="pb-3 pr-4">{label}</th>
@@ -503,7 +584,7 @@ export const Devices: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-transparent pb-12 font-sans text-slate-900">
+        <div className="firebase-devices-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-slate-900">
             <DashboardPageHeader
                 title="Devices"
                 icon={<Smartphone className="h-6 w-6" />}
@@ -514,9 +595,9 @@ export const Devices: React.FC = () => {
                 </div>
             </DashboardPageHeader>
 
-            <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-6 sm:px-6">
+            <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6">
                 {!selectedProject?.id && (
-                    <div className="border-2 border-black bg-[#f9a8d4] p-5 text-sm font-black uppercase text-black shadow-neo">
+                    <div className="devices-empty-state border-2 border-black bg-[#f9a8d4] p-5 text-sm font-black uppercase text-black shadow-neo">
                         Select a project to load device analytics.
                     </div>
                 )}
@@ -535,7 +616,7 @@ export const Devices: React.FC = () => {
 
                 {hasData && data && (
                     <>
-                        <section>
+                        <section className="devices-summary-grid">
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                                 <SummaryCard
                                     label="Most Used Device"
@@ -568,7 +649,7 @@ export const Devices: React.FC = () => {
                             </div>
                         </section>
 
-                        <div className="soft-border-scope space-y-6">
+                        <div className="devices-workspace soft-border-scope space-y-6">
                             <section className="grid grid-cols-1 gap-6 xl:grid-cols-4">
                                 <Panel title="Device Portfolio" subtitle={`${formatCompact(data.totalSessions)} sessions across ${deviceRows.length.toLocaleString()} models`} icon={Layers}>
                                     <div className="grid grid-cols-2 gap-3">
@@ -595,29 +676,7 @@ export const Devices: React.FC = () => {
                                 </Panel>
 
                                 <Panel title="Platform Mix" subtitle="Where the device traffic comes from." icon={Smartphone} className="xl:col-span-3">
-                                    <div className="grid gap-3 md:grid-cols-3">
-                                        {Object.entries(data.platforms).map(([platform, count]) => (
-                                            <div key={platform} className="border border-slate-200 bg-white p-4 shadow-sm">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div className="flex items-center gap-2 text-sm font-black uppercase text-slate-900">
-                                                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getPlatformColor(platform) }} />
-                                                        {platform}
-                                                    </div>
-                                                    <div className="text-sm font-black text-black">{formatPercent((count / Math.max(data.totalSessions, 1)) * 100)}</div>
-                                                </div>
-                                                <div className="mt-3 h-2 bg-slate-100">
-                                                    <div
-                                                        className="h-2"
-                                                        style={{
-                                                            backgroundColor: getPlatformColor(platform),
-                                                            width: `${Math.min(100, (count / Math.max(data.totalSessions, 1)) * 100)}%`,
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div className="mt-2 text-xs font-semibold text-slate-500">{formatCompact(count)} sessions</div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <PlatformMixBar platforms={data.platforms} totalSessions={data.totalSessions} />
                                 </Panel>
                             </section>
 
@@ -723,7 +782,7 @@ export const Devices: React.FC = () => {
                             {matrixHotspots.length > 0 && (
                                 <Panel title="Device + Version Hotspots" subtitle="Device/version combinations with the most concentrated friction." icon={AlertTriangle}>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full min-w-[820px] text-left text-sm">
+                                        <table className="devices-data-table w-full min-w-[820px] text-left text-sm">
                                             <thead className="text-[11px] font-black uppercase tracking-wide text-slate-500">
                                                 <tr>
                                                     <th className="pb-3 pr-4">Device</th>

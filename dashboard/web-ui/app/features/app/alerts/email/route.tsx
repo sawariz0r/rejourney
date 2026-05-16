@@ -372,7 +372,7 @@ export const AlertEmails: React.FC = () => {
     const nonRecipientMembers = availableMembers.filter(m => !m.isRecipient);
 
     return (
-        <div className="min-h-screen animate-fade-in bg-transparent pb-12 font-sans text-slate-900">
+        <div className="firebase-alerts-page min-h-screen animate-fade-in bg-[#f8fafd] pb-12 font-sans text-slate-900">
             <DashboardPageHeader
                 title="Alert Settings"
                 subtitle="Configure real-time notifications for critical events"
@@ -385,7 +385,7 @@ export const AlertEmails: React.FC = () => {
                 </div>
             </DashboardPageHeader>
 
-            <div className="mx-auto max-w-[1200px] space-y-8 px-4 py-6 sm:px-6">
+            <div className="mx-auto max-w-[1200px] space-y-6 px-4 py-6 sm:px-6">
             {error && (
                 <div className="bg-red-50 border border-red-200 p-4 text-sm text-red-900 rounded-xl flex items-center gap-3">
                     <AlertTriangle className="w-5 h-5 text-red-500" />

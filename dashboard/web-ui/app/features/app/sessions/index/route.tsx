@@ -565,7 +565,7 @@ export const RecordingsList: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] font-sans text-slate-900">
+    <div className="firebase-replays-page min-h-screen flex flex-col bg-[#f8fafd] font-sans text-slate-900">
       {/* Main Header — scrolls away with page */}
       <div className="shrink-0">
         <DashboardPageHeader
@@ -755,7 +755,7 @@ export const RecordingsList: React.FC = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className={`h-2.5 w-2.5 shrink-0 border border-black ${!canNavigateToSession ? 'bg-slate-300' : hasIssues ? 'bg-[#fb7185]' : 'bg-[#86efac]'}`} />
+                      <span className={`h-2.5 w-2.5 shrink-0 border border-black ${!canNavigateToSession ? 'bg-slate-300' : hasIssues ? 'bg-[#fb7185]' : 'bg-[#15803d]'}`} />
                       <h3 className="truncate font-mono text-sm font-semibold text-slate-900" title={userId}>{userId}</h3>
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
@@ -805,7 +805,11 @@ export const RecordingsList: React.FC = () => {
                       NEW USER
                     </span>
                   )}
-                  {!hasIssues && <NeoBadge variant="success" size="sm">HEALTHY</NeoBadge>}
+                  {!hasIssues && (
+                    <span className="inline-flex items-center border border-[#15803d] bg-[#dcfce7] px-2 py-0.5 text-[10px] font-black uppercase text-[#14532d]">
+                      HEALTHY
+                    </span>
+                  )}
                   {(session.crashCount || 0) > 0 && <NeoBadge variant="danger" size="sm">CRASH</NeoBadge>}
                   {((session as any).anrCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ANR</NeoBadge>}
                   {((session as any).errorCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ERR</NeoBadge>}
@@ -962,7 +966,7 @@ export const RecordingsList: React.FC = () => {
                 >
                     {/* Visual Indicator */}
                     <td className="w-10 py-2.5 pl-4 pr-2 align-middle text-center">
-                      <div className={`w-2.5 h-2.5 border border-black mx-auto ${isReplayBlocked ? 'bg-slate-400 animate-pulse' : hasIssues ? 'bg-[#fb7185]' : 'bg-[#86efac]'}`} />
+                      <div className={`w-2.5 h-2.5 border border-black mx-auto ${isReplayBlocked ? 'bg-slate-400 animate-pulse' : hasIssues ? 'bg-[#fb7185]' : 'bg-[#15803d]'}`} />
                     </td>
 
                     {/* User & Device */}
@@ -1060,7 +1064,11 @@ export const RecordingsList: React.FC = () => {
                           NEW USER
                         </span>
                       )}
-                      {!hasIssues && <NeoBadge variant="success" size="sm">HEALTHY</NeoBadge>}
+                      {!hasIssues && (
+                        <span className="inline-flex items-center border border-[#15803d] bg-[#dcfce7] px-2 py-0.5 text-[10px] font-black uppercase text-[#14532d]">
+                          HEALTHY
+                        </span>
+                      )}
                       {(session.crashCount || 0) > 0 && <NeoBadge variant="danger" size="sm">CRASH</NeoBadge>}
                       {((session as any).anrCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ANR</NeoBadge>}
                       {((session as any).errorCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ERR</NeoBadge>}

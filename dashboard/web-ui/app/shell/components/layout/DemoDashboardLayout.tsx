@@ -34,7 +34,7 @@ export const DemoDashboardLayout: React.FC = () => {
 
     return (
         <div className="dashboard-modern dashboard-shell flex h-screen">
-            <div className="w-0 shrink-0 overflow-visible md:w-auto md:shrink-0">
+            <div className="w-0 shrink-0 overflow-visible bg-white md:w-auto md:shrink-0">
                 <Sidebar
                     currentProject={selectedProject}
                     onProjectChange={handleProjectChange}
@@ -49,7 +49,7 @@ export const DemoDashboardLayout: React.FC = () => {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden bg-[var(--dashboard-canvas)]">
                 {/* Demo Banner */}
                 <div className="z-10 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-[#e0f2fe] px-4 py-2 text-slate-900 shadow-sm">
                     <div className="flex min-w-0 items-center gap-2">

@@ -135,7 +135,7 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
   return (
     <div className="dashboard-modern dashboard-shell flex h-dvh min-h-screen min-w-0 font-sans text-black antialiased selection:bg-[#67e8f9] selection:text-black">
       {!isWarehouseRoute && (
-        <div className="z-20 w-0 shrink-0 overflow-visible bg-[#f8fafc] md:w-auto md:shrink-0">
+        <div className="z-20 w-0 shrink-0 overflow-visible bg-white md:w-auto md:shrink-0">
           <Sidebar
             currentProject={selectedProject}
             onProjectChange={handleProjectChange}
@@ -150,7 +150,7 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
           />
         </div>
       )}
-      <div key={routeScopeKey} className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f8fafc]">
+      <div key={routeScopeKey} className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--dashboard-canvas)]">
         {!isWarehouseRoute && <TopBar currentProject={selectedProject} />}
         {!isWarehouseRoute && projectsError && (
           <div className="mx-4 mt-4 border-2 border-black bg-[#f9a8d4] px-4 py-3 text-sm font-extrabold text-black shadow-neo-sm sm:mx-6">

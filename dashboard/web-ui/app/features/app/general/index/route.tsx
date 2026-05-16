@@ -654,11 +654,11 @@ const GA4Card: React.FC<{
     className?: string;
     accentClassName?: string;
 }> = ({ title, action, children, className = '', accentClassName = 'bg-[#67e8f9]' }) => (
-    <div className={`flex h-full min-w-0 flex-col border-2 border-black bg-white shadow-neo transition-all hover:-translate-y-0.5 hover:shadow-neo-lg ${className}`}>
-        <div className={`h-1.5 border-b-2 border-black ${accentClassName}`} />
-        <div className="flex min-h-0 flex-1 flex-col p-3.5 sm:p-4">
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b-2 border-black pb-2.5">
-                <h3 className="min-w-0 break-words text-sm font-extrabold text-black">{title}</h3>
+    <div className={`firebase-general-card flex h-full min-w-0 flex-col overflow-hidden border border-[#dadce0] bg-white shadow-none ${className}`}>
+        <div className={`h-1 ${accentClassName}`} />
+        <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2 border-b border-[#e8eaed] pb-3">
+                <h3 className="min-w-0 break-words text-[15px] font-medium text-[#202124] underline decoration-dotted decoration-[#bdc1c6] underline-offset-4">{title}</h3>
                 {action ? <div className="flex flex-wrap items-center gap-1.5">{action}</div> : null}
             </div>
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
@@ -1384,7 +1384,7 @@ export const GeneralOverview: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#f8fafc] bg-[linear-gradient(90deg,rgba(0,0,0,0.045)_1px,transparent_1px),linear-gradient(rgba(0,0,0,0.045)_1px,transparent_1px)] bg-[length:28px_28px] pb-12 font-sans text-slate-900">
+        <div className="firebase-general-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-[#202124]">
             <DashboardPageHeader
                 title="General"
                 icon={<MessageSquareWarning className="h-5 w-5" />}
@@ -1395,7 +1395,7 @@ export const GeneralOverview: React.FC = () => {
                 </div>
             </DashboardPageHeader>
 
-            <div className="mx-auto w-full max-w-[1600px] space-y-5 px-3 py-4 sm:space-y-6 sm:px-5 sm:py-5">
+            <div className="mx-auto w-full max-w-[1560px] space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-6">
                 {!selectedProject?.id && (
                     <div className="border-2 border-black bg-[#f9a8d4] p-4 text-sm font-extrabold text-black shadow-neo">
                         Select a project to view general diagnostics.
@@ -1409,14 +1409,14 @@ export const GeneralOverview: React.FC = () => {
                 )}
 
                 {!isLoading && selectedProject?.id && !hasData && (
-                    <div className="overflow-hidden border-2 border-black bg-white shadow-neo-lg">
-                        <div className="border-b-2 border-black bg-[#86efac] px-4 py-4 sm:px-5">
-                            <div className="flex flex-wrap items-center gap-2 text-[11px] font-extrabold uppercase text-black">
+                    <div className="dashboard-surface overflow-hidden rounded-lg border border-[#dadce0] bg-white shadow-sm">
+                        <div className="border-b border-[#dadce0] bg-[#e6f4ea] px-4 py-4 sm:px-5">
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase text-[#137333]">
                                 <Info className="h-4 w-4 shrink-0" aria-hidden />
                                 New project setup
                             </div>
-                            <h3 className="mt-2 text-lg font-extrabold text-black">No analytics yet - connect your app first</h3>
-                            <p className="mt-2 max-w-3xl text-sm font-semibold text-slate-700">
+                            <h3 className="mt-2 text-lg font-semibold text-[#202124]">No analytics yet - connect your app first</h3>
+                            <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#3c4043]">
                                 Once your first build sends data, this General dashboard will populate automatically.
                                 Use these shortcuts to finish setup for either React Native or Swift.
                             </p>
@@ -1427,7 +1427,7 @@ export const GeneralOverview: React.FC = () => {
                                 type="button"
                                 onClick={handleCopyProjectKey}
                                 disabled={!selectedProject.publicKey}
-                                className="flex items-center justify-center gap-2 border-2 border-black bg-[#86efac] px-4 py-2.5 text-xs font-extrabold text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#4ade80] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-60"
+                                className="flex items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-xs font-semibold text-[#202124] transition-colors hover:border-[#137333] hover:bg-[#f0fdf4] disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 <Copy className="h-4 w-4" />
                                 {copiedPublicKey ? 'Public key copied' : 'Copy public key'}
@@ -1436,7 +1436,7 @@ export const GeneralOverview: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleCopyIntegrationPrompt}
-                                className="flex items-center justify-center gap-2 border-2 border-black bg-[#60a5fa] px-4 py-2.5 text-xs font-extrabold text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#3b82f6] hover:shadow-neo"
+                                className="flex items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-xs font-semibold text-[#202124] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
                             >
                                 <BookOpen className="h-4 w-4" />
                                 {copiedDocsPrompt ? 'AI prompt copied' : 'Copy AI docs prompt'}
@@ -1446,7 +1446,7 @@ export const GeneralOverview: React.FC = () => {
                                 href="/docs/reactnative/overview"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex items-center justify-center gap-2 border-2 border-black bg-[#f9a8d4] px-4 py-2.5 text-xs font-extrabold text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#f472b6] hover:shadow-neo"
+                                className="flex items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-xs font-semibold text-[#1a73e8] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
                             >
                                 <ExternalLink className="h-4 w-4" />
                                 View React Native docs
@@ -1456,7 +1456,7 @@ export const GeneralOverview: React.FC = () => {
                                 href="/docs/swift/overview"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex items-center justify-center gap-2 border-2 border-black bg-[#c4b5fd] px-4 py-2.5 text-xs font-extrabold text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#a78bfa] hover:shadow-neo"
+                                className="flex items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-xs font-semibold text-[#1a73e8] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
                             >
                                 <ExternalLink className="h-4 w-4" />
                                 View Swift docs
@@ -1478,11 +1478,10 @@ export const GeneralOverview: React.FC = () => {
                                                 : 'text-rose-700';
 
                                         return (
-                                            <div key={card.label} className="min-w-0 border-2 border-black bg-white p-2.5 shadow-neo transition-all hover:-translate-y-0.5 hover:shadow-neo-lg sm:p-4">
-                                                <div className="mb-2 h-1 border-2 border-black sm:mb-2.5 sm:h-1.5" style={{ backgroundColor: RETRO_CARD_ACCENTS[index % RETRO_CARD_ACCENTS.length] }} />
-                                                <div className="dashboard-label break-words text-slate-700">{card.label}</div>
-                                                <div className="mt-1.5 break-words text-[1.35rem] font-extrabold leading-none text-black sm:mt-2 sm:text-3xl">{card.value}</div>
-                                                <div className={`mt-1.5 inline-flex border-2 border-black bg-white px-1.5 py-0.5 text-[10px] font-bold uppercase shadow-neo-sm sm:mt-2 sm:px-2 sm:py-1 sm:text-[11px] ${deltaClass}`}>
+                                            <div key={card.label} className="firebase-kpi-card min-w-0 rounded-xl border border-[#dadce0] bg-white p-4 shadow-none transition-colors hover:border-[#bdc1c6] sm:p-5">
+                                                <div className="dashboard-label break-words text-[#5f6368]">{card.label}</div>
+                                                <div className="mt-3 break-words text-[1.6rem] font-normal leading-none text-[#202124] sm:text-[2rem]">{card.value}</div>
+                                                <div className={`mt-4 inline-flex rounded-full border border-[#dadce0] bg-white px-2.5 py-1 text-[11px] font-semibold uppercase sm:text-xs ${deltaClass}`}>
                                                     {card.delta}
                                                 </div>
                                             </div>

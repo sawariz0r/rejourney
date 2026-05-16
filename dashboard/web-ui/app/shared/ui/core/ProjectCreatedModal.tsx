@@ -64,37 +64,37 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
       title=""
       size="lg"
       showCloseButton={false}
-      panelClassName="max-w-4xl rounded-none border-2 border-black shadow-[10px_10px_0_0_rgba(0,0,0,1)]"
+      panelClassName="max-w-4xl !rounded-xl !border !border-[#dadce0] !shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
       bodyClassName="p-0"
     >
-      <div className="overflow-hidden rounded-none bg-white">
-        <div className="border-b-2 border-black bg-[#f8fafc] px-8 py-7">
+      <div className="overflow-hidden rounded-xl bg-white">
+        <div className="border-b border-[#dadce0] bg-[#f8fafd] px-8 py-7">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#b7dfc3] bg-[#e6f4ea] text-[#137333]">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-2 border-2 border-black bg-[#86efac] px-3 py-1 text-[11px] font-black uppercase text-black shadow-neo-sm">
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#b7dfc3] bg-[#e6f4ea] px-3 py-1 text-[11px] font-bold uppercase text-[#137333]">
                   Project Ready
                 </div>
-                <h2 className="text-2xl font-black uppercase text-black">
+                <h2 className="text-2xl font-semibold text-[#202124]">
                   {project.name} is set up and ready for integration.
                 </h2>
-                <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-700">
+                <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#3c4043]">
                   Copy the public key or grab a ready-to-paste AI setup prompt with this project already filled in.
                 </p>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span className="border-2 border-black bg-[#67e8f9] px-3 py-1 text-[11px] font-black uppercase text-black shadow-neo-sm">
+                  <span className="rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-3 py-1 text-[11px] font-bold uppercase text-[#1d4ed8]">
                     {getProjectPlatformLabel(project)}
                   </span>
                   {project.bundleId && (
-                    <span className="border-2 border-black bg-white px-3 py-1 font-mono text-[11px] text-slate-700 shadow-neo-sm">
+                    <span className="rounded-full border border-[#dadce0] bg-white px-3 py-1 font-mono text-[11px] text-slate-600">
                       iOS: {project.bundleId}
                     </span>
                   )}
                   {project.packageName && (
-                    <span className="border-2 border-black bg-white px-3 py-1 font-mono text-[11px] text-slate-700 shadow-neo-sm">
+                    <span className="rounded-full border border-[#dadce0] bg-white px-3 py-1 font-mono text-[11px] text-slate-600">
                       Android: {project.packageName}
                     </span>
                   )}
@@ -105,7 +105,7 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="border-2 border-black bg-white p-2 text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo"
+              className="rounded-full border border-[#dadce0] bg-white p-2 text-[#3c4043] transition-colors hover:bg-[#f1f3f4] hover:text-[#202124]"
             >
               <X className="h-5 w-5" />
               <span className="sr-only">Close</span>
@@ -115,20 +115,20 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
 
         <div className="space-y-6 px-8 py-7">
           <div className="grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
-            <section className="border-2 border-black bg-white p-5 shadow-neo-sm rounded-none">
+            <section className="rounded-lg border border-[#dadce0] bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-black">
-                    <KeyRound className="h-4 w-4 text-black" />
+                  <div className="flex items-center gap-2 text-sm font-semibold text-[#202124]">
+                    <KeyRound className="h-4 w-4 text-[#5f6368]" />
                     Public key
                   </div>
-                  <p className="mt-1 text-sm font-semibold text-slate-700">
+                  <p className="mt-1 text-sm font-medium text-[#3c4043]">
                     Use this in `Rejourney.init(...)`. It is safe to ship in the client app.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 border-2 border-black bg-white px-4 py-3 font-mono text-[13px] leading-6 text-black break-all shadow-neo-sm">
+              <div className="mt-4 rounded-md border border-[#dadce0] bg-[#f8fafd] px-4 py-3 font-mono text-[13px] leading-6 text-[#202124] break-all">
                 {project.publicKey}
               </div>
 
@@ -136,7 +136,7 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
                 <Button
                   variant="outline"
                   onClick={handleCopyPublicKey}
-                  className="rounded-none border-2 border-black bg-[#86efac] font-black uppercase tracking-wide text-black shadow-neo-sm hover:bg-[#4ade80]"
+                  className="!rounded-md !border !border-[#dadce0] !bg-white font-semibold text-[#202124] !shadow-none hover:!border-[#137333] hover:!bg-[#f0fdf4]"
                 >
                   {copiedKey ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
                   {copiedKey ? 'Public key copied' : 'Copy public key'}
@@ -144,17 +144,17 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
               </div>
             </section>
 
-            <section className="border-2 border-black bg-white p-5 shadow-neo-sm rounded-none">
-              <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-black">
-                <Sparkles className="h-4 w-4 text-black" />
+            <section className="rounded-lg border border-[#dadce0] bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#202124]">
+                <Sparkles className="h-4 w-4 text-[#5f6368]" />
                 AI setup prompt
               </div>
-              <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">
+              <p className="mt-2 text-sm font-medium leading-6 text-[#3c4043]">
                 This copies a smart integration prompt with your new project key already inserted.
                 It supports both React Native and native Swift (iOS) setup flows.
               </p>
 
-              <div className="mt-4 border-2 border-black bg-white px-4 py-3 text-xs font-semibold leading-6 text-slate-700 shadow-neo-sm">
+              <div className="mt-4 rounded-md border border-[#dadce0] bg-[#f8fafd] px-4 py-3 text-xs font-medium leading-6 text-[#3c4043]">
                 Includes install steps, initialization, screen tracking, privacy notes, and your project key.
               </div>
 
@@ -162,7 +162,7 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
                 <Button
                   variant="primary"
                   onClick={handleCopyPrompt}
-                  className="rounded-none border-2 border-black bg-[#60a5fa] font-black uppercase tracking-wide text-black shadow-neo-sm hover:bg-[#3b82f6]"
+                  className="!rounded-md !border !border-[#1a73e8] !bg-[#1a73e8] font-semibold text-white !shadow-none hover:!bg-[#1558b0]"
                 >
                   {copiedPrompt ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   {copiedPrompt ? 'Prompt copied' : 'Copy AI prompt'}
@@ -170,7 +170,7 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
                 <Button
                   variant="outline"
                   onClick={handleOpenDocs}
-                  className="rounded-none border-2 border-black bg-[#c4b5fd] font-black uppercase tracking-wide text-black shadow-neo-sm hover:bg-[#a78bfa]"
+                  className="!rounded-md !border !border-[#dadce0] !bg-white font-semibold text-[#202124] !shadow-none hover:!border-[#1a73e8] hover:!bg-[#eef4ff]"
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open docs
@@ -179,37 +179,37 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
             </section>
           </div>
 
-          <section className="border-2 border-black bg-white px-5 py-4 shadow-neo-sm rounded-none">
-            <h3 className="text-sm font-black uppercase text-black">Recommended next steps</h3>
+          <section className="rounded-lg border border-[#dadce0] bg-white px-5 py-4 shadow-sm">
+            <h3 className="text-sm font-semibold text-[#202124]">Recommended next steps</h3>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <div className="border-2 border-black bg-[#fafafa] p-4 shadow-neo-sm rounded-none">
-                <div className="text-[11px] font-black uppercase text-black">Step 1</div>
-                <p className="mt-2 text-sm font-semibold text-black">Pick your stack: React Native SDK or native Swift package.</p>
+              <div className="rounded-md border border-[#dadce0] bg-[#f8fafd] p-4">
+                <div className="text-[11px] font-bold uppercase text-[#5f6368]">Step 1</div>
+                <p className="mt-2 text-sm font-medium text-[#202124]">Pick your stack: React Native SDK or native Swift package.</p>
               </div>
-              <div className="border-2 border-black bg-[#fafafa] p-4 shadow-neo-sm rounded-none">
-                <div className="text-[11px] font-black uppercase text-black">Step 2</div>
-                <p className="mt-2 text-sm font-semibold text-black">Initialize the SDK with this project’s public key.</p>
+              <div className="rounded-md border border-[#dadce0] bg-[#f8fafd] p-4">
+                <div className="text-[11px] font-bold uppercase text-[#5f6368]">Step 2</div>
+                <p className="mt-2 text-sm font-medium text-[#202124]">Initialize the SDK with this project’s public key.</p>
               </div>
-              <div className="border-2 border-black bg-[#fafafa] p-4 shadow-neo-sm rounded-none">
-                <div className="text-[11px] font-black uppercase text-black">Step 3</div>
-                <p className="mt-2 text-sm font-semibold text-black">Ship a test build and confirm new sessions start appearing in the dashboard.</p>
+              <div className="rounded-md border border-[#dadce0] bg-[#f8fafd] p-4">
+                <div className="text-[11px] font-bold uppercase text-[#5f6368]">Step 3</div>
+                <p className="mt-2 text-sm font-medium text-[#202124]">Ship a test build and confirm new sessions start appearing in the dashboard.</p>
               </div>
             </div>
           </section>
         </div>
 
-        <div className="flex flex-col gap-3 border-t-2 border-black bg-[#f8fafc] px-8 py-5 sm:flex-row sm:justify-end">
+        <div className="flex flex-col gap-3 border-t border-[#dadce0] bg-[#f8fafd] px-8 py-5 sm:flex-row sm:justify-end">
           <Button
             variant="secondary"
             onClick={onClose}
-            className="rounded-none border-2 border-black bg-white font-black uppercase tracking-wide text-black shadow-neo-sm hover:bg-slate-100"
+            className="!rounded-md !border !border-[#dadce0] !bg-white font-semibold text-[#202124] !shadow-none hover:!bg-[#f1f3f4]"
           >
             Close
           </Button>
           <Button
             variant="primary"
             onClick={handleOpenDocs}
-            className="rounded-none border-2 border-black bg-black font-black uppercase tracking-wide text-white shadow-neo-sm hover:bg-slate-800"
+            className="!rounded-md !border !border-[#1a73e8] !bg-[#1a73e8] font-semibold text-white !shadow-none hover:!bg-[#1558b0]"
           >
             <ExternalLink className="mr-2 h-4 w-4" />
             View full docs

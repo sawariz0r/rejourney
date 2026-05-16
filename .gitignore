@@ -38,6 +38,7 @@ local.properties
 
 # macOS
 .DS_Store
+**/.DS_Store
 *.pem
 
 # Temporary files
@@ -55,7 +56,6 @@ local.properties
 .local-k8s/
 api_logs.txt
 temp_env.txt
-.DS_Store
 examples/react-native-boilerplate/.env.dev.example
 .
 backend/src/utils/rejourney.code-workspace
@@ -63,3 +63,4 @@ backend/src/utils/rejourney.code-workspace
 .config.kiro
 .kiro/
 dev_docs/scaling-plan.md
+dashboard/.DS_Store

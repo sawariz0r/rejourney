@@ -675,7 +675,8 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
 
   if (error || !project) {
     return (
-      <div className="p-8 max-w-5xl mx-auto">
+      <div className="firebase-settings-page firebase-project-settings-page min-h-screen bg-[#f8fafd] p-8">
+        <div className="mx-auto max-w-5xl">
         <NeoCard className="p-6 border-rose-600 bg-rose-50">
           <div className="flex gap-4 items-center">
             <AlertTriangle className="text-rose-600 w-6 h-6" />
@@ -685,6 +686,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             </div>
           </div>
         </NeoCard>
+        </div>
       </div>
     );
   }
@@ -694,7 +696,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
   const displayedRecordingFps = recordingFpsDraft ?? recordingFpsConfirmation ?? recordingFps;
 
   return (
-    <div className="flex min-h-screen flex-col bg-transparent font-sans text-slate-900">
+    <div className="firebase-settings-page firebase-project-settings-page flex min-h-screen flex-col bg-[#f8fafd] font-sans text-slate-900">
       <DashboardPageHeader
         title="Project Settings"
         subtitle={`Configure ${project.name}`}
@@ -704,7 +706,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
         {!canEdit ? <NeoBadge variant="warning">View Only</NeoBadge> : null}
       </DashboardPageHeader>
 
-      <div className="mx-auto w-full max-w-[1600px] flex-1 space-y-12 px-4 py-6 sm:px-6">
+      <div className="settings-layout-content mx-auto w-full max-w-[1600px] flex-1 space-y-12 px-4 py-6 sm:px-6">
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column: Main Settings */}

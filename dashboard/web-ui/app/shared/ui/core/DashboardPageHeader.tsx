@@ -40,31 +40,28 @@ const HEADER_ICON_ACCENTS: Record<string, string> = {
 export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
     title,
     subtitle,
-    icon,
     iconColor = 'bg-white', // Default to white if not provided
     children
 }) => {
     const iconAccent = HEADER_ICON_ACCENTS[iconColor] ?? HEADER_ICON_ACCENTS['bg-white'];
-    const iconStyle = {
-        '--dashboard-page-header-accent': iconAccent,
-    } as React.CSSProperties;
+    const accentStyle = { backgroundColor: iconAccent };
 
     return (
-        <div className="dashboard-page-header w-full border-b border-slate-200 bg-[#fbfdff]">
-            <div className="grid w-full gap-x-4 gap-y-2 px-4 py-2 sm:px-6 sm:py-2.5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-                <div className="flex min-w-0 flex-wrap items-center gap-2.5 sm:gap-3">
-                    {icon && (
-                        <div className="dashboard-page-header-mark shrink-0" style={iconStyle}>
-                            {icon}
-                        </div>
-                    )}
+        <div className="dashboard-page-header w-full border-b border-slate-200 bg-white">
+            <div className="grid w-full gap-x-4 gap-y-2 px-3 py-2 sm:px-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+                <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                    <span
+                        aria-hidden="true"
+                        className="dashboard-page-header-accent h-5 w-1.5 shrink-0 border border-black/20"
+                        style={accentStyle}
+                    />
                     <div className="min-w-0 flex-1" style={{ minWidth: 'min(100%, 13rem)' }}>
-                        <h1 className="text-lg font-extrabold leading-tight text-black sm:text-xl">
+                        <h1 className="text-[15px] font-extrabold uppercase leading-none text-slate-950 sm:text-base">
                             {title}
                         </h1>
                         {subtitle && (
-                            <div className="mt-1.5 flex min-w-0 items-start gap-2 opacity-80">
-                                <p className="max-w-3xl text-xs font-semibold leading-5 text-slate-600 sm:text-sm">
+                            <div className="mt-1 flex min-w-0 items-start gap-2 opacity-90">
+                                <p className="max-w-3xl text-xs font-medium leading-4 text-slate-600">
                                     {subtitle}
                                 </p>
                             </div>

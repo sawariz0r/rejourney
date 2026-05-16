@@ -356,7 +356,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
 
     return (
         <div
-            className="dashboard-tabbar flex min-w-0 items-end border-b border-slate-200 bg-slate-50"
+            className="dashboard-tabbar flex min-w-0 items-end border-b-2 border-black bg-[#f8fafc] px-2 pt-1"
             onClick={() => setContextMenu(null)}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -371,7 +371,7 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
             <div className="min-w-0 flex-1 overflow-hidden">
                 <div
                     ref={tabScrollRef}
-                    className="flex w-full items-end gap-[2px] overflow-x-auto overflow-y-hidden no-scrollbar px-2 pt-1 pb-0"
+                    className="flex w-full items-end gap-[3px] overflow-x-auto overflow-y-hidden no-scrollbar"
                     onWheel={handleTabStripWheel}
                 >
                     {groupTabs.map((tab, index) => {
@@ -381,10 +381,11 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                         const TabIcon = tab.icon || FileText;
                         const theme = TAB_THEME_MAP[getTabThemeKey(tab.path, tab.id)];
                         const tabStyle: React.CSSProperties = {
-                            backgroundColor: isDraggingOver ? theme.idleHoverBg : isActive ? '#ffffff' : theme.idleBg,
-                            color: isActive ? '#0f172a' : theme.badgeText,
-                            borderTopColor: theme.accent,
-                            borderTopWidth: '2px',
+                            backgroundColor: isDraggingOver ? theme.idleHoverBg : 'transparent',
+                            borderColor: 'transparent',
+                            boxShadow: isActive
+                                ? `inset 0 -3px 0 0 ${theme.accent}`
+                                : 'none',
                         };
 
                         return (
@@ -401,23 +402,24 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                                 onDragEnd={handleDragEnd}
                                 onClick={() => handleTabClick(tab)}
                                 onContextMenu={(e) => handleContextMenu(e, tab.id)}
+                                aria-current={isActive ? 'page' : undefined}
                                 className={[
-                                    'group relative flex min-w-[120px] max-w-[220px] shrink-0 cursor-pointer select-none items-center gap-2 px-3 py-1 text-xs transition-all border border-slate-200 border-b-0 -mb-[1px] rounded-t-sm',
+                                    'group relative flex h-10 min-w-[112px] max-w-[220px] shrink-0 cursor-pointer select-none items-center gap-2 border border-transparent px-3 text-[12px] transition-all',
                                     isActive
-                                        ? 'z-10 shadow-sm translate-y-0.5 pb-[6px] bg-white border-slate-300'
-                                        : 'z-0 hover:bg-white',
+                                        ? 'z-[1] font-semibold text-[#202124]'
+                                        : 'z-0 font-medium text-[#5f6368] hover:bg-[#f1f3f4] hover:text-[#202124]',
                                 ].join(' ')}
                                 style={tabStyle}
                                 title={`Project: ${projectLabel}\n${tab.title}`}
                             >
-                                <div className="min-w-0 flex flex-1 items-center gap-2">
-                                    <TabIcon
-                                        className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'stroke-[2.8]' : 'stroke-[2.3]'}`}
-                                        style={{ color: isActive ? theme.accent : '#64748b' }}
-                                    />
-                                    <div className={`truncate text-xs ${isActive ? 'font-extrabold text-slate-900' : 'font-semibold text-slate-600'}`}>
+                                <TabIcon
+                                    className={`h-3.5 w-3.5 shrink-0 stroke-[2.4] ${isActive ? 'text-[#1a73e8]' : 'text-[#5f6368]'}`}
+                                    style={{ color: isActive ? theme.accent : undefined }}
+                                />
+                                <div className="min-w-0 flex-1 truncate leading-none">
+                                    <span className="truncate">
                                         {tab.title}
-                                    </div>
+                                    </span>
                                 </div>
 
                                 <div className={`flex shrink-0 items-center ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
@@ -427,10 +429,10 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                                                 e.stopPropagation();
                                                 closeTab(tab.id, e);
                                             }}
-                                            className="flex h-5 w-5 items-center justify-center border-2 border-transparent text-slate-700 transition-all hover:border-black hover:bg-red-500 hover:text-white hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                                            className="flex h-5 w-5 items-center justify-center border border-transparent text-slate-700 transition-colors hover:border-black hover:bg-[#fecaca] hover:text-red-700"
                                             title="Close tab"
                                         >
-                                            <X className="h-3.5 w-3.5 stroke-[3]" />
+                                            <X className="h-3 w-3 stroke-[3]" />
                                         </button>
                                     )}
                                 </div>
@@ -443,41 +445,41 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                     {group === 'primary' && (
                         <button
                             onClick={handleNewTab}
-                            className="ml-1 flex h-[34px] w-[34px] shrink-0 items-center justify-center border-2 border-black border-b-0 bg-[#ecfeff] text-black transition-all hover:-translate-y-px hover:bg-white -mb-[2px]"
+                            className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-transparent bg-transparent text-[#5f6368] transition-colors hover:bg-[#f1f3f4] hover:text-[#202124]"
                             title="New tab"
                         >
-                            <Plus className="h-4 w-4" />
+                            <Plus className="h-4 w-4 stroke-[2.5]" />
                         </button>
                     )}
                 </div>
             </div>
 
             {/* Controls Area */}
-            <div className="flex items-center gap-1 border-l-2 border-black pl-2 ml-1 shrink-0 pb-1">
+            <div className="ml-2 flex shrink-0 items-center gap-1 border-l border-[#dadce0] pl-2">
                 {group === 'primary' && (
                     <>
                         <button
                             onClick={handleReopen}
                             disabled={!canReopen}
                             className={[
-                                'flex h-7 w-7 items-center justify-center border-2 border-transparent transition-all',
-                                canReopen ? 'hover:border-black hover:bg-[#ecfeff] text-slate-600 hover:text-black' : 'text-slate-300 cursor-not-allowed'
+                                'flex h-8 w-8 items-center justify-center rounded-full border border-transparent transition-colors',
+                                canReopen ? 'text-[#5f6368] hover:bg-[#f1f3f4] hover:text-[#202124]' : 'cursor-not-allowed text-slate-300'
                             ].join(' ')}
                             title={canReopen ? 'Reopen closed tab' : 'No recently closed tabs'}
                         >
-                            <Undo2 className="h-4 w-4" />
+                            <Undo2 className="h-4 w-4 stroke-[3]" />
                         </button>
 
                         <button
                             onClick={handleCloseStale}
                             disabled={!canCloseStale}
                             className={[
-                                'flex h-7 w-7 items-center justify-center border-2 border-transparent transition-all',
-                                canCloseStale ? 'hover:border-black hover:bg-[#ecfeff] text-slate-600 hover:text-black' : 'text-slate-300 cursor-not-allowed'
+                                'flex h-8 w-8 items-center justify-center rounded-full border border-transparent transition-colors',
+                                canCloseStale ? 'text-[#5f6368] hover:bg-[#f1f3f4] hover:text-[#202124]' : 'cursor-not-allowed text-slate-300'
                             ].join(' ')}
                             title={canCloseStale ? 'Close stale tabs' : 'No stale tabs'}
                         >
-                            <Layers className="h-4 w-4" />
+                            <Layers className="h-4 w-4 stroke-[3]" />
                         </button>
                     </>
                 )}
@@ -485,19 +487,19 @@ export const TabBar: React.FC<TabBarProps> = ({ pathPrefix = '', group = 'primar
                 {isSplitView && group === 'secondary' && (
                     <button
                         onClick={handleCloseSplit}
-                        className="flex h-7 w-7 items-center justify-center border-2 border-transparent text-black transition-all hover:border-black hover:bg-[#67e8f9]"
+                        className="flex h-7 w-7 items-center justify-center border-2 border-transparent text-black transition-colors hover:border-black hover:bg-white"
                         title="Close split view"
                     >
-                        <PanelRightClose className="h-4 w-4" />
+                        <PanelRightClose className="h-4 w-4 stroke-[3]" />
                     </button>
                 )}
 
                 <button
                     onClick={handleCloseAll}
-                    className="flex h-7 w-7 items-center justify-center border-2 border-transparent text-slate-600 transition-all hover:border-black hover:bg-[#fecaca] hover:text-red-700"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-[#5f6368] transition-colors hover:bg-[#fce8e6] hover:text-[#d93025]"
                     title="Close all tabs"
                 >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4 stroke-[3]" />
                 </button>
             </div>
 

@@ -303,7 +303,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
 
     if (nodes.length === 0) {
         return (
-            <div className="w-full h-80 flex items-center justify-center border-2 border-black bg-white">
+            <div className="journey-sankey-empty w-full h-80 flex items-center justify-center border-2 border-black bg-white">
                 <p className="text-slate-500 text-sm font-medium">No flow data available for this filter.</p>
             </div>
         );
@@ -343,7 +343,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
     const hasSelectedPaths = selectedTransitionSet.size > 0;
 
     return (
-        <div className="relative overflow-hidden border-2 border-black bg-white shadow-neo">
+        <div className="journey-sankey-card relative overflow-hidden border-2 border-black bg-white shadow-neo">
             <div className="flex flex-col gap-2 border-b-2 border-black bg-[#f8fafc] px-5 py-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <div className="text-[11px] font-black uppercase text-black">
@@ -371,7 +371,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                             const targetNode = nodeLookup.get(link.target);
                             if (!sourceNode || !targetNode) return null;
 
-                            const xStart = padding + sourceNode.level * levelSpacing + barWidth + cardGap + cardWidth;
+                            const xStart = padding + sourceNode.level * levelSpacing + barWidth + cardGap;
                             const xEnd = padding + targetNode.level * levelSpacing;
                             const cp1x = xStart + Math.max(80, (xEnd - xStart) * 0.46);
                             const cp2x = xEnd - Math.max(80, (xEnd - xStart) * 0.46);
@@ -382,14 +382,28 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                             const isOther = hasActiveFocus && !isHovered && !isSelected;
                             const isAggregate = Boolean(link.data.isAggregate);
 
+                            const t = isSelected ? link.thickness + 6 : isHovered ? link.thickness + 4 : link.thickness;
+                            const ht = t / 2;
+                            const y0t = link.ySource - ht;
+                            const y0b = link.ySource + ht;
+                            const y1t = link.yTarget - ht;
+                            const y1b = link.yTarget + ht;
+
+                            // Filled ribbon: top bezier forward, bottom bezier backward
+                            const d = [
+                                `M ${xStart} ${y0t}`,
+                                `C ${cp1x} ${y0t}, ${cp2x} ${y1t}, ${xEnd} ${y1t}`,
+                                `L ${xEnd} ${y1b}`,
+                                `C ${cp2x} ${y1b}, ${cp1x} ${y0b}, ${xStart} ${y0b}`,
+                                'Z',
+                            ].join(' ');
+
                             return (
                                 <path
                                     key={link.id}
-                                    d={`M ${xStart} ${link.ySource} C ${cp1x} ${link.ySource}, ${cp2x} ${link.yTarget}, ${xEnd} ${link.yTarget}`}
-                                    fill="none"
-                                    stroke={getLinkColor(link, isHovered, isSelected)}
-                                    strokeWidth={isSelected ? Math.max(link.thickness + 6, 14) : isHovered ? link.thickness + 4 : link.thickness}
-                                    strokeLinecap="round"
+                                    d={d}
+                                    fill={getLinkColor(link, isHovered, isSelected)}
+                                    stroke="none"
                                     strokeDasharray={isAggregate ? '14 10' : undefined}
                                     opacity={isOther ? 0.16 : 1}
                                     onMouseEnter={() => setHoveredLinkId(link.id)}
@@ -403,7 +417,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                                     className={isAggregate ? 'cursor-default' : 'cursor-pointer'}
                                     style={{
                                         filter: isHovered || isSelected ? 'drop-shadow(0 4px 7px rgba(15,23,42,0.16))' : 'none',
-                                        transition: 'opacity 180ms ease, stroke-width 180ms ease, filter 180ms ease',
+                                        transition: 'opacity 180ms ease, filter 180ms ease',
                                     }}
                                 />
                             );

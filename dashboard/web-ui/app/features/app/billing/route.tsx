@@ -490,7 +490,7 @@ export const BillingSettings: React.FC = () => {
 
   if (!currentTeam) {
     return (
-      <SettingsLayout title="Billing" description="Select a team to manage billing" icon={<CreditCard className="w-6 h-6" />} iconColor="bg-[#f4f4f5]">
+      <SettingsLayout className="firebase-settings-page firebase-billing-settings-page" title="Billing" description="Select a team to manage billing" icon={<CreditCard className="w-6 h-6" />} iconColor="bg-[#f4f4f5]">
         <div className="p-12 text-center border-2 border-dashed border-slate-300 bg-slate-50">
           <Building className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <h2 className="text-lg font-bold text-slate-900 mb-1">No Team Selected</h2>
@@ -503,6 +503,7 @@ export const BillingSettings: React.FC = () => {
   if (isDemoMode) {
     return (
       <SettingsLayout
+        className="firebase-settings-page firebase-billing-settings-page"
         title="Billing"
         description={`Demo billing preview for ${currentTeam.name}`}
         icon={<CreditCard className="w-6 h-6" />}
@@ -537,6 +538,7 @@ export const BillingSettings: React.FC = () => {
   if (stripeStatus?.selfHosted) {
     return (
       <SettingsLayout
+        className="firebase-settings-page firebase-billing-settings-page"
         title="Billing"
         description={`Enterprise billing for ${currentTeam.name}`}
         icon={<CreditCard className="w-6 h-6" />}
@@ -566,6 +568,7 @@ export const BillingSettings: React.FC = () => {
 
   return (
     <SettingsLayout
+      className="firebase-settings-page firebase-billing-settings-page"
       title="Billing"
       description={`Plan & usage for ${currentTeam.name}`}
       icon={<CreditCard className="w-6 h-6" />}
@@ -741,19 +744,19 @@ export const BillingSettings: React.FC = () => {
                 onClick={isCurrentPlan || isFreePlanDisabled || isScheduledPlan ? undefined : () => handlePlanClick(plan.name)}
               >
                 {isCurrentPlan && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                  <div className="absolute right-4 top-4 z-10">
                     <NeoBadge variant="success" size="sm">CURRENT PLAN</NeoBadge>
                   </div>
                 )}
                 {isScheduledPlan && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                  <div className="absolute right-4 top-4 z-10">
                     <NeoBadge variant="warning" size="sm">SCHEDULED</NeoBadge>
                   </div>
                 )}
 
 
-                <div className="pt-2 space-y-4">
-                  <div>
+                <div className="space-y-4">
+                  <div className={isCurrentPlan || isScheduledPlan ? 'pr-32' : undefined}>
                     <h3 className="text-xl font-semibold uppercase tracking-tight">{plan.displayName}</h3>
                     <p className="text-xs font-bold text-slate-500 mt-1">{PLAN_DESCRIPTIONS[plan.name] || 'Subscription Plan'}</p>
                   </div>
@@ -765,16 +768,16 @@ export const BillingSettings: React.FC = () => {
                     {price > 0 && <span className="text-sm font-bold text-slate-500">/mo</span>}
                   </div>
 
-                  <div className="py-3 border-t-2 border-black">
+                  <div className="space-y-3 rounded-md border border-[#dadce0] bg-white px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-slate-900" />
+                      <div className="h-2 w-2 shrink-0 bg-slate-900" />
                       <span className="text-sm font-bold font-mono uppercase text-black">
                         {plan.sessionLimit.toLocaleString()} sessions
                       </span>
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 mt-1 ml-4">per month</p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <div className="w-2 h-2 bg-slate-400" />
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 shrink-0 bg-slate-400" />
                       <span className="text-sm font-bold font-mono uppercase text-black">
                         {plan.videoRetentionLabel} Video Retention
                       </span>

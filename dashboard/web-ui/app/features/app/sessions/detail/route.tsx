@@ -44,6 +44,7 @@ import { MarkerTooltip } from '~/shared/ui/core/MarkerTooltip';
 import { SessionLoadingOverlay, SessionLoadingOverlayProps } from '~/features/app/sessions/shared/SessionLoadingOverlay';
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
 import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
+import { useSessionData } from '~/shared/providers/SessionContext';
 
 // ============================================================================
 // Types
@@ -88,6 +89,7 @@ interface NetworkRequest {
 
 interface FullSession {
     id: string;
+    projectId?: string;
     userId: string;
     platform?: string;
     appVersion?: string;
@@ -207,7 +209,7 @@ const EVENT_COLORS = {
     deadTap: '#94a3b8',
     crash: '#b91c1c',
     anr: '#a855f7',
-    apiSuccess: '#22c55e',
+    apiSuccess: '#15803d',
     tap: '#3b82f6',
     scroll: '#3b82f6',
     gesture: '#3b82f6',
@@ -216,7 +218,7 @@ const EVENT_COLORS = {
     pan: '#3b82f6',
     rotation: '#ec4899',
     appBackground: '#f9a8d4',
-    appForeground: '#10b981',
+    appForeground: '#047857',
     sessionStart: '#06b6d4',
     navigation: '#8b5cf6',
     deviceInfo: '#64748b',
@@ -644,6 +646,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const navigate = useNavigate();
     const pathPrefix = usePathPrefix();
     const isDemoReplay = pathPrefix === '/demo';
+    const { sessions: contextSessions, selectedProject } = useSessionData();
 
     const handleBackClick = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -683,6 +686,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const [metadataCopied, setMetadataCopied] = useState(false);
     const [userIdCopied, setUserIdCopied] = useState(false);
     const [sessionIdCopied, setSessionIdCopied] = useState(false);
+    const [archiveNeighborSessions, setArchiveNeighborSessions] = useState<any[]>([]);
 
     // DOM Inspector state
     const [hierarchySnapshots, setHierarchySnapshots] = useState<HierarchySnapshot[]>([]);
@@ -720,9 +724,11 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         currentFrameIndexRef.current = currentFrameIndex;
     }, [currentFrameIndex]);
 
-    // Get basic session from context
-    const session: any = null;
-    const sessions: any[] = [];
+    // Get basic session from context. Non-demo detail routes may not have the
+    // archive list hydrated, so a small fallback fetch below keeps Prev/Next usable.
+    const navigationSessions = contextSessions.length > 0 ? contextSessions : archiveNeighborSessions;
+    const session: any = navigationSessions.find((item) => item.id === id) || null;
+    const sessions: any[] = navigationSessions;
 
     // Fetch full session data
     const fetchFullSession = useCallback(async () => {
@@ -877,6 +883,41 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     useEffect(() => {
         fetchFullSession();
     }, [fetchFullSession]);
+
+    useEffect(() => {
+        if (!id || contextSessions.length > 0) {
+            setArchiveNeighborSessions([]);
+            return;
+        }
+
+        let cancelled = false;
+        const projectId = fullSession?.projectId || selectedProject?.id;
+
+        const loadNeighborSessions = async () => {
+            try {
+                const result = await api.getSessionsPaginated({
+                    projectId,
+                    limit: 300,
+                    timeRange: 'all',
+                    sort: 'date',
+                    sortDir: 'desc',
+                    includeTotal: false,
+                });
+                if (cancelled) return;
+                setArchiveNeighborSessions(result.sessions || []);
+            } catch (err) {
+                if (cancelled) return;
+                console.error('Failed to load neighboring sessions:', err);
+                setArchiveNeighborSessions([]);
+            }
+        };
+
+        void loadNeighborSessions();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [contextSessions.length, fullSession?.projectId, id, selectedProject?.id]);
 
     useEffect(() => {
         return () => {
@@ -2498,7 +2539,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     };
 
     return (
-        <div className="replay-workbench-page flex min-h-screen flex-col bg-[#f8fafc] xl:h-full xl:min-h-0 xl:overflow-hidden">
+        <div className="firebase-replay-workbench replay-workbench-page flex min-h-screen flex-col bg-[#f8fafd] xl:h-full xl:min-h-0 xl:overflow-hidden">
             <div className="replay-workbench-header border-b-2 border-black bg-[#f8fafc] md:sticky md:top-0 md:z-40 xl:shrink-0">
                 <div className="mx-auto flex w-full max-w-[1920px] flex-col gap-3 px-3 py-3 sm:px-4 xl:flex-row xl:items-center xl:justify-between xl:gap-2 xl:py-2">
                     <div className="flex w-full min-w-0 flex-1 items-start gap-3">
@@ -2879,8 +2920,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                 <div className="bg-[#f8fafc] px-3 py-2 xl:shrink-0 xl:px-4 xl:py-1.5">
                                     <div className="mb-1 flex flex-wrap items-center justify-between gap-1">
                                         <div className="flex items-center gap-3 text-[9px] font-black uppercase text-black">
-                                            <span className="flex items-center gap-1"><span className="h-2 w-2 border border-black bg-[#67e8f9]" />Touches</span>
-                                            <span className="flex items-center gap-1"><span className="h-2 w-2 border border-black bg-[#86efac]" />API</span>
+                                            <span className="flex items-center gap-1"><span className="h-2 w-2 border border-slate-500 bg-[#3b82f6]" />Touch Density</span>
+                                            <span className="flex items-center gap-1"><span className="h-2 w-2 border border-slate-500 bg-[#10b981]" />API Density</span>
                                             <span className="flex items-center gap-1"><span className="h-2 w-2 border border-black bg-[#fb7185]" />Issues</span>
                                         </div>
                                         <span className="text-[9px] font-bold uppercase text-slate-600">
@@ -2965,11 +3006,11 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                         onMouseDown={handleProgressMouseDown}
                                         onTouchStart={handleProgressTouchStart}
                                     >
-                                        <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 bg-white border-2 border-black" />
-                                        <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 overflow-hidden">
+                                        <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full border border-slate-400 bg-slate-200" />
+                                        <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 overflow-hidden rounded-full">
                                             <div
                                                 ref={progressFillRef}
-                                                className="h-full w-full origin-left bg-[#67e8f9] will-change-transform"
+                                                className="h-full w-full origin-left bg-slate-950 will-change-transform"
                                                 style={{ transform: `scaleX(${progressPercent / 100})` }}
                                             />
                                         </div>
@@ -3027,7 +3068,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
                                         <div
                                             ref={progressThumbRef}
-                                            className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 border-2 border-black bg-[#67e8f9] shadow transition-transform ${isDragging ? 'scale-110' : 'group-hover:scale-105'
+                                            className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-sm border-2 border-white bg-slate-950 shadow transition-transform ${isDragging ? 'scale-110' : 'group-hover:scale-105'
                                                 }`}
                                             style={{ left: `${progressPercent}%`, willChange: 'left' }}
                                         />
@@ -3210,7 +3251,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                                 {isNetwork ? (
                                                                     <span
                                                                         className={`inline-flex rounded border px-1 py-0.5 font-mono text-[9px] font-bold ${event.properties?.success
-                                                                            ? 'border-2 border-[#34d399] bg-white text-[#34d399]'
+                                                                            ? 'border-2 border-[#15803d] bg-[#f0fdf4] text-[#166534]'
                                                                             : 'border-2 border-[#ef4444] bg-white text-[#ef4444]'
                                                                             }`}
                                                                     >

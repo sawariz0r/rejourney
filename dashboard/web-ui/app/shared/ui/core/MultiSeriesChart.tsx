@@ -65,7 +65,7 @@ export const MultiSeriesChart: React.FC<MultiSeriesChartProps> = ({
     const minValue = Math.min(...allValues, 0);
     const range = maxValue - minValue || 1;
 
-    const padding = { top: 20, right: 20, bottom: 40, left: 50 };
+    const padding = { top: 20, right: 20, bottom: 44, left: 54 };
     const chartWidth = dimensions.width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
@@ -193,10 +193,11 @@ export const MultiSeriesChart: React.FC<MultiSeriesChartProps> = ({
                             key={`y-${i}`}
                             x={padding.left - 8}
                             y={label.y + 4}
-                            fontSize="11"
-                            fill="#666"
+                            fontSize="12"
+                            fill="#475569"
                             textAnchor="end"
-                            fontFamily="monospace"
+                            fontFamily="Inter, system-ui, sans-serif"
+                            fontWeight="600"
                         >
                             {label.value}
                         </text>
@@ -215,10 +216,11 @@ export const MultiSeriesChart: React.FC<MultiSeriesChartProps> = ({
                                 key={`x-${i}`}
                                 x={x}
                                 y={height - 8}
-                                fontSize="10"
-                                fill="#666"
+                                fontSize="11"
+                                fill="#475569"
                                 textAnchor="middle"
-                                fontFamily="monospace"
+                                fontFamily="Inter, system-ui, sans-serif"
+                                fontWeight="600"
                             >
                                 {label.length > 8 ? label.substring(0, 6) + '..' : label}
                             </text>

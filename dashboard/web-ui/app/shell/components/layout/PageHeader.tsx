@@ -15,23 +15,19 @@ interface PageHeaderProps {
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
-    icon: Icon,
     title,
     subtitle,
     badge,
     actions,
-    iconClassName = "text-slate-900"
 }) => {
     return (
-        <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-4 sm:px-6 md:py-5">
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 max-w-7xl mx-auto md:gap-5">
-                <div className="flex items-start gap-4 md:gap-5">
-                    <div className="p-2.5 md:p-3 bg-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] rounded-none shrink-0">
-                        <Icon className={`w-8 h-8 ${iconClassName}`} />
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-3 mb-1 flex-wrap">
-                            <h1 className="text-2xl font-black uppercase text-black md:text-3xl">
+        <div className="border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
+            <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 md:flex-row md:items-center">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <span aria-hidden="true" className="h-5 w-1.5 shrink-0 border border-black/20 bg-[#67e8f9]" />
+                    <div className="min-w-0">
+                        <div className="mb-0.5 flex flex-wrap items-center gap-2">
+                            <h1 className="truncate text-[15px] font-extrabold uppercase leading-none text-slate-950 sm:text-base">
                                 {title}
                             </h1>
                             {badge && (
@@ -41,7 +37,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
                             )}
                         </div>
                         {subtitle && (
-                            <p className="text-xs font-semibold text-slate-600 max-w-2xl leading-relaxed">
+                            <p className="max-w-2xl text-xs font-medium leading-4 text-slate-600">
                                 {subtitle}
                             </p>
                         )}
@@ -49,7 +45,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
                 </div>
 
                 {actions && (
-                    <div className="flex w-full flex-col items-stretch gap-3 shrink-0 sm:w-auto sm:flex-row sm:items-center">
+                    <div className="flex w-full shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
                         {actions}
                     </div>
                 )}

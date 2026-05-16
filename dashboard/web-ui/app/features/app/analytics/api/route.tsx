@@ -983,7 +983,7 @@ export const ApiAnalytics: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-transparent font-sans text-slate-900 pb-12">
+        <div className="firebase-api-page min-h-screen bg-[#f8fafd] font-sans text-slate-900 pb-12">
             <DashboardPageHeader
                 title="API Reliability & Performance"
                 icon={<Activity className="w-6 h-6" />}

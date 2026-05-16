@@ -1,7 +1,6 @@
 import React, { startTransition, useEffect, useMemo, useState } from 'react';
 import { TimeRange } from '~/shared/ui/core/TimeFilter';
 import { InfoTooltip } from '~/shared/ui/core/InfoTooltip';
-import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
 
 export type KpiTrendState = 'improving' | 'declining' | 'flat' | 'unknown';
 export type KpiTrendFilter = 'all' | KpiTrendState;
@@ -51,6 +50,7 @@ type SeriesDeltaResult = {
 };
 
 const STORAGE_PREFIX = 'kpi-cards-v1:';
+const KPI_CARD_ACCENTS = ['#67e8f9', '#86efac', '#f9a8d4', '#c4b5fd'];
 
 const WINDOW_DAYS_BY_RANGE: Record<TimeRange, number> = {
     '24h': 1,
@@ -88,10 +88,9 @@ function getTrendState(delta?: KpiCardDelta): KpiTrendState {
 }
 
 function getTrendToneClass(trendState: KpiTrendState): string {
-    if (trendState === 'improving') return 'rounded-none border-2 border-black shadow-[2px_2px_0_0_#10b981] bg-[#10b981] text-white font-black uppercase tracking-wider text-[10px]';
-    if (trendState === 'declining') return 'rounded-none border-2 border-black shadow-[2px_2px_0_0_#ef4444] bg-[#ef4444] text-white font-black uppercase tracking-wider text-[10px]';
-    if (trendState === 'flat') return 'rounded-none border-2 border-black shadow-[2px_2px_0_0_#94a3b8] bg-[#f1f5f9] text-black font-black uppercase tracking-wider text-[10px]';
-    return 'rounded-none border-2 border-black shadow-[2px_2px_0_0_#94a3b8] bg-[#f1f5f9] text-black font-black uppercase tracking-wider text-[10px]';
+    if (trendState === 'improving') return 'text-emerald-700';
+    if (trendState === 'declining') return 'text-rose-700';
+    return 'text-slate-600';
 }
 
 function formatDelta(delta: KpiCardDelta): string {
@@ -394,43 +393,47 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
             )}
 
             <div className={gridClassName.replace('gap-4', 'gap-5')}>
-                {filteredCards.map((card) => {
+                {filteredCards.map((card, index) => {
                     const trendState = getTrendState(card.delta);
                     const deltaLabel = card.delta?.label ?? comparisonLabel;
 
                     return (
-                        <NeoCard key={card.id} className="dashboard-keep-neo min-w-0 bg-white !p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform border-2 border-black shadow-neo-sm">
+                        <div key={card.id} className="dashboard-keep-neo dashboard-kpi-card min-w-0 p-2.5 transition-all hover:-translate-y-0.5 sm:p-4">
+                            <div
+                                className="dashboard-kpi-accent mb-2 h-1 border-2 border-black sm:mb-2.5 sm:h-1.5"
+                                style={{ backgroundColor: KPI_CARD_ACCENTS[index % KPI_CARD_ACCENTS.length] }}
+                            />
                             <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0 text-[11px] font-black uppercase tracking-widest text-black break-words">
+                                <div className="dashboard-label min-w-0 break-words text-slate-700">
                                     {card.label}
                                 </div>
                                 <InfoTooltip content={card.info} align="right" />
                             </div>
 
-                            <div className="mt-4 break-words text-[1.75rem] font-black leading-none tracking-tight text-black sm:text-3xl">
+                            <div className="mt-1.5 break-words text-[1.35rem] font-extrabold leading-none text-black sm:mt-2 sm:text-3xl">
                                 {card.value}
                             </div>
 
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className={`px-2 py-1 ${getTrendToneClass(trendState)}`}>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:mt-2">
+                                <span className={`dashboard-kpi-delta inline-flex border-2 border-black bg-white px-1.5 py-0.5 text-[10px] font-bold uppercase shadow-neo-sm sm:px-2 sm:py-1 sm:text-[11px] ${getTrendToneClass(trendState)}`}>
                                     {card.delta ? formatDelta(card.delta) : 'N/A'}
                                 </span>
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600">{deltaLabel}</span>
+                                <span className="text-[10px] font-bold uppercase text-slate-600">{deltaLabel}</span>
                             </div>
 
                             {showDetails && card.detail && (
                                 <div className="mt-1 text-xs leading-relaxed text-slate-500">{card.detail}</div>
                             )}
-                        </NeoCard>
+                        </div>
                     );
                 })}
 
                 {filteredCards.length === 0 && (
-                    <NeoCard className="dashboard-keep-neo col-span-full border-dashed border-slate-300 bg-white">
+                    <div className="dashboard-surface col-span-full border-dashed border-slate-300 bg-white">
                         <div className="py-5 text-center text-xs font-medium text-slate-500">
                             No KPI cards match the current filters
                         </div>
-                    </NeoCard>
+                    </div>
                 )}
             </div>
         </section>

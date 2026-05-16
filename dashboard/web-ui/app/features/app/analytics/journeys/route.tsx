@@ -887,7 +887,7 @@ export const Journeys: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-transparent pb-12 font-sans text-slate-900">
+        <div className="firebase-journeys-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-slate-900">
             <DashboardPageHeader
                 title="User Journeys"
                 icon={<Route className="w-6 h-6" />}
@@ -924,18 +924,23 @@ export const Journeys: React.FC = () => {
                             cards={kpiCards}
                             timeRange={timeRange}
                             storageKey="analytics-journeys"
+                            showControls={false}
+                            gridClassName="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4"
                         />
 
                         <section className="dashboard-surface overflow-hidden">
                             <div>
                                 <div className="border-b-2 border-black bg-[#f8fafc] px-5 py-4">
                                     <div className="flex items-center justify-between gap-3">
-                                        <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Journey Flow Map</h2>
+                                        <div>
+                                            <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Flow Map</h2>
+                                            <p className="mt-1 text-sm text-slate-500">Screen transitions by volume and health.</p>
+                                        </div>
                                         <Compass className="h-5 w-5 text-blue-600" />
                                     </div>
-                                    <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                                    <div className="journey-filter-grid mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(160px,0.8fr)_minmax(160px,0.8fr)_minmax(240px,1.35fr)_minmax(220px,1fr)]">
                                         <label className="space-y-1 text-xs text-slate-600">
-                                            <span className="font-semibold text-slate-700">Path health</span>
+                                            <span className="font-semibold text-slate-700">Health</span>
                                             <select
                                                 value={flowHealthFilter}
                                                 onChange={(event) => setFlowHealthFilter(event.target.value as FlowHealthFilter)}
@@ -949,7 +954,7 @@ export const Journeys: React.FC = () => {
                                         </label>
 
                                         <label className="space-y-1 text-xs text-slate-600">
-                                            <span className="font-semibold text-slate-700">Min transition volume</span>
+                                            <span className="font-semibold text-slate-700">Min volume</span>
                                             <select
                                                 value={minFlowCount}
                                                 onChange={(event) => setMinFlowCount(Number(event.target.value))}
@@ -964,7 +969,7 @@ export const Journeys: React.FC = () => {
                                         </label>
 
                                         <label className="space-y-1 text-xs text-slate-600">
-                                            <span className="font-semibold text-slate-700">Screen/path search</span>
+                                            <span className="font-semibold text-slate-700">Search</span>
                                             <input
                                                 type="text"
                                                 value={flowSearch}
@@ -974,32 +979,22 @@ export const Journeys: React.FC = () => {
                                             />
                                         </label>
 
-                                        <label className="flex items-center gap-2 self-end border-2 border-black bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-neo-sm">
+                                        <label className="journey-evidence-toggle flex items-center gap-2 self-end border-2 border-black bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-neo-sm">
                                             <input
                                                 type="checkbox"
                                                 checked={onlyWithEvidence}
                                                 onChange={(event) => setOnlyWithEvidence(event.target.checked)}
                                                 className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                             />
-                                            <span className="font-semibold">Only show paths with evidence sessions</span>
+                                            <span className="font-semibold">Evidence only</span>
                                         </label>
                                     </div>
-                                    <div className="mt-2 text-xs text-slate-500">
-                                        Showing {journeyFlowPresentation.flows.length.toLocaleString()} map lanes from {filteredSankeyFlows.length.toLocaleString()} matching transitions
-                                        {' • '}
-                                        {formatCompact(filteredFlowEventCount)} total transition events in view
-                                        {journeyFlowPresentation.aggregatedCount > 0 && (
-                                            <>
-                                                {' • '}
-                                                {formatCompact(journeyFlowPresentation.aggregatedCount)} tail transitions aggregated
-                                            </>
-                                        )}
-                                        {journeyFlowPresentation.droppedCount > 0 && (
-                                            <>
-                                                {' • '}
-                                                {formatCompact(journeyFlowPresentation.droppedCount)} extreme outliers dropped
-                                            </>
-                                        )}
+                                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                        <span>{journeyFlowPresentation.flows.length.toLocaleString()} lanes</span>
+                                        <span className="text-slate-300">/</span>
+                                        <span>{filteredSankeyFlows.length.toLocaleString()} matching transitions</span>
+                                        <span className="text-slate-300">/</span>
+                                        <span>{formatCompact(filteredFlowEventCount)} events</span>
                                     </div>
                                 </div>
                                 <div className="p-4">
@@ -1018,15 +1013,15 @@ export const Journeys: React.FC = () => {
                             <div className="border-b-2 border-black bg-[#f8fafc] px-5 py-4">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                     <div>
-                                        <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Journey Query Builder</h2>
-                                        <p className="mt-1 text-sm text-slate-500">Selected transitions become reusable replay-search clauses.</p>
+                                        <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Replay Evidence</h2>
+                                        <p className="mt-1 text-sm text-slate-500">Select map ribbons to find matching replay samples.</p>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
-                                        <span className="inline-flex h-9 items-center gap-1.5 border-2 border-black bg-white px-3 text-xs font-black uppercase text-black shadow-neo-sm">
+                                        <span className="journey-count-pill inline-flex h-9 items-center gap-1.5 border-2 border-black bg-white px-3 text-xs font-black uppercase text-black shadow-neo-sm">
                                             <Filter className="h-3.5 w-3.5" />
-                                            {formatCompact(selectedTransitionOptions.length)} clauses
+                                            {formatCompact(selectedTransitionOptions.length)}
                                         </span>
-                                        <span className="inline-flex h-9 items-center border-2 border-black bg-white px-3 text-xs font-black uppercase text-black shadow-neo-sm">
+                                        <span className="journey-count-pill inline-flex h-9 items-center border-2 border-black bg-white px-3 text-xs font-black uppercase text-black shadow-neo-sm">
                                             {formatCompact(selectedQuerySessionCount)} evidence replays
                                         </span>
                                         {selectedTransitionIds.length > 0 && (
@@ -1036,7 +1031,7 @@ export const Journeys: React.FC = () => {
                                                 className="inline-flex h-9 items-center gap-1.5 border-2 border-black bg-white px-3 text-xs font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#fecaca] hover:shadow-neo"
                                             >
                                                 <X className="h-3.5 w-3.5" />
-                                                Clear
+                                                Clear selection
                                             </button>
                                         )}
                                     </div>
@@ -1111,7 +1106,7 @@ export const Journeys: React.FC = () => {
                                             <div className="mx-auto mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100">
                                                 <Route className="h-5 w-5" />
                                             </div>
-                                            <div className="text-sm font-bold uppercase text-slate-900">No path clauses selected</div>
+                                            <div className="text-sm font-bold uppercase text-slate-900">No paths selected to search replays</div>
                                             {totalReplayEvidenceSessionCount > 0 && (
                                                 <div className="mt-2 text-xs font-medium text-slate-500">
                                                     {formatCompact(totalReplayEvidenceSessionCount)} evidence replays are available across the map.
@@ -1132,7 +1127,7 @@ export const Journeys: React.FC = () => {
                                             </div>
                                         </div>
                                         <span className="text-xs font-medium text-slate-500">
-                                            Query builder preview, not an autoplay replay list
+                                            Opens filtered replay search
                                         </span>
                                     </div>
 
@@ -1247,7 +1242,7 @@ export const Journeys: React.FC = () => {
                                         </>
                                     ) : (
                                         <div className="flex min-h-[180px] items-center justify-center p-6 text-center text-sm font-medium text-slate-500">
-                                            Select one or more ribbons in the journey map to populate this zebra list.
+                                            Select one or more ribbons in the journey map to populate the replay table.
                                         </div>
                                     )}
                                 </div>

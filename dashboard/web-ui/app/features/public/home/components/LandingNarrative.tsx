@@ -399,22 +399,22 @@ const workspaceCursors = [
         label: 'PM',
         color: '#f97316',
         softColor: 'rgba(249, 115, 22, 0.16)',
-        left: '28.5%',
-        top: '23%',
+        left: '24%',
+        top: '27%',
     },
     {
         label: 'UX',
         color: '#ec4899',
         softColor: 'rgba(236, 72, 153, 0.15)',
-        left: '72%',
-        top: '55%',
+        left: '67%',
+        top: '56%',
     },
     {
         label: 'DEV',
         color: '#2563eb',
         softColor: 'rgba(93, 173, 236, 0.2)',
-        left: '85%',
-        top: '33%',
+        left: '88%',
+        top: '31%',
     },
 ];
 
@@ -553,52 +553,53 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
                                 </div>
                             </div>
                             <div className="landing-workspace-frame__screen">
-                                    <img
-                                        src="/images/team-workspace.png"
-                                        alt="Rejourney team workspace showing analytics, replay workbench, and timeline evidence"
-                                        className="landing-workspace-frame__image"
-                                        loading="lazy"
-                                    />
-                                    <div className="absolute inset-0 pointer-events-none" aria-hidden>
-                                        {workspaceCursors.map((cursor) => (
-                                            <div
-                                                key={cursor.label}
-                                                className="landing-workspace-cursor"
-                                                style={{
-                                                    left: cursor.left,
-                                                    top: cursor.top,
-                                                    '--cursor-color': cursor.color,
-                                                    '--cursor-soft': cursor.softColor,
-                                                } as React.CSSProperties}
-                                            >
-                                                <span className="landing-workspace-cursor__trail" />
-                                                <svg width="42" height="48" viewBox="0 0 42 48" fill="none" className="landing-workspace-cursor__pointer">
-                                                    <path
-                                                        d="M5 3.5L7.1 36.8L16.2 28.1L23.3 43.2L32.5 38.9L25.2 24.6H38.3L5 3.5Z"
-                                                        fill="white"
-                                                        stroke="white"
-                                                        strokeWidth="7"
-                                                        strokeLinejoin="round"
-                                                    />
-                                                    <path
-                                                        d="M5 3.5L7.1 36.8L16.2 28.1L23.3 43.2L32.5 38.9L25.2 24.6H38.3L5 3.5Z"
-                                                        fill={cursor.color}
-                                                        stroke="#020617"
-                                                        strokeWidth="2.5"
-                                                        strokeLinejoin="round"
-                                                    />
-                                                    <path d="M11.2 12.2L12.2 27.2L16.8 22.8" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.78" />
-                                                </svg>
-                                                <span className="landing-workspace-cursor__label">
-                                                    {cursor.label}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
+                                <img
+                                    src="/images/one-room-for-all.png"
+                                    alt="Rejourney workspace showing analytics, replay theater, console evidence, and mobile session context"
+                                    className="landing-workspace-frame__image"
+                                    loading="lazy"
+                                    decoding="async"
+                                />
+                                <div className="absolute inset-0 pointer-events-none" aria-hidden>
+                                    {workspaceCursors.map((cursor) => (
+                                        <div
+                                            key={cursor.label}
+                                            className="landing-workspace-cursor"
+                                            style={{
+                                                left: cursor.left,
+                                                top: cursor.top,
+                                                '--cursor-color': cursor.color,
+                                                '--cursor-soft': cursor.softColor,
+                                            } as React.CSSProperties}
+                                        >
+                                            <span className="landing-workspace-cursor__trail" />
+                                            <svg width="42" height="48" viewBox="0 0 42 48" fill="none" className="landing-workspace-cursor__pointer">
+                                                <path
+                                                    d="M5 3.5L7.1 36.8L16.2 28.1L23.3 43.2L32.5 38.9L25.2 24.6H38.3L5 3.5Z"
+                                                    fill="white"
+                                                    stroke="white"
+                                                    strokeWidth="7"
+                                                    strokeLinejoin="round"
+                                                />
+                                                <path
+                                                    d="M5 3.5L7.1 36.8L16.2 28.1L23.3 43.2L32.5 38.9L25.2 24.6H38.3L5 3.5Z"
+                                                    fill={cursor.color}
+                                                    stroke="#020617"
+                                                    strokeWidth="2.5"
+                                                    strokeLinejoin="round"
+                                                />
+                                                <path d="M11.2 12.2L12.2 27.2L16.8 22.8" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.78" />
+                                            </svg>
+                                            <span className="landing-workspace-cursor__label">
+                                                {cursor.label}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
             </section>
 
             <section className="w-full bg-[#e8f4ff] px-4 py-10 text-slate-950 sm:px-6 lg:px-8">
