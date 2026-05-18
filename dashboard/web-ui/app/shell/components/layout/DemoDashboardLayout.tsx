@@ -12,6 +12,7 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { DEMO_NOW_ISO } from '~/shared/data/demoData';
 
 export const DemoDashboardLayout: React.FC = () => {
     const { demoProjects } = useDemoMode();
@@ -28,8 +29,8 @@ export const DemoDashboardLayout: React.FC = () => {
         name: 'Demo Team',
         ownerUserId: 'demo-user',
         billingPlan: 'free' as const,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: DEMO_NOW_ISO,
+        updatedAt: DEMO_NOW_ISO,
     };
 
     return (

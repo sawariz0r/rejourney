@@ -56,18 +56,93 @@ function withDefaultHeaders(extra?: HeadersInit): Headers {
   return headers;
 }
 
-function handleUnauthorized() {
-  cache.clear();
-  if (typeof window === 'undefined') return;
+export class ApiUnauthorizedError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message);
+    this.name = 'ApiUnauthorizedError';
+  }
+}
+
+export class ApiServiceUnavailableError extends Error {
+  readonly status?: number;
+
+  constructor(message = 'Service temporarily unavailable', status?: number) {
+    super(message);
+    this.name = 'ApiServiceUnavailableError';
+    this.status = status;
+  }
+}
+
+type SessionProbeResult = 'authenticated' | 'unauthenticated' | 'unavailable';
+let sessionProbePromise: Promise<SessionProbeResult> | null = null;
+
+function isTransientStatus(status: number): boolean {
+  return status >= 500 || status === 408 || status === 425;
+}
+
+async function probeCurrentSession(): Promise<SessionProbeResult> {
+  if (typeof window === 'undefined') {
+    return 'unavailable';
+  }
+
+  if (sessionProbePromise) {
+    return sessionProbePromise;
+  }
+
+  sessionProbePromise = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/me?_=${Date.now()}`, {
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+      });
+
+      if (response.ok) return 'authenticated';
+      if (response.status === 401 || response.status === 403) return 'unauthenticated';
+      return 'unavailable';
+    } catch {
+      return 'unavailable';
+    } finally {
+      sessionProbePromise = null;
+    }
+  })();
+
+  return sessionProbePromise;
+}
+
+async function handleUnauthorized(endpoint: string): Promise<never> {
+  if (typeof window === 'undefined') {
+    throw new ApiUnauthorizedError();
+  }
 
   // Never redirect to login from demo routes
   if (window.location.pathname.startsWith('/demo')) {
-    return;
+    throw new ApiUnauthorizedError();
   }
 
-  if (!isPublicRoutePath(window.location.pathname)) {
-    window.location.href = '/login';
+  const sessionState = await probeCurrentSession();
+
+  if (sessionState === 'unavailable') {
+    throw new ApiServiceUnavailableError(
+      'Authentication service is temporarily unavailable. Your session was not cleared.',
+      503,
+    );
   }
+
+  if (sessionState === 'authenticated') {
+    throw new ApiUnauthorizedError(`Unauthorized request to ${endpoint}`);
+  }
+
+  cache.clear();
+  if (!isPublicRoutePath(window.location.pathname)) {
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    window.location.replace(`/login?returnTo=${encodeURIComponent(returnTo)}&reason=session_expired`);
+  }
+
+  throw new ApiUnauthorizedError();
 }
 
 async function fetchJson<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -83,11 +158,18 @@ async function fetchJson<T>(endpoint: string, options: RequestInit = {}): Promis
   };
   const method = (requestInit.method ?? 'GET').toUpperCase();
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, requestInit);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, requestInit);
+  } catch (error) {
+    if (typeof window !== 'undefined') {
+      console.error('[fetchJson] API network error', { method, endpoint, error });
+    }
+    throw new ApiServiceUnavailableError('API service is temporarily unavailable. Please try again shortly.', 503);
+  }
 
   if (response.status === 401) {
-    handleUnauthorized();
-    throw new Error('Unauthorized');
+    await handleUnauthorized(endpoint);
   }
 
   if (!response.ok) {
@@ -107,6 +189,17 @@ async function fetchJson<T>(endpoint: string, options: RequestInit = {}): Promis
         body: parsed ?? text,
       });
     }
+    if (isTransientStatus(response.status)) {
+      const message = (
+        parsed &&
+        typeof parsed === 'object' &&
+        'message' in parsed &&
+        typeof (parsed as { message: unknown }).message === 'string'
+      )
+        ? (parsed as { message: string }).message
+        : `API service is temporarily unavailable: ${response.status} ${response.statusText}`;
+      throw new ApiServiceUnavailableError(message, response.status);
+    }
     if (
       parsed &&
       typeof parsed === 'object' &&
@@ -124,6 +217,7 @@ async function fetchJson<T>(endpoint: string, options: RequestInit = {}): Promis
 
 /** True for errors that often clear after idle (stale connections, LB blips). */
 function isTransientApiError(err: unknown): boolean {
+  if (err instanceof ApiServiceUnavailableError) return true;
   if (!(err instanceof Error)) return false;
   if (err.message === 'Unauthorized') return false;
   const msg = err.message;
@@ -178,7 +272,10 @@ async function fetchWithCache<T>(
     return cached.data as T;
   }
 
-  const data = await fetchJson<T>(endpoint, options);
+  const method = (options.method ?? 'GET').toUpperCase();
+  const data = method === 'GET' || method === 'HEAD'
+    ? await fetchJsonWithTransientRetry<T>(endpoint, options)
+    : await fetchJson<T>(endpoint, options);
 
   // Cache successful responses
   cache.set(key, { data, timestamp: Date.now() });
@@ -1332,6 +1429,28 @@ export async function getWarehouseAlerting(): Promise<WarehouseAlertingData> {
  * Get team's current billing plan
  */
 export async function getTeamPlan(teamId: string): Promise<TeamPlanInfo | null> {
+  if (isDemoMode()) {
+    return {
+      planName: 'pro',
+      displayName: 'Pro',
+      sessionLimit: demoApiData.demoTeamUsage.sessionLimit,
+      videoRetentionTier: 3,
+      videoRetentionDays: 90,
+      videoRetentionLabel: '90 days',
+      priceCents: 9900,
+      isCustom: false,
+      subscriptionId: null,
+      subscriptionStatus: null,
+      cancelAtPeriodEnd: false,
+      scheduledPriceId: null,
+      scheduledPlanName: null,
+    };
+  }
+
+  if (!isUuid(teamId)) {
+    return null;
+  }
+
   try {
     const res = await fetchWithCache<{ plan: TeamPlanInfo }>(
       `/api/teams/${teamId}/billing/plan`
@@ -1868,8 +1987,7 @@ export async function exportUserData(): Promise<Blob> {
   });
 
   if (response.status === 401 || response.status === 403) {
-    handleUnauthorized();
-    throw new Error('Unauthorized');
+    await handleUnauthorized('/api/auth/export-data');
   }
 
   if (response.status === 429) {

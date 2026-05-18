@@ -6,7 +6,7 @@
  */
 
 import React, { createContext, useContext, ReactNode } from 'react';
-import { demoProjects, demoSessions, demoReplaySessions, demoDashboardStats, demoDailyStats, DEMO_FEATURED_SESSION_ID, DEMO_TEAM } from '~/shared/data/demoData';
+import { demoProjects, demoSessions, demoReplaySessions, demoDashboardStats, demoDailyStats, DEMO_FEATURED_SESSION_ID, DEMO_TEAM, DEMO_NOW_ISO } from '~/shared/data/demoData';
 import { Project, RecordingSession, ProjectDailyStats } from '~/shared/types';
 import { ApiTeam, ApiTeamMember } from '~/shared/api/client';
 import { DemoTeamContext } from './TeamContext';
@@ -90,7 +90,7 @@ export function DemoTeamProvider({ children }: { children: ReactNode }) {
         role: 'owner',
         email: 'demo@shopflow.com',
         displayName: 'Demo User',
-        createdAt: new Date().toISOString(),
+        createdAt: DEMO_NOW_ISO,
     };
 
     const value: DemoTeamContextValue = {

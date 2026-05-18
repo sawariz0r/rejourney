@@ -22,7 +22,6 @@ import {
 import type { Route } from "./+types/root";
 
 import "./styles/index.css";
-import "./styles/landing.css";
 import { getPublicRuntimeEnvSnapshot } from "./shared/config/runtimeEnv";
 import {
     MARKETING_AVAILABLE_LANGUAGES,
@@ -184,7 +183,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         __html: `window.ENV = ${JSON.stringify(runtimeEnv)}`,
                     }}
                 />
-                <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
             </head>
             <body>
                 {children}

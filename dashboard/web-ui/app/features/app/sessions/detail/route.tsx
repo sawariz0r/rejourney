@@ -760,6 +760,16 @@ const FRAME_CACHE_PRUNE_THRESHOLD = 240;
 const MAX_TIMELINE_MARKERS = 900;
 const MAX_ACTIVITY_ROWS = 900;
 
+type SessionLoadErrorKind = 'forbidden' | 'not_found' | 'unavailable' | 'unknown';
+
+function classifySessionLoadError(error: unknown): SessionLoadErrorKind {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    if (message.includes('no access') || message.includes('forbidden')) return 'forbidden';
+    if (message.includes('not found')) return 'not_found';
+    if (message.includes('temporarily unavailable') || message.includes('failed to fetch')) return 'unavailable';
+    return 'unknown';
+}
+
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -790,6 +800,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const [isHierarchyLoading, setIsHierarchyLoading] = useState(true);
     const [isStatsLoading, setIsStatsLoading] = useState(true);
     const [isFramesLoading, setIsFramesLoading] = useState(false);
+    const [sessionLoadError, setSessionLoadError] = useState<SessionLoadErrorKind | null>(null);
     const [activityFilter, setActivityFilter] = useState<string>('all');
     const [currentPlaybackTime, setCurrentPlaybackTime] = useState<number>(0);
     const [activeWorkbenchTab, setActiveWorkbenchTab] = useState<'timeline' | 'console' | 'inspector' | 'metadata'>('timeline');
@@ -872,6 +883,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
             setIsHierarchyLoading(true);
             setIsStatsLoading(true);
             setIsFramesLoading(false);
+            setSessionLoadError(null);
             setHierarchySnapshots([]);
 
             const transformHierarchySnapshots = (rawSnapshots: any[], sessionLike: any): HierarchySnapshot[] => {
@@ -967,7 +979,13 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                 }
             } catch (err) {
                 if (activeReplayRequestRef.current !== requestId) return;
-                console.error('Failed to fetch session core:', err);
+                const errorKind = classifySessionLoadError(err);
+                setSessionLoadError(errorKind);
+                setIsHierarchyLoading(false);
+                if (errorKind === 'unknown' || errorKind === 'unavailable') {
+                    console.error('Failed to fetch session core:', err);
+                }
+                return;
             } finally {
                 if (activeReplayRequestRef.current === requestId) {
                     setIsCoreLoading(false);
@@ -2494,11 +2512,23 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     }
 
     if (!session && !fullSession) {
+        const message = sessionLoadError === 'forbidden'
+            ? "You don't have access to this session"
+            : sessionLoadError === 'unavailable'
+                ? 'Session data is temporarily unavailable'
+                : 'Session not found';
+        const detail = sessionLoadError === 'forbidden'
+            ? 'This replay belongs to another workspace or team.'
+            : sessionLoadError === 'unavailable'
+                ? 'The API could not load the replay right now. Your session was not cleared.'
+                : null;
+
         return (
             <div className="min-h-screen flex items-center justify-center bg-transparent">
                 <div className="text-center">
                     <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <p className="text-slate-500">Session not found</p>
+                    <p className="text-slate-600 font-semibold">{message}</p>
+                    {detail ? <p className="mt-1 text-sm text-slate-500">{detail}</p> : null}
                 </div>
             </div>
         );

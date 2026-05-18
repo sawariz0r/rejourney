@@ -7,26 +7,41 @@
   <img src="https://rejourney.co/images/session-replay-preview.png" alt="Rejourney Session Replay" width="100%" />
 
   <p>
-    <strong>Lightweight session replay and observability for Mobile Apps</strong>
+    <strong>Lightweight session replay and observability for Mobile and Web Apps</strong>
     <br />
-    Mobile-first focus with pixel-perfect video capture and real-time incident detection.
+    Focus with pixel-perfect video capture and real-time incident detection.
   </p>
   
   <p>
     <a href="https://rejourney.co"><strong>Explore the Website »</strong></a>
   </p>
   
-<p>
-  <a href="https://reactnative.dev">
-    <img src="https://img.shields.io/badge/React%20Native-61DAFB?logo=react&logoColor=black" alt="React Native" />
-  </a>
-  <a href="https://expo.dev">
-    <img src="https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white" alt="Expo" />
-  </a>
-  <a href="https://www.swift.org">
-    <img src="https://img.shields.io/badge/Swift-F05138?logo=swift&logoColor=white" alt="Swift" />
-  </a>
-</p>
+  <p>
+    <a href="https://reactnative.dev">
+      <img src="https://img.shields.io/badge/React%20Native-20232A?style=for-the-badge&amp;logo=react&amp;logoColor=61DAFB" alt="React Native" />
+    </a>
+    <a href="https://expo.dev">
+      <img src="https://img.shields.io/badge/Expo-000020?style=for-the-badge&amp;logo=expo&amp;logoColor=white" alt="Expo" />
+    </a>
+    <a href="https://www.swift.org">
+      <img src="https://img.shields.io/badge/Swift-F05138?style=for-the-badge&amp;logo=swift&amp;logoColor=white" alt="Swift" />
+    </a>
+  </p>
+
+  <p>
+    <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript">
+      <img src="https://img.shields.io/badge/Browser%20SDK-F7DF1E?style=for-the-badge&amp;logo=javascript&amp;logoColor=black" alt="Browser SDK" />
+    </a>
+    <a href="https://nextjs.org">
+      <img src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&amp;logo=nextdotjs&amp;logoColor=white" alt="Next.js" />
+    </a>
+    <a href="https://vuejs.org">
+      <img src="https://img.shields.io/badge/Vue.js-4FC08D?style=for-the-badge&amp;logo=vuedotjs&amp;logoColor=white" alt="Vue.js" />
+    </a>
+    <a href="https://nuxt.com">
+      <img src="https://img.shields.io/badge/Nuxt-00DC82?style=for-the-badge&amp;logo=nuxt&amp;logoColor=white" alt="Nuxt" />
+    </a>
+  </p>
 </div>
 
 ## Features

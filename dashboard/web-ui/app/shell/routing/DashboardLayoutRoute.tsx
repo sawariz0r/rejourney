@@ -5,15 +5,16 @@
  * It handles auth checking and provides the sidebar, topbar, and session data context.
  */
 
-import { Outlet, redirect, useLoaderData, useNavigate } from "react-router";
+import { isRouteErrorResponse, Outlet, redirect, useLoaderData, useNavigate, useRouteError } from "react-router";
 import type { Route } from "./+types/DashboardLayoutRoute";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ProjectLayout } from "~/shell/components/layout/AppLayout";
 import { TabWorkspace } from "~/shell/components/layout/TabWorkspace";
 import { useAuth } from "~/shared/providers/AuthContext";
 import { SessionDataProvider } from "~/shared/providers/SessionContext";
 import { TabProvider } from "~/shared/providers/TabContext";
-import { ErrorBoundary } from "~/shared/ui/core/ErrorBoundary";
+import { ErrorBoundary as ClientErrorBoundary } from "~/shared/ui/core/ErrorBoundary";
+import { AuthServiceUnavailable } from "~/shared/ui/core/AuthServiceUnavailable";
 import { BootstrapTransientError, loadDashboardShellBootstrap } from "~/shell/server/dashboardBootstrap";
 
 export const meta: Route.MetaFunction = () => [
@@ -50,18 +51,28 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 // Protected route wrapper - redirects to login if not authenticated
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-    const { isAuthenticated, isLoading } = useAuth();
+    const { authServiceUnavailable, error, isAuthenticated, isLoading, refreshUser } = useAuth();
     const navigate = useNavigate();
+    const [isRetryingAuth, setIsRetryingAuth] = useState(false);
 
     useEffect(() => {
-        if (!isLoading && !isAuthenticated) {
+        if (!isLoading && !isAuthenticated && !authServiceUnavailable) {
             // Store the intended destination so we can redirect back after login
             if (typeof window !== 'undefined') {
-                localStorage.setItem('returnUrl', window.location.pathname);
+                localStorage.setItem('returnUrl', `${window.location.pathname}${window.location.search}`);
             }
             navigate('/login', { replace: true });
         }
-    }, [isAuthenticated, isLoading, navigate]);
+    }, [authServiceUnavailable, isAuthenticated, isLoading, navigate]);
+
+    const handleRetryAuth = async () => {
+        setIsRetryingAuth(true);
+        try {
+            await refreshUser();
+        } finally {
+            setIsRetryingAuth(false);
+        }
+    };
 
     if (isLoading) {
         return (
@@ -71,6 +82,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
                     <div className="text-sm text-muted-foreground font-mono uppercase">Loading...</div>
                 </div>
             </div>
+        );
+    }
+
+    if (!isAuthenticated && authServiceUnavailable) {
+        return (
+            <AuthServiceUnavailable
+                detail={error}
+                isRetrying={isRetryingAuth}
+                onRetry={handleRetryAuth}
+            />
         );
     }
 
@@ -98,7 +119,7 @@ export default function DashboardLayout() {
     const bootstrap = useLoaderData<typeof loader>();
 
     return (
-        <ErrorBoundary>
+        <ClientErrorBoundary>
             <ProtectedRoute>
                 <SessionDataProvider
                     initialProjects={bootstrap.projects}
@@ -110,6 +131,47 @@ export default function DashboardLayout() {
                     </TabProvider>
                 </SessionDataProvider>
             </ProtectedRoute>
-        </ErrorBoundary>
+        </ClientErrorBoundary>
+    );
+}
+
+export function ErrorBoundary() {
+    const error = useRouteError();
+
+    if (isRouteErrorResponse(error) && error.status === 503) {
+        return (
+            <AuthServiceUnavailable
+                detail="The dashboard API is temporarily unavailable. Our team has been notified. If this issue remains past a few minutes, email contact@rejourney.co for 24/7 support."
+                onRetry={() => {
+                    if (typeof window !== 'undefined') {
+                        window.location.reload();
+                    }
+                }}
+            />
+        );
+    }
+
+    const message = isRouteErrorResponse(error)
+        ? error.statusText || `Dashboard error ${error.status}`
+        : error instanceof Error
+            ? error.message
+            : "An unexpected dashboard error occurred.";
+
+    return (
+        <main className="min-h-screen flex items-center justify-center bg-background p-4">
+            <div className="max-w-md border-2 border-red-500 bg-red-50 p-6 text-center">
+                <h1 className="mb-3 text-xl font-black uppercase text-red-800">Dashboard error</h1>
+                <p className="mb-5 text-sm font-semibold text-red-700">{message}</p>
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (typeof window !== 'undefined') window.location.reload();
+                    }}
+                    className="px-4 py-2 bg-red-600 text-white font-bold uppercase hover:bg-red-700"
+                >
+                    Reload
+                </button>
+            </div>
+        </main>
     );
 }

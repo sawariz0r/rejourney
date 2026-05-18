@@ -4,8 +4,6 @@ export interface RuntimeEnvSnapshot {
   VITE_TURNSTILE_SITE_KEY?: string;
 }
 
-const DEFAULT_TURNSTILE_SITE_KEY = "0x4AAAAAACFAymkezoYB_TBw";
-
 function readRuntimeEnvValue(key: keyof RuntimeEnvSnapshot): string | undefined {
   const fromWindow = typeof window !== "undefined" ? window.ENV?.[key] : undefined;
   const fromProcess = typeof process !== "undefined" ? process.env?.[key] : undefined;
@@ -31,7 +29,7 @@ export function getMapboxToken(): string {
 }
 
 export function getTurnstileSiteKey(): string {
-  return getRuntimeEnvSnapshot().VITE_TURNSTILE_SITE_KEY || DEFAULT_TURNSTILE_SITE_KEY;
+  return getRuntimeEnvSnapshot().VITE_TURNSTILE_SITE_KEY || "";
 }
 
 export function getPublicRuntimeEnvSnapshot(): RuntimeEnvSnapshot {

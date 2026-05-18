@@ -71,6 +71,12 @@ spec:
                   name: mapbox-secret
                   key: VITE_MAPBOX_TOKEN
                   optional: true
+            - name: VITE_TURNSTILE_SITE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: turnstile-secret
+                  key: TURNSTILE_SITE_KEY
+                  optional: true
           resources:
             requests:
               cpu: 200m

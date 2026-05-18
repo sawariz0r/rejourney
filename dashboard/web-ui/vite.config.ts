@@ -1,9 +1,38 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { reactRouter } from "@react-router/dev/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
+function noStoreOptimizedDeps(): Plugin {
+    return {
+        name: "no-store-optimized-deps",
+        apply: "serve",
+        configureServer(server) {
+            server.middlewares.use((req, res, next) => {
+                if (!req.url?.startsWith("/node_modules/.vite/deps/")) {
+                    next();
+                    return;
+                }
+
+                const setHeader = res.setHeader.bind(res);
+                res.setHeader = ((name: string, value: number | string | readonly string[]) => {
+                    if (name.toLowerCase() === "cache-control") {
+                        return setHeader(name, "no-store, max-age=0");
+                    }
+                    return setHeader(name, value);
+                }) as typeof res.setHeader;
+
+                setHeader("Cache-Control", "no-store, max-age=0");
+                setHeader("Pragma", "no-cache");
+                setHeader("Expires", "0");
+                next();
+            });
+        },
+    };
+}
+
 export default defineConfig({
     plugins: [
+        noStoreOptimizedDeps(),
         reactRouter(),
         tsconfigPaths({
             projects: ['./tsconfig.json'],

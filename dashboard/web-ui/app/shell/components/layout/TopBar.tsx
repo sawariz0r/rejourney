@@ -23,7 +23,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
   const { currentTeam } = useTeam();
   const pathPrefix = usePathPrefix();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshTime, setLastRefreshTime] = useState<Date>(new Date());
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
   const [refreshCompletedPulse, setRefreshCompletedPulse] = useState(false);
   const [teamUsage, setTeamUsage] = useState<TeamUsage | null>(null);
   const [teamPlan, setTeamPlan] = useState<{ planName: string; sessionLimit: number; videoRetentionLabel: string } | null>(null);
@@ -201,7 +201,9 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
 
   const refreshTitle = isRefreshing
     ? 'Refreshing dashboard data...'
-    : `Refresh data (last: ${lastRefreshTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})`;
+    : lastRefreshTime
+      ? `Refresh data (last: ${lastRefreshTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})`
+      : 'Refresh dashboard data';
 
   return (
     <div className="dashboard-topbar relative z-10 flex min-h-[44px] items-center gap-2 px-2 py-1.5 sm:px-3">

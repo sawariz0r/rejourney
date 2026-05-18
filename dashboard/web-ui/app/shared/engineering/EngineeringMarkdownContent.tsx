@@ -6,6 +6,11 @@ import { createMarkdownHeadingIdGenerator } from "~/shared/lib/markdownHeadings"
 
 export function EngineeringMarkdownContent({ content }: { content: string }) {
     const getHeadingId = createMarkdownHeadingIdGenerator();
+    const paragraphClassName = "text-lg leading-8 text-slate-700";
+    const hasImageChild = (node: any) => (
+        Array.isArray(node?.children)
+        && node.children.some((child: any) => child?.tagName === "img")
+    );
 
     return (
         <ReactMarkdown
@@ -62,10 +67,10 @@ export function EngineeringMarkdownContent({ content }: { content: string }) {
                         {children}
                     </h4>
                 ),
-                p: ({ children }) => (
-                    <p className="text-lg leading-8 text-slate-700">
-                        {children}
-                    </p>
+                p: ({ node, children }: any) => (
+                    hasImageChild(node)
+                        ? <div className={paragraphClassName}>{children}</div>
+                        : <p className={paragraphClassName}>{children}</p>
                 ),
                 ul: ({ children }) => (
                     <ul className="ml-6 list-outside list-disc space-y-3 text-lg leading-8 text-slate-700">

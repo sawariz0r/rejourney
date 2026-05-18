@@ -38,6 +38,18 @@ const router = Router();
 const OTP_EXPIRY_MINUTES = 10;
 const SESSION_EXPIRY_DAYS = 30;
 
+/**
+ * Public auth runtime configuration.
+ * GET /api/auth/config
+ */
+router.get('/config', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+        turnstileRequired: Boolean(config.TURNSTILE_SECRET_KEY),
+        turnstileSiteKey: config.TURNSTILE_SITE_KEY || '',
+    });
+});
+
 async function auditAuthEvent(
     req: Request,
     params: {
@@ -69,6 +81,9 @@ async function verifyTurnstileToken(token: string, remoteIp?: string): Promise<b
         return true;
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+
     try {
         const params = new URLSearchParams({
             secret: secretKey,
@@ -79,7 +94,13 @@ async function verifyTurnstileToken(token: string, remoteIp?: string): Promise<b
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: params.toString(),
+            signal: controller.signal,
         });
+
+        if (!response.ok) {
+            logger.warn({ status: response.status }, 'Turnstile verification service returned an error');
+            throw new ApiError('Security check temporarily unavailable. Please try again shortly.', 503);
+        }
 
         const result = await response.json() as { success: boolean; 'error-codes'?: string[] };
 
@@ -90,8 +111,14 @@ async function verifyTurnstileToken(token: string, remoteIp?: string): Promise<b
 
         return true;
     } catch (err) {
+        if (err instanceof ApiError) {
+            throw err;
+        }
+
         logger.error({ err }, 'Turnstile verification error');
-        return false;
+        throw new ApiError('Security check temporarily unavailable. Please try again shortly.', 503);
+    } finally {
+        clearTimeout(timeout);
     }
 }
 
@@ -117,7 +144,7 @@ router.post(
         // Verify Turnstile token (if configured)
         if (config.TURNSTILE_SECRET_KEY) {
             if (!turnstileToken) {
-                throw new ApiError('Turnstile verification required', 400);
+                throw new ApiError('Security verification is required. Please complete the prompt and try again.', 400);
             }
 
             const isValid = await verifyTurnstileToken(turnstileToken, req.ip);

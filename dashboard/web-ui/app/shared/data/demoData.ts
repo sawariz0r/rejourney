@@ -8,6 +8,15 @@
 import { Project, RecordingSession, ProjectDailyStats } from '~/shared/types';
 import { demoReplayFixture } from './demoReplayData';
 
+export const DEMO_NOW = Date.UTC(2026, 4, 18, 12, 0, 0);
+export const DEMO_NOW_ISO = new Date(DEMO_NOW).toISOString();
+
+let demoRandomSeed = 0x51f15eED;
+const demoRandom = () => {
+    demoRandomSeed = (demoRandomSeed * 1664525 + 1013904223) >>> 0;
+    return demoRandomSeed / 0x100000000;
+};
+
 // Featured session ID - this will use the real recording from the backend
 export const DEMO_FEATURED_SESSION_ID = 'session_1773776620852_4474dcb8c2634e99b379b6c14f0b641a';
 
@@ -17,8 +26,8 @@ export const DEMO_TEAM = {
     name: 'ShopFlow Inc.',
     ownerUserId: 'demo-user',
     billingPlan: 'pro' as const,
-    createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: new Date(DEMO_NOW - 180 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(DEMO_NOW).toISOString(),
 };
 
 // Demo project
@@ -38,7 +47,7 @@ export const demoProjects: Project[] = [
         sampleRate: 100,
         maxRecordingMinutes: 10,
         webMaxObservabilityMinutes: 30,
-        createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date(DEMO_NOW - 90 * 24 * 60 * 60 * 1000).toISOString(),
         sessionsLast7Days: 1247,
         errorsLast7Days: 23,
     }
@@ -52,7 +61,7 @@ export const demoDashboardStats = {
 };
 
 // Generate time helpers
-const now = Date.now();
+const now = DEMO_NOW;
 const hour = 60 * 60 * 1000;
 const day = 24 * hour;
 
@@ -1028,19 +1037,19 @@ export const demoDailyStats: ProjectDailyStats[] = Array.from({ length: 30 }, (_
     const date = new Date(now - (29 - i) * day);
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     const baseSessions = isWeekend ? 280 : 420;
-    const variance = Math.random() * 0.3 - 0.15; // ±15% variance
+    const variance = demoRandom() * 0.3 - 0.15; // ±15% variance
 
     return {
         projectId: 'demo-project-001',
         date: date.toISOString().split('T')[0],
         totalSessions: Math.round(baseSessions * (1 + variance)),
         completedSessions: Math.round(baseSessions * (1 + variance) * 0.92),
-        avgDurationSeconds: Math.round(300 + Math.random() * 120),
-        avgInteractionScore: Math.round(70 + Math.random() * 15),
-        avgApiErrorRate: Math.round((2 + Math.random() * 2) * 100) / 100,
-        p50Duration: Math.round(280 + Math.random() * 60),
-        p90Duration: Math.round(600 + Math.random() * 200),
-        p50InteractionScore: Math.round(72 + Math.random() * 10),
-        p90InteractionScore: Math.round(88 + Math.random() * 8)
+        avgDurationSeconds: Math.round(300 + demoRandom() * 120),
+        avgInteractionScore: Math.round(70 + demoRandom() * 15),
+        avgApiErrorRate: Math.round((2 + demoRandom() * 2) * 100) / 100,
+        p50Duration: Math.round(280 + demoRandom() * 60),
+        p90Duration: Math.round(600 + demoRandom() * 200),
+        p50InteractionScore: Math.round(72 + demoRandom() * 10),
+        p90InteractionScore: Math.round(88 + demoRandom() * 8)
     };
 });

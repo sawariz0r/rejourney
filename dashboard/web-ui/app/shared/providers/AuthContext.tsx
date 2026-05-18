@@ -90,6 +90,96 @@ async function fetchFreshCurrentUser(): Promise<Response> {
   });
 }
 
+function isAuthServiceUnavailableStatus(status: number): boolean {
+  return status >= 500 || status === 408 || status === 425;
+}
+
+function isTransientAuthError(err: unknown): boolean {
+  if (err instanceof AuthRequestError) {
+    return err.transient;
+  }
+
+  return isNetworkError(err);
+}
+
+async function parseJsonResponse(response: Response): Promise<any> {
+  const text = await response.text().catch(() => '');
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (!response.ok) {
+      throw new AuthRequestError(
+        isAuthServiceUnavailableStatus(response.status)
+          ? 'Authentication service returned an invalid response. Please try again shortly.'
+          : 'Invalid response from server. Please try again.',
+        { status: response.status, transient: isAuthServiceUnavailableStatus(response.status) },
+      );
+    }
+    throw new AuthRequestError('Invalid response from server. Please try again.', {
+      status: response.status,
+      transient: false,
+    });
+  }
+}
+
+function messageFromAuthFailure(response: Response, data: any, fallback: string): string {
+  if (data && typeof data === 'object') {
+    if (typeof data.message === 'string' && data.message) return data.message;
+    if (typeof data.error === 'string' && data.error) return data.error;
+  }
+
+  if (isAuthServiceUnavailableStatus(response.status)) {
+    return 'Authentication service is temporarily unavailable. Please try again shortly.';
+  }
+
+  return fallback || `Server error: ${response.status} ${response.statusText}`;
+}
+
+async function fetchAuthJson<T>(
+  url: string,
+  options: RequestInit,
+  fallbackError: string,
+): Promise<T> {
+  const response = await fetchWithTimeout(url, options);
+  const data = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    throw new AuthRequestError(messageFromAuthFailure(response, data, fallbackError), {
+      status: response.status,
+      transient: isAuthServiceUnavailableStatus(response.status),
+    });
+  }
+
+  return data as T;
+}
+
+function authActionFailure(err: unknown, fallback: string): AuthActionResult {
+  if (err instanceof AuthRequestError) {
+    return {
+      ok: false,
+      message: err.message,
+      transient: err.transient,
+      status: err.status,
+    };
+  }
+
+  if (isNetworkError(err)) {
+    return {
+      ok: false,
+      message: 'Authentication service is temporarily unavailable. Please check your connection and try again.',
+      transient: true,
+    };
+  }
+
+  return {
+    ok: false,
+    message: err instanceof Error ? err.message : fallback,
+    transient: false,
+  };
+}
+
 export interface User {
   id: string;
   email: string;
@@ -126,12 +216,32 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  authServiceUnavailable: boolean;
   error: string | null;
-  login: (email: string, otp: string) => Promise<boolean>;
+  login: (email: string, otp: string) => Promise<AuthActionResult>;
   loginWithGitHub: () => void;
   logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
-  sendOtp: (email: string, turnstileToken: string) => Promise<boolean>;
+  refreshUser: () => Promise<User | null>;
+  sendOtp: (email: string, turnstileToken?: string | null) => Promise<AuthActionResult>;
+}
+
+export interface AuthActionResult {
+  ok: boolean;
+  message?: string;
+  transient?: boolean;
+  status?: number;
+}
+
+class AuthRequestError extends Error {
+  readonly status?: number;
+  readonly transient: boolean;
+
+  constructor(message: string, options: { status?: number; transient?: boolean } = {}) {
+    super(message);
+    this.name = 'AuthRequestError';
+    this.status = options.status;
+    this.transient = Boolean(options.transient);
+  }
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -154,21 +264,27 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
   const [user, setUser] = useState<User | null>(initialHydrated ? initialUser : null);
   const [isLoading, setIsLoading] = useState(!initialHydrated);
   const [error, setError] = useState<string | null>(null);
+  const [authServiceUnavailable, setAuthServiceUnavailable] = useState(false);
   
   // Track if refreshUser is currently running to prevent race conditions
-  const refreshUserPromiseRef = useRef<Promise<void> | null>(null);
+  const refreshUserPromiseRef = useRef<Promise<User | null> | null>(null);
+  const userRef = useRef<User | null>(initialHydrated ? initialUser : null);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Fetch current user
   const refreshUser = useCallback(async () => {
     // Skip during SSR - cookies are not available server-side
     if (typeof window === 'undefined') {
-      return;
+      return userRef.current;
     }
 
     // Skip user fetching in demo mode to avoid unnecessary console errors
     if (window.location.pathname.startsWith('/demo')) {
       setIsLoading(false);
-      return;
+      return userRef.current;
     }
 
     // If a refresh is already in progress, return the existing promise
@@ -182,43 +298,64 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
         const response = await fetchFreshCurrentUser();
 
         if (response.ok) {
-          let data;
-          try {
-            data = await response.json();
-          } catch (jsonErr) {
-            // Handle JSON parsing errors
-            console.error('Failed to parse user data:', jsonErr);
-            throw new Error('Invalid response from server. Please try again.');
-          }
+          const data = await parseJsonResponse(response);
           
           // Backend returns { user: {...} }, extract the user object
-          const userData = data.user || data;
+          const userData = data?.user || data;
+          if (!userData) {
+            throw new AuthRequestError('Invalid auth response from server. Please try again.', {
+              status: response.status,
+              transient: true,
+            });
+          }
           // Ensure all required fields have default values
-          setUser(normalizeAuthUser(userData));
+          const normalizedUser = normalizeAuthUser(userData);
+          setUser(normalizedUser);
+          userRef.current = normalizedUser;
           setError(null);
+          setAuthServiceUnavailable(false);
+          return normalizedUser;
         } else if (response.status === 401) {
           // Unauthorized - user is not authenticated
           setUser(null);
+          userRef.current = null;
           setError(null); // Clear error for 401 as it's expected when not logged in
+          setAuthServiceUnavailable(false);
+          return null;
+        } else if (response.status === 403) {
+          setUser(null);
+          userRef.current = null;
+          setError(null);
+          setAuthServiceUnavailable(false);
+          return null;
         } else {
           // Other HTTP errors
           const errorText = await response.text().catch(() => '');
-          throw new Error(`Server error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ''}`);
+          throw new AuthRequestError(
+            `Authentication service error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ''}`,
+            {
+              status: response.status,
+              transient: isAuthServiceUnavailableStatus(response.status),
+            },
+          );
         }
       } catch (err) {
         // Only set error for network errors, not for 401 (unauthorized)
-        if (isNetworkError(err)) {
+        if (isTransientAuthError(err)) {
           const errorMessage = err instanceof Error ? err.message : 'Network error: Unable to connect to server.';
           console.error('Network error fetching user:', errorMessage);
           // Don't clear user on network errors - keep existing state
           setError(errorMessage);
+          setAuthServiceUnavailable(true);
         } else {
           console.error('Failed to fetch user:', err);
           // For non-network errors, only clear user if it's a 401 or similar
           // Otherwise keep existing user state
           const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user';
           setError(errorMessage);
+          setAuthServiceUnavailable(false);
         }
+        return userRef.current;
       } finally {
         // Clear the promise ref when done
         refreshUserPromiseRef.current = null;
@@ -233,7 +370,9 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
     if (!initialHydrated) return;
     startTransition(() => {
       setUser(initialUser);
+      userRef.current = initialUser;
       setError(null);
+      setAuthServiceUnavailable(false);
       setIsLoading(false);
     });
   }, [initialHydrated, initialUser]);
@@ -253,7 +392,7 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
   }, [initialHydrated, refreshUser]);
 
   // Send OTP to email
-  const sendOtp = useCallback(async (email: string, turnstileToken: string): Promise<boolean> => {
+  const sendOtp = useCallback(async (email: string, turnstileToken?: string | null): Promise<AuthActionResult> => {
     try {
       setError(null);
       const headers = withDefaultHeaders({ 'Content-Type': 'application/json' });
@@ -262,42 +401,29 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
       const fingerprint = await getFingerprint();
 
       // Use relative URL to go through the proxy with timeout
-      const response = await fetchWithTimeout('/api/auth/otp/send', {
+      await fetchAuthJson('/api/auth/otp/send', {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({ email, fingerprint, turnstileToken }),
-      });
+        body: JSON.stringify({
+          email,
+          fingerprint,
+          ...(turnstileToken ? { turnstileToken } : {}),
+        }),
+      }, 'Failed to send verification code');
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (jsonErr) {
-        throw new Error('Invalid response from server. Please try again.');
-      }
-
-      if (!response.ok) {
-        const errorMessage = data.message || data.error || `Server error: ${response.status} ${response.statusText}`;
-        throw new Error(errorMessage);
-      }
-
-      return true;
+      setAuthServiceUnavailable(false);
+      return { ok: true };
     } catch (err) {
-      let errorMessage: string;
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (isNetworkError(err)) {
-        errorMessage = 'Network error: Unable to connect to server. Please check your internet connection.';
-      } else {
-        errorMessage = 'Failed to send verification code';
-      }
-      setError(errorMessage);
-      return false;
+      const failure = authActionFailure(err, 'Failed to send verification code');
+      setAuthServiceUnavailable(Boolean(failure.transient));
+      setError(failure.message || 'Failed to send verification code');
+      return failure;
     }
   }, []);
 
   // Login with email and OTP
-  const login = useCallback(async (email: string, otp: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, otp: string): Promise<AuthActionResult> => {
     try {
       setError(null);
       const headers = withDefaultHeaders({ 'Content-Type': 'application/json' });
@@ -306,39 +432,34 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
       const fingerprint = await getFingerprint();
 
       // Use relative URL to go through the proxy with timeout
-      const response = await fetchWithTimeout('/api/auth/otp/verify', {
+      const verifyData = await fetchAuthJson<{ user?: Record<string, any> }>('/api/auth/otp/verify', {
         method: 'POST',
         headers,
         credentials: 'include',
         body: JSON.stringify({ email, code: otp, fingerprint }),
-      });
+      }, 'Login failed');
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (jsonErr) {
-        throw new Error('Invalid response from server. Please try again.');
-      }
-
-      if (!response.ok) {
-        const errorMessage = data.message || data.error || `Server error: ${response.status} ${response.statusText}`;
-        throw new Error(errorMessage);
+      if (verifyData?.user) {
+        const verifiedUser = normalizeAuthUser(verifyData.user);
+        setUser(verifiedUser);
+        userRef.current = verifiedUser;
       }
 
       // Fetch user data after successful login
-      await refreshUser();
-      return true;
+      const refreshedUser = await refreshUser();
+      setAuthServiceUnavailable(false);
+      return refreshedUser
+        ? { ok: true }
+        : {
+            ok: false,
+            message: 'We verified the code, but could not load your dashboard session. Please retry.',
+            transient: true,
+          };
     } catch (err) {
-      let errorMessage: string;
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (isNetworkError(err)) {
-        errorMessage = 'Network error: Unable to connect to server. Please check your internet connection.';
-      } else {
-        errorMessage = 'Login failed';
-      }
-      setError(errorMessage);
-      return false;
+      const failure = authActionFailure(err, 'Login failed');
+      setAuthServiceUnavailable(Boolean(failure.transient));
+      setError(failure.message || 'Login failed');
+      return failure;
     }
   }, [refreshUser]);
 
@@ -358,7 +479,9 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
     } finally {
       // Always clear user state, even if network request fails
       setUser(null);
+      userRef.current = null;
       setError(null);
+      setAuthServiceUnavailable(false);
     }
   }, []);
 
@@ -373,6 +496,7 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
     user,
     isLoading,
     isAuthenticated: !!user,
+    authServiceUnavailable,
     error,
     login,
     loginWithGitHub,

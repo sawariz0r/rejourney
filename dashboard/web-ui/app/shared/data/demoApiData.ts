@@ -28,12 +28,20 @@ import {
 import { Issue, IssueSession } from '~/shared/types';
 import { DEMO_FEATURED_SESSION_ID } from './demoData';
 
+const DEMO_NOW = Date.UTC(2026, 4, 18, 12, 0, 0);
+
+let demoRandomSeed = 0x5eed1234;
+const demoRandom = () => {
+    demoRandomSeed = (demoRandomSeed * 1664525 + 1013904223) >>> 0;
+    return demoRandomSeed / 0x100000000;
+};
+
 // ================================================================================
 // Dashboard Stats (for Overview and Growth pages)
 // ================================================================================
 
 const demoWatermark = (() => {
-    const d = new Date();
+    const d = new Date(DEMO_NOW);
     d.setUTCDate(d.getUTCDate() - 1);
     return d.toISOString().split('T')[0];
 })();
@@ -159,7 +167,7 @@ export const demoApiLatencyByLocation: ApiLatencyByLocationResponse = {
 // Insights Trends (for Growth charts)
 // ================================================================================
 
-const now = Date.now();
+const now = DEMO_NOW;
 const day = 24 * 60 * 60 * 1000;
 
 export const demoInsightsTrends: InsightsTrends = {
@@ -167,36 +175,36 @@ export const demoInsightsTrends: InsightsTrends = {
         const date = new Date(now - (29 - i) * day);
         const isWeekend = date.getDay() === 0 || date.getDay() === 6;
         const baseSessions = isWeekend ? 800 : 1200; // More sessions per day
-        const variance = Math.random() * 0.2 + 0.9;
+        const variance = demoRandom() * 0.2 + 0.9;
 
         return {
             date: date.toISOString().split('T')[0],
             sessions: Math.round(baseSessions * variance), // Sessions per day (800-1200)
-            crashes: Math.round(1 + Math.random() * 3),
-            rageTaps: Math.round(5 + Math.random() * 10),
-            dau: Math.round(200 + Math.random() * 100), // DAU (200-300) < sessions
-            mau: Math.round(850 + (Math.random() - 0.5) * 50), // MAU varies slightly (825-875)
+            crashes: Math.round(1 + demoRandom() * 3),
+            rageTaps: Math.round(5 + demoRandom() * 10),
+            dau: Math.round(200 + demoRandom() * 100), // DAU (200-300) < sessions
+            mau: Math.round(850 + (demoRandom() - 0.5) * 50), // MAU varies slightly (825-875)
             // NEW: Additional metrics for overview graphs
-            avgApiResponseMs: Math.round(150 + Math.random() * 100), // 150-250ms
-            apiErrorRate: Math.round((1 + Math.random() * 4) * 100) / 100, // 1-5%
-            avgDurationSeconds: Math.round(180 + Math.random() * 120), // 180-300 seconds
-            errorCount: Math.round(5 + Math.random() * 15), // 5-20 errors per day
+            avgApiResponseMs: Math.round(150 + demoRandom() * 100), // 150-250ms
+            apiErrorRate: Math.round((1 + demoRandom() * 4) * 100) / 100, // 1-5%
+            avgDurationSeconds: Math.round(180 + demoRandom() * 120), // 180-300 seconds
+            errorCount: Math.round(5 + demoRandom() * 15), // 5-20 errors per day
             // App version breakdown - simulating gradual adoption of newer versions
             appVersionBreakdown: {
-                '2.3.1': Math.round(40 + i * 3 + Math.random() * 10), // Newest, growing
-                '2.3.0': Math.round(60 - i * 1.5 + Math.random() * 10), // Previous, declining
-                '2.2.9': Math.round(30 - i * 0.8 + Math.random() * 5), // Older, declining
-                '2.2.8': Math.round(15 - i * 0.4 + Math.random() * 3), // Even older
-                '2.2.5': Math.round(5 + Math.random() * 2), // Long-tail users
+                '2.3.1': Math.round(40 + i * 3 + demoRandom() * 10), // Newest, growing
+                '2.3.0': Math.round(60 - i * 1.5 + demoRandom() * 10), // Previous, declining
+                '2.2.9': Math.round(30 - i * 0.8 + demoRandom() * 5), // Older, declining
+                '2.2.8': Math.round(15 - i * 0.4 + demoRandom() * 3), // Even older
+                '2.2.5': Math.round(5 + demoRandom() * 2), // Long-tail users
             },
             countryDauBreakdown: {
-                'United States': Math.round(110 + i * 1.8 + Math.random() * 16),
-                'United Kingdom': Math.round(42 + i * 0.9 + Math.random() * 8),
-                Germany: Math.round(34 + i * 0.6 + Math.random() * 7),
-                Japan: Math.round(24 + i * 0.4 + Math.random() * 5),
-                Canada: Math.round(18 + i * 0.3 + Math.random() * 4),
+                'United States': Math.round(110 + i * 1.8 + demoRandom() * 16),
+                'United Kingdom': Math.round(42 + i * 0.9 + demoRandom() * 8),
+                Germany: Math.round(34 + i * 0.6 + demoRandom() * 7),
+                Japan: Math.round(24 + i * 0.4 + demoRandom() * 5),
+                Canada: Math.round(18 + i * 0.3 + demoRandom() * 4),
             },
-            totalApiCalls: Math.round(baseSessions * (15 + Math.random() * 5)),
+            totalApiCalls: Math.round(baseSessions * (15 + demoRandom() * 5)),
         };
     }),
     dataCompleteThrough: demoWatermark,
@@ -643,7 +651,7 @@ export const demoJourneyObservability: ObservabilityJourneySummary = {
         targetScreen: 'Order Confirmation',
         confidence: 0.71,
         sampleSize: 750,
-        updatedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+        updatedAt: new Date(DEMO_NOW - 6 * 60 * 60 * 1000).toISOString(),
     },
     exitAfterError: [
         { screen: 'Checkout', exitCount: 456, errorTypes: { api: 312, crash: 45, rage: 234 }, sampleSessionIds: ['demo-err-001', 'demo-err-002'] },
@@ -704,16 +712,16 @@ export const demoJourneyObservability: ObservabilityJourneySummary = {
 // Generate daily health data for last 30 days
 const generateDailyHealth = () => {
     const data = [];
-    const now = new Date();
+    const now = new Date(DEMO_NOW);
     for (let i = 29; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-        const baseClean = 600 + Math.round(Math.random() * 200);
-        const baseError = 40 + Math.round(Math.random() * 30);
-        const baseRage = 30 + Math.round(Math.random() * 20);
-        const baseSlow = 20 + Math.round(Math.random() * 15);
-        const baseCrash = 5 + Math.round(Math.random() * 5);
+        const baseClean = 600 + Math.round(demoRandom() * 200);
+        const baseError = 40 + Math.round(demoRandom() * 30);
+        const baseRage = 30 + Math.round(demoRandom() * 20);
+        const baseSlow = 20 + Math.round(demoRandom() * 15);
+        const baseCrash = 5 + Math.round(demoRandom() * 5);
         data.push({
             date: dateStr,
             clean: baseClean,
@@ -729,7 +737,7 @@ const generateDailyHealth = () => {
 const generateDailyCustomEvents = () => {
     const eventNames = ['product_viewed', 'add_to_cart', 'checkout_started', 'signup_completed', 'search_submitted'];
     const data: Array<{ date: string; events: Record<string, number> }> = [];
-    const now = new Date();
+    const now = new Date(DEMO_NOW);
     for (let i = 29; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
@@ -738,11 +746,11 @@ const generateDailyCustomEvents = () => {
         data.push({
             date: dateStr,
             events: {
-                [eventNames[0]]: 120 + growth * 3 + Math.round(Math.random() * 18),
-                [eventNames[1]]: 72 + growth * 2 + Math.round(Math.random() * 12),
-                [eventNames[2]]: 42 + growth + Math.round(Math.random() * 9),
-                [eventNames[3]]: 18 + Math.round(growth * 0.6) + Math.round(Math.random() * 6),
-                [eventNames[4]]: 50 + Math.round(growth * 1.4) + Math.round(Math.random() * 10),
+                [eventNames[0]]: 120 + growth * 3 + Math.round(demoRandom() * 18),
+                [eventNames[1]]: 72 + growth * 2 + Math.round(demoRandom() * 12),
+                [eventNames[2]]: 42 + growth + Math.round(demoRandom() * 9),
+                [eventNames[3]]: 18 + Math.round(growth * 0.6) + Math.round(demoRandom() * 6),
+                [eventNames[4]]: 50 + Math.round(growth * 1.4) + Math.round(demoRandom() * 10),
             },
         });
     }
@@ -889,8 +897,8 @@ export const demoObservabilityDeepMetrics: ObservabilityDeepMetrics = {
             crashCount: 51,
             anrCount: 19,
             errorCount: 514,
-            firstSeen: new Date(Date.now() - 18 * day).toISOString(),
-            latestSeen: new Date(Date.now() - 2 * day).toISOString(),
+            firstSeen: new Date(DEMO_NOW - 18 * day).toISOString(),
+            latestSeen: new Date(DEMO_NOW - 2 * day).toISOString(),
         },
         {
             version: '2.4.0',
@@ -901,8 +909,8 @@ export const demoObservabilityDeepMetrics: ObservabilityDeepMetrics = {
             crashCount: 32,
             anrCount: 11,
             errorCount: 376,
-            firstSeen: new Date(Date.now() - 31 * day).toISOString(),
-            latestSeen: new Date(Date.now() - 5 * day).toISOString(),
+            firstSeen: new Date(DEMO_NOW - 31 * day).toISOString(),
+            latestSeen: new Date(DEMO_NOW - 5 * day).toISOString(),
         },
         {
             version: '2.3.9',
@@ -913,8 +921,8 @@ export const demoObservabilityDeepMetrics: ObservabilityDeepMetrics = {
             crashCount: 19,
             anrCount: 7,
             errorCount: 292,
-            firstSeen: new Date(Date.now() - 54 * day).toISOString(),
-            latestSeen: new Date(Date.now() - 9 * day).toISOString(),
+            firstSeen: new Date(DEMO_NOW - 54 * day).toISOString(),
+            latestSeen: new Date(DEMO_NOW - 9 * day).toISOString(),
         },
     ],
     evidenceSessions: [
@@ -962,17 +970,17 @@ export const demoObservabilityDeepMetrics: ObservabilityDeepMetrics = {
 
 const generateUserEngagementTrends = (): UserEngagementTrends => {
     const daily = [];
-    const now = new Date();
+    const now = new Date(DEMO_NOW);
     let totalBouncers = 0, totalCasuals = 0, totalExplorers = 0, totalLoyalists = 0;
 
     for (let i = 29; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-        const bouncers = 80 + Math.round(Math.random() * 40);
-        const casuals = 150 + Math.round(Math.random() * 60);
-        const explorers = 200 + Math.round(Math.random() * 80);
-        const loyalists = 120 + Math.round(Math.random() * 50);
+        const bouncers = 80 + Math.round(demoRandom() * 40);
+        const casuals = 150 + Math.round(demoRandom() * 60);
+        const explorers = 200 + Math.round(demoRandom() * 80);
+        const loyalists = 120 + Math.round(demoRandom() * 50);
         totalBouncers += bouncers;
         totalCasuals += casuals;
         totalExplorers += explorers;
@@ -1307,8 +1315,8 @@ export const demoIssuesResponse: { issues: Issue[], stats: any, total: number } 
             subtitle: 'main.m in -[AppDelegate application:didFinishLaunchingWithOptions:]',
             culprit: 'AppDelegate.m:42',
             status: 'unresolved',
-            firstSeen: new Date(Date.now() - 7 * day).toISOString(),
-            lastSeen: new Date().toISOString(),
+            firstSeen: new Date(DEMO_NOW - 7 * day).toISOString(),
+            lastSeen: new Date(DEMO_NOW).toISOString(),
             eventCount: 124,
             userCount: 89,
             events24h: 12,
@@ -1323,8 +1331,8 @@ export const demoIssuesResponse: { issues: Issue[], stats: any, total: number } 
             subtitle: '/api/v1/auth/login',
             culprit: 'NetworkClient.ts:156',
             status: 'unresolved',
-            firstSeen: new Date(Date.now() - 3 * day).toISOString(),
-            lastSeen: new Date().toISOString(),
+            firstSeen: new Date(DEMO_NOW - 3 * day).toISOString(),
+            lastSeen: new Date(DEMO_NOW).toISOString(),
             eventCount: 2456,
             userCount: 1234,
             events24h: 312,
@@ -1338,8 +1346,8 @@ export const demoIssuesResponse: { issues: Issue[], stats: any, total: number } 
             title: 'Rage Taps on "Checkout" button',
             subtitle: 'CartScreen',
             status: 'ongoing',
-            firstSeen: new Date(Date.now() - 1 * day).toISOString(),
-            lastSeen: new Date().toISOString(),
+            firstSeen: new Date(DEMO_NOW - 1 * day).toISOString(),
+            lastSeen: new Date(DEMO_NOW).toISOString(),
             eventCount: 45,
             userCount: 32,
             events24h: 15,
@@ -1361,7 +1369,7 @@ export const demoIssueSessions: IssueSession[] = [
         deviceModel: 'iPhone 14 Pro',
         platform: 'ios',
         durationSeconds: 145,
-        createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+        createdAt: new Date(DEMO_NOW - 10 * 60 * 1000).toISOString(),
         coverPhotoUrl: null,
     },
     {
@@ -1369,7 +1377,7 @@ export const demoIssueSessions: IssueSession[] = [
         deviceModel: 'Pixel 7',
         platform: 'android',
         durationSeconds: 234,
-        createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+        createdAt: new Date(DEMO_NOW - 25 * 60 * 1000).toISOString(),
         coverPhotoUrl: null,
     },
 ];
@@ -1384,7 +1392,7 @@ export const demoErrorsResponse: any = {
             id: 'err-1',
             sessionId: 'session-1',
             projectId: 'demo-project',
-            timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+            timestamp: new Date(DEMO_NOW - 15 * 60 * 1000).toISOString(),
             errorType: 'JS Error',
             errorName: 'TypeError',
             message: 'Cannot read property "map" of undefined',
@@ -1407,7 +1415,7 @@ export const demoErrorsResponse: any = {
             id: 'err-2',
             sessionId: 'session-2',
             projectId: 'demo-project',
-            timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+            timestamp: new Date(DEMO_NOW - 45 * 60 * 1000).toISOString(),
             errorType: 'JS Error',
             errorName: 'ReferenceError',
             message: 'config is not defined',
@@ -1436,7 +1444,7 @@ export const demoANRsResponse: any = {
             id: 'anr-1',
             sessionId: 'session-1',
             projectId: 'demo-project',
-            timestamp: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+            timestamp: new Date(DEMO_NOW - 20 * 60 * 1000).toISOString(),
             durationMs: 5400,
             threadState: `Thread[main,5,main]
     at android.view.ViewRootImpl.draw(ViewRootImpl.java:4567)
