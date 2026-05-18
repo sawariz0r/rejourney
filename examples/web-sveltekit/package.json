@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm --prefix ../../packages/browser run build",
     "dev": "vite dev --host 0.0.0.0 --port 3101",
+    "prebuild": "npm --prefix ../../packages/browser run build",
     "build": "vite build",
+    "prepreview": "npm --prefix ../../packages/browser run build",
     "preview": "vite preview --host 0.0.0.0 --port 3101",
     "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },

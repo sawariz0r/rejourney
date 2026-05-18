@@ -50,10 +50,10 @@ export default function PrivacyPolicy() {
 
                             <h3 id="visitors" className="text-base font-semibold mt-6 mb-2">1. Information for Website Visitors</h3>
                             <p>
-                                When you visit rejourney.co, we collect standard log data and use first-party cookies to understand how you interact with our site. This may include your IP address, browser type, and pages visited. We use this information to improve our website and marketing efforts.
+                                When you visit rejourney.co, we collect standard log data and use first-party cookies and local storage identifiers to understand how you interact with our site. This may include your IP address, browser type, and pages visited. We use this information to improve our website and marketing efforts.
                             </p>
                             <p className="mt-4">
-                                We use Microsoft Clarity to capture how you use and interact with our website through behavioral metrics, heatmaps, and session replay to improve and market our products/services. Microsoft Clarity uses cookies and other tracking technologies. We load Microsoft Clarity only after you provide explicit consent. For more information about how Microsoft collects and uses your data, visit the <a href="https://privacy.microsoft.com/en-US/privacystatement" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">Microsoft Privacy Statement</a>.
+                                We use the Rejourney web SDK on rejourney.co to capture optional first-party website analytics, performance signals, and session replay so we can improve our website and product experience. We load Rejourney website analytics and replay only after you provide explicit consent through our cookie consent banner. The SDK masks text inputs by default and does not load third-party session replay tooling.
                             </p>
 
                             <h3 id="customers" className="text-base font-semibold mt-6 mb-2">2. Information for Customers</h3>
@@ -130,12 +130,6 @@ export default function PrivacyPolicy() {
                                             <td className="px-4 py-2 border-b border-input">United States</td>
                                             <td className="px-4 py-2 border-b border-input">SCCs (Art. 46(2)(c))</td>
                                         </tr>
-                                        <tr>
-                                            <td className="px-4 py-2 border-b border-input">Microsoft Clarity</td>
-                                            <td className="px-4 py-2 border-b border-input">Website Analytics & Session Recording</td>
-                                            <td className="px-4 py-2 border-b border-input">United States</td>
-                                            <td className="px-4 py-2 border-b border-input">SCCs (Art. 46(2)(c))</td>
-                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -192,7 +186,7 @@ export default function PrivacyPolicy() {
                             </p>
                             <ul className="list-disc list-inside space-y-2 ml-4 mt-2">
                                 <li><strong>Performance of a contract (Art. 6(1)(b)):</strong> Processing customer account data, billing information, and service-related communications necessary to provide the Service.</li>
-                                <li><strong>Consent (Art. 6(1)(a)):</strong> Loading Microsoft Clarity analytics and cookies on our website — only after you provide explicit consent via our cookie consent banner.</li>
+                                <li><strong>Consent (Art. 6(1)(a)):</strong> Loading optional Rejourney website analytics, session replay, and related first-party storage on rejourney.co — only after you provide explicit consent via our cookie consent banner.</li>
                                 <li><strong>Legitimate interests (Art. 6(1)(f)):</strong> Processing server log data for security, fraud prevention, and site improvement where our interests are not overridden by your rights.</li>
                                 <li><strong>Controller's legal basis (end-user data):</strong> Rejourney processes end-user session data as a Data Processor on behalf of our Customers (Data Controllers). The lawful basis for this processing is determined by the Customer and must be established by the Customer before deploying the Rejourney SDK.</li>
                                 <li><strong>Anonymous information:</strong> Once information has been rendered anonymous so that it no longer relates to an identified or identifiable person, it is no longer personal data under GDPR. The processing used to create anonymized aggregate datasets follows the applicable legal basis above and, for end-user data, the Customer's instructions under the DPA.</li>

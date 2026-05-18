@@ -34,3 +34,30 @@ export function isSameBaseDomain(hostnameA: string, hostnameB: string): boolean 
     // Base domain matches
     return getBaseDomain(hostnameA) === getBaseDomain(hostnameB);
 }
+
+export function splitOriginList(value: string | undefined): string[] {
+    return (value || '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+}
+
+export function isOriginAllowedByList(origin: string | undefined, allowedOrigins: string[]): boolean {
+    if (!origin) return true;
+
+    for (const allowedOrigin of allowedOrigins) {
+        if (origin === allowedOrigin) return true;
+
+        try {
+            const allowedUrl = new URL(allowedOrigin);
+            const originUrl = new URL(origin);
+            if (getBaseDomain(allowedUrl.hostname) === getBaseDomain(originUrl.hostname)) {
+                return true;
+            }
+        } catch {
+            // Ignore malformed configured or request origins.
+        }
+    }
+
+    return false;
+}

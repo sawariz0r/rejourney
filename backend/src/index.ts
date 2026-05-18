@@ -26,7 +26,7 @@ import { csrfProtection, originValidation, errorHandler, notFoundHandler } from 
 import { startStatsAggregationJob, stopStatsAggregationJob } from './jobs/statsAggregator.js';
 import { startAlertWorker, stopAlertWorker } from './worker/alertWorker.js';
 import stripeWebhooksRoutes from './routes/stripeWebhooks.js';
-import { getBaseDomain } from './utils/domain.js';
+import { isOriginAllowedByList, splitOriginList } from './utils/domain.js';
 
 // Use createRequire for CJS modules
 const require = createRequire(import.meta.url);
@@ -63,28 +63,13 @@ function isCorsOriginAllowed(origin: string | undefined, path: string): boolean 
     // route auth so project webAllowedDomains can make the real decision.
     if (isPublicBrowserSdkCorsPath(path)) return true;
 
-    // Allow configured dashboard URL and related domains
-    if (config.PUBLIC_DASHBOARD_URL) {
-        // Allow exact match
-        if (origin === config.PUBLIC_DASHBOARD_URL) {
-            return true;
-        }
+    const allowedDashboardOrigins = [
+        ...splitOriginList(config.PUBLIC_DASHBOARD_URL),
+        ...splitOriginList(config.DASHBOARD_ORIGIN),
+        ...splitOriginList(config.ADDITIONAL_DASHBOARD_ORIGINS),
+    ];
 
-        try {
-            const dashboardUrl = new URL(config.PUBLIC_DASHBOARD_URL);
-            const originUrl = new URL(origin);
-
-            const dashboardBase = getBaseDomain(dashboardUrl.hostname);
-            const originBase = getBaseDomain(originUrl.hostname);
-
-            // Allow same base domain (e.g., rejourney.co, www.rejourney.co)
-            if (dashboardBase === originBase) {
-                return true;
-            }
-        } catch {
-            // Invalid URL, fall through to deny
-        }
-    }
+    if (isOriginAllowedByList(origin, allowedDashboardOrigins)) return true;
 
     // In development, allow all
     return isDevelopment;

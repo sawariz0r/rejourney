@@ -41,6 +41,7 @@ export const links: Route.LinksFunction = () => [
     },
     // DNS prefetch for external domains
     { rel: "dns-prefetch", href: "https://api.rejourney.co" },
+    { rel: "dns-prefetch", href: "https://ingest.rejourney.co" },
     { rel: "dns-prefetch", href: "https://challenges.cloudflare.com" },
     // Favicon links - using root-relative paths to work on all routes
     { rel: "icon", href: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
@@ -201,7 +202,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 import { AuthProvider } from "./shared/providers/AuthContext";
 import { TeamProvider } from "./shared/providers/TeamContext";
 import { ToastProvider } from "./shared/providers/ToastContext";
-import { ClarityConsentBanner } from "~/shared/compliance/ClarityConsentBanner";
+import { RejourneyConsentBanner } from "~/shared/compliance/RejourneyConsentBanner";
 
 export default function App() {
     const matches = useMatches();
@@ -221,7 +222,7 @@ export default function App() {
             >
                 <ToastProvider>
                     <Outlet />
-                    <ClarityConsentBanner />
+                    <RejourneyConsentBanner />
                 </ToastProvider>
             </TeamProvider>
         </AuthProvider>

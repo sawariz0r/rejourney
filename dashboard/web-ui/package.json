@@ -21,6 +21,7 @@
     "@react-router/express": "^7.9.6",
     "@react-router/node": "^7.9.6",
     "@react-router/serve": "^7.9.6",
+    "@rejourneyco/browser": "https://registry.npmjs.org/@rejourneyco/browser/-/browser-0.1.0.tgz",
     "@rrweb/replay": "^2.0.0-alpha.20",
     "@stripe/react-stripe-js": "^5.4.1",
     "@stripe/stripe-js": "^8.6.1",

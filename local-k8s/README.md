@@ -17,28 +17,46 @@ It keeps the same plain-YAML shape as the prod manifests, but targets a local
 - `ingress.yaml`: local Traefik ingress using `*.localtest.me`
 - `env.example`: template for `.env.k8s.local`
 
-## Default Flow
+## First Bootstrap
 
-For daily work:
+For a fresh checkout:
 
 ```bash
 cp local-k8s/env.example .env.k8s.local
+```
+
+Fill the required local secrets in `.env.k8s.local`, then run:
+
+```bash
+npm run ci:local
+```
+
+That installs dependencies, runs the local CI checks, builds/imports local
+Docker images, applies the local Kubernetes manifests, runs migrations/setup,
+and starts the host-side API, upload relay, workers, and dashboard dev server.
+
+## Daily Host Flow
+
+After the first successful bootstrap:
+
+```bash
 npm run dev
 ```
 
 That creates the local cluster if needed, applies infra-only manifests, updates
 LAN-safe URLs, syncs secrets, and runs the API, web, and workers from source on
-the host.
+the host. The dashboard is served from the hot-reload dev server on
+`http://127.0.0.1:8080`.
 
-## Full Parity Flow
+## Full In-Cluster Flow
 
 ```bash
 npm run dev:full
 ```
 
 That builds local images, imports them into `k3d`, applies `api.yaml`,
-`web.yaml`, `workers.yaml`, and `ingress.yaml`, and exposes the same app
-topology we expect in production:
+`web.yaml`, `workers.yaml`, and `ingress.yaml`, and exposes the full in-cluster
+app topology:
 
 - `api`
 - `ingest-upload`
@@ -64,10 +82,13 @@ It also exposes:
 
 ## Useful Commands
 
-- `npm run dev`: hybrid flow with infra in Kubernetes and app services on the host
-- `npm run dev:full`: full local stack in Kubernetes
+- `npm run ci:local`: first-run bootstrap plus local CI-parity validation
+- `npm run dev`: hot-reload daily flow with infra in Kubernetes and app services on the host
 - `npm run dev:logs`: host-process logs for the hybrid workflow
 - `npm run dev:down`: stop host services and remove the local namespace
+- `npm run ci:local:fast`: rebuild/redeploy/rerun migrations without reinstalling npm dependencies
+- `npm run ci:local:deploy`: rebuild/import/deploy local images without rerunning validation checks
+- `npm run dev:full`: full local stack in Kubernetes when you specifically want in-cluster web/API/workers
 
 ## Local CI Parity
 

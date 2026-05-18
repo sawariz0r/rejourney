@@ -6,7 +6,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { CheckCircle2, Copy, ExternalLink, KeyRound, Sparkles, X } from 'lucide-react';
-import { AI_INTEGRATION_PROMPT } from '~/shared/constants/aiPrompts';
+import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
 import { Project } from '~/shared/types';
 import { Button } from './Button';
 import { Modal } from './Modal';
@@ -37,9 +37,8 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   const promptText = useMemo(() => {
-    if (!project?.publicKey) return AI_INTEGRATION_PROMPT;
-    return AI_INTEGRATION_PROMPT.replace('PUBLIC_KEY_HERE', project.publicKey);
-  }, [project?.publicKey]);
+    return buildProjectAIIntegrationPrompt(project);
+  }, [project]);
 
   const handleCopyPublicKey = useCallback(async () => {
     if (!project?.publicKey) return;
@@ -160,11 +159,11 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
               </div>
               <p className="mt-2 text-sm font-medium leading-6 text-[#3c4043]">
                 This copies a smart integration prompt with your new project key already inserted.
-                It supports both React Native and native Swift (iOS) setup flows.
+                It supports Web, React Native, and native Swift (iOS) setup flows.
               </p>
 
               <div className="mt-4 rounded-md border border-[#dadce0] bg-[#f8fafd] px-4 py-3 text-xs font-medium leading-6 text-[#3c4043]">
-                Includes install steps, initialization, screen tracking, privacy notes, and your project key.
+                Includes install steps, initialization, route or screen tracking, privacy notes, and your project key.
               </div>
 
               <div className="mt-4 flex flex-wrap gap-3">
@@ -193,7 +192,7 @@ export const ProjectCreatedModal: React.FC<ProjectCreatedModalProps> = ({
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               <div className="rounded-md border border-[#dadce0] bg-[#f8fafd] p-4">
                 <div className="text-[11px] font-bold uppercase text-[#5f6368]">Step 1</div>
-                <p className="mt-2 text-sm font-medium text-[#202124]">Pick your stack: React Native SDK or native Swift package.</p>
+                <p className="mt-2 text-sm font-medium text-[#202124]">Pick your stack: Web SDK, React Native SDK, or native Swift package.</p>
               </div>
               <div className="rounded-md border border-[#dadce0] bg-[#f8fafd] p-4">
                 <div className="text-[11px] font-bold uppercase text-[#5f6368]">Step 2</div>

@@ -6,7 +6,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Rejourney Web Next Example',
-  description: 'Next.js fixture for @rejourneyco/web',
+  description: 'Next.js fixture for @rejourneyco/browser',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

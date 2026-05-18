@@ -7,8 +7,8 @@ const LIVE_DEMO_PATH = '/demo/general';
 
 const RetroHeroBlocks: React.FC = () => (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
-        <div className="absolute -left-32 top-10 h-28 w-64 -rotate-6 border-2 border-black bg-[#fff08a] shadow-[8px_8px_0_0_rgba(0,0,0,1)] sm:-left-16 sm:top-16 sm:h-32 sm:w-72" />
-        <div className="absolute -right-36 top-8 h-24 w-60 rotate-12 border-2 border-black bg-[#f9a8d4] shadow-[8px_8px_0_0_rgba(0,0,0,1)] sm:-right-20 sm:top-14 sm:h-28 sm:w-72" />
+        <div className="absolute -left-16 top-16 hidden h-32 w-72 -rotate-6 border-2 border-black bg-[#fff08a] shadow-[8px_8px_0_0_rgba(0,0,0,1)] md:block" />
+        <div className="absolute -right-20 top-14 hidden h-28 w-72 rotate-12 border-2 border-black bg-[#f9a8d4] shadow-[8px_8px_0_0_rgba(0,0,0,1)] md:block" />
         <div className="absolute -left-28 bottom-[18rem] h-24 w-60 rotate-6 border-2 border-black bg-[#bbf7d0] shadow-[8px_8px_0_0_rgba(0,0,0,1)] sm:-left-12 sm:bottom-[20rem] sm:h-28 sm:w-72" />
         <div className="absolute -right-32 bottom-[14rem] h-20 w-56 -rotate-8 border-2 border-black bg-[#c4b5fd] shadow-[7px_7px_0_0_rgba(0,0,0,1)] sm:-right-16 sm:bottom-[18rem] sm:h-24 sm:w-68" />
     </div>

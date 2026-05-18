@@ -97,12 +97,6 @@ export default function DPA() {
                                             <td className="px-4 py-2 border-b border-input">United States</td>
                                             <td className="px-4 py-2 border-b border-input">SCCs (Art. 46(2)(c))</td>
                                         </tr>
-                                        <tr>
-                                            <td className="px-4 py-2 border-b border-input">Microsoft Clarity</td>
-                                            <td className="px-4 py-2 border-b border-input">Website Analytics & Session Recording</td>
-                                            <td className="px-4 py-2 border-b border-input">United States</td>
-                                            <td className="px-4 py-2 border-b border-input">SCCs (Art. 46(2)(c))</td>
-                                        </tr>
                                     </tbody>
                                 </table>
                             </div>

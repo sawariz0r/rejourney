@@ -8,6 +8,7 @@ import {
     ExternalLink,
     Globe2,
     Info,
+    Mail,
     MessageSquareWarning,
     User,
 } from 'lucide-react';
@@ -882,6 +883,7 @@ export const GeneralOverview: React.FC = () => {
     const [copiedTopUserKey, setCopiedTopUserKey] = useState<string | null>(null);
     const [copiedPublicKey, setCopiedPublicKey] = useState(false);
     const [copiedDocsPrompt, setCopiedDocsPrompt] = useState(false);
+    const [copiedContactEmail, setCopiedContactEmail] = useState(false);
     const [selectedCustomEventNames, setSelectedCustomEventNames] = useState<string[]>([]);
     const [customEventSelectionTouched, setCustomEventSelectionTouched] = useState(false);
 
@@ -1545,6 +1547,16 @@ export const GeneralOverview: React.FC = () => {
         }
     }, [selectedProject]);
 
+    const handleCopyContactEmail = useCallback(async () => {
+        try {
+            await navigator.clipboard.writeText('contact@rejourney.co');
+            setCopiedContactEmail(true);
+            window.setTimeout(() => setCopiedContactEmail(false), 1600);
+        } catch (error) {
+            console.error('Failed to copy developer contact email:', error);
+        }
+    }, []);
+
     const anonymousNicknameStyleMap = useMemo(() => {
         const styleMap: Record<string, string> = {};
         let paletteIndex = 0;
@@ -1610,37 +1622,47 @@ export const GeneralOverview: React.FC = () => {
                             <h3 className="mt-2 text-lg font-semibold text-[#202124]">No analytics yet - connect your project first</h3>
                             <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#3c4043]">
                                 Once your first SDK sends data, this General dashboard will populate automatically.
-                                Use these shortcuts to finish setup for either React Native or Swift.
+                                Use these shortcuts to finish setup for Web, React Native, or Swift.
                             </p>
                         </div>
 
-                        <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+                        <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-5">
                             <button
                                 type="button"
                                 onClick={handleCopyProjectKey}
                                 disabled={!selectedProject.publicKey}
-                                className="flex items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-xs font-semibold text-[#202124] transition-colors hover:border-[#137333] hover:bg-[#f0fdf4] disabled:cursor-not-allowed disabled:opacity-60"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-center text-xs font-semibold leading-snug text-[#202124] transition-colors hover:border-[#137333] hover:bg-[#f0fdf4] disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                <Copy className="h-4 w-4" />
+                                <Copy className="h-4 w-4 shrink-0" />
                                 {copiedPublicKey ? 'Public key copied' : 'Copy public key'}
                             </button>
 
                             <button
                                 type="button"
                                 onClick={handleCopyIntegrationPrompt}
-                                className="flex items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-xs font-semibold text-[#202124] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-center text-xs font-semibold leading-snug text-[#202124] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
                             >
-                                <BookOpen className="h-4 w-4" />
+                                <BookOpen className="h-4 w-4 shrink-0" />
                                 {copiedDocsPrompt ? 'AI prompt copied' : 'Copy AI docs prompt'}
                             </button>
+
+                            <a
+                                href="/docs/web/getting-started"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-center text-xs font-semibold leading-snug text-[#1a73e8] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
+                            >
+                                <ExternalLink className="h-4 w-4 shrink-0" />
+                                View Web docs
+                            </a>
 
                             <a
                                 href="/docs/reactnative/overview"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-xs font-semibold text-[#1a73e8] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-center text-xs font-semibold leading-snug text-[#1a73e8] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
                             >
-                                <ExternalLink className="h-4 w-4" />
+                                <ExternalLink className="h-4 w-4 shrink-0" />
                                 View React Native docs
                             </a>
 
@@ -1648,11 +1670,26 @@ export const GeneralOverview: React.FC = () => {
                                 href="/docs/swift/overview"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-xs font-semibold text-[#1a73e8] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-[#dadce0] bg-white px-4 py-2.5 text-center text-xs font-semibold leading-snug text-[#1a73e8] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
                             >
-                                <ExternalLink className="h-4 w-4" />
+                                <ExternalLink className="h-4 w-4 shrink-0" />
                                 View Swift docs
                             </a>
+                        </div>
+
+                        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+                            <button
+                                type="button"
+                                onClick={handleCopyContactEmail}
+                                title="Copy developer contact email: contact@rejourney.co"
+                                aria-label="Copy developer contact email"
+                                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-md border border-[#1d4ed8] bg-[#1a73e8] px-4 py-3 text-center text-sm font-bold leading-snug text-white shadow-sm transition-colors hover:border-[#1e40af] hover:bg-[#2563eb] active:bg-[#1d4ed8]"
+                            >
+                                {copiedContactEmail ? <Check className="h-4 w-4 shrink-0" /> : <Mail className="h-4 w-4 shrink-0" />}
+                                <span className="min-w-0">
+                                    {copiedContactEmail ? 'Developer email copied' : 'Having an issue? Need a feature? Contact our devs!'}
+                                </span>
+                            </button>
                         </div>
                     </div>
                 )}

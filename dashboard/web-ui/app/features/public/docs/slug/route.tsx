@@ -4,11 +4,14 @@
  */
 
 import type { Route } from "./+types/route";
+import { useCallback } from "react";
 import { redirect } from "react-router";
 import { BookOpen } from "lucide-react";
 import { DocsLayout } from "~/shared/docs/DocsLayout";
 import { DocsSidebar } from "~/shared/docs/DocsSidebar";
 import { DocsAIPromptCallout, getDocsAIPromptText, MarkdownContent } from "~/shared/docs/MarkdownContent";
+import { getProjects, type ApiProject } from "~/shared/api/client";
+import { buildProjectAIIntegrationPrompt } from "~/shared/constants/aiPrompts";
 import { getDocMetadata } from "~/shared/lib/docsConfig";
 import { getContentLocaleCopy, getLocalizedDocMetadata } from "~/shared/lib/contentLocalization";
 import {
@@ -20,12 +23,41 @@ import {
     MARKETING_LOCALE_VARY_HEADER,
     MARKETING_LOCALES,
 } from "~/shared/lib/internationalMarketing";
+import { useAuth } from "~/shared/providers/AuthContext";
+import { useTeam } from "~/shared/providers/TeamContext";
 
 function getSlugFromParams(params: any): string {
     // Route is configured as /docs/* so React Router provides the splat param as "*"
     const raw = (params as any)["*"] || "";
     // Normalize by trimming any leading/trailing slashes
     return String(raw).replace(/^\/+|\/+$/g, "");
+}
+
+const SELECTED_PROJECT_ID_KEY_PREFIX = "rejourney_selected_project_id";
+
+function getStoredSelectedProjectId(teamId?: string | null): string | null {
+    if (typeof window === "undefined") {
+        return null;
+    }
+
+    const teamStorageKey = teamId ? `${SELECTED_PROJECT_ID_KEY_PREFIX}:${teamId}` : null;
+    return (teamStorageKey ? localStorage.getItem(teamStorageKey) : null)
+        ?? localStorage.getItem(SELECTED_PROJECT_ID_KEY_PREFIX);
+}
+
+function selectProjectForDocsPrompt(projects: ApiProject[], teamId?: string | null): ApiProject | null {
+    const teamProjects = projects.filter((project) => !teamId || !project.teamId || project.teamId === teamId);
+    const candidateProjects = teamProjects.length > 0 ? teamProjects : projects;
+    const storedProjectId = getStoredSelectedProjectId(teamId);
+
+    if (storedProjectId) {
+        const storedProject = candidateProjects.find((project) => project.id === storedProjectId);
+        if (storedProject) {
+            return storedProject;
+        }
+    }
+
+    return candidateProjects[0] ?? null;
 }
 
 export const meta: Route.MetaFunction = ({ params, location }) => {
@@ -120,11 +152,27 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
 export default function DocPage({ loaderData }: Route.ComponentProps) {
     const { content, metadata, localeCode, contentLocaleCode } = loaderData;
+    const { isAuthenticated } = useAuth();
+    const { currentTeam } = useTeam();
     const locale = MARKETING_LOCALES[localeCode] ?? MARKETING_LOCALES.en;
     const contentLocale = MARKETING_LOCALES[contentLocaleCode] ?? MARKETING_LOCALES.en;
     const copy = getContentLocaleCopy(locale);
     const localizedMetadata = metadata ? getLocalizedDocMetadata(metadata, locale) : null;
     const aiPromptText = getDocsAIPromptText(content);
+    const getDocsIntegrationPrompt = useCallback(async () => {
+        if (!isAuthenticated) {
+            return buildProjectAIIntegrationPrompt(null);
+        }
+
+        try {
+            const projects = await getProjects();
+            const project = selectProjectForDocsPrompt(projects, currentTeam?.id ?? null);
+            return buildProjectAIIntegrationPrompt(project);
+        } catch (error) {
+            console.error("Failed to load project for docs AI integration prompt:", error);
+            return buildProjectAIIntegrationPrompt(null);
+        }
+    }, [currentTeam?.id, isAuthenticated]);
 
     if (!localizedMetadata) {
         return (
@@ -216,6 +264,7 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
                         {aiPromptText && (
                             <DocsAIPromptCallout
                                 promptText={aiPromptText}
+                                copyText={getDocsIntegrationPrompt}
                                 compact
                                 labels={{
                                     heading: copy.docsAiHeading,

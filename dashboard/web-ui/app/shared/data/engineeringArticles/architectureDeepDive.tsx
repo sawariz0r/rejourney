@@ -114,8 +114,8 @@ const TechArticleContent = () => (
             <p>
                 Most mobile session replay tools attempt to <strong>reconstruct</strong> the
                 session rather than record it. Tools like <strong>PostHog</strong>, <strong>LogRocket</strong>,
-                and <strong>Microsoft Clarity</strong> use native APIs to serialize the view
-                hierarchy or capture low-level drawing commands.
+                and other replay systems use native APIs to serialize the view hierarchy or capture
+                low-level drawing commands.
             </p>
             <ul className="list-disc pl-6 space-y-4 my-6">
                 <li>
@@ -125,7 +125,7 @@ const TechArticleContent = () => (
                     GPU content.
                 </li>
                 <li>
-                    <strong>Microsoft Clarity:</strong> Captures low-level <strong>Drawing Commands</strong> to
+                    <strong>Drawing-command recorders:</strong> Capture low-level <strong>Drawing Commands</strong> to
                     provide a "walkthrough-style" video. It buffers visual commands on-device, but it
                     isn't capturing the final rendered outcome seen by the user.
                 </li>

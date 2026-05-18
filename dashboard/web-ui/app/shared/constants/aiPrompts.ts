@@ -362,6 +362,8 @@ Once the integration is successfully implemented:
    - Events with properties that would be valuable to track (e.g., 'checkout_completed' with properties: ["total": amount, "items": count])
    Base your suggestions on the actual business logic you see in the user's code.`;
 
+export const EXAMPLE_PROJECT_KEY = 'rj_example_public_key';
+
 type ProjectForPrompt = {
   publicKey?: string;
   platforms?: string[];
@@ -370,6 +372,6 @@ type ProjectForPrompt = {
 } | null;
 
 export function buildProjectAIIntegrationPrompt(project: ProjectForPrompt): string {
-  const key = project?.publicKey ?? 'YOUR_PUBLIC_KEY';
+  const key = project?.publicKey?.trim() || EXAMPLE_PROJECT_KEY;
   return AI_INTEGRATION_PROMPT.replace(/PUBLIC_KEY_HERE/g, key);
 }

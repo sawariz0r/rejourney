@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DEFAULT_ENV_FILE="$ROOT_DIR/.env.k8s.local"
 CI_BILLING_TEST_PATTERN="billing|Billing|renewal|Renewal|downgrade|Downgrade"
+K3D_IMAGE_IMPORT_MODE="${K3D_IMAGE_IMPORT_MODE:-direct}"
 MODE="${1:-full}"
 ENV_FILE="${2:-$DEFAULT_ENV_FILE}"
 
@@ -27,6 +28,20 @@ EOF
 
 require_bin() {
     command -v "$1" >/dev/null 2>&1 || error "$1 is required"
+}
+
+use_node24_if_available() {
+    local node_major=""
+    node_major="$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || true)"
+    if [ "$node_major" = "24" ]; then
+        return
+    fi
+
+    if command -v fnm >/dev/null 2>&1; then
+        eval "$(fnm env --shell bash)"
+        fnm use 24 --install-if-missing --silent-if-unchanged >/dev/null 2>&1 || true
+        hash -r
+    fi
 }
 
 warn_if_node_version_differs() {
@@ -134,10 +149,11 @@ build_images() {
 }
 
 import_images() {
-    log "Importing images into k3d"
-    k3d image import rejourney-local/api:dev -c rejourney-dev
-    k3d image import rejourney-local/web:dev -c rejourney-dev
-    k3d image import rejourney-local/migration:dev -c rejourney-dev
+    log "Importing images into k3d using $K3D_IMAGE_IMPORT_MODE mode"
+    k3d image import --mode "$K3D_IMAGE_IMPORT_MODE" -c rejourney-dev \
+        rejourney-local/api:dev \
+        rejourney-local/web:dev \
+        rejourney-local/migration:dev
 }
 
 deploy_local_apps() {
@@ -193,6 +209,7 @@ main() {
             ;;
     esac
 
+    use_node24_if_available
     warn_if_node_version_differs
 
     case "$MODE" in

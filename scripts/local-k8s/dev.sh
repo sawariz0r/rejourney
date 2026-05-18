@@ -9,9 +9,27 @@ ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.k8s.local}"
 STATE_DIR="$ROOT_DIR/.local-k8s"
 LOG_DIR="$STATE_DIR/logs"
 PID_DIR="$STATE_DIR/pids"
-HOST_PORTS=(3000 3001 8080)
+DASHBOARD_HOST_PORT="${DASHBOARD_HOST_PORT:-8080}"
+HOST_STARTUP_WAIT_SECONDS="${HOST_STARTUP_WAIT_SECONDS:-30}"
+HOST_PORTS=(3000 3001 "$DASHBOARD_HOST_PORT")
 
 mkdir -p "$LOG_DIR" "$PID_DIR"
+
+use_node24_if_available() {
+    local node_major=""
+    node_major="$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || true)"
+    if [ "$node_major" = "24" ]; then
+        return
+    fi
+
+    if command -v fnm >/dev/null 2>&1; then
+        eval "$(fnm env --shell bash)"
+        fnm use 24 --install-if-missing --silent-if-unchanged >/dev/null 2>&1 || true
+        hash -r
+    fi
+}
+
+use_node24_if_available
 
 kill_pid_gracefully() {
     local pid="$1"
@@ -29,7 +47,8 @@ kill_pid_gracefully() {
         kill "$pid" 2>/dev/null || true
     fi
 
-    for _ in {1..20}; do
+    local attempts=$((HOST_STARTUP_WAIT_SECONDS * 2))
+    for ((attempt = 1; attempt <= attempts; attempt++)); do
         if ! kill -0 "$pid" 2>/dev/null; then
             return
         fi
@@ -56,14 +75,78 @@ kill_if_running() {
     fi
 }
 
+pid_belongs_to_repo() {
+    local pid="$1"
+    local command cwd
+
+    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1 || true)"
+
+    case "$cwd" in
+        "$ROOT_DIR"|"$ROOT_DIR"/*)
+            return 0
+            ;;
+    esac
+
+    [[ "$command" == *"$ROOT_DIR"* ]]
+}
+
+port_has_repo_listener() {
+    local port="$1"
+    local pid
+
+    while IFS= read -r pid; do
+        [ -n "$pid" ] || continue
+        if pid_belongs_to_repo "$pid"; then
+            return 0
+        fi
+    done < <(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+
+    return 1
+}
+
+port_has_external_listener() {
+    local port="$1"
+    local pid
+
+    while IFS= read -r pid; do
+        [ -n "$pid" ] || continue
+        if ! pid_belongs_to_repo "$pid"; then
+            return 0
+        fi
+    done < <(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+
+    return 1
+}
+
+select_dashboard_port() {
+    export DASHBOARD_HOST_PORT
+    HOST_PORTS=(3000 3001 "$DASHBOARD_HOST_PORT")
+
+    if port_has_external_listener "$DASHBOARD_HOST_PORT"; then
+        echo "[local-k8s] ERROR: Dashboard port :$DASHBOARD_HOST_PORT is occupied by a non-Rejourney process." >&2
+        echo "[local-k8s] Free :$DASHBOARD_HOST_PORT and rerun this command; hot-reload dashboard dev must own that port." >&2
+        exit 1
+    fi
+}
+
+update_local_urls() {
+    select_dashboard_port
+    DASHBOARD_HOST_PORT="$DASHBOARD_HOST_PORT" "$SCRIPT_DIR/update-ips.sh" "$ENV_FILE"
+}
+
 cleanup_stale_host_ports() {
     local port pid
 
     for port in "${HOST_PORTS[@]}"; do
         while IFS= read -r pid; do
             [ -n "$pid" ] || continue
-            echo "[local-k8s] Releasing local listener on :$port (pid $pid)"
-            kill_pid_gracefully "$pid"
+            if pid_belongs_to_repo "$pid"; then
+                echo "[local-k8s] Releasing local listener on :$port (pid $pid)"
+                kill_pid_gracefully "$pid"
+            else
+                echo "[local-k8s] Leaving non-Rejourney listener on :$port alone (pid $pid)"
+            fi
         done < <(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
     done
 }
@@ -88,6 +171,7 @@ cleanup_stale_host_processes() {
         "node dist/index.js"
         "node dist/uploadServer.js"
         "react-router dev --host 0.0.0.0 --port 8080"
+        "react-router dev --host 0.0.0.0 --port $DASHBOARD_HOST_PORT"
     )
 
     for pattern in "${patterns[@]}"; do
@@ -112,14 +196,15 @@ start_process() {
     local pid=$!
     echo "$pid" > "$pid_file"
 
-    for _ in {1..20}; do
+    local startup_attempts=$((HOST_STARTUP_WAIT_SECONDS * 2))
+    for ((attempt = 1; attempt <= startup_attempts; attempt++)); do
         if ! kill -0 "$pid" 2>/dev/null; then
             echo "[local-k8s] ERROR: Failed to start $name (see $log_file)" >&2
             tail -n 40 "$log_file" >&2 || true
             return 1
         fi
 
-        if [ -n "$port" ] && lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+        if [ -n "$port" ] && port_has_repo_listener "$port"; then
             echo "[local-k8s] Started $name on :$port (log: $log_file)"
             return 0
         fi
@@ -182,6 +267,7 @@ sync_storage_endpoint() {
 
 start_host_services() {
     source_env
+    select_dashboard_port
     cleanup_stale_host_processes
     cleanup_stale_host_ports
 
@@ -192,7 +278,7 @@ start_host_services() {
     start_process "worker-lifecycle" "" "cd '$ROOT_DIR/backend' && set -a && source '$ENV_FILE' && set +a && node --import tsx src/worker/sessionLifecycleWorker.ts"
     start_process "worker-retention" "" "cd '$ROOT_DIR/backend' && set -a && source '$ENV_FILE' && set +a && node --import tsx src/worker/retentionWorker.ts"
     start_process "worker-alerts" "" "cd '$ROOT_DIR/backend' && set -a && source '$ENV_FILE' && set +a && node --import tsx src/worker/alertWorker.ts"
-    start_process "web" "8080" "cd '$ROOT_DIR/dashboard/web-ui' && set -a && source '$ENV_FILE' && set +a && npm run dev -- --host 0.0.0.0 --port 8080"
+    start_process "web" "$DASHBOARD_HOST_PORT" "cd '$ROOT_DIR/dashboard/web-ui' && set -a && source '$ENV_FILE' && set +a && npm run dev -- --host 0.0.0.0 --port $DASHBOARD_HOST_PORT"
 }
 
 stop_host_services() {
@@ -229,7 +315,7 @@ print_status() {
     echo "[local-k8s] Hybrid development is running."
     echo "[local-k8s] API: http://127.0.0.1:3000"
     echo "[local-k8s] Upload relay: http://127.0.0.1:3001"
-    echo "[local-k8s] Dashboard: http://127.0.0.1:8080"
+    echo "[local-k8s] Dashboard: http://127.0.0.1:$DASHBOARD_HOST_PORT"
     echo "[local-k8s] MinIO: http://127.0.0.1:9000"
     echo "[local-k8s] MinIO Console: http://127.0.0.1:9001"
     echo "[local-k8s] Logs: $LOG_DIR"
@@ -246,20 +332,20 @@ case "${1:-up}" in
         show_logs "$@"
         ;;
 host-restart)
-        "$SCRIPT_DIR/update-ips.sh" "$ENV_FILE"
+        update_local_urls
         sync_storage_endpoint
         start_host_services
         print_status
         ;;
     restart)
-        "$SCRIPT_DIR/update-ips.sh" "$ENV_FILE"
+        update_local_urls
         "$SCRIPT_DIR/deploy.sh" infra "$ENV_FILE"
         sync_db_schema
         start_host_services
         print_status
         ;;
     up)
-        "$SCRIPT_DIR/update-ips.sh" "$ENV_FILE"
+        update_local_urls
         "$SCRIPT_DIR/deploy.sh" infra "$ENV_FILE"
         setup_db
         start_host_services

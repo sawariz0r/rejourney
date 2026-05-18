@@ -336,6 +336,12 @@ spec:
                   name: app-secret
                   key: DASHBOARD_ORIGIN
                   optional: true
+            - name: ADDITIONAL_DASHBOARD_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ADDITIONAL_DASHBOARD_ORIGINS
+                  optional: true
             # Ingest byte quotas (tuned for 100k+ sessions with burst uploads)
             - name: INGEST_PROJECT_BYTES_PER_MINUTE
               value: "5368709120"       # 5 GB/min (default was 512 MB)
@@ -663,6 +669,12 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: DASHBOARD_ORIGIN
+                  optional: true
+            - name: ADDITIONAL_DASHBOARD_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ADDITIONAL_DASHBOARD_ORIGINS
                   optional: true
             - name: PUSHGATEWAY_URL
               value: "http://pushgateway.rejourney.svc.cluster.local:9091"

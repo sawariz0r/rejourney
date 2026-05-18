@@ -8,6 +8,8 @@ npm run dev
 ```
 
 Configure `.env.local` from `.env.example`, then open the app on port `3100`.
+The dev/build/start scripts rebuild `../../packages/browser` first so local web
+SDK changes are reflected when the command starts.
 
 For local device testing, open the app with your machine's LAN IP instead of
 `localhost`, just like the mobile examples:

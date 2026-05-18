@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "predev": "npm --prefix ../../packages/browser run build",
-    "dev": "next dev -H 0.0.0.0 -p 3101",
+    "dev": "next dev -H 0.0.0.0 -p 3100",
     "prebuild": "npm --prefix ../../packages/browser run build",
     "build": "next build",
     "prestart": "npm --prefix ../../packages/browser run build",
-    "start": "next start -H 0.0.0.0 -p 3101",
+    "start": "next start -H 0.0.0.0 -p 3100",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

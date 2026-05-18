@@ -9,6 +9,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
   DASHBOARD_ORIGIN: z.string().optional(),
+  ADDITIONAL_DASHBOARD_ORIGINS: z.string().optional(),
   S3_ENDPOINT: z.string().url().optional(),
   S3_PUBLIC_ENDPOINT: z.string().url().optional(), // For presigned URLs in local dev (external IP)
   S3_REGION: z.string().optional(),

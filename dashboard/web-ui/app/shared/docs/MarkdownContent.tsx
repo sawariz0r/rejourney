@@ -7,7 +7,6 @@ import remarkGfm from 'remark-gfm';
 import { DocsCodeBlock } from '~/shared/docs/DocsCodeBlock';
 import React, { useState } from 'react';
 import { Check, Info, AlertTriangle, XCircle, Lightbulb, Code2 } from 'lucide-react';
-import { AI_INTEGRATION_PROMPT } from '~/shared/constants/aiPrompts';
 import { cn } from "~/shared/lib/cn";
 
 interface MarkdownContentProps {
@@ -52,6 +51,8 @@ type DocsAIPromptLabels = {
     copied: string;
 };
 
+type CopyTextResolver = string | (() => string | Promise<string>);
+
 const defaultAIPromptLabels: DocsAIPromptLabels = {
     heading: "Use AI to integrate faster",
     copyButton: "Copy Integration Prompt",
@@ -60,10 +61,12 @@ const defaultAIPromptLabels: DocsAIPromptLabels = {
 
 export function DocsAIPromptCallout({
     promptText,
+    copyText,
     compact = false,
     labels = defaultAIPromptLabels,
 }: {
     promptText: string;
+    copyText?: CopyTextResolver;
     compact?: boolean;
     labels?: DocsAIPromptLabels;
 }) {
@@ -71,7 +74,8 @@ export function DocsAIPromptCallout({
 
     const handleCopyPrompt = async () => {
         try {
-            await navigator.clipboard.writeText(AI_INTEGRATION_PROMPT);
+            const resolvedCopyText = typeof copyText === "function" ? await copyText() : copyText;
+            await navigator.clipboard.writeText(resolvedCopyText ?? promptText);
             setPromptCopied(true);
             setTimeout(() => setPromptCopied(false), 2000);
         } catch (err) {

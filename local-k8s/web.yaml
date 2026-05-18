@@ -73,20 +73,26 @@ spec:
                   optional: true
           resources:
             requests:
-              cpu: 50m
-              memory: 192Mi
-            limits:
               cpu: 200m
               memory: 384Mi
+            limits:
+              cpu: 750m
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 2
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 15
           readinessProbe:
             httpGet:
-              path: /
+              path: /health/ready
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10

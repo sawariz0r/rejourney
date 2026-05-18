@@ -241,6 +241,12 @@ spec:
                   name: app-secret
                   key: DASHBOARD_ORIGIN
                   optional: true
+            - name: ADDITIONAL_DASHBOARD_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ADDITIONAL_DASHBOARD_ORIGINS
+                  optional: true
           resources:
             requests:
               cpu: 250m

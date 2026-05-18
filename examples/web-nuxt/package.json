@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm --prefix ../../packages/browser run build",
     "dev": "nuxt dev --host 0.0.0.0 --port 3102",
+    "prebuild": "npm --prefix ../../packages/browser run build",
     "build": "nuxt build",
+    "prepreview": "npm --prefix ../../packages/browser run build",
     "preview": "nuxt preview --host 0.0.0.0 --port 3102",
     "typecheck": "nuxt typecheck"
   },

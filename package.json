@@ -1,6 +1,6 @@
 {
   "name": "rejourney-monorepo",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "private": true,
   "description": "Rejourney Monorepo - Session Recording Platform",
   "workspaces": [
@@ -33,7 +33,7 @@
     "docs:localize:web:audit": "DOCS=web/getting-started.md node scripts/audit-localized-docs.mjs",
     "clean": "rm -rf packages/react-native/lib packages/browser/dist",
     "db:seed": "cd backend && npm run db:seed",
-    "example:boilerplate": "cd examples/react-native-boilerplate && npm start",
+    "example:boilerplate": "cd examples/react-native-boilerplate && npm run dev",
     "example:brew": "cd examples/brew-coffee-labs && npm start",
     "example:bare": "cd examples/react-native-bare && npm start",
     "example:web-next": "cd examples/web-next && npm run dev",

@@ -8,6 +8,7 @@ import { useTeam } from '~/shared/providers/TeamContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { DASHBOARD_MANUAL_REFRESH_COMPLETE } from '~/shared/constants/events';
 import { FolderPlus, Layers3, Megaphone, X } from 'lucide-react';
+import { trackRejourneyDashboardContext } from '~/shared/compliance/rejourneyWebsiteTelemetry';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -187,6 +188,16 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
       window.removeEventListener(DASHBOARD_MANUAL_REFRESH_COMPLETE, handleManualRefreshComplete);
     };
   }, []);
+
+  useEffect(() => {
+    trackRejourneyDashboardContext({
+      pathname: location.pathname,
+      currentTeam,
+      teams,
+      selectedProject,
+      projectCount: projects.length,
+    });
+  }, [currentTeam, location.pathname, projects.length, selectedProject, teams]);
 
   const handleProjectChange = (project: Project) => {
     // Sync with SessionContext - this updates both sidebar and all pages

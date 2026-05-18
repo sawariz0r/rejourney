@@ -88,7 +88,7 @@ Want to contribute to Rejourney? See our Contributing Guide: https://rejourney.c
 
 ## Local Development
 
-Local development now mirrors production more closely through [`local-k8s/`](local-k8s). Copy `local-k8s/env.example` to `.env.k8s.local`, then run `npm run dev` for the hybrid workflow or `npm run dev:full` for the full in-cluster stack.
+Local development mirrors production through [`local-k8s/`](local-k8s). For a fresh checkout, copy `local-k8s/env.example` to `.env.k8s.local`, fill the required local secrets, then run `npm run ci:local` to install, validate, build, deploy, migrate, and start the local stack. After that first bootstrap, use `npm run dev` for the hot-reload daily workflow.
 
 `docker-compose.selfhosted.yml` is the official single-node self-hosted deployment path.
 

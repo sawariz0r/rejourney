@@ -8,7 +8,7 @@ import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { clearCache, getTeamBillingUsage, getTeamPlan, TeamUsage } from '~/features/app/billing/api';
 import { clearCacheMatching } from '~/shared/api/client';
 import { RefreshCw, User as UserIcon, LogOut, ChevronDown, CreditCard, Copy, BookOpen, Check, Menu, Mail } from 'lucide-react';
-import { AI_INTEGRATION_PROMPT } from '~/shared/constants/aiPrompts';
+import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
 import { DASHBOARD_MANUAL_REFRESH_COMPLETE, DASHBOARD_MANUAL_REFRESH_START } from '~/shared/constants/events';
 
 interface TopBarProps {
@@ -188,10 +188,10 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
   }, [currentProject?.publicKey]);
 
   const handleCopyDocsUrl = useCallback(() => {
-    navigator.clipboard.writeText(AI_INTEGRATION_PROMPT);
+    navigator.clipboard.writeText(buildProjectAIIntegrationPrompt(currentProject));
     setCopiedDocs(true);
     setTimeout(() => setCopiedDocs(false), 2000);
-  }, []);
+  }, [currentProject]);
 
   const handleCopyContactEmail = useCallback(() => {
     navigator.clipboard.writeText('contact@rejourney.co');

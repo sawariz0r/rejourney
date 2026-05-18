@@ -85,7 +85,7 @@ async function fetchJson<T>(endpoint: string, options: RequestInit = {}): Promis
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, requestInit);
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     handleUnauthorized();
     throw new Error('Unauthorized');
   }

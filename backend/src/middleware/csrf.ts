@@ -7,7 +7,7 @@ import { randomBytes } from 'crypto';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { getCsrfCookieOptions } from '../utils/cookies.js';
-import { getBaseDomain } from '../utils/domain.js';
+import { isOriginAllowedByList, splitOriginList } from '../utils/domain.js';
 
 const CSRF_COOKIE = 'csrf';
 const CSRF_HEADER = 'x-csrf-token';
@@ -109,30 +109,18 @@ export function originValidation(
 
     // In production, validate origin against allowed origins
     if (config.NODE_ENV === 'production') {
-        const dashboardUrl = config.PUBLIC_DASHBOARD_URL;
+        const allowedDashboardOrigins = [
+            ...splitOriginList(config.PUBLIC_DASHBOARD_URL),
+            ...splitOriginList(config.DASHBOARD_ORIGIN),
+            ...splitOriginList(config.ADDITIONAL_DASHBOARD_ORIGINS),
+        ];
 
-        if (dashboardUrl) {
-            const allowedUrl = new URL(dashboardUrl);
-            const allowedOrigin = allowedUrl.origin;
-            const allowedBaseDomain = getBaseDomain(allowedUrl.hostname);
-
+        if (allowedDashboardOrigins.length > 0) {
             if (origin) {
-                try {
-                    const originUrl = new URL(origin);
-                    const originBaseDomain = getBaseDomain(originUrl.hostname);
-
-                    if (origin !== allowedOrigin && originBaseDomain !== allowedBaseDomain) {
-                        res.status(403).json({
-                            error: 'Forbidden',
-                            message: 'Invalid origin',
-                        });
-                        return;
-                    }
-                } catch {
-                    // Invalid URL in origin header
+                if (!isOriginAllowedByList(origin, allowedDashboardOrigins)) {
                     res.status(403).json({
                         error: 'Forbidden',
-                        message: 'Invalid origin format',
+                        message: 'Invalid origin',
                     });
                     return;
                 }
@@ -142,9 +130,8 @@ export function originValidation(
                 try {
                     const refererUrl = new URL(referer);
                     const refererOrigin = refererUrl.origin;
-                    const refererBaseDomain = getBaseDomain(refererUrl.hostname);
 
-                    if (refererOrigin !== allowedOrigin && refererBaseDomain !== allowedBaseDomain) {
+                    if (!isOriginAllowedByList(refererOrigin, allowedDashboardOrigins)) {
                         res.status(403).json({
                             error: 'Forbidden',
                             message: 'Invalid referer',

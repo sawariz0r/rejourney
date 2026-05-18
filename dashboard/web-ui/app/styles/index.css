@@ -2741,16 +2741,6 @@
   }
 }
 
-.clarity-consent-banner {
-  width: min(20rem, calc(100vw - 3rem));
-}
-
-@media (min-width: 640px) {
-  .clarity-consent-banner {
-    width: min(28rem, calc(100vw - 2rem));
-  }
-}
-
 @media (max-width: 767px) {
   .dashboard-content {
     background-image: none !important;

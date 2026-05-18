@@ -123,6 +123,8 @@ const envSchema = z.object({
 
     // URLs
     PUBLIC_DASHBOARD_URL: z.string().optional(),
+    DASHBOARD_ORIGIN: z.string().optional(),
+    ADDITIONAL_DASHBOARD_ORIGINS: z.string().optional(),
     PUBLIC_API_URL: z.string().optional(),
     PUBLIC_INGEST_URL: z.string().optional(),
 
