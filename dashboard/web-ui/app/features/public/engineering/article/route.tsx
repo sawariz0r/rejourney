@@ -6,7 +6,7 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { Header } from "~/shell/components/layout/Header";
 import { Footer } from "~/shell/components/layout/Footer";
-import { ARTICLES } from "~/shared/data/engineering";
+import { ARTICLES, getAbsoluteArticleImage, getArticlePath } from "~/shared/data/engineering";
 import { ArrowLeft } from "lucide-react";
 import { Link, redirect, useLocation, useParams } from "react-router";
 import { getContentLocaleCopy, getLocalizedArticleSeo } from "~/shared/lib/contentLocalization";
@@ -22,7 +22,7 @@ import {
 const SITE_URL = "https://rejourney.co";
 
 function getArticleUrl(article: (typeof ARTICLES)[number], locale = getMarketingLocaleFromPathname("/")): string {
-    return getLocalizedPublicUrl(locale, `/engineering/${article.urlDate}/${article.id}`);
+    return getLocalizedPublicUrl(locale, getArticlePath(article));
 }
 
 // Loader to validate slug
@@ -36,7 +36,7 @@ export function loader({ params, request }: LoaderFunctionArgs) {
     const localeRedirectPath = getMarketingLocaleRedirectPath(request);
     if (localeRedirectPath) {
         const preferredLocale = getMarketingLocaleFromPathname(localeRedirectPath);
-        throw redirect(`${getLocalizedPublicPath(preferredLocale, `/engineering/${article.urlDate}/${article.id}`)}${requestUrl.search}`, {
+        throw redirect(`${getLocalizedPublicPath(preferredLocale, getArticlePath(article))}${requestUrl.search}`, {
             status: params.date !== article.urlDate ? 301 : 302,
             headers: {
                 Vary: MARKETING_LOCALE_VARY_HEADER,
@@ -46,7 +46,7 @@ export function loader({ params, request }: LoaderFunctionArgs) {
 
     if (params.date !== article.urlDate) {
         const locale = getMarketingLocaleFromPathname(requestUrl.pathname);
-        throw redirect(`${getLocalizedPublicPath(locale, `/engineering/${article.urlDate}/${article.id}`)}${requestUrl.search}`, { status: 301 });
+        throw redirect(`${getLocalizedPublicPath(locale, getArticlePath(article))}${requestUrl.search}`, { status: 301 });
     }
 
     return null;
@@ -60,10 +60,14 @@ export const meta: MetaFunction = ({ params, location }) => {
         return [{ title: "Article Not Found - Rejourney" }];
     }
     const localizedArticle = getLocalizedArticleSeo(article, locale);
-    const canonicalPath = `/engineering/${article.urlDate}/${article.id}`;
+    const canonicalPath = getArticlePath(article);
     const canonicalUrl = getArticleUrl(article, locale);
+    const imageUrl = getAbsoluteArticleImage(article);
+    const imageAlt = article.imageAlt ?? localizedArticle.title;
     const metaTitle = localizedArticle.metaTitle;
     const metaDescription = localizedArticle.metaDescription;
+    const publishedTime = `${article.urlDate}T12:00:00.000Z`;
+    const modifiedTime = `${article.dateModified ?? article.urlDate}T12:00:00.000Z`;
     const alternateLinks = getLocalizedAlternateLinksForPath(canonicalPath).map((alternate) => ({
         tagName: "link",
         rel: "alternate",
@@ -81,6 +85,7 @@ export const meta: MetaFunction = ({ params, location }) => {
         { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
         { name: "description", content: metaDescription },
         { name: "keywords", content: localizedArticle.targetKeywords.join(", ") },
+        { name: "news_keywords", content: article.seo.topicTags.join(", ") },
         { name: "author", content: article.author.name },
         { httpEquiv: "Content-Language", content: locale.languageTag },
         { property: "og:locale", content: locale.ogLocale },
@@ -89,18 +94,25 @@ export const meta: MetaFunction = ({ params, location }) => {
         { property: "og:description", content: metaDescription },
         { property: "og:type", content: "article" },
         { property: "og:url", content: canonicalUrl },
-        { property: "og:image", content: article.image },
-        { property: "og:image:alt", content: article.title },
+        { property: "og:image", content: imageUrl },
+        { property: "og:image:secure_url", content: imageUrl },
+        { property: "og:image:alt", content: imageAlt },
         { property: "og:site_name", content: "Rejourney" },
-        { property: "article:published_time", content: `${article.urlDate}T12:00:00.000Z` },
-        { property: "article:modified_time", content: `${article.dateModified ?? article.urlDate}T12:00:00.000Z` },
+        { property: "og:updated_time", content: modifiedTime },
+        { property: "article:published_time", content: publishedTime },
+        { property: "article:modified_time", content: modifiedTime },
         { property: "article:section", content: "Engineering" },
         { property: "article:author", content: article.author.name },
         ...article.seo.topicTags.map((tag) => ({ property: "article:tag", content: tag })),
         { name: "twitter:card", content: "summary_large_image" },
         { name: "twitter:title", content: metaTitle },
         { name: "twitter:description", content: metaDescription },
-        { name: "twitter:image", content: article.image },
+        { name: "twitter:image", content: imageUrl },
+        { name: "twitter:image:alt", content: imageAlt },
+        { name: "twitter:label1", content: "Written by" },
+        { name: "twitter:data1", content: article.author.name },
+        { name: "twitter:label2", content: "Read time" },
+        { name: "twitter:data2", content: localizedArticle.readTime },
         { tagName: "link", rel: "canonical", href: canonicalUrl },
         ...alternateLinks,
     ];
@@ -120,15 +132,34 @@ export default function EngineeringArticlePage() {
 
     const canonicalUrl = getArticleUrl(article, locale);
     const localizedArticle = getLocalizedArticleSeo(article, locale);
+    const imageUrl = getAbsoluteArticleImage(article);
+    const imageAlt = article.imageAlt ?? localizedArticle.title;
+    const sameAs = [article.author.url, article.author.github].filter(Boolean);
     const articleStructuredData = {
         ...article.schema,
+        "@context": "https://schema.org",
         headline: localizedArticle.title,
         description: localizedArticle.metaDescription,
         inLanguage: locale.languageTag,
         url: canonicalUrl,
+        datePublished: article.urlDate,
         keywords: localizedArticle.targetKeywords,
         dateModified: article.dateModified ?? article.urlDate,
-        image: [article.image],
+        image: [{
+            "@type": "ImageObject",
+            url: imageUrl,
+            caption: imageAlt,
+        }],
+        thumbnailUrl: imageUrl,
+        articleSection: "Engineering",
+        ...(article.wordCount ? { wordCount: article.wordCount } : {}),
+        ...(article.timeRequired ? { timeRequired: article.timeRequired } : {}),
+        author: {
+            "@type": "Person",
+            name: article.author.name,
+            url: article.author.url,
+            ...(sameAs.length ? { sameAs } : {}),
+        },
         mainEntityOfPage: {
             "@type": "WebPage",
             "@id": canonicalUrl,
@@ -168,13 +199,13 @@ export default function EngineeringArticlePage() {
                     <div className="h-full bg-black w-full origin-left scale-x-0 animate-scroll-progress" />
                 </div>
 
-                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+                <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
 
                     <Link to={getLocalizedPublicPath(locale, "/engineering")} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-gray-500 hover:text-black mb-12 transition-colors">
                         <ArrowLeft size={16} /> {copy.backToEngineering}
                     </Link>
 
-                    <article>
+                    <article className="mx-auto max-w-4xl">
                         <header className="mb-16 border-b-4 border-black pb-12">
                             <div className="flex flex-wrap items-center gap-4 text-xs font-mono font-black uppercase tracking-widest text-blue-600 mb-6">
                                 <span>{article.date}</span>
@@ -210,10 +241,32 @@ export default function EngineeringArticlePage() {
                             </div>
                         </header>
 
-                        <div className="prose prose-xl prose-slate max-w-none prose-headings:font-black prose-headings:uppercase prose-headings:tracking-tighter prose-img:rounded-none prose-img:border-2 prose-img:border-black">
+                    </article>
+
+                    <div className={article.tableOfContents?.length ? "mx-auto grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,1fr)_16rem]" : "mx-auto max-w-4xl"}>
+                        <div className={article.kind === "markdown" ? "max-w-4xl space-y-8" : "prose prose-xl prose-slate max-w-4xl prose-headings:font-black prose-headings:uppercase prose-headings:tracking-tighter prose-img:rounded-none prose-img:border-2 prose-img:border-black"}>
                             {article.content}
                         </div>
 
+                        {article.tableOfContents?.length ? (
+                            <aside className="hidden lg:block">
+                                <nav className="sticky top-24 border-l border-slate-200 pl-5" aria-label={copy.articleOnThisPage}>
+                                    <p className="mb-4 text-xs font-black uppercase tracking-widest text-slate-500">{copy.articleOnThisPage}</p>
+                                    <ol className="space-y-3">
+                                        {article.tableOfContents.map((item) => (
+                                            <li key={item.id} className={item.level === 3 ? "pl-4" : undefined}>
+                                                <a href={`#${item.id}`} className="block text-sm font-semibold leading-snug text-slate-600 transition hover:text-slate-950">
+                                                    {item.title}
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ol>
+                                </nav>
+                            </aside>
+                        ) : null}
+                    </div>
+
+                    <article className="mx-auto max-w-4xl">
                         <div className="mt-20 pt-12 border-t-2 border-gray-100">
                             <h3 className="text-2xl font-black uppercase tracking-tighter mb-8">{copy.authorHeading}</h3>
                             <div className="flex items-start gap-4">

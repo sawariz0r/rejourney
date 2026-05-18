@@ -52,12 +52,17 @@ const MAX_PER_ENDPOINT = 20;
 
 const config = {
   enabled: true,
-  ignorePatterns: [] as string[],
+  ignorePatterns: [] as (string | RegExp)[],
   maxUrlLength: 300,
   captureSizes: false,
 };
 
 const SENSITIVE_KEYS = ['token', 'key', 'secret', 'password', 'auth', 'access_token', 'api_key'];
+const INTERNAL_NETWORK_PATH_PREFIXES = [
+  '/api/sdk/config',
+  '/api/ingest',
+  '/upload/artifacts',
+] as const;
 
 function getUtf8Size(text: string): number {
   if (!text) return 0;
@@ -173,14 +178,34 @@ function scrubUrl(url: string): string {
   }
 }
 
-/**
- * Fast check if URL should be ignored (no regex for speed)
- */
-function shouldIgnoreUrl(url: string): boolean {
-  const patterns = config.ignorePatterns;
-  for (let i = 0; i < patterns.length; i++) {
-    const pattern = patterns[i];
-    if (pattern && url.indexOf(pattern) !== -1) return true;
+function pathForUrl(url: string): string {
+  try {
+    return new URL(url, 'http://rejourney.local').pathname;
+  } catch {
+    return url.split('?')[0] || url;
+  }
+}
+
+export function shouldIgnoreNetworkUrl(
+  url: string,
+  options: { ignoreUrls?: (string | RegExp)[] } = {}
+): boolean {
+  const path = pathForUrl(url);
+  if (INTERNAL_NETWORK_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
+    return true;
+  }
+
+  const patterns = options.ignoreUrls || config.ignorePatterns;
+  for (const pattern of patterns) {
+    if (!pattern) continue;
+    if (typeof pattern === 'string') {
+      if (url.indexOf(pattern) !== -1) return true;
+      continue;
+    }
+    pattern.lastIndex = 0;
+    if (pattern.test(url)) {
+      return true;
+    }
   }
   return false;
 }
@@ -297,7 +322,7 @@ function interceptFetch(): void {
         ? input.href
         : (input as Request).url;
 
-    if (shouldIgnoreUrl(url)) {
+    if (shouldIgnoreNetworkUrl(url)) {
       return originalFetch!(input, init);
     }
 
@@ -382,7 +407,7 @@ function interceptXHR(): void {
   XMLHttpRequest.prototype.send = function (body?: any): void {
     const data = (this as any).__rj;
 
-    if (!config.enabled || !logCallback || !data || shouldIgnoreUrl(data.u)) {
+    if (!config.enabled || !logCallback || !data || shouldIgnoreNetworkUrl(data.u)) {
       return originalXHRSend!.call(this, body);
     }
     const { path } = parseUrlFast(data.u);
@@ -443,10 +468,7 @@ export function initNetworkInterceptor(
   logCallback = callback;
   config.enabled = true;
 
-  if (options?.ignoreUrls) {
-    config.ignorePatterns = options.ignoreUrls
-      .filter((p): p is string => typeof p === 'string');
-  }
+  config.ignorePatterns = options?.ignoreUrls || [];
 
   if (options?.captureSizes !== undefined) {
     config.captureSizes = options.captureSizes;
@@ -504,6 +526,9 @@ export function restoreNetworkInterceptor(): void {
   }
 
   logCallback = null;
+  config.enabled = true;
+  config.ignorePatterns = [];
+  config.captureSizes = false;
 
   // Clear state
   pendingHead = 0;

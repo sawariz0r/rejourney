@@ -12817,7 +12817,7 @@ export const demoReplayFixture = {
     },
     {
       "timestamp": 1773776621933,
-      "file": "1773776621933_0001.jpg",
+      "file": "1773776621901_0000.jpg",
       "index": 1
     },
     {
@@ -12842,7 +12842,7 @@ export const demoReplayFixture = {
     },
     {
       "timestamp": 1773776626924,
-      "file": "1773776626924_0006.jpg",
+      "file": "1773776625934_0005.jpg",
       "index": 6
     },
     {
@@ -12887,7 +12887,7 @@ export const demoReplayFixture = {
     },
     {
       "timestamp": 1773776638935,
-      "file": "1773776638935_0015.jpg",
+      "file": "1773776637934_0014.jpg",
       "index": 15
     },
     {
@@ -12907,7 +12907,7 @@ export const demoReplayFixture = {
     },
     {
       "timestamp": 1773776642938,
-      "file": "1773776642938_0019.jpg",
+      "file": "1773776642163_0018.jpg",
       "index": 19
     },
     {
@@ -12932,7 +12932,7 @@ export const demoReplayFixture = {
     },
     {
       "timestamp": 1773776646914,
-      "file": "1773776646914_0004.jpg",
+      "file": "1773776646884_0003.jpg",
       "index": 24
     },
     {
@@ -12967,7 +12967,7 @@ export const demoReplayFixture = {
     },
     {
       "timestamp": 1773776653933,
-      "file": "1773776653933_0011.jpg",
+      "file": "1773776652912_0010.jpg",
       "index": 31
     },
     {
@@ -12977,7 +12977,7 @@ export const demoReplayFixture = {
     },
     {
       "timestamp": 1773776655933,
-      "file": "1773776655933_0013.jpg",
+      "file": "1773776654937_0012.jpg",
       "index": 33
     },
     {
@@ -13007,12 +13007,12 @@ export const demoReplayFixture = {
     },
     {
       "timestamp": 1773776661936,
-      "file": "1773776661936_0019.jpg",
+      "file": "1773776654937_0012.jpg",
       "index": 39
     },
     {
       "timestamp": 1773776662928,
-      "file": "1773776662928_0000.jpg",
+      "file": "1773776654937_0012.jpg",
       "index": 40
     }
   ],

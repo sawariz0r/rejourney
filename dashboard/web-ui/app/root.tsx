@@ -131,6 +131,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                     "logo": "https://rejourney.co/rejourneyIcon-removebg-preview.png",
                                     "sameAs": [
                                         "https://x.com/rejourneyco",
+                                        "https://www.linkedin.com/company/rejourneyco/",
                                         "https://github.com/rejourneyco"
                                     ],
                                     "contactPoint": {

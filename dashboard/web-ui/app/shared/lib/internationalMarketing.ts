@@ -1169,6 +1169,7 @@ export type MarketingHomeCopy = {
     contact: string;
     copyEmailToast: string;
     xAriaLabel: string;
+    linkedinAriaLabel: string;
     githubAriaLabel: string;
     copyright: string;
   };
@@ -1339,6 +1340,7 @@ const englishHomeCopy: MarketingHomeCopy = {
     contact: "Contact",
     copyEmailToast: "Email copied to clipboard!",
     xAriaLabel: "Rejourney on X",
+    linkedinAriaLabel: "Rejourney on LinkedIn",
     githubAriaLabel: "Rejourney on GitHub",
     copyright: "© 2026 Rejourney. All rights reserved.",
   },
@@ -1611,6 +1613,7 @@ const arabicHomeCopy: MarketingHomeCopy = {
     contact: "تواصل",
     copyEmailToast: "تم نسخ البريد الإلكتروني!",
     xAriaLabel: "Rejourney على X",
+    linkedinAriaLabel: "Rejourney على LinkedIn",
     githubAriaLabel: "Rejourney على GitHub",
     copyright: "© 2026 Rejourney. جميع الحقوق محفوظة.",
   },
@@ -1886,6 +1889,7 @@ const spanishHomeCopy: MarketingHomeCopy = {
     contact: "Contacto",
     copyEmailToast: "Correo copiado al portapapeles!",
     xAriaLabel: "Rejourney en X",
+    linkedinAriaLabel: "Rejourney en LinkedIn",
     githubAriaLabel: "Rejourney en GitHub",
     copyright: "© 2026 Rejourney. Todos los derechos reservados.",
   },
@@ -2157,6 +2161,7 @@ const turkishHomeCopy: MarketingHomeCopy = {
     contact: "Iletisim",
     copyEmailToast: "E-posta panoya kopyalandi!",
     xAriaLabel: "X uzerinde Rejourney",
+    linkedinAriaLabel: "LinkedIn uzerinde Rejourney",
     githubAriaLabel: "GitHub uzerinde Rejourney",
     copyright: "© 2026 Rejourney. Tum haklari saklidir.",
   },

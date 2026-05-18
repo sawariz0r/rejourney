@@ -321,6 +321,7 @@ final class RejourneyNativeController: NSObject {
     func configure(publicKey: String, options: RejourneyOptions) {
         self.publicKey = publicKey
         self.options = options
+        RejourneyNetworkEventFilter.configure(apiURLString: options.apiURL.rejourneyAbsoluteString)
         if let userId = options.userId, !userId.isEmpty {
             currentUserIdentity = userId
             sessionContext.setUserId(userId)

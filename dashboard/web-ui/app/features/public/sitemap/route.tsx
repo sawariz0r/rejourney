@@ -4,7 +4,7 @@
  */
 
 import { DOCS_MAP } from "~/shared/lib/docsConfig";
-import { ARTICLES } from "~/shared/data/engineering";
+import { ARTICLES, getAbsoluteArticleImage, getArticlePath } from "~/shared/data/engineering";
 import {
     MARKETING_LOCALE_ORDER,
     MARKETING_LOCALES,
@@ -73,13 +73,13 @@ export async function loader() {
 
     const engineeringRoutes: SitemapRoute[] = MARKETING_LOCALE_ORDER.flatMap((code) =>
         ARTICLES.map(article => ({
-            path: getLocalizedPublicPath(MARKETING_LOCALES[code], `/engineering/${article.urlDate}/${article.id}`),
+            path: getLocalizedPublicPath(MARKETING_LOCALES[code], getArticlePath(article)),
             priority: code === "en" ? "0.8" : "0.6",
             changefreq: "monthly",
             lastmod: article.dateModified ?? article.urlDate,
-            image: article.image,
-            imageTitle: article.title,
-            alternates: getLocalizedAlternateLinksForPath(`/engineering/${article.urlDate}/${article.id}`),
+            image: getAbsoluteArticleImage(article),
+            imageTitle: article.imageAlt ?? article.title,
+            alternates: getLocalizedAlternateLinksForPath(getArticlePath(article)),
         }))
     );
 

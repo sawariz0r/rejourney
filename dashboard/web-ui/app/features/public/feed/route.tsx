@@ -2,7 +2,7 @@
  * RSS feed for the engineering log — one item per article for discovery and readers.
  */
 
-import { ARTICLES } from "~/shared/data/engineering";
+import { ARTICLES, getAbsoluteArticleImage, getArticlePath } from "~/shared/data/engineering";
 
 function escapeXml(text: string): string {
     return text
@@ -21,7 +21,8 @@ function articlePubDate(urlDate: string): string {
 export async function loader() {
     const base = "https://rejourney.co";
     const itemsXml = ARTICLES.map((article) => {
-        const link = `${base}/engineering/${article.urlDate}/${article.id}`;
+        const link = `${base}${getArticlePath(article)}`;
+        const image = getAbsoluteArticleImage(article);
         return `
     <item>
       <title>${escapeXml(article.title)}</title>
@@ -31,7 +32,8 @@ export async function loader() {
       <pubDate>${articlePubDate(article.urlDate)}</pubDate>
       <guid isPermaLink="true">${link}</guid>
       ${article.seo.topicTags.map((tag) => `<category>${escapeXml(tag)}</category>`).join("")}
-      <media:content url="${escapeXml(article.image)}" medium="image" type="image/png" />
+      <media:content url="${escapeXml(image)}" medium="image" />
+      <media:thumbnail url="${escapeXml(image)}" />
     </item>`;
     }).join("");
 

@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
 
+export interface ArticleTableOfContentsItem {
+    id: string;
+    title: string;
+    level: 2 | 3;
+}
+
 export interface Article {
     id: string;
     title: string;
@@ -19,10 +25,15 @@ export interface Article {
         github?: string;
     };
     image: string;
+    imageAlt?: string;
     date: string;
     urlDate: string;
     dateModified?: string;
     readTime: string;
+    timeRequired?: string;
+    wordCount?: number;
+    kind?: "tsx" | "markdown";
+    tableOfContents?: ArticleTableOfContentsItem[];
     schema: object;
     content: ReactNode;
 }

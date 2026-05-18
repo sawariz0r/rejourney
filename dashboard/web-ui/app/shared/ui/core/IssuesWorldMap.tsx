@@ -130,7 +130,7 @@ export const IssuesWorldMap: React.FC<IssuesWorldMapProps> = ({
     return (
         <div className={`relative h-[520px] max-h-[72vh] min-h-[360px] w-full rounded-xl border border-slate-200 bg-slate-50 shadow-sm ${className || ''}`}>
             <img
-                src="/Eckert4-optimized.jpg"
+                src="/images/maps/eckert4-optimized.jpg"
                 alt="World Map (Eckert IV)"
                 className="absolute inset-0 h-full w-full object-fill rounded-xl"
                 loading="lazy"

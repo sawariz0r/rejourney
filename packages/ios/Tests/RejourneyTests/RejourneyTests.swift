@@ -4,6 +4,25 @@ import XCTest
 @testable import Rejourney
 
 final class RejourneyTests: XCTestCase {
+    func testNetworkEventFilterIgnoresRejourneyInternalUrls() throws {
+        RejourneyNetworkEventFilter.configure(apiURLString: "https://api.rejourney.co")
+
+        XCTAssertTrue(RejourneyNetworkEventFilter.shouldIgnore(url: try XCTUnwrap(URL(string: "https://api.rejourney.co/api/sdk/config"))))
+        XCTAssertTrue(RejourneyNetworkEventFilter.shouldIgnore(url: try XCTUnwrap(URL(string: "https://api.rejourney.co/api/ingest/presign"))))
+        XCTAssertTrue(RejourneyNetworkEventFilter.shouldIgnore(url: try XCTUnwrap(URL(string: "https://ingest.example.com/upload/artifacts/artifact_123?token=secret"))))
+        XCTAssertTrue(RejourneyNetworkEventFilter.shouldIgnore(details: ["urlPath": "/api/ingest/session/end"]))
+    }
+
+    func testNetworkEventFilterSupportsSelfHostedApiBasePath() throws {
+        RejourneyNetworkEventFilter.configure(apiURLString: "https://example.com/rejourney/")
+        defer { RejourneyNetworkEventFilter.configure(apiURLString: "https://api.rejourney.co") }
+
+        XCTAssertTrue(RejourneyNetworkEventFilter.shouldIgnore(url: try XCTUnwrap(URL(string: "https://example.com/rejourney/api/sdk/config"))))
+        XCTAssertTrue(RejourneyNetworkEventFilter.shouldIgnore(url: try XCTUnwrap(URL(string: "https://upload.example.com/upload/artifacts/artifact_123"))))
+        XCTAssertFalse(RejourneyNetworkEventFilter.shouldIgnore(url: try XCTUnwrap(URL(string: "https://app.example.com/api/orders"))))
+        XCTAssertFalse(RejourneyNetworkEventFilter.shouldIgnore(url: try XCTUnwrap(URL(string: "https://app.example.com/api/ingestor"))))
+    }
+
     func testRemoteConfigFetchSendsNativeHeadersAndParsesConfig() async {
         let body = """
         {

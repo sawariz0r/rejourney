@@ -676,6 +676,7 @@ class TelemetryPipeline private constructor(private val context: Context) {
     }
     
     fun recordNetworkEvent(details: Map<String, Any>) {
+        if (RejourneyNetworkEventFilter.shouldIgnore(details)) return
         val event = details.toMutableMap()
         event["type"] = "network_request"
         event["timestamp"] = ts()

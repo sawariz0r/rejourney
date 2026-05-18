@@ -17,6 +17,8 @@ const pricingArticleSchema = {
         "mobile observability cost",
         "GDPR session replay",
         "EU mobile analytics",
+        "cheap session replay",
+        "cheap mobile session replay",
         "affordable session replay",
         "fixed price session replay",
         "Redis buffered ingest",
@@ -51,7 +53,8 @@ const PricingArticleContent = () => (
             350,000 sessions/month. This article is not about how our pricing works rather it is about
             why those numbers are sustainable for us when they are not for a usage-based model.
             The answer is a stack of deliberate engineering decisions that each remove a unit
-            of cost that would otherwise compound with volume.
+            of cost that would otherwise compound with volume. If you are looking for cheap session
+            replay that is still built for production mobile apps, this is the engineering behind it.
         </p>
 
         {/* Quick reference table — one clean table, no charts */}
@@ -372,13 +375,16 @@ export const mobileSessionReplayCostArticle: Article = {
     title: "How We Keep Mobile Session Replay 17× Cheaper Than PostHog",
     subtitle: "The specific engineering decisions and great GDPR providers.",
     seoKeywords:
-        "session replay pricing comparison, react native session replay cost, mobile observability budget, GDPR session replay, EU mobile analytics tool, affordable session replay, fixed price session recording, posthog alternative react native, logrocket alternative cost",
+        "cheap session replay, cheap mobile session replay, session replay pricing comparison, react native session replay cost, mobile observability budget, GDPR session replay, EU mobile analytics tool, affordable session replay, fixed price session recording, posthog alternative react native, logrocket alternative cost",
     seo: {
-        primaryKeyword: "session replay pricing",
-        metaTitle: "How Rejourney Keeps Session Replay 17× Cheaper Than PostHog",
+        primaryKeyword: "cheap session replay",
+        metaTitle: "Cheap Session Replay: 17× Cheaper Than PostHog",
         metaDescription:
-            "How Rejourney keeps fixed pricing low with capture scaling, Redis-buffered ingest, CloudNativePG, and self-hosted k3s on Hetzner.",
+            "Cheap session replay without usage-based pricing: how Rejourney stays 17× cheaper than PostHog with mobile SDK and infrastructure choices.",
         targetKeywords: [
+            "cheap session replay",
+            "cheap mobile session replay",
+            "affordable session replay",
             "session replay pricing",
             "PostHog session replay cost",
             "mobile session replay pricing",

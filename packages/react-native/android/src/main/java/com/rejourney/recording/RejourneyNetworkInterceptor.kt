@@ -19,6 +19,10 @@ class RejourneyNetworkInterceptor : Interceptor {
     @Throws(IOException::class)
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        if (RejourneyNetworkEventFilter.shouldIgnore(request.url)) {
+            return chain.proceed(request)
+        }
+
         val startMs = System.currentTimeMillis()
 
         var response: Response? = null

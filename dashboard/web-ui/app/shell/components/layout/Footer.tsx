@@ -58,6 +58,16 @@ export const Footer: React.FC = () => {
           </a>
           <span className="hidden sm:inline">•</span>
           <a
+            href="https://www.linkedin.com/company/rejourneyco/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-black transition-colors"
+            aria-label={copy.linkedinAriaLabel}
+          >
+            LinkedIn
+          </a>
+          <span className="hidden sm:inline">•</span>
+          <a
             href="https://github.com/rejourneyco"
             target="_blank"
             rel="noopener noreferrer"

@@ -43,6 +43,7 @@ struct AppMain: App {
 ```
 
 The native SDK fetches `/api/sdk/config` itself, then uses the existing production ingest routes under `https://api.rejourney.co`.
+Those Rejourney-owned config, ingest, and upload-relay calls are excluded from network monitoring automatically so they do not appear as application API traffic.
 
 ## Releasing a new version
 

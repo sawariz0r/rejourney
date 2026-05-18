@@ -107,7 +107,7 @@ export const WorldMap: React.FC<WorldMapProps> = ({ locations, className }) => {
         <div className={`relative w-full aspect-[2/1] bg-slate-100 border-2 border-slate-900 shadow-[8px_8px_0_0_#0f172a] overflow-hidden ${className}`}>
             {/* Background Map Image - Original colors, no filters */}
             <img
-                src="/Eckert4-optimized.jpg"
+                src="/images/maps/eckert4-optimized.jpg"
                 alt="World Map (Eckert IV)"
                 className="absolute inset-0 w-full h-full object-fill"
                 loading="lazy"

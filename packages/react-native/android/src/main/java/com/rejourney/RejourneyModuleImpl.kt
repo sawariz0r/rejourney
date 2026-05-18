@@ -555,6 +555,7 @@ class RejourneyModuleImpl(
             lastPublicKey = publicKey
 
             // Configure endpoints and tokens
+            RejourneyNetworkEventFilter.configure(apiUrl)
             TelemetryPipeline.shared?.endpoint = apiUrl
             TelemetryPipeline.shared?.apiToken = publicKey
             SegmentDispatcher.shared.endpoint = apiUrl

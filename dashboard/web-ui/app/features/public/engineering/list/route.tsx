@@ -6,7 +6,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Header } from "~/shell/components/layout/Header";
 import { Footer } from "~/shell/components/layout/Footer";
-import { ARTICLES } from "~/shared/data/engineering";
+import { ARTICLES, getArticlePath } from "~/shared/data/engineering";
 import { Link, redirect, useLocation } from "react-router";
 import { getContentLocaleCopy, getLocalizedArticleSeo } from "~/shared/lib/contentLocalization";
 import {
@@ -135,7 +135,7 @@ export default function EngineeringIndexPage() {
                                     return {
                                         "@type": "ListItem",
                                         position: index + 1,
-                                        url: getLocalizedPublicUrl(locale, `/engineering/${article.urlDate}/${article.id}`),
+                                        url: getLocalizedPublicUrl(locale, getArticlePath(article)),
                                         name: localizedArticle.title,
                                         description: localizedArticle.metaDescription,
                                         image: getArticleImageUrl(article),
@@ -174,7 +174,7 @@ export default function EngineeringIndexPage() {
                                     <div className="aspect-[1.9/1] overflow-hidden rounded-md border border-slate-200 bg-slate-50 shadow-sm">
                                         <img
                                             src={getArticleImage(article)}
-                                            alt=""
+                                            alt={article.imageAlt ?? localizedArticle.title}
                                             className="h-full w-full object-cover brightness-[0.96] saturate-[0.95] transition duration-300 group-hover:scale-[1.015] group-hover:brightness-100 group-hover:saturate-100"
                                             loading={index < 2 ? "eager" : "lazy"}
                                         />

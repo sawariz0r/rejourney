@@ -406,6 +406,7 @@ public final class RejourneyImpl: NSObject {
             self.lastApiUrl = apiUrl
             self.lastPublicKey = publicKey
 
+            RejourneyNetworkEventFilter.configure(apiURLString: apiUrl)
             TelemetryPipeline.shared.endpoint = apiUrl
             SegmentDispatcher.shared.endpoint = apiUrl
             DeviceRegistrar.shared.endpoint = apiUrl

@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src='https://github.com/wataru-maeda/react-native-boilerplate/blob/main/__DELELE_ME__/banner.png' width='600'>
+  <img src="./assets/images/logo-lg.png" alt="Rejourney React Native Boilerplate" width="260">
 </h1>
 
 <p align="center">
@@ -7,11 +7,6 @@
   <img src="https://github.com/wataru-maeda/react-native-boilerplate/actions/workflows/preview.yml/badge.svg" alt="" />
   <img src="https://github.com/wataru-maeda/react-native-boilerplate/actions/workflows/test.yml/badge.svg" alt="" />
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs welcome!" />
-</p>
-
-<p align="center">
-  <img src='https://github.com/wataru-maeda/react-native-boilerplate/blob/main/__DELELE_ME__/demo-light-theme.gif' width='150px'>
-  <img src='https://github.com/wataru-maeda/react-native-boilerplate/blob/main/__DELELE_ME__/demo-dark-theme.gif' width='150px'>
 </p>
 
 Say goodbye to time-consuming setup tasks like restructuring files, installing libraries, and crafting reusable components. Our project boilerplate is your solution to eliminate redundant work when starting from scratch. Built with the latest Expo SDK 54, React 19.1, and modern development practices, it includes only the most commonly-used libraries, so you can hit the ground running with a fully configured setup.

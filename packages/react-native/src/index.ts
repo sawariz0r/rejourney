@@ -783,12 +783,6 @@ export const Rejourney: RejourneyAPI = {
           // RN's own networking since it creates its NSURLSession/OkHttpClient at init time.
           const ignoreUrls: (string | RegExp)[] = [
             apiUrl,
-            '/api/sdk/config',
-            '/api/ingest/presign',
-            '/api/ingest/batch/complete',
-            '/api/ingest/session/end',
-            '/api/ingest/segment/presign',
-            '/api/ingest/segment/complete',
             ...(_storedConfig?.networkIgnoreUrls || []),
           ];
 

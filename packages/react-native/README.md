@@ -87,6 +87,10 @@ Rejourney.setMetadata({
 **Events** = things that happened (actions, timestamped, can occur multiple times)
 **Metadata** = who the user is / what state they're in (session-level, one value per key)
 
+## Network Capture
+
+Network capture is enabled by default. Rejourney SDK calls to `/api/sdk/config`, `/api/ingest`, and `/upload/artifacts` are always excluded from monitoring; use `networkIgnoreUrls` or `autoTrackNetwork: false` for your own app traffic.
+
 ## API Reference & Compatibility
 
 Rejourney supports both a standardized `Rejourney.` namespace and standalone function exports (AKA calls). Both are fully supported.

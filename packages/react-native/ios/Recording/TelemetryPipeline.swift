@@ -592,6 +592,7 @@ public final class TelemetryPipeline: NSObject {
     }
     
     @objc public func recordNetworkEvent(details: [String: Any]) {
+        guard !RejourneyNetworkEventFilter.shouldIgnore(details: details) else { return }
         var e = details
         e["type"] = "network_request"
         e["timestamp"] = _ts()

@@ -119,6 +119,10 @@ class RejourneyURLProtocol: URLProtocol {
             return false
         }
         
+        if RejourneyNetworkEventFilter.shouldIgnore(url: url) {
+            return false
+        }
+
         return true
     }
     
@@ -176,6 +180,7 @@ class RejourneyURLProtocol: URLProtocol {
     
     private func _logRequest(task: URLSessionTask) {
         guard let req = task.originalRequest, let url = req.url else { return }
+        guard !RejourneyNetworkEventFilter.shouldIgnore(url: url) else { return }
         
         let duration = _endMs - _startMs
         let isSuccess = _error == nil && ((_response as? HTTPURLResponse)?.statusCode ?? 0) < 400
