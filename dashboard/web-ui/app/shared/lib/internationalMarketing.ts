@@ -916,6 +916,11 @@ export function stripMarketingLocaleFromPathname(pathname: string): {
   };
 }
 
+export function isLocalizableMarketingPath(pathname: string): boolean {
+  const { pathname: basePathname } = stripMarketingLocaleFromPathname(pathname);
+  return basePathname === "/" || /^\/(?:docs|engineering|pricing|roadmap)(?:\/.*)?$/.test(basePathname);
+}
+
 export function getLocalizedPublicPath(localeOrCode: MarketingLocale | MarketingLocaleCode, pathname: string): string {
   const locale = typeof localeOrCode === "string" ? MARKETING_LOCALES[localeOrCode] : localeOrCode;
   const normalizedPathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
@@ -1129,15 +1134,9 @@ export function getPreferredMarketingLocaleFromRequest(request: Request): Market
 }
 
 export function getMarketingLocaleRedirectPath(request: Request): string | null {
-  const url = new URL(request.url);
-  const { pathname, hasLocalePrefix } = stripMarketingLocaleFromPathname(url.pathname);
-  const isLocalizablePublicPath = /^\/(?:docs|engineering|pricing|roadmap)(?:\/.*)?$/.test(pathname);
-  if (hasLocalePrefix || (pathname !== "/" && !isLocalizablePublicPath)) return null;
-
-  const preferredLocale = getPreferredMarketingLocaleFromRequest(request);
-  if (!preferredLocale || preferredLocale.code === "en") return null;
-
-  return `${getLocalizedPublicPath(preferredLocale, pathname)}${url.search}`;
+  void request;
+  // Locale pages are opt-in from the language switcher instead of automatic geo/browser redirects.
+  return null;
 }
 
 export type MarketingHomeCopy = {
