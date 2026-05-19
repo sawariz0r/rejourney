@@ -790,53 +790,62 @@ async function loadRrwebReplayPayload(session: any, rrwebArtifacts: any[]): Prom
         return aTime - bTime;
     });
 
-    for (const [index, artifact] of sortedArtifacts.entries()) {
-        try {
-            const [data, url] = await Promise.all([
-                downloadFromS3ForArtifact(session.projectId, artifact.s3ObjectKey, artifact.endpointId),
-                artifact.endpointId
-                    ? getSignedDownloadUrl(artifact.endpointId, artifact.s3ObjectKey)
-                    : getSignedDownloadUrlForProject(session.projectId, artifact.s3ObjectKey),
-            ]);
-            if (!data) continue;
+    const artifactResults = await mapWithConcurrency(
+        sortedArtifacts,
+        DETAIL_FETCH_CONCURRENCY,
+        async (artifact, index) => {
+            try {
+                const [data, url] = await Promise.all([
+                    downloadFromS3ForArtifact(session.projectId, artifact.s3ObjectKey, artifact.endpointId),
+                    artifact.endpointId
+                        ? getSignedDownloadUrl(artifact.endpointId, artifact.s3ObjectKey)
+                        : getSignedDownloadUrlForProject(session.projectId, artifact.s3ObjectKey),
+                ]);
+                if (!data) return null;
 
-            const parsed = parseArtifactJson(data, artifact.s3ObjectKey);
-            const segmentEvents = Array.isArray(parsed)
-                ? parsed
-                : (Array.isArray(parsed?.events) ? parsed.events : []);
+                const parsed = parseArtifactJson(data, artifact.s3ObjectKey);
+                const segmentEvents = Array.isArray(parsed)
+                    ? parsed
+                    : (Array.isArray(parsed?.events) ? parsed.events : []);
 
-            if (!page && parsed?.page && typeof parsed.page === 'object') {
-                page = parsed.page;
+                return {
+                    events: segmentEvents,
+                    page: parsed?.page && typeof parsed.page === 'object' ? parsed.page : null,
+                    viewport: parsed?.viewport && typeof parsed.viewport === 'object' ? parsed.viewport : null,
+                    segment: {
+                        index,
+                        startTime: artifact.startTime ?? parsed?.chunkStartedAt ?? parsed?.startedAt ?? null,
+                        endTime: artifact.endTime ?? parsed?.chunkEndedAt ?? null,
+                        eventCount: segmentEvents.length || artifact.frameCount || 0,
+                        sizeBytes: artifact.sizeBytes ?? artifact.declaredSizeBytes ?? null,
+                        url: url ?? null,
+                    } satisfies RrwebReplaySegment,
+                };
+            } catch (err) {
+                logger.warn(
+                    {
+                        err,
+                        event: 'sessions.rrweb_artifact_download_failed',
+                        sessionId: session.id,
+                        projectId: session.projectId,
+                        artifactId: artifact.id,
+                        s3ObjectKeySuffix: artifact.s3ObjectKey?.slice(-64),
+                    },
+                    'sessions.rrweb_artifact_download_failed',
+                );
+                return null;
             }
-            if (!viewport && parsed?.viewport && typeof parsed.viewport === 'object') {
-                viewport = parsed.viewport;
-            }
-
-            if (segmentEvents.length > 0) {
-                events.push(...segmentEvents);
-            }
-
-            segments.push({
-                index,
-                startTime: artifact.startTime ?? parsed?.chunkStartedAt ?? parsed?.startedAt ?? null,
-                endTime: artifact.endTime ?? parsed?.chunkEndedAt ?? null,
-                eventCount: segmentEvents.length || artifact.frameCount || 0,
-                sizeBytes: artifact.sizeBytes ?? artifact.declaredSizeBytes ?? null,
-                url: url ?? null,
-            });
-        } catch (err) {
-            logger.warn(
-                {
-                    err,
-                    event: 'sessions.rrweb_artifact_download_failed',
-                    sessionId: session.id,
-                    projectId: session.projectId,
-                    artifactId: artifact.id,
-                    s3ObjectKeySuffix: artifact.s3ObjectKey?.slice(-64),
-                },
-                'sessions.rrweb_artifact_download_failed',
-            );
         }
+    );
+
+    for (const result of artifactResults) {
+        if (!result) continue;
+        if (!page && result.page) page = result.page;
+        if (!viewport && result.viewport) viewport = result.viewport;
+        if (result.events.length > 0) {
+            events.push(...result.events);
+        }
+        segments.push(result.segment);
     }
 
     events.sort((a, b) => (a?.timestamp || 0) - (b?.timestamp || 0));
@@ -2591,12 +2600,16 @@ router.get(
         const screenshotArtifacts = artifactsList.filter((artifact) => artifact.kind === 'screenshots');
         const rrwebArtifacts = artifactsList.filter((artifact) => artifact.kind === 'rrweb');
         const frameUrlMode = resolveFrameUrlMode(req.query.frameUrlMode);
-        const replayBootstrap = await loadVisualReplayBootstrap(
-            session,
-            screenshotArtifacts.length,
-            rrwebArtifacts,
-            frameUrlMode,
-        );
+        const [replayBootstrap, timeline, stats] = await Promise.all([
+            loadVisualReplayBootstrap(
+                session,
+                screenshotArtifacts.length,
+                rrwebArtifacts,
+                frameUrlMode,
+            ),
+            loadTimelinePayload(session, artifactsList),
+            computeSessionStats(session, metrics, artifactsList, true),
+        ]);
 
         const basePayload = buildSessionBasePayload(
             session,
@@ -2619,11 +2632,6 @@ router.get(
             }),
             aggregate.latestReplayArtifactEndMs,
         );
-
-        const [timeline, stats] = await Promise.all([
-            loadTimelinePayload(session, artifactsList),
-            computeSessionStats(session, metrics, artifactsList, true),
-        ]);
 
         const core = {
             ...basePayload,
@@ -2690,12 +2698,15 @@ router.get(
         const screenshotArtifacts = artifactsList.filter((a) => a.kind === 'screenshots');
         const rrwebArtifacts = artifactsList.filter((a) => a.kind === 'rrweb');
         const frameUrlMode = resolveFrameUrlMode(req.query.frameUrlMode);
-        const replayBootstrap = await loadVisualReplayBootstrap(
-            session,
-            screenshotArtifacts.length,
-            rrwebArtifacts,
-            frameUrlMode
-        );
+        const [replayBootstrap, stats] = await Promise.all([
+            loadVisualReplayBootstrap(
+                session,
+                screenshotArtifacts.length,
+                rrwebArtifacts,
+                frameUrlMode
+            ),
+            computeSessionStats(session, metrics, artifactsList, false),
+        ]);
 
         const basePayload = buildSessionBasePayload(
             session,
@@ -2718,7 +2729,6 @@ router.get(
             }),
             aggregate.latestReplayArtifactEndMs
         );
-        const stats = await computeSessionStats(session, metrics, artifactsList, false);
         const responseBody = {
             ...basePayload,
             hasRecording: replayBootstrap.hasRecording,

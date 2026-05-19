@@ -6,6 +6,18 @@ If you run Rejourney with [Docker Compose self-hosting](/docs/selfhosted), treat
 - `.env.selfhosted`
 - MinIO data if you use built-in MinIO
 
+Think of recovery as a three-part bundle: config, database, and replay bytes. If all three are available, a single-server restore should be straightforward.
+
+---
+
+## Backup Checklist
+
+- [ ] I have a recent Postgres backup.
+- [ ] I have the matching `.env.selfhosted`.
+- [ ] If using built-in MinIO, I have a MinIO backup from the same period.
+- [ ] If using external S3, I know which bucket contains recordings.
+- [ ] I have tested at least one restore path on a non-production machine.
+
 ---
 
 ## Quick Backup
@@ -24,6 +36,8 @@ What it does:
 - `.env.selfhosted` copy every time
 - MinIO object data when `--full` is used and built-in MinIO is enabled
 
+Use `--full` before server moves, major upgrades, or any maintenance where replacing the machine is on the table.
+
 ---
 
 ## What to Save
@@ -38,6 +52,22 @@ What it does:
 - `backups/minio-*.tar.gz`
 
 If you use external S3, your recordings live in that bucket instead of the local MinIO volume, so the database plus `.env.selfhosted` are the minimum local backups.
+
+---
+
+## Restore Worksheet
+
+Fill this in before touching production data.
+
+| Question | Answer |
+|---|---|
+| Which backup timestamp am I restoring? | `YYYYMMDD-HHMMSS` |
+| Do I have the matching `.env.selfhosted`? | yes / no |
+| Storage mode | built-in MinIO / external S3 |
+| Target server | same server / new server |
+| Is data loss acceptable? | yes / no |
+
+If the answer to "Do I have the matching `.env.selfhosted`?" is no, stop and recover that file first. It contains `STORAGE_ENCRYPTION_KEY`, which is needed to read encrypted storage credentials saved in Postgres.
 
 ---
 
@@ -107,6 +137,8 @@ You need all of the following to fully restore a built-in-MinIO deployment:
 - MinIO backup
 
 Without `.env.selfhosted`, you may lose access to encrypted storage credentials in Postgres because `STORAGE_ENCRYPTION_KEY` lives there.
+
+Do not run `reset` during recovery unless you have already confirmed the target volumes are disposable. `reset` removes the self-hosted containers and Docker volumes.
 
 ---
 

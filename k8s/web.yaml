@@ -95,7 +95,10 @@ spec:
             - name: PORT
               value: "8080"
             - name: API_URL
-              value: "http://api:3000"
+              # Browser dashboard requests hit the web pod first and are then
+              # proxied here. Keep operator/dashboard API work on api-dashboard
+              # pods instead of the api-ingest compatibility alias.
+              value: "http://api-dashboard:3000"
             - name: VITE_STRIPE_PUBLISHABLE_KEY
               valueFrom:
                 secretKeyRef:

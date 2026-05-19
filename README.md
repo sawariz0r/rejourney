@@ -109,22 +109,68 @@ Local development mirrors production through [`local-k8s/`](local-k8s). For a fr
 
 ## Benchmarks
 
-Rejourney is designed to be **invisible to the eye**. We utilize an **Async Capture Pipeline** combined with **Run Loop Gating**, ensuring the SDK automatically pauses during interactions (touches/scrolls) to maintain 100% UI responsiveness.
+Rejourney is designed to stay out of the way: small package footprint, low browser intensity, and mobile capture work that keeps the main thread clear. The landing-page benchmark gallery is directly linkable at [rejourney.co/#benchmark-gallery](https://rejourney.co/#benchmark-gallery).
+
+### Web vs PostHog
+
+Live Chromium benchmark across the three web fixtures: Next.js, SvelteKit, and Nuxt. Each SDK ran against a live project endpoint for 3 iterations per framework. Lower is better for every metric below.
+
+**Evidence:** [benchmark report](benchmarks/web-analytics/results/2026-05-19T03-47-21-774Z/benchmark-report.md), [raw results](benchmarks/web-analytics/results/2026-05-19T03-47-21-774Z/benchmark-results.json), [Rejourney live network captures](benchmarks/web-analytics/results/2026-05-19T03-47-21-774Z/rejourney-live-network-captures.json), [PostHog network captures](benchmarks/web-analytics/results/2026-05-19T03-47-21-774Z/posthog-network-captures.json).
+
+| Section | Winner | Margin |
+| :--- | :---: | :--- |
+| Bundlephobia gzipped package size | Rejourney | **3.9x smaller** than `posthog-js` |
+| Median live SDK upload body | Rejourney | **3.0x smaller** than PostHog |
+| Browser task duration | Rejourney | **1.1x lower** median task time |
+| Script execution time | Rejourney | **2.0x lower** median script time |
+| Final JS heap | Rejourney | **1.4x lower** median heap |
+
+#### Package Size
+
+Bundlephobia fixed-version package size. Gzip is the transfer-size segment; minified is the full bar represented in the gallery.
+
+| Package | Version | Minified | Gzipped | Source |
+| :--- | :---: | ---: | ---: | :--- |
+| `@rejourneyco/browser` | `0.1.0` | **52.3 kB** | **15.9 kB** | [Bundlephobia](https://bundlephobia.com/package/@rejourneyco/browser@0.1.0) |
+| `posthog-js` | `1.374.2` | 187.5 kB | 61.5 kB | [Bundlephobia](https://bundlephobia.com/package/posthog-js@1.374.2) |
+
+#### Live Web Benchmark Metrics
+
+| App | Rejourney upload | PostHog upload | Rejourney task | PostHog task | Rejourney script | PostHog script | Rejourney heap | PostHog heap |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Next.js | **21.29 KiB** | 45.35 KiB | **417.96 ms** | 449.91 ms | **160.46 ms** | 185.06 ms | **15.81 MiB** | 16.19 MiB |
+| SvelteKit | **8.38 KiB** | 24.99 KiB | **268.72 ms** | 304.03 ms | **19.35 ms** | 42.02 ms | **6.63 MiB** | 9.17 MiB |
+| Nuxt | **8.40 KiB** | 26.57 KiB | **305.51 ms** | 322.24 ms | **21.12 ms** | 41.17 ms | **11.33 MiB** | 15.44 MiB |
+
+### Mobile vs Sentry
+
+Rejourney Mobile uses an async capture pipeline with run loop gating, so capture work can happen off the app's critical rendering path and automatically pause during high-interaction periods.
+
+#### React Native Package Size
+
+| Package | Version | Minified | Gzipped | Winner |
+| :--- | :---: | ---: | ---: | :--- |
+| `@rejourneyco/react-native` | `1.0.17` | **39.7 kB** | **13.2 kB** | **10.2x smaller minified JS bundle** |
+| `@sentry/react-native` | `8.7.0` | 403 kB | 135.3 kB | - |
+
+Sources: [`@rejourneyco/react-native` on Bundlephobia](https://bundlephobia.com/package/@rejourneyco/react-native@1.0.17), [`@sentry/react-native` on Bundlephobia](https://bundlephobia.com/package/@sentry/react-native@8.7.0).
+
+#### Mobile Performance
 
 **Device:** iPhone 15 Pro (iOS 26)  
-**Environment:** Expo SDK 54, React Native New Architecture (Concurrent Mode)  
-**Test App:** [Merch App](https://merchcampus.com) (Production build with Mapbox Metal + Firebase)  
+**Environment:** Expo SDK 54, React Native New Architecture  
+**Test App:** [Merch App](https://merchcampus.com) production build with Mapbox Metal and Firebase  
 **Test Workload:** 46 complex feed items, Mapbox GL View, 124 API calls, 31 subcomponents, active gesture tracking, and real-time privacy redaction.
 
 | Metric | Avg (ms) | Max (ms) | Min (ms) | Thread |
-| :--- | :---: | :---: | :---: | :---: |
+| :--- | ---: | ---: | ---: | :---: |
 | **Main: UIKit + Metal Capture** | **12.4** | 28.2 | 8.1 | Main |
 | **BG: Async Image Processing** | 42.5 | 88.0 | 32.4 | Background |
 | **BG: Tar+Gzip Compression** | 14.2 | 32.5 | 9.6 | Background |
 | **BG: Upload Handshake** | 0.8 | 2.4 | 0.3 | Background |
 | **Total Main Thread Impact** | **12.4** | 28.2 | 8.1 | Main |
 
-*Note: Total Main Thread Impact is the only work that blocks your app's rendering.*
+Total Main Thread Impact is the only work in this table that blocks app rendering.
 
 ## Engineering
 

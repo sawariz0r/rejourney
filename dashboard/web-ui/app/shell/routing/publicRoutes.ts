@@ -22,6 +22,7 @@ export const publicRoutes = [
   ...MARKETING_LOCALE_SLUGS.map((locale) =>
     route(`${locale}/pricing`, "features/public/pricing/route.tsx", { id: `public-pricing-${locale}` })
   ),
+  route("ai/responsibleusage", "features/public/ai/responsibleusage/route.tsx", { id: "public-ai-responsible-usage" }),
   route("terms-of-service", "features/public/legal/terms/route.tsx", { id: "public-terms" }),
   route("privacy-policy", "features/public/legal/privacy/route.tsx", { id: "public-privacy" }),
   route("dpa", "features/public/legal/dpa/route.tsx", { id: "public-dpa" }),

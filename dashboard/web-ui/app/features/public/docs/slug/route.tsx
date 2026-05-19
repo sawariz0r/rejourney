@@ -11,7 +11,7 @@ import { DocsLayout } from "~/shared/docs/DocsLayout";
 import { DocsSidebar } from "~/shared/docs/DocsSidebar";
 import { DocsAIPromptCallout, getDocsAIPromptText, MarkdownContent } from "~/shared/docs/MarkdownContent";
 import { getProjects, type ApiProject } from "~/shared/api/client";
-import { buildProjectAIIntegrationPrompt } from "~/shared/constants/aiPrompts";
+import { buildProjectAIIntegrationPrompt, buildSelfHostedAIDeploymentPrompt } from "~/shared/constants/aiPrompts";
 import { getDocMetadata } from "~/shared/lib/docsConfig";
 import { getContentLocaleCopy, getLocalizedDocMetadata } from "~/shared/lib/contentLocalization";
 import {
@@ -159,7 +159,12 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
     const copy = getContentLocaleCopy(locale);
     const localizedMetadata = metadata ? getLocalizedDocMetadata(metadata, locale) : null;
     const aiPromptText = getDocsAIPromptText(content);
+    const isSelfHostedOverview = metadata?.path === "selfhosted";
     const getDocsIntegrationPrompt = useCallback(async () => {
+        if (isSelfHostedOverview) {
+            return buildSelfHostedAIDeploymentPrompt();
+        }
+
         if (!isAuthenticated) {
             return buildProjectAIIntegrationPrompt(null);
         }
@@ -172,7 +177,7 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
             console.error("Failed to load project for docs AI integration prompt:", error);
             return buildProjectAIIntegrationPrompt(null);
         }
-    }, [currentTeam?.id, isAuthenticated]);
+    }, [currentTeam?.id, isAuthenticated, isSelfHostedOverview]);
 
     if (!localizedMetadata) {
         return (
@@ -266,11 +271,17 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
                                 promptText={aiPromptText}
                                 copyText={getDocsIntegrationPrompt}
                                 compact
-                                labels={{
-                                    heading: copy.docsAiHeading,
-                                    copyButton: copy.docsCopyIntegrationPrompt,
-                                    copied: copy.docsCopied,
-                                }}
+                                labels={isSelfHostedOverview
+                                    ? {
+                                        heading: "Use AI to deploy self-hosted",
+                                        copyButton: "Copy Full Deployment Prompt",
+                                        copied: copy.docsCopied,
+                                    }
+                                    : {
+                                        heading: copy.docsAiHeading,
+                                        copyButton: copy.docsCopyIntegrationPrompt,
+                                        copied: copy.docsCopied,
+                                    }}
                             />
                         )}
                     </div>
@@ -280,6 +291,7 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
             <MarkdownContent
                 content={content}
                 showAIPrompt={false}
+                checklistStorageKey={`${contentLocaleCode}:${metadata.path}`}
                 aiPromptLabels={{
                     heading: copy.docsAiHeading,
                     copyButton: copy.docsCopyIntegrationPrompt,

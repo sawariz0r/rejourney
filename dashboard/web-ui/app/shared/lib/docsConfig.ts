@@ -84,8 +84,8 @@ export const DOCS_MAP: Record<string, { file: string; title: string; category?: 
         file: 'distributed-vs-single-node/ci-cd.md',
         title: 'CI/CD & Testing',
         category: 'Architecture',
-        description: 'Understand Rejourney CI/CD, testing, and release workflows for the web dashboard, backend, and mobile SDK packages.',
-        keywords: ['mobile SDK CI/CD', 'observability testing pipeline', 'React Native SDK testing', 'Rejourney CI CD']
+        description: 'Understand Rejourney CI/CD, testing, deployment, and release workflows for the backend, dashboard, React Native SDK, native iOS SDK, and Browser SDK.',
+        keywords: ['mobile SDK CI/CD', 'observability testing pipeline', 'React Native SDK testing', 'Browser SDK release', 'Swift SDK CI', 'Rejourney CI CD']
     },
 };
 

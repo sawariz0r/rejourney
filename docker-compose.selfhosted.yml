@@ -296,6 +296,8 @@ services:
     image: *api-image
     restart: unless-stopped
     command: ["node", "dist/worker/ingestArtifactWorker.js"]
+    healthcheck:
+      disable: true
     environment:
       <<: *app-env
     depends_on:
@@ -312,6 +314,8 @@ services:
     image: *api-image
     restart: unless-stopped
     command: ["node", "dist/worker/replayArtifactWorker.js"]
+    healthcheck:
+      disable: true
     environment:
       <<: *app-env
     depends_on:
@@ -328,6 +332,8 @@ services:
     image: *api-image
     restart: unless-stopped
     command: ["node", "dist/worker/sessionLifecycleWorker.js"]
+    healthcheck:
+      disable: true
     environment:
       <<: *app-env
     depends_on:
@@ -342,6 +348,8 @@ services:
   retention-worker:
     image: *api-image
     restart: unless-stopped
+    healthcheck:
+      disable: true
     command:
       - /bin/sh
       - -c
@@ -365,6 +373,8 @@ services:
     image: *api-image
     restart: unless-stopped
     command: ["node", "dist/worker/alertWorker.js"]
+    healthcheck:
+      disable: true
     environment:
       <<: *app-env
     depends_on:
@@ -379,6 +389,7 @@ services:
 
 networks:
   rejourney-network:
+    name: rejourney-network
     driver: bridge
 
 volumes:

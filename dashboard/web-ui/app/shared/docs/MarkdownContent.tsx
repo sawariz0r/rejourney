@@ -5,7 +5,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { DocsCodeBlock } from '~/shared/docs/DocsCodeBlock';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Info, AlertTriangle, XCircle, Lightbulb, Code2 } from 'lucide-react';
 import { cn } from "~/shared/lib/cn";
 
@@ -14,6 +14,7 @@ interface MarkdownContentProps {
     onAIPromptRender?: (renderPrompt: () => React.JSX.Element) => void;
     showAIPrompt?: boolean;
     aiPromptLabels?: DocsAIPromptLabels;
+    checklistStorageKey?: string;
 }
 
 const AI_PROMPT_START_MARKER = '<!-- AI_PROMPT_SECTION -->';
@@ -58,6 +59,8 @@ const defaultAIPromptLabels: DocsAIPromptLabels = {
     copyButton: "Copy Integration Prompt",
     copied: "Copied!",
 };
+
+const CHECKLIST_STORAGE_PREFIX = "rejourney_docs_checklist:";
 
 export function DocsAIPromptCallout({
     promptText,
@@ -212,13 +215,55 @@ const getAlertProps = (children: any) => {
     return { type, title, content };
 };
 
-export function MarkdownContent({ content, onAIPromptRender, showAIPrompt = true, aiPromptLabels }: MarkdownContentProps) {
+export function MarkdownContent({
+    content,
+    onAIPromptRender,
+    showAIPrompt = true,
+    aiPromptLabels,
+    checklistStorageKey,
+}: MarkdownContentProps) {
     // Check if content has AI prompt section
     const hasAIPrompt = content.includes(AI_PROMPT_START_MARKER);
 
     // Extract AI prompt section
     const processedContent = stripDocsAIPromptSection(content);
     const aiPromptSection = getDocsAIPromptText(content);
+    const checklistLocalStorageKey = useMemo(() => {
+        if (!checklistStorageKey) return null;
+        return `${CHECKLIST_STORAGE_PREFIX}${checklistStorageKey}`;
+    }, [checklistStorageKey]);
+    const [checklistState, setChecklistState] = useState<Record<string, boolean>>({});
+    const [isChecklistReady, setIsChecklistReady] = useState(false);
+
+    useEffect(() => {
+        setIsChecklistReady(false);
+
+        if (!checklistLocalStorageKey || typeof window === "undefined") {
+            setChecklistState({});
+            setIsChecklistReady(true);
+            return;
+        }
+
+        try {
+            const stored = window.localStorage.getItem(checklistLocalStorageKey);
+            const parsed = stored ? JSON.parse(stored) : {};
+            setChecklistState(parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {});
+        } catch {
+            setChecklistState({});
+        }
+
+        setIsChecklistReady(true);
+    }, [checklistLocalStorageKey]);
+
+    const persistChecklistState = useCallback((nextState: Record<string, boolean>) => {
+        if (!checklistLocalStorageKey || typeof window === "undefined") return;
+
+        try {
+            window.localStorage.setItem(checklistLocalStorageKey, JSON.stringify(nextState));
+        } catch {
+            // localStorage can be unavailable in private browsing or locked-down embeds.
+        }
+    }, [checklistLocalStorageKey]);
 
     // Render AI prompt section if present
     const renderAIPromptSection = () => {
@@ -233,6 +278,8 @@ export function MarkdownContent({ content, onAIPromptRender, showAIPrompt = true
     if (onAIPromptRender && aiPromptSection) {
         onAIPromptRender(renderAIPromptSection);
     }
+
+    let checkboxFallbackIndex = 0;
 
     return (
         <article className="border-2 border-black bg-white px-5 py-7 shadow-[8px_8px_0_0_rgba(0,0,0,1)] sm:px-8 sm:py-9 lg:px-10">
@@ -345,11 +392,51 @@ export function MarkdownContent({ content, onAIPromptRender, showAIPrompt = true
                             {children}
                         </ol>
                     ),
-                    li: ({ children }) => (
-                        <li className="pl-1">
-                            {children}
-                        </li>
-                    ),
+                    li: ({ node, children }: any) => {
+                        const isTaskListItem = typeof node?.checked === "boolean";
+
+                        return (
+                            <li className={cn(
+                                "pl-1",
+                                isTaskListItem && "list-none pl-0"
+                            )}>
+                                {children}
+                            </li>
+                        );
+                    },
+                    input: ({ node, type, checked, ...props }: any) => {
+                        if (type !== "checkbox") {
+                            return <input type={type} {...props} />;
+                        }
+
+                        const start = node?.position?.start;
+                        const itemKey = start
+                            ? `${start.line}:${start.column}`
+                            : `checkbox-${checkboxFallbackIndex++}`;
+                        const fallbackChecked = Boolean(checked);
+                        const isChecked = checklistState[itemKey] ?? fallbackChecked;
+
+                        return (
+                            <input
+                                type="checkbox"
+                                checked={isChecked}
+                                disabled={!isChecklistReady}
+                                onChange={(event) => {
+                                    const nextChecked = event.currentTarget.checked;
+                                    setChecklistState((previous) => {
+                                        const nextState = {
+                                            ...previous,
+                                            [itemKey]: nextChecked,
+                                        };
+                                        persistChecklistState(nextState);
+                                        return nextState;
+                                    });
+                                }}
+                                className="mr-3 mt-1 h-4 w-4 cursor-pointer accent-black disabled:cursor-wait disabled:opacity-60"
+                                aria-label="Toggle checklist item"
+                            />
+                        );
+                    },
                     // Style links
                     a: ({ href, children }) => (
                         <a

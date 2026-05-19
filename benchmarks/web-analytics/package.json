@@ -1,0 +1,14 @@
+{
+  "name": "rejourney-web-analytics-benchmark",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Benchmark Rejourney web SDK capture against PostHog web session replay across local web fixtures.",
+  "scripts": {
+    "benchmark": "node run-web-analytics-benchmark.mjs"
+  },
+  "dependencies": {
+    "playwright": "latest",
+    "posthog-js": "latest"
+  }
+}

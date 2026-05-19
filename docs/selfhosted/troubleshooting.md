@@ -4,6 +4,30 @@ Use this page if you followed [Self-hosted Rejourney](/docs/selfhosted) and some
 
 ---
 
+## Start Here
+
+Pick the symptom that best matches what you are seeing.
+
+| Symptom | First place to look |
+|---|---|
+| Install exits during bootstrap | [Install or update fails before or during bootstrap](#1-install-or-update-fails-before-or-during-bootstrap) |
+| Dashboard opens, but recordings are empty | [Sessions are counted but Replay stays empty](#2-sessions-are-counted-but-replay-stays-empty) |
+| Dashboard loads, but requests fail | [Dashboard loads, but auth or API calls fail](#3-dashboard-loads-but-auth-or-api-calls-fail) |
+| Browser SDK says config is forbidden | [Web SDK config returns 403](#4-web-sdk-config-returns-403) |
+| HTTPS does not issue | [TLS or certificate issues](#5-tls-or-certificate-issues) |
+| S3 credentials work locally, but uploads fail | [External S3 works in CLI, but Rejourney cannot upload](#6-external-s3-works-in-cli-but-rejourney-cannot-upload) |
+
+### 90-second triage
+
+- [ ] `./scripts/selfhosted/deploy.sh status` shows API and upload relay running.
+- [ ] DNS for dashboard, API, ingest, and www points at this server.
+- [ ] `.env.selfhosted` is the original file for this deployment.
+- [ ] `PUBLIC_API_URL` and `PUBLIC_INGEST_URL` use the public HTTPS hosts.
+- [ ] If using the Web SDK, the app origin is in **Web allowed domains**.
+- [ ] If using external S3, the `ingest-upload` container can reach the S3 endpoint.
+
+---
+
 ## Fast Checks
 
 ### Service status
@@ -149,7 +173,7 @@ Look for:
 - API host DNS points to the server
 - ingest host DNS points to the server
 - ports `80` and `443` are open
-- Let’s Encrypt has issued certificates
+- Let's Encrypt has issued certificates
 
 Inspect:
 
@@ -160,7 +184,27 @@ Inspect:
 
 ---
 
-## 4. TLS or certificate issues
+## 4. Web SDK config returns 403
+
+The Web SDK enforces the project's allowed browser origins before it returns
+configuration or accepts ingest.
+
+Checks:
+
+- The app's browser origin is listed in the project's **Web allowed domains**.
+- Include the host and port for local or staging apps, for example `localhost:3100`.
+- `PUBLIC_API_URL` points at the public API host that browsers can reach.
+- `PUBLIC_INGEST_URL` points at the public ingest upload relay host that browsers can reach.
+
+After changing domain or ingest values in `.env.selfhosted`, rerun:
+
+```bash
+./scripts/selfhosted/deploy.sh update
+```
+
+---
+
+## 5. TLS or certificate issues
 
 Traefik manages certificates automatically.
 
@@ -173,7 +217,7 @@ dig ingest.example.com
 dig www.example.com
 ```
 
-Make sure both names resolve to the server running the stack.
+Make sure all names resolve to the server running the stack.
 
 If DNS was wrong during first install, fix DNS and rerun:
 
@@ -183,7 +227,7 @@ If DNS was wrong during first install, fix DNS and rerun:
 
 ---
 
-## 5. External S3 works in CLI, but Rejourney cannot upload
+## 6. External S3 works in CLI, but Rejourney cannot upload
 
 Remember the upload path is server-side.
 
@@ -201,7 +245,7 @@ If you changed them, rerun:
 
 ---
 
-## 6. Built-in MinIO install, but artifacts still fail
+## 7. Built-in MinIO install, but artifacts still fail
 
 ### Checks
 
@@ -220,11 +264,11 @@ If you changed the bucket name after first install, run:
 
 ---
 
-## 7. Billing pages show disabled billing
+## 8. Billing pages show disabled billing
 
 That is expected unless Stripe keys are configured.
 
-The stack no longer disables billing because it is “self-hosted”. It disables billing because Stripe is unconfigured.
+The stack no longer disables billing because it is "self-hosted". It disables billing because Stripe is unconfigured.
 
 If you do not set Stripe keys:
 
@@ -233,7 +277,7 @@ If you do not set Stripe keys:
 
 ---
 
-## 8. Storage endpoint in Postgres is wrong after changing `.env.selfhosted`
+## 9. Storage endpoint in Postgres is wrong after changing `.env.selfhosted`
 
 Run:
 
@@ -245,7 +289,7 @@ The update path reruns bootstrap and resyncs the active `storage_endpoints` row.
 
 ---
 
-## 9. Need to stop services without losing data
+## 10. Need to stop services without losing data
 
 Use:
 
@@ -257,7 +301,7 @@ This stops containers only. It does not remove volumes.
 
 ---
 
-## 10. Need deeper logs for one service
+## 11. Need deeper logs for one service
 
 ```bash
 ./scripts/selfhosted/deploy.sh logs api

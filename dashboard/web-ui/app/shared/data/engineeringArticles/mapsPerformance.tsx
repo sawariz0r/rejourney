@@ -1,4 +1,4 @@
-import { Cpu, Map, Zap } from "lucide-react";
+import { Apple, Map } from "lucide-react";
 import type { Article } from "../engineeringTypes";
 
 // --- Content: Map Performance (New) ---
@@ -42,6 +42,27 @@ const mapArticleSchema = {
         "@id": MAP_ARTICLE_URL,
     },
 };
+
+const AndroidMark = ({ className }: { className?: string }) => (
+    <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        aria-hidden
+        className={className}
+    >
+        <path d="M7.5 8 5.5 5.5" />
+        <path d="M16.5 8 18.5 5.5" />
+        <path d="M6 11a6 6 0 0 1 12 0v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-6Z" />
+        <path d="M3.5 12.5v4" />
+        <path d="M20.5 12.5v4" />
+        <path d="M9.25 14.5h.01" />
+        <path d="M14.75 14.5h.01" />
+    </svg>
+);
 
 const MapArticleContent = () => (
     <div className="space-y-6 text-lg font-medium leading-relaxed">
@@ -104,7 +125,7 @@ const MapArticleContent = () => (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-8">
                 <div className="bg-slate-50 border-2 border-black p-6">
                     <div className="flex items-center gap-2 mb-4">
-                        <Cpu size={20} className="text-black" />
+                        <Apple size={20} className="text-black" />
                         <div className="font-mono text-xs font-black uppercase text-gray-500">
                             iOS (Swift)
                         </div>
@@ -122,7 +143,7 @@ const MapArticleContent = () => (
 
                 <div className="bg-slate-50 border-2 border-black p-6">
                     <div className="flex items-center gap-2 mb-4">
-                        <Zap size={20} className="text-black" />
+                        <AndroidMark className="h-5 w-5 text-black" />
                         <div className="font-mono text-xs font-black uppercase text-gray-500">
                             Android (Kotlin)
                         </div>
@@ -140,16 +161,10 @@ const MapArticleContent = () => (
         </div>
 
         <div className="bg-black text-white p-8 my-10 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Map size={120} />
-            </div>
+
             <h4 className="text-2xl font-black uppercase tracking-tighter mb-4 relative z-10">
-                Code Analysis: SpecialCases.swift
+                SpecialCases.swift
             </h4>
-            <p className="text-gray-300 text-sm font-mono mb-6 relative z-10">
-                Here is the actual logic we use to safely swizzle the Apple Maps delegate without crashing
-                the host app. We verify response to selectors before hooking.
-            </p>
 
             <pre className="text-xs sm:text-sm font-mono text-green-400 overflow-x-auto relative z-10">
                 {`private func _hookAppleMapKit(_ mapView: UIView) {
@@ -195,7 +210,7 @@ const MapArticleContent = () => (
                     <div className="text-xs text-gray-400 mt-2">During active map gestures</div>
                 </div>
                 <div className="p-4 border-l-4 border-blue-500">
-                    <div className="font-black text-3xl mb-1">100%</div>
+                    <div className="font-black text-3xl mb-1">High</div>
                     <div className="text-sm font-bold uppercase text-gray-500">Frame Integrity</div>
                     <div className="text-xs text-gray-400 mt-2">No tearing or half-rendered tiles</div>
                 </div>

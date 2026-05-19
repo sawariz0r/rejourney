@@ -108,7 +108,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {/* Must be first — sets scrollRestoration=manual globally before the
                     browser can restore any saved scroll position. ScrollRestoration
                     component handles restoring scroll on non-landing routes. */}
-                <script dangerouslySetInnerHTML={{ __html: `(function(){try{window.history.scrollRestoration='manual';}catch(e){}if(window.location.pathname==='/'){window.scrollTo(0,0);}})();` }} />
+                <script dangerouslySetInnerHTML={{ __html: `(function(){try{window.history.scrollRestoration='manual';}catch(e){}if(window.location.pathname==='/'&&!window.location.hash){window.scrollTo(0,0);}})();` }} />
                 <meta charSet="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
                 <meta httpEquiv="Content-Language" content={locale.languageTag} />
