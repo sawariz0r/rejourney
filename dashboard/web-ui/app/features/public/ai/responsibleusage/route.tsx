@@ -34,7 +34,7 @@ export default function ResponsibleAiUsage() {
                         {" "}is our baseline for AI-assisted development.
                     </p>
                     <p className="mt-4">
-                        Beyond human review, we rely on vacuum-tight CI pipelines to catch mistakes that AI
+                        Beyond human review, we rely on CI pipelines to catch mistakes that AI
                         code may introduce. Pull requests run locked dependency installs, TypeScript checks,
                         linting, backend and SDK unit tests, billing-focused regression tests, schema and
                         migration guards, SSR production builds, package build verification, and secret hygiene
