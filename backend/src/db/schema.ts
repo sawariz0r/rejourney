@@ -438,6 +438,20 @@ export const sessions = pgTable(
         index('sessions_anonymous_hash_idx').on(table.anonymousHash),
         index('sessions_events_idx').using('gin', table.events),
         index('sessions_metadata_idx').using('gin', table.metadata),
+        /** Retention worker: status IN ('ready','completed') AND recording_deleted=false, ordered by retention_tier + started_at. The existing sessions_retention_eligible_idx excludes status='completed' so it can't serve this query. */
+        index('sessions_retention_due_idx')
+            .on(table.retentionTier, table.startedAt, table.id)
+            .where(sql`${table.recordingDeleted} = false AND ${table.status} IN ('ready', 'completed')`),
+        /** sessionArtifactPurge: rows where recording_deleted=true OR is_replay_expired=true. Without this the OR predicate forces a full sessions_seed_started_at_idx scan of ~438K rows. */
+        index('sessions_artifact_deletion_idx')
+            .on(table.startedAt, table.id)
+            .where(sql`${table.recordingDeleted} = true OR ${table.isReplayExpired} = true`),
+        /** sessionReconciliation: status IN ('processing','pending') AND last_ingest_activity_at <= cutoff. sessions_status_idx alone forces a post-filter sort. */
+        index('sessions_reconciliation_activity_idx')
+            .on(table.lastIngestActivityAt)
+            .where(sql`${table.status} IN ('processing', 'pending')`),
+        /** Covering index for any future analytics shape filtering by project + time window + status. sessions_project_started_idx alone does not cover status, so a post-filter scans the full project's session range (1M+ rows on the top project). */
+        index('sessions_project_started_status_idx').on(table.projectId, table.startedAt, table.status),
     ]
 
 );
@@ -534,6 +548,18 @@ export const recordingArtifacts = pgTable(
         index('recording_artifacts_failed_recent_idx')
             .on(table.status, table.createdAt, table.kind, table.endpointId)
             .where(sql`${table.status} IN ('abandoned', 'failed')`),
+        /** queueRecoverableArtifacts (sessionLifecycleWorker every 10s): repairs sessions with ready 'events' segments missing start/end times. Targeted partial index avoids the 33GB full sort that previously spilled 347GB of temp files. */
+        index('recording_artifacts_recoverable_idx')
+            .on(sql`${table.createdAt} DESC`)
+            .where(sql`${table.status} = 'ready' AND ${table.kind} = 'events' AND (${table.startTime} IS NULL OR ${table.endTime} IS NULL)`),
+        /** queueRecoverableArtifacts: scans status='uploaded' (artifact bytes received, awaiting worker pickup) every 10s. Partial index turns the skip-scan into a direct seek. */
+        index('recording_artifacts_uploaded_idx')
+            .on(table.createdAt)
+            .where(sql`${table.status} = 'uploaded'`),
+        /** queueRecoverableArtifacts: scans status='buffered' (edge-node buffer awaiting flush-to-S3) every 10s. Partial index turns the skip-scan into a direct seek. */
+        index('recording_artifacts_buffered_idx')
+            .on(table.createdAt)
+            .where(sql`${table.status} = 'buffered'`),
         uniqueIndex('recording_artifacts_client_upload_id_unique').on(table.clientUploadId),
     ]
 );

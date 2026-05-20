@@ -458,7 +458,14 @@ spec:
             - name: LOG_LEVEL
               value: "info"
             - name: NODE_OPTIONS
-              value: "--max-old-space-size=2048"
+              # 3072MB = 75% of the 4Gi container limit below. Node.js uses memory
+              # beyond the JS heap (native buffers, V8 code cache) — the remaining
+              # 1Gi is overhead headroom so the kernel never OOMKills the pod.
+              # Generous sizing because dashboard is user-facing critical path:
+              # the /core replay endpoint holds large session event payloads in
+              # memory for 8–24s while reading from S3, so concurrent requests
+              # can briefly push heap usage well above steady state.
+              value: "--max-old-space-size=3072"
             - name: DB_POOL_MAX
               value: "20"
             - name: COOKIE_SECURE
@@ -687,10 +694,14 @@ spec:
           resources:
             requests:
               cpu: 500m
-              memory: 768Mi
+              # Bumped from 768Mi → 1536Mi: guarantees enough RAM that the
+              # scheduler can always place the pod even on a busy node, and
+              # gives the dashboard pods a higher priority during eviction
+              # pressure. Dashboard is the user-facing critical path.
+              memory: 1536Mi
             limits:
               cpu: "2000m"
-              memory: 2Gi
+              memory: 4Gi
           livenessProbe:
             httpGet:
               path: /health/live
