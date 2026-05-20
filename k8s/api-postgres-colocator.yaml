@@ -114,7 +114,7 @@ data:
     fi
 
     log "Evicting ${misplaced_pod}; Postgres primary is on ${primary_node}."
-    kubectl create -n "${namespace}" -f - <<EOF
+    kubectl create --validate=false -n "${namespace}" -f - <<EOF
     apiVersion: policy/v1
     kind: Eviction
     metadata:

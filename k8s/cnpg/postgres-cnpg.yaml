@@ -67,6 +67,12 @@ spec:
       # Capped to match the 6-vCPU pod limit. 32 was pure overhead.
       max_parallel_workers: "6"
       max_worker_processes: "8"
+      # Caps temp file spill per session. Prevents a single runaway query from
+      # filling the node disk (incident: one query spilled 347GB before eviction).
+      # 50GB is well above any legitimate query need given the ~48GB database size.
+      temp_file_limit: "50GB"
+      # Log any query that spills more than 1GB to disk for early visibility.
+      log_temp_files: "1GB"
 
   resources:
     requests:
