@@ -11,6 +11,7 @@
 import { createRequire } from 'module';
 import type { Server } from 'node:http';
 import express, { Request, Response } from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -81,6 +82,24 @@ app.disable('x-powered-by');
 
 app.use(helmet({
     contentSecurityPolicy: isDevelopment ? false : undefined,
+}));
+
+// Gzip JSON responses larger than ~1KB. Replay payloads (/core, /timeline,
+// /hierarchy) routinely return 1–50MB of event data — gzip typically gets
+// 10–20× compression on the repetitive rrweb event shape, dropping a 50MB
+// response to ~3MB. Threshold of 1KB skips small JSON where compression
+// overhead would exceed the savings.
+app.use(compression({
+    threshold: 1024,
+    // level 6 is the gzip default — good ratio/speed balance. Bumping to 9
+    // gives ~5% better ratio at ~3× CPU cost; not worth it for hot paths.
+    level: 6,
+    // Skip if the client sends `x-no-compression: true` (useful for debugging
+    // or for clients that already handle compression at a different layer).
+    filter: (req, res) => {
+        if (req.headers['x-no-compression']) return false;
+        return compression.filter(req, res);
+    },
 }));
 
 app.use(cors((req, callback) => {

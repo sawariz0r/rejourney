@@ -44,6 +44,7 @@ import { TouchOverlay, TouchEvent as OverlayTouchEvent } from '~/shared/ui/core/
 import { MarkerTooltip } from '~/shared/ui/core/MarkerTooltip';
 import { SessionLoadingOverlay, SessionLoadingOverlayProps } from '~/features/app/sessions/shared/SessionLoadingOverlay';
 import WebReplayPlayer from '~/shared/ui/core/WebReplayPlayer';
+import { useRrwebReplayEvents } from '~/shared/lib/rrwebReplayLoader';
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
 import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 import { getWebSessionEnvironment } from '~/shared/lib/webSessionEnvironment';
@@ -167,6 +168,13 @@ interface FullSession {
         }>;
         page?: Record<string, unknown> | null;
         viewport?: Record<string, unknown> | null;
+        /**
+         * 'inline' — events array is server-populated (small sessions).
+         * 'segments' — events array is empty; fetch each segment URL directly
+         *              from R2 in parallel via loadRrwebSegmentsFromUrls().
+         *              Used for sessions >~2MB so the dashboard pod isn't a bottleneck.
+         */
+        loadMode?: 'inline' | 'segments';
     };
     hierarchySnapshots?: {
         timestamp: number;
@@ -1391,7 +1399,17 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         (fullSession?.screenshotFramesStatus === 'preparing' || isFramesLoading) &&
         screenshotFrames.length === 0
     );
-    const rrwebReplayEvents = fullSession?.rrwebReplay?.events || [];
+    // useRrwebReplayEvents transparently returns either the server-inlined events
+    // (small sessions, loadMode='inline') or events fetched in parallel from R2
+    // (large sessions, loadMode='segments'). Consumers below treat both the same.
+    const {
+        events: rrwebReplayEvents,
+        isLoading: rrwebSegmentsLoading,
+        progress: rrwebSegmentProgress,
+    } = useRrwebReplayEvents(fullSession?.rrwebReplay);
+    // Mark intentionally-unused for downstream UI; surface later as a progress bar.
+    void rrwebSegmentsLoading;
+    void rrwebSegmentProgress;
     const webReplayRawEndMs = useMemo(() => {
         const sessionStart = fullSession?.startTime || 0;
         if (!sessionStart) return null;

@@ -506,11 +506,22 @@ const DETAIL_FETCH_CONCURRENCY = Number(process.env.RJ_REPLAY_DETAIL_FETCH_CONCU
 const frameModeFromEnv = (process.env.RJ_REPLAY_FRAME_URL_MODE || 'proxy').toLowerCase();
 const DEFAULT_FRAME_URL_MODE: ScreenshotFrameUrlMode = frameModeFromEnv === 'signed' ? 'signed' : 'proxy';
 const SESSION_CORE_CACHE_TTL_SECONDS = Number(process.env.RJ_SESSION_CORE_CACHE_TTL_SECONDS ?? 300);
+// Short TTL for sessions that are still being recorded/processed. Without this,
+// every click on an active session re-runs the full S3 fetch pipeline, which
+// is the dominant cause of multi-second /core latency for users browsing live
+// or recently-ended sessions.
+const SESSION_CORE_UNSTABLE_CACHE_TTL_SECONDS = Number(process.env.RJ_SESSION_CORE_UNSTABLE_CACHE_TTL_SECONDS ?? 20);
 const SESSION_DETAIL_CACHE_TTL_SECONDS = Number(process.env.RJ_SESSION_DETAIL_CACHE_TTL_SECONDS ?? 300);
 const SESSION_BOOTSTRAP_CACHE_TTL_SECONDS = Number(process.env.RJ_SESSION_BOOTSTRAP_CACHE_TTL_SECONDS ?? 15);
 const FRAME_AUTH_CACHE_TTL_SECONDS = Number(process.env.RJ_FRAME_AUTH_CACHE_TTL_SECONDS ?? 60);
 const SESSION_BOOTSTRAP_CACHE_CONTROL = 'private, max-age=15, stale-while-revalidate=45';
 const SESSION_DETAIL_CACHE_VERSION = 'v3';
+// Inline-events cap for /core rrweb payload. When the total rrweb segment size
+// exceeds this, the server returns segment URLs (events: []) and the dashboard
+// fetches segments directly from R2 in parallel. This removes the dashboard
+// pod as a bottleneck for large replays (a 50MB session can finish loading in
+// the browser before the server would have even finished concatenating it).
+const REPLAY_CORE_INLINE_LIMIT_BYTES = Number(process.env.RJ_REPLAY_CORE_INLINE_LIMIT_BYTES ?? 2_000_000);
 
 function isStableForSessionDetailCache(session: any): boolean {
     const status = String(session?.status || '').toLowerCase();
@@ -525,6 +536,17 @@ function shouldWriteSessionDetailCache(session: any, aggregate?: SessionWorkAggr
     if (!isStableForSessionDetailCache(session)) return false;
     if (aggregate?.hasPendingWork || aggregate?.hasPendingReplayWork) return false;
     return true;
+}
+
+/**
+ * Returns a TTL in seconds for caching a /core response. Stable sessions get
+ * the full SESSION_CORE_CACHE_TTL_SECONDS. Unstable sessions get a short TTL
+ * that absorbs burst clicks (e.g. user rapidly cycling through live sessions)
+ * without holding onto stale state for long.
+ */
+function pickSessionCoreCacheTtl(session: any, aggregate?: SessionWorkAggregate | null): number {
+    if (shouldWriteSessionDetailCache(session, aggregate)) return SESSION_CORE_CACHE_TTL_SECONDS;
+    return SESSION_CORE_UNSTABLE_CACHE_TTL_SECONDS;
 }
 
 function latestClientEvidenceEndMs(aggregate: SessionWorkAggregate): number | null {
@@ -568,13 +590,19 @@ async function readCachedSessionDetail(kind: 'bootstrap' | 'core' | 'timeline' |
     }
 }
 
-async function writeCachedSessionDetail(kind: 'bootstrap' | 'core' | 'timeline' | 'hierarchy', sessionId: string, payload: unknown): Promise<void> {
+async function writeCachedSessionDetail(
+    kind: 'bootstrap' | 'core' | 'timeline' | 'hierarchy',
+    sessionId: string,
+    payload: unknown,
+    ttlOverrideSeconds?: number,
+): Promise<void> {
     try {
-        const ttl = kind === 'bootstrap'
+        const defaultTtl = kind === 'bootstrap'
             ? SESSION_BOOTSTRAP_CACHE_TTL_SECONDS
             : kind === 'core'
                 ? SESSION_CORE_CACHE_TTL_SECONDS
                 : SESSION_DETAIL_CACHE_TTL_SECONDS;
+        const ttl = ttlOverrideSeconds && ttlOverrideSeconds > 0 ? ttlOverrideSeconds : defaultTtl;
         await getRedis().setex(buildSessionDetailCacheKey(kind, sessionId), ttl, JSON.stringify(payload));
     } catch (err) {
         logger.warn({ err, kind, sessionId }, '[sessions] Failed to write session detail cache');
@@ -751,6 +779,13 @@ type RrwebReplayPayload = {
     segments: RrwebReplaySegment[];
     page: Record<string, unknown> | null;
     viewport: Record<string, unknown> | null;
+    /**
+     * 'inline' — events array is fully populated server-side (default for small sessions).
+     * 'segments' — events array is empty; the dashboard must fetch each segment URL
+     *              directly from R2 and concatenate. Used when total payload would
+     *              exceed REPLAY_CORE_INLINE_LIMIT_BYTES so the server isn't a bottleneck.
+     */
+    loadMode?: 'inline' | 'segments';
 };
 
 const emptyRrwebReplayPayload = (): RrwebReplayPayload => ({
@@ -759,6 +794,7 @@ const emptyRrwebReplayPayload = (): RrwebReplayPayload => ({
     segments: [],
     page: null,
     viewport: null,
+    loadMode: 'inline',
 });
 
 function parseArtifactJson(data: Buffer, s3ObjectKey?: string | null) {
@@ -779,16 +815,88 @@ async function loadRrwebReplayPayload(session: any, rrwebArtifacts: any[]): Prom
         return emptyRrwebReplayPayload();
     }
 
-    const events: any[] = [];
-    const segments: RrwebReplaySegment[] = [];
-    let page: Record<string, unknown> | null = null;
-    let viewport: Record<string, unknown> | null = null;
-
     const sortedArtifacts = [...rrwebArtifacts].sort((a, b) => {
         const aTime = a.startTime ?? a.timestamp ?? a.createdAt?.getTime?.() ?? 0;
         const bTime = b.startTime ?? b.timestamp ?? b.createdAt?.getTime?.() ?? 0;
         return aTime - bTime;
     });
+
+    // Pre-compute total declared payload size from artifact metadata. If the
+    // session is large enough that inlining would create a multi-MB response
+    // and bottleneck the dashboard pod, we skip the S3 download entirely and
+    // return signed segment URLs for the browser to fetch directly. This
+    // doesn't just save bandwidth — it removes a round-trip-amplifying
+    // intermediary (the dashboard pod) from the hot path.
+    const totalDeclaredBytes = sortedArtifacts.reduce((sum, a) => {
+        const size = Number(a.sizeBytes ?? a.declaredSizeBytes ?? 0);
+        return sum + (Number.isFinite(size) && size > 0 ? size : 0);
+    }, 0);
+    const shouldSkipInline = REPLAY_CORE_INLINE_LIMIT_BYTES > 0
+        && totalDeclaredBytes > REPLAY_CORE_INLINE_LIMIT_BYTES;
+
+    if (shouldSkipInline) {
+        // Build segments with signed URLs only — no S3 downloads, no parsing.
+        // The browser fetches segments directly from R2 in parallel, which is
+        // both faster (no proxy hop) and removes the dashboard CPU bottleneck.
+        const segments = await mapWithConcurrency(
+            sortedArtifacts,
+            DETAIL_FETCH_CONCURRENCY,
+            async (artifact, index) => {
+                try {
+                    const url = artifact.endpointId
+                        ? await getSignedDownloadUrl(artifact.endpointId, artifact.s3ObjectKey)
+                        : await getSignedDownloadUrlForProject(session.projectId, artifact.s3ObjectKey);
+                    return {
+                        index,
+                        startTime: artifact.startTime ?? null,
+                        endTime: artifact.endTime ?? null,
+                        eventCount: artifact.frameCount ?? 0,
+                        sizeBytes: artifact.sizeBytes ?? artifact.declaredSizeBytes ?? null,
+                        url: url ?? null,
+                    } satisfies RrwebReplaySegment;
+                } catch (err) {
+                    logger.warn(
+                        {
+                            err,
+                            event: 'sessions.rrweb_signed_url_failed',
+                            sessionId: session.id,
+                            projectId: session.projectId,
+                            artifactId: artifact.id,
+                        },
+                        'sessions.rrweb_signed_url_failed',
+                    );
+                    return null;
+                }
+            }
+        );
+
+        const validSegments = segments.filter((s): s is RrwebReplaySegment => s !== null);
+        logger.info(
+            {
+                event: 'sessions.rrweb_segments_only',
+                sessionId: session.id,
+                segmentCount: validSegments.length,
+                totalDeclaredBytes,
+                inlineLimitBytes: REPLAY_CORE_INLINE_LIMIT_BYTES,
+            },
+            'sessions.rrweb_segments_only',
+        );
+
+        return {
+            events: [],
+            eventCount: validSegments.reduce((sum, s) => sum + (s.eventCount || 0), 0),
+            segments: validSegments,
+            page: null,
+            viewport: null,
+            loadMode: 'segments',
+        };
+    }
+
+    // Below-threshold path: inline events server-side (legacy behavior).
+    const events: any[] = [];
+    const segments: RrwebReplaySegment[] = [];
+    let page: Record<string, unknown> | null = null;
+    let viewport: Record<string, unknown> | null = null;
 
     const artifactResults = await mapWithConcurrency(
         sortedArtifacts,
@@ -856,6 +964,7 @@ async function loadRrwebReplayPayload(session: any, rrwebArtifacts: any[]): Prom
         segments,
         page,
         viewport,
+        loadMode: 'inline',
     };
 }
 
@@ -2672,8 +2781,9 @@ router.get(
     dashboardRateLimiter,
     asyncHandler(async (req, res) => {
         const { session, metrics } = await getAuthorizedSession(req.user!.id, req.params.id);
-        const mayReadCache = isStableForSessionDetailCache(session);
-        const cached = mayReadCache ? await readCachedSessionDetail('core', session.id) : null;
+        // Always try cache: unstable sessions get a short TTL on write, which
+        // absorbs rapid repeat clicks (the common dashboard browsing pattern).
+        const cached = await readCachedSessionDetail('core', session.id);
         if (cached) {
             res.setHeader('X-Replay-Core-Cache', 'hit');
             res.type('json').send(cached);
@@ -2739,10 +2849,15 @@ router.get(
             stats,
         };
 
+        res.setHeader('X-Replay-Core-Cache', 'miss');
         res.json(responseBody);
 
-        if (shouldWriteSessionDetailCache(session, aggregate) && replayBootstrap.screenshotFramesStatus !== 'preparing') {
-            await writeCachedSessionDetail('core', session.id, responseBody);
+        // Always cache. Stable sessions get the full 5-min TTL, unstable ones
+        // get a short 20s TTL so repeat clicks within the burst window are
+        // instant without holding onto data that may have changed.
+        if (replayBootstrap.screenshotFramesStatus !== 'preparing') {
+            const ttl = pickSessionCoreCacheTtl(session, aggregate);
+            await writeCachedSessionDetail('core', session.id, responseBody, ttl);
         }
     })
 );

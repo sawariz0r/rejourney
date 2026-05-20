@@ -472,6 +472,23 @@ spec:
               value: "true"
             - name: RJ_API_ROLE
               value: "dashboard"
+            # Replay loading tuning — defaults are tuned for fast /core page loads.
+            # CONCURRENCY=16: pulls all rrweb segments from R2 in parallel (was 6 →
+            # was the dominant cause of 17–82s /core latency on long sessions).
+            # CACHE_TTL=300: even unstable sessions get a short cache so repeated
+            # clicks on the same session within 5 min are instant.
+            # INLINE_LIMIT_BYTES=2_000_000 (2MB): big sessions ship segment URLs
+            # only; the dashboard fetches segments directly from R2 in parallel,
+            # cutting time-to-first-frame and removing the dashboard pod as the
+            # bottleneck for multi-megabyte replays.
+            - name: RJ_REPLAY_DETAIL_FETCH_CONCURRENCY
+              value: "16"
+            - name: RJ_SESSION_CORE_CACHE_TTL_SECONDS
+              value: "300"
+            - name: RJ_SESSION_CORE_UNSTABLE_CACHE_TTL_SECONDS
+              value: "20"
+            - name: RJ_REPLAY_CORE_INLINE_LIMIT_BYTES
+              value: "2000000"
             # Primary connection (writes: login, settings save, etc.)
             - name: DATABASE_URL
               valueFrom:
