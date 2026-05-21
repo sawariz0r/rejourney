@@ -2718,34 +2718,25 @@ export async function getDashboardOverviewHeavy(projectId?: string, timeRange?: 
 
 export async function getApiOverview(projectId: string, timeRange?: string, platform?: string): Promise<ApiOverviewResponse> {
   const normalizedPlatform = platform && platform !== 'all' ? platform : undefined;
-  if (isDemoMode()) {
-    const range = timeRange === 'all' ? undefined : timeRange;
-    const trendsRange = timeRange === '24h' ? '7d' : (timeRange || '30d');
-    const regionRange = timeRange === '24h' ? '7d' : (timeRange || '30d');
-    const [endpointStats, deepMetrics, regionStats, latencyByLocation, trends] = await Promise.all([
-      getApiEndpointStats(projectId, range, normalizedPlatform),
-      getObservabilityDeepMetrics(projectId, range, 'full', normalizedPlatform),
-      getRegionPerformance(projectId, regionRange, normalizedPlatform),
-      getApiLatencyByLocation(projectId, range, normalizedPlatform),
-      getInsightsTrends(projectId, trendsRange, normalizedPlatform),
-    ]);
+  const range = timeRange === 'all' ? undefined : timeRange;
+  const trendsRange = timeRange === '24h' ? '7d' : (timeRange || '30d');
+  const [endpointStatsResult, trendsResult] = await Promise.allSettled([
+    getApiEndpointStats(projectId, range, normalizedPlatform),
+    getInsightsTrends(projectId, trendsRange, normalizedPlatform),
+  ]);
 
-    return {
-      endpointStats,
-      deepMetrics,
-      regionStats,
-      latencyByLocation,
-      trends,
-      failedSections: [],
-    };
-  }
+  const failedSections: string[] = [];
+  if (endpointStatsResult.status !== 'fulfilled') failedSections.push('endpoint stats');
+  if (trendsResult.status !== 'fulfilled') failedSections.push('traffic trends');
 
-  const params = new URLSearchParams({ projectId });
-  if (timeRange) params.set('timeRange', timeRange);
-  if (normalizedPlatform) params.set('platform', normalizedPlatform);
-  const endpoint = `/api/overview/api?${params.toString()}`;
-  const cacheKey = `overview:api:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}`;
-  return fetchWithCache<ApiOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
+  return {
+    endpointStats: endpointStatsResult.status === 'fulfilled' ? endpointStatsResult.value : null,
+    regionStats: null,
+    deepMetrics: null,
+    latencyByLocation: null,
+    trends: trendsResult.status === 'fulfilled' ? trendsResult.value : { daily: [] },
+    failedSections,
+  };
 }
 
 export async function getDevicesOverview(projectId: string, timeRange?: string, platform?: string): Promise<DevicesOverviewResponse> {
@@ -2936,7 +2927,7 @@ export async function getHeatmapsOverview(projectId: string, timeRange?: string,
   if (timeRange) params.set('timeRange', timeRange);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
   const endpoint = `/api/overview/heatmaps?${params.toString()}`;
-  const cacheKey = `overview:heatmaps:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v8`;
+  const cacheKey = `overview:heatmaps:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v9`;
   return fetchWithCache<HeatmapOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
@@ -2954,7 +2945,7 @@ export async function getHeatmapScreenOverview(projectId: string, screenName: st
   if (timeRange) params.set('timeRange', timeRange);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
   const endpoint = `/api/overview/heatmaps/screen?${params.toString()}`;
-  const cacheKey = `overview:heatmaps:screen:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v5`;
+  const cacheKey = `overview:heatmaps:screen:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v6`;
   return fetchWithCache<HeatmapScreenOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 

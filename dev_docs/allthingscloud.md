@@ -314,6 +314,7 @@ Rollout gates:
 3. Run `clickhouse-backfill-api-stats` with an exclusive `CLICKHOUSE_CUTOVER_DATE`.
 4. Compare Postgres and ClickHouse totals by date and by project.
 5. Enable reads: `CLICKHOUSE_READS_ENABLED=true`, `CLICKHOUSE_CUTOVER_DATE=<date dual-write became reliable>`.
+   For a same-day cutover, set `CLICKHOUSE_CUTOVER_DATE` to tomorrow's UTC date and `CLICKHOUSE_RAW_READS_AFTER` to the timestamp immediately after the final same-day backfill completes. That keeps today's backfilled totals and adds new raw ClickHouse rows after the handoff point.
 6. Only after at least a clean week, remove Postgres writes for this workload. Do not drop `api_endpoint_daily_stats` in the same release that removes writes.
 
 Local verification completed on 2026-05-21: the backfill imported 832 local `api_endpoint_daily_stats` rows; Postgres and ClickHouse `FINAL` totals matched exactly at 27,505 calls, 262 errors, and 11,229,944 summed latency ms. See the migration runbook for commands and details.
@@ -452,6 +453,8 @@ Local k8s uses the same idea with `http:` allowed for MinIO/local endpoints. Buc
 20. **Do not drop `api_endpoint_daily_stats` at read cutover.** First cut over reads, keep Postgres writes and fallback for rollback, soak for at least a week, then remove Postgres writes for this one workload. Archive/drop the old table only in a later release after rollback is no longer needed.
 
 21. **The raw ClickHouse fact date must match the Postgres aggregate date.** `api_endpoint_daily_stats.date` is the artifact processing day, not necessarily the client event day. If `api_endpoint_request_events.event_date` uses the client timestamp, cutover can lose late-arriving events at day boundaries. Keep the raw fact `event_date` aligned with the processing day for compatibility with the existing dashboard aggregates.
+
+22. **For same-day ClickHouse read cutover, use `CLICKHOUSE_RAW_READS_AFTER`.** Without it, a mid-day cutover either reads today's imported snapshot only or today's raw facts only. The safe immediate path is: final same-day backfill, record the UTC completion timestamp, set `CLICKHOUSE_RAW_READS_AFTER`, then restart `api-dashboard`.
 
 ---
 

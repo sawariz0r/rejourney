@@ -246,7 +246,7 @@ Local parity nuance:
 - `ci:local*` uses `migrate`, not `push`, so it is the production-parity path.
 - If the local DB was created by the old `push` flow and has no migration history, the deploy guard stops early with an explicit error instead of letting `db-setup` hang.
 - The one-time reset path for that old local state is `./scripts/local-k8s/deploy.sh down`.
-- Local ClickHouse is enabled by default in `.env.k8s.local` so `npm run ci:local` exercises the dual-write/read path. `CLICKHOUSE_CUTOVER_DATE` stays empty unless you intentionally want the running local API to include imported historical aggregates.
+- Local ClickHouse is enabled by default in `.env.k8s.local` so `npm run ci:local` exercises the dual-write/read path. `CLICKHOUSE_CUTOVER_DATE` and `CLICKHOUSE_RAW_READS_AFTER` stay empty unless you intentionally want the running local API to include imported historical aggregates or test a same-day cutover bridge.
 - The local historical import check is manual: `cd backend && node --import tsx scripts/backfillClickHouseApiEndpointStats.ts --until <cutover-date> --batch-size 5000`.
 
 Relevant files:

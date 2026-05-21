@@ -20,6 +20,7 @@ import {
 import { boundedTimeRangeToDays } from '../utils/analyticsTimeRange.js';
 import { buildRetentionCohortRows } from '../services/retentionCohorts.js';
 import { generateAnonymousName } from '../utils/anonymousName.js';
+import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
 
 const router = Router();
 const redis = getRedis();
@@ -1000,7 +1001,7 @@ function updateHeatmapIterationScreen(
         screen.evidenceSessionId = values.evidenceSessionId;
     }
     if (!screen.screenshotUrl && values.screenshotSessionId) {
-        screen.screenshotUrl = `/api/session/thumbnail/${values.screenshotSessionId}`;
+        screen.screenshotUrl = buildHeatmapScreenshotUrl(values.screenshotSessionId);
     }
 }
 
@@ -1989,7 +1990,7 @@ router.get(
     asyncHandler(async (req, res) => {
         const scope = await resolveOverviewScope(req, { requireProjectId: true });
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('heatmaps', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v7` : 'v7'),
+            cacheKey: buildOverviewCacheKey('heatmaps', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v8` : 'v8'),
             routeName: 'heatmaps',
             res,
             logContext: {
@@ -2012,7 +2013,7 @@ router.get(
         }
 
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey(`heatmaps:screen:${screenName}`, scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v4` : 'v4'),
+            cacheKey: buildOverviewCacheKey(`heatmaps:screen:${screenName}`, scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v5` : 'v5'),
             routeName: 'heatmaps-screen',
             res,
             logContext: {

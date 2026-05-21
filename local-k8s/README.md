@@ -169,7 +169,8 @@ node --import tsx scripts/backfillClickHouseApiEndpointStats.ts \
 `--until` is exclusive and should match the cutover date you want to test. Keep
 `CLICKHOUSE_CUTOVER_DATE` empty unless you intentionally want the running API to
 serve imported history; with an empty cutover date, ClickHouse reads use raw facts
-only.
+only. To test a same-day cutover, also set `CLICKHOUSE_RAW_READS_AFTER` to a UTC
+timestamp after the final local backfill.
 
 ## Notes
 

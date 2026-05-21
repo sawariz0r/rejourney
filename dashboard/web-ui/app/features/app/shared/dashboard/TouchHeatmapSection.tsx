@@ -5,7 +5,9 @@ import { useDemoMode } from '~/shared/providers/DemoModeContext';
 import {
     getHeatmapsOverview,
     getHeatmapScreenOverview,
+    getSessionReplayManifest,
     type AlltimeHeatmapScreen,
+    type ApiSessionReplayManifest,
     type HeatmapIterationScreen,
     type HeatmapIterationSummary,
     type HeatmapIterationVersion,
@@ -13,6 +15,8 @@ import {
 import { API_BASE_URL, getCsrfToken } from '~/shared/config/appConfig';
 import { TimeRange } from '~/shared/ui/core/TimeFilter';
 import { demoReplayFixture as brewCoffeeReplayFixture } from '~/shared/data/demoReplayDataFrankfurt';
+import WebReplayPlayer from '~/shared/ui/core/WebReplayPlayer';
+import { useRrwebReplayEvents } from '~/shared/lib/rrwebReplayLoader';
 
 const TOUCH_HEATMAP_DEBUG_PREFIX = '[TouchHeatmapDebug]';
 const HEATMAP_DETAIL_FETCH_CONCURRENCY = 4;
@@ -50,6 +54,39 @@ function getScreenshotPreviewErrorMessage(error: unknown): string {
         return 'Screenshot unavailable';
     }
     return 'Failed to load screenshot';
+}
+
+function toAbsoluteHeatmapImageUrl(url: string): string {
+    if (/^(https?:|blob:|data:)/i.test(url)) return url;
+    return `${API_BASE_URL}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
+function buildHeatmapImageUrlCandidates(screen: PreviewHeatmapScreen, isWebViewer: boolean): string[] {
+    const candidates: string[] = [];
+    const seen = new Set<string>();
+    const addCandidate = (url: string | null | undefined) => {
+        if (!url) return;
+        const absoluteUrl = toAbsoluteHeatmapImageUrl(url);
+        if (seen.has(absoluteUrl)) return;
+        seen.add(absoluteUrl);
+        candidates.push(absoluteUrl);
+    };
+
+    addCandidate(screen.screenshotUrl);
+
+    const evidenceSessionId = screen.evidenceSessionId?.trim();
+    if (!isWebViewer && evidenceSessionId) {
+        const encodedSessionId = encodeURIComponent(evidenceSessionId);
+        const timestamp = Number(screen.screenFirstSeenMs);
+        if (Number.isFinite(timestamp) && timestamp > 0) {
+            const roundedTimestamp = Math.round(timestamp);
+            addCandidate(`/api/session/frame/${encodedSessionId}/${roundedTimestamp}.jpg`);
+            addCandidate(`/api/session/thumbnail/${encodedSessionId}?ts=${roundedTimestamp}`);
+        }
+        addCandidate(`/api/session/thumbnail/${encodedSessionId}`);
+    }
+
+    return candidates;
 }
 
 async function mapWithConcurrency<T, R>(
@@ -535,13 +572,25 @@ function getHeatmapFrameDimensions(screen: PreviewHeatmapScreen, isWebViewer: bo
 
     const viewportWidth = getPositiveMetric(screen.viewportWidth) ?? 1440;
     const viewportHeight = getPositiveMetric(screen.viewportHeight) ?? 900;
-    const rawPageWidth = getPositiveMetric(screen.pageWidth) ?? viewportWidth;
-    const rawPageHeight = getPositiveMetric(screen.pageHeight) ?? Math.max(viewportHeight, Math.round(viewportHeight * 1.65));
-    const hasFullPageMeta = rawPageHeight > viewportHeight * 1.08;
-    const pageRatio = Math.max(1.05, Math.min(5.5, rawPageHeight / Math.max(rawPageWidth, 1)));
-    const pageWidth = rawPageWidth;
+    const observedPageWidth = getPositiveMetric(screen.pageWidth);
+    const observedPageHeight = getPositiveMetric(screen.pageHeight);
+    const hasFullPageMeta = Boolean(
+        observedPageWidth
+        && observedPageHeight
+        && observedPageHeight > viewportHeight * 1.08
+    );
+    const pageWidth = observedPageWidth ?? viewportWidth;
+    const rawPageHeight = hasFullPageMeta
+        ? observedPageHeight!
+        : (observedPageHeight ?? viewportHeight);
+    const rawPageRatio = rawPageHeight / Math.max(pageWidth, 1);
+    const pageRatio = hasFullPageMeta
+        ? Math.max(viewportHeight / viewportWidth, Math.min(5.5, rawPageRatio))
+        : rawPageRatio;
     const pageHeight = Math.round(pageWidth * pageRatio);
-    const viewportPercent = Math.max(8, Math.min(100, (viewportHeight / Math.max(pageHeight, 1)) * 100));
+    const viewportPercent = hasFullPageMeta
+        ? Math.max(8, Math.min(100, (viewportHeight / Math.max(pageHeight, 1)) * 100))
+        : 100;
 
     return {
         pageWidth,
@@ -563,6 +612,94 @@ function buildViewportGuideStops(pageHeight: number, viewportHeight: number): nu
 
 const WEB_DOCUMENT_SECTION_TOPS = [12, 28, 45, 63, 80];
 
+type HeatmapFrameDimensions = ReturnType<typeof getHeatmapFrameDimensions>;
+
+const RrwebHeatmapPreview: React.FC<{
+    screen: PreviewHeatmapScreen;
+    frameDimensions: HeatmapFrameDimensions;
+}> = ({ screen, frameDimensions }) => {
+    const [rrwebReplay, setRrwebReplay] = useState<ApiSessionReplayManifest['rrwebReplay'] | null>(null);
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        const sessionId = screen.evidenceSessionId?.trim();
+        if (!sessionId) {
+            setRrwebReplay(null);
+            setFailed(false);
+            return;
+        }
+
+        const abort = new AbortController();
+        let cancelled = false;
+        setRrwebReplay(null);
+        setFailed(false);
+
+        getSessionReplayManifest(sessionId, { frameUrlMode: 'signed', signal: abort.signal })
+            .then((manifest) => {
+                if (cancelled) return;
+                if (manifest.playbackMode === 'rrweb' && manifest.rrwebReplay) {
+                    setRrwebReplay(manifest.rrwebReplay);
+                    return;
+                }
+                setFailed(true);
+            })
+            .catch((error: unknown) => {
+                if (cancelled || (error as { name?: string } | null)?.name === 'AbortError') return;
+                heatmapDebug('Failed to load rrweb heatmap preview', {
+                    screenName: screen.name,
+                    sessionId,
+                    error,
+                });
+                setFailed(true);
+            });
+
+        return () => {
+            cancelled = true;
+            abort.abort();
+        };
+    }, [screen.evidenceSessionId, screen.name]);
+
+    const { events } = useRrwebReplayEvents(rrwebReplay);
+    const replayTiming = useMemo(() => {
+        let first = Number.POSITIVE_INFINITY;
+        let last = Number.NEGATIVE_INFINITY;
+        for (const event of events) {
+            const timestamp = Number(event?.timestamp);
+            if (!Number.isFinite(timestamp)) continue;
+            first = Math.min(first, timestamp);
+            last = Math.max(last, timestamp);
+        }
+        if (!Number.isFinite(first) || !Number.isFinite(last)) return null;
+        return {
+            first,
+            last,
+        };
+    }, [events]);
+
+    if (failed || !replayTiming || events.length === 0) return null;
+
+    const targetTimestamp = Number(screen.screenFirstSeenMs);
+    const currentTime = Number.isFinite(targetTimestamp) && targetTimestamp > 0
+        ? Math.max(0, (targetTimestamp - replayTiming.first) / 1000)
+        : 0;
+    const durationSeconds = Math.max(1, (replayTiming.last - replayTiming.first) / 1000);
+
+    return (
+        <div
+            className="pointer-events-none absolute inset-x-0 top-0 overflow-hidden bg-white"
+            style={{ height: `${frameDimensions.viewportPercent}%` }}
+        >
+            <WebReplayPlayer
+                events={events}
+                currentTime={currentTime}
+                isPlaying={false}
+                playbackRate={1}
+                durationSeconds={durationSeconds}
+            />
+        </div>
+    );
+};
+
 const HeatmapPreview: React.FC<{
     screen: PreviewHeatmapScreen;
     compact?: boolean;
@@ -578,6 +715,7 @@ const HeatmapPreview: React.FC<{
     const [downloadProgress, setDownloadProgress] = useState(0);
 
     const containerRef = useRef<HTMLDivElement>(null);
+    const overlayRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const blobUrlRef = useRef<string | null>(null);
 
@@ -590,11 +728,15 @@ const HeatmapPreview: React.FC<{
             : [],
         [frameDimensions.pageHeight, frameDimensions.viewportHeight, isWebViewer, tile],
     );
-    const fullCoverUrl = screen.screenshotUrl
-        ? screen.screenshotUrl.startsWith('http')
-            ? screen.screenshotUrl
-            : `${API_BASE_URL}${screen.screenshotUrl}`
-        : null;
+    const coverUrlCandidates = useMemo(
+        () => buildHeatmapImageUrlCandidates(screen, isWebViewer),
+        [screen.screenshotUrl, screen.evidenceSessionId, screen.screenFirstSeenMs, isWebViewer],
+    );
+    const coverUrlKey = coverUrlCandidates.join('|');
+    const shouldRenderRrwebPreview = isWebViewer
+        && !tile
+        && Boolean(screen.evidenceSessionId?.trim())
+        && (coverUrlCandidates.length === 0 || (!blobUrl && Boolean(loadError)));
 
     useEffect(() => {
         let cancelled = false;
@@ -608,7 +750,7 @@ const HeatmapPreview: React.FC<{
             screenName: screen.name,
             compact,
             screenshotUrl: screen.screenshotUrl,
-            fullCoverUrl,
+            coverUrlCandidates,
             hotspotCount: screen.touchHotspots?.length ?? 0,
             evidenceSessionId: screen.evidenceSessionId,
         });
@@ -623,7 +765,7 @@ const HeatmapPreview: React.FC<{
         }
         setBlobUrl(null);
 
-        if (!fullCoverUrl) {
+        if (coverUrlCandidates.length === 0) {
             heatmapDebug('Skipping screenshot fetch because no screenshot URL is available', {
                 screenName: screen.name,
                 screenshotUrl: screen.screenshotUrl,
@@ -632,19 +774,27 @@ const HeatmapPreview: React.FC<{
         }
 
         const csrfToken = getCsrfToken() || '';
-        const fetchUrl = fullCoverUrl;
 
-        const fetchWithProgress = async () => {
+        const fetchWithProgress = async (fetchUrl: string) => {
+            const sameOrigin = (() => {
+                try {
+                    return new URL(fetchUrl, window.location.href).origin === window.location.origin;
+                } catch {
+                    return true;
+                }
+            })();
             heatmapDebug('Fetching screenshot blob', {
                 screenName: screen.name,
                 fetchUrl,
-                csrfTokenPresent: Boolean(csrfToken),
+                csrfTokenPresent: sameOrigin && Boolean(csrfToken),
                 requestedAt: new Date(fetchStartedAt).toISOString(),
             });
 
             const response = await fetch(fetchUrl, {
-                credentials: 'include',
-                headers: { Accept: 'image/*', 'X-CSRF-Token': csrfToken },
+                credentials: sameOrigin ? 'include' : 'omit',
+                headers: sameOrigin
+                    ? { Accept: 'image/*', 'X-CSRF-Token': csrfToken }
+                    : { Accept: 'image/*' },
             });
 
             heatmapDebug('Screenshot fetch response received', {
@@ -718,10 +868,30 @@ const HeatmapPreview: React.FC<{
             return { blob: new Blob(chunks), contentType };
         };
 
-        fetchWithProgress()
+        const fetchFirstAvailableScreenshot = async () => {
+            let lastError: unknown = null;
+            for (const fetchUrl of coverUrlCandidates) {
+                if (cancelled) return null;
+                setDownloadProgress(0);
+                try {
+                    const result = await fetchWithProgress(fetchUrl);
+                    return { ...result, fetchUrl };
+                } catch (error) {
+                    lastError = error;
+                    heatmapDebug('Screenshot candidate failed, trying next fallback', {
+                        screenName: screen.name,
+                        fetchUrl,
+                        error,
+                    });
+                }
+            }
+            throw lastError instanceof Error ? lastError : new Error('No screenshot candidate could be loaded');
+        };
+
+        fetchFirstAvailableScreenshot()
             .then(async (result) => {
                 if (!result || cancelled) return;
-                const { blob, contentType } = result;
+                const { blob, contentType, fetchUrl } = result;
 
                 heatmapDebug('Screenshot blob ready', {
                     screenName: screen.name,
@@ -784,7 +954,7 @@ const HeatmapPreview: React.FC<{
                 if (cancelled) return;
                 console.error(`${TOUCH_HEATMAP_DEBUG_PREFIX} Screenshot preview pipeline failed`, {
                     screenName: screen.name,
-                    fetchUrl,
+                    coverUrlCandidates,
                     error,
                     durationMs: Date.now() - fetchStartedAt,
                 });
@@ -799,7 +969,7 @@ const HeatmapPreview: React.FC<{
             cancelled = true;
             heatmapDebug('HeatmapPreview cleanup', {
                 screenName: screen.name,
-                fetchUrl,
+                coverUrlCandidates,
                 durationMs: Date.now() - fetchStartedAt,
             });
             if (blobUrlRef.current) {
@@ -807,35 +977,53 @@ const HeatmapPreview: React.FC<{
                 blobUrlRef.current = null;
             }
         };
-    }, [fullCoverUrl]);
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        const container = containerRef.current;
-        if (!canvas || !container) return;
-
-        const draw = () => drawTouchHeatmap(canvas, container, screen.touchHotspots || []);
-        draw();
-
-        window.addEventListener('resize', draw);
-        return () => window.removeEventListener('resize', draw);
-    }, [screen.touchHotspots, imageLoaded, blobUrl]);
-
-    const topDots = useMemo(
-        () => [...(screen.touchHotspots || [])].sort((a, b) => b.intensity - a.intensity).slice(0, 10),
-        [screen.touchHotspots],
-    );
+    }, [coverUrlKey]);
 
     const displayRoute = getDisplayRoute(screen.name);
-    const documentAspectStyle = isWebViewer
-        ? { aspectRatio: `${frameDimensions.pageWidth} / ${frameDimensions.pageHeight}` }
-        : undefined;
-    const tileAspectStyle = isWebViewer ? { aspectRatio: '5 / 6' } : undefined;
+    const documentAspectStyle = { aspectRatio: `${frameDimensions.pageWidth} / ${frameDimensions.pageHeight}` };
+    const tileAspectStyle = { aspectRatio: `${frameDimensions.pageWidth} / ${frameDimensions.pageHeight}` };
     const imageRatio = imageNaturalSize ? imageNaturalSize.height / Math.max(imageNaturalSize.width, 1) : null;
     const useImageAsFullDocument = !isWebViewer || !imageRatio || Math.abs(imageRatio - frameDimensions.pageRatio) < 0.5 || !frameDimensions.hasFullPageMeta;
     const firstViewportImageStyle = isWebViewer && !useImageAsFullDocument
         ? { height: `${frameDimensions.viewportPercent}%` }
         : undefined;
+    const useViewportOnlyHeatmap = isWebViewer
+        && frameDimensions.hasFullPageMeta
+        && (!useImageAsFullDocument || shouldRenderRrwebPreview);
+    const viewportHeatmapFraction = frameDimensions.viewportPercent / 100;
+    const visibleHotspots = useMemo(() => {
+        const hotspots = screen.touchHotspots || [];
+        if (!useViewportOnlyHeatmap) return hotspots;
+        return hotspots
+            .filter((hotspot) => hotspot.y >= 0 && hotspot.y <= viewportHeatmapFraction)
+            .map((hotspot) => ({
+                ...hotspot,
+                y: Math.max(0, Math.min(1, hotspot.y / Math.max(viewportHeatmapFraction, 0.001))),
+            }));
+    }, [screen.touchHotspots, useViewportOnlyHeatmap, viewportHeatmapFraction]);
+    const heatmapOverlayClass = useViewportOnlyHeatmap
+        ? 'pointer-events-none absolute inset-x-0 top-0'
+        : 'pointer-events-none absolute inset-0';
+    const heatmapOverlayStyle = useViewportOnlyHeatmap
+        ? { height: `${frameDimensions.viewportPercent}%` }
+        : undefined;
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        const overlay = overlayRef.current;
+        if (!canvas || !overlay) return;
+
+        const draw = () => drawTouchHeatmap(canvas, overlay, visibleHotspots);
+        draw();
+
+        window.addEventListener('resize', draw);
+        return () => window.removeEventListener('resize', draw);
+    }, [visibleHotspots, imageLoaded, blobUrl, useViewportOnlyHeatmap, frameDimensions.viewportPercent]);
+
+    const topDots = useMemo(
+        () => [...visibleHotspots].sort((a, b) => b.intensity - a.intensity).slice(0, 10),
+        [visibleHotspots],
+    );
     const widthClass = tile
         ? isWebViewer
             ? 'w-full'
@@ -850,7 +1038,7 @@ const HeatmapPreview: React.FC<{
     const tileScreenClass = isWebViewer
         ? 'heatmap-tile-screen heatmap-web-tile-screen heatmap-web-document-tile relative overflow-hidden rounded-lg border-2 border-black bg-white shadow-neo-sm'
         : 'heatmap-tile-screen relative mx-auto aspect-[9/19] max-h-[500px] w-full max-w-[184px] overflow-hidden rounded-2xl border-2 border-black bg-slate-800 shadow-neo-sm';
-    const imageFitClass = isWebViewer && useImageAsFullDocument ? 'object-cover' : isWebViewer ? 'object-cover' : 'object-cover';
+    const imageFitClass = 'object-fill';
     const placeholderClass = isWebViewer
         ? 'bg-transparent'
         : 'bg-[#111827]';
@@ -912,39 +1100,47 @@ const HeatmapPreview: React.FC<{
                     ) : (
                         <MousePointer2 className="mb-2 h-8 w-8 text-[#67e8f9]" />
                     )}
-                    <p className="text-xs font-black uppercase text-slate-200">{screen.name}</p>
+                    <p className={`text-xs font-black uppercase ${isWebViewer ? 'text-slate-700' : 'text-slate-200'}`}>{screen.name}</p>
                     {!loadError && downloadProgress > 0 && downloadProgress < 100 && (
                         <p className="mt-2 text-[11px] text-slate-400">Loading screenshot {downloadProgress}%</p>
                     )}
                     {loadError && <p className="mt-2 text-[11px] text-rose-300">{loadError}</p>}
                 </div>
             )}
-
-            {(screen.touchHotspots?.length || 0) > 0 && (
-                <canvas
-                    ref={canvasRef}
-                    className="pointer-events-none absolute inset-0 h-full w-full"
-                    style={{ mixBlendMode: 'normal', opacity: 0.96 }}
+            {shouldRenderRrwebPreview && !blobUrl && (
+                <RrwebHeatmapPreview
+                    screen={screen}
+                    frameDimensions={frameDimensions}
                 />
             )}
 
-            <div className="pointer-events-none absolute inset-0">
-                {topDots.map((hotspot, index) => {
-                    const size = 10 + (hotspot.intensity * 14);
-                    return (
-                        <span
-                            key={`dot-${index}-${hotspot.x}-${hotspot.y}`}
-                            className={`absolute rounded-full border border-white/50 ${hotspot.isRageTap ? 'bg-rose-500/60' : 'bg-cyan-400/55'}`}
-                            style={{
-                                left: `${hotspot.x * 100}%`,
-                                top: `${hotspot.y * 100}%`,
-                                width: `${size}px`,
-                                height: `${size}px`,
-                                transform: 'translate(-50%, -50%)',
-                            }}
-                        />
-                    );
-                })}
+            <div ref={overlayRef} className={heatmapOverlayClass} style={heatmapOverlayStyle}>
+                {visibleHotspots.length > 0 && (
+                    <canvas
+                        ref={canvasRef}
+                        className="absolute inset-0 h-full w-full"
+                        style={{ mixBlendMode: 'normal', opacity: 0.96 }}
+                    />
+                )}
+
+                <div className="absolute inset-0">
+                    {topDots.map((hotspot, index) => {
+                        const size = 10 + (hotspot.intensity * 14);
+                        return (
+                            <span
+                                key={`dot-${index}-${hotspot.x}-${hotspot.y}`}
+                                className={`absolute rounded-full border border-white/50 ${hotspot.isRageTap ? 'bg-rose-500/60' : 'bg-cyan-400/55'}`}
+                                style={{
+                                    left: `${hotspot.x * 100}%`,
+                                    top: `${hotspot.y * 100}%`,
+                                    width: `${size}px`,
+                                    height: `${size}px`,
+                                    transform: 'translate(-50%, -50%)',
+                                }}
+                            />
+                        );
+                    })}
+                </div>
             </div>
         </>
     );

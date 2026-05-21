@@ -15,6 +15,7 @@ import { sessionAuth } from '../middleware/auth.js';
 import { excludeInternalToolEndpointTraffic } from '../utils/internalToolEndpointFilter.js';
 import { boundedTimeRangeToDays } from '../utils/analyticsTimeRange.js';
 import { buildRetentionCohortRows } from '../services/retentionCohorts.js';
+import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
 
 const router = Router();
 const redis = getRedis();
@@ -148,7 +149,7 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const cacheKey = `insights:friction:${projectIds.sort().join(',')}:${isRealtime ? 'realtime' : (timeRange || '7d')}:${platform || 'all'}:v3`;
+        const cacheKey = `insights:friction:${projectIds.sort().join(',')}:${isRealtime ? 'realtime' : (timeRange || '7d')}:${platform || 'all'}:v4`;
 
         // For realtime, use shorter cache TTL
         if (!isRealtime) {
@@ -347,6 +348,36 @@ router.get(
             }
         }
 
+        const heatmapSampleSessionIds = Array.from(new Set(
+            Array.from(screenHeatmapMap.values())
+                .map((heatmap) => heatmap.sampleSessionId)
+                .filter((sessionId): sessionId is string => Boolean(sessionId))
+        ));
+        const missingSampleSessionIds = heatmapSampleSessionIds.filter((sessionId) => !sessionFrameMap.has(sessionId));
+
+        if (missingSampleSessionIds.length > 0) {
+            const sampleFrameArtifacts = await db
+                .select({
+                    id: recordingArtifacts.id,
+                    sessionId: recordingArtifacts.sessionId,
+                })
+                .from(recordingArtifacts)
+                .innerJoin(sessions, eq(sessions.id, recordingArtifacts.sessionId))
+                .where(and(
+                    inArray(recordingArtifacts.sessionId, missingSampleSessionIds),
+                    eq(recordingArtifacts.kind, 'screenshots'),
+                    eq(recordingArtifacts.status, 'ready'),
+                    eq(sessions.recordingDeleted, false)
+                ))
+                .limit(missingSampleSessionIds.length);
+
+            for (const artifact of sampleFrameArtifacts) {
+                if (!sessionFrameMap.has(artifact.sessionId)) {
+                    sessionFrameMap.set(artifact.sessionId, artifact.id);
+                }
+            }
+        }
+
         const scoredScreens = candidateScreens
             .map(([name, stats]) => {
                 const heatmap = screenHeatmapMap.get(name);
@@ -428,29 +459,28 @@ router.get(
         // Build final response with frame URLs and touch hotspots
         const screens = scoredScreens.map((screen) => {
             let screenshotUrl: string | null = null;
+            const heatmap = screenHeatmapMap.get(screen.name);
+
+            if (heatmap?.sampleSessionId && sessionFrameMap.has(heatmap.sampleSessionId)) {
+                screenshotUrl = buildHeatmapScreenshotUrl(heatmap.sampleSessionId, heatmap.screenFirstSeenMs);
+            }
 
             // Find a session that has screenshot artifacts for getting screen screenshot
-            for (const sessionId of screen.sessionIds) {
-                const artifactId = sessionFrameMap.get(sessionId);
-                if (artifactId) {
-                    screenshotUrl = `/api/session/thumbnail/${sessionId}`;
-                    break; // Found one!
+            if (!screenshotUrl) {
+                for (const sessionId of screen.sessionIds) {
+                    const artifactId = sessionFrameMap.get(sessionId);
+                    if (artifactId) {
+                        screenshotUrl = buildHeatmapScreenshotUrl(sessionId);
+                        break; // Found one!
+                    }
                 }
             }
 
             // Get touch hotspot data for this screen
-            const heatmap = screenHeatmapMap.get(screen.name);
             const touchHotspots = heatmap
                 ? bucketsToHotspots(heatmap.touchBuckets, heatmap.rageTapBuckets)
                 : [];
 
-            // If no screenshot from artifacts but we have heatmap data with a sample session, try that
-            if (!screenshotUrl && heatmap?.sampleSessionId) {
-                const artifactId = sessionFrameMap.get(heatmap.sampleSessionId);
-                if (artifactId) {
-                    screenshotUrl = `/api/session/thumbnail/${heatmap.sampleSessionId}`;
-                }
-            }
             const sessionIds = heatmap?.sampleSessionId
                 ? [heatmap.sampleSessionId, ...screen.sessionIds.filter((sessionId) => sessionId !== heatmap.sampleSessionId)]
                 : screen.sessionIds;
@@ -518,7 +548,7 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const cacheKey = `insights:alltime-heatmap:${projectIds.sort().join(',')}:v3`;
+        const cacheKey = `insights:alltime-heatmap:${projectIds.sort().join(',')}:v4`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -722,16 +752,10 @@ router.get(
             .map(([screenName, data]) => {
                 let screenshotUrl: string | null = null;
                 let screenshotSource = 'none';
-                let timestampParam = '';
-
-                // Add timestamp parameter if we have screen first seen time
-                if (data.screenFirstSeenMs) {
-                    timestampParam = `?ts=${data.screenFirstSeenMs}`;
-                }
 
                 // First, try sample session if it has screenshot artifacts
                 if (data.sampleSessionId && sessionFrameMap.has(data.sampleSessionId)) {
-                    screenshotUrl = `/api/session/thumbnail/${data.sampleSessionId}${timestampParam}`;
+                    screenshotUrl = buildHeatmapScreenshotUrl(data.sampleSessionId, data.screenFirstSeenMs);
                     screenshotSource = 'sampleSession';
                 }
 
@@ -742,7 +766,7 @@ router.get(
                     for (const sessionId of fallbackSessions) {
                         if (sessionFrameMap.has(sessionId)) {
                             // Fallback sessions don't have screen-specific timestamp, use default
-                            screenshotUrl = `/api/session/thumbnail/${sessionId}`;
+                            screenshotUrl = buildHeatmapScreenshotUrl(sessionId);
                             screenshotSource = 'fallbackSession';
                             break;
                         }

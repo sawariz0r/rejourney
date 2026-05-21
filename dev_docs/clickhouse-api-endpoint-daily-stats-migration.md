@@ -325,6 +325,7 @@ CLICKHOUSE_PASSWORD: z.string().optional(),
 CLICKHOUSE_DATABASE: z.string().default('rejourney'),
 CLICKHOUSE_ASYNC_INSERT: z.string().transform(v => v !== 'false').default('true'),
 CLICKHOUSE_CUTOVER_DATE: z.string().optional(),
+CLICKHOUSE_RAW_READS_AFTER: z.string().optional(),
 CLICKHOUSE_REQUEST_TIMEOUT_MS: z.string().transform(Number).default('5000'),
 ```
 
@@ -530,6 +531,7 @@ Create `clickhouse-secret`:
 --from-literal=CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required when ClickHouse is deployed or enabled}"
 --from-literal=CLICKHOUSE_DATABASE="${CLICKHOUSE_DATABASE:-rejourney}"
 --from-literal=CLICKHOUSE_CUTOVER_DATE="${CLICKHOUSE_CUTOVER_DATE:-}"
+--from-literal=CLICKHOUSE_RAW_READS_AFTER="${CLICKHOUSE_RAW_READS_AFTER:-}"
 ```
 
 Production defaults are safe:
@@ -539,6 +541,7 @@ CLICKHOUSE_ENABLED=false
 CLICKHOUSE_DUAL_WRITE_ENABLED=false
 CLICKHOUSE_READS_ENABLED=false
 CLICKHOUSE_CUTOVER_DATE=
+CLICKHOUSE_RAW_READS_AFTER=
 ```
 
 Important: GitHub Actions deploy does not run `scripts/k8s/k8s-sync-secrets.sh`. New required secrets can break pods if manifests reference them without `optional: true`. First merge should either:
@@ -709,6 +712,7 @@ CLICKHOUSE_USER=rejourney
 CLICKHOUSE_PASSWORD=rejourney
 CLICKHOUSE_DATABASE=rejourney
 CLICKHOUSE_CUTOVER_DATE=
+CLICKHOUSE_RAW_READS_AFTER=
 ```
 
 In local secret sync, create `clickhouse-secret` using `CLICKHOUSE_K8S_URL` for pods. The host keeps `CLICKHOUSE_URL=http://127.0.0.1:30123`.
@@ -1034,9 +1038,18 @@ Flags:
 ```env
 CLICKHOUSE_READS_ENABLED=true
 CLICKHOUSE_CUTOVER_DATE=<date dual-write became reliable>
+CLICKHOUSE_RAW_READS_AFTER=
 ```
 
 Keep Postgres writes enabled during this phase.
+
+If the read cutover happens in the middle of a UTC day, do not choose between stale imported totals and incomplete raw facts. Use the same-day bridge:
+
+1. run the final bounded backfill for today's date
+2. set `CLICKHOUSE_CUTOVER_DATE` to tomorrow's UTC date
+3. set `CLICKHOUSE_RAW_READS_AFTER` to the UTC timestamp immediately after the final backfill completes
+
+That makes ClickHouse serve already-imported daily totals for today and add raw request facts inserted after that timestamp. For exact parity, briefly pause `ingest-worker` while the final same-day backfill runs, then resume it after dashboard reads are restarted.
 
 Checks:
 
@@ -1047,6 +1060,7 @@ Checks:
 - fallback-to-Postgres count stays near zero
 - pre-cutover history appears from `api_endpoint_daily_stats_imported`
 - post-cutover facts appear from `api_endpoint_request_events`
+- same-day mid-cutover facts after `CLICKHOUSE_RAW_READS_AFTER` appear from `api_endpoint_request_events.inserted_at`
 
 ### Phase 5: Stop Postgres Writes For This Workload
 
@@ -1153,6 +1167,9 @@ Production live verification on 2026-05-21:
 - Parity for dates `< 2026-05-21` matched exactly using `api_endpoint_daily_stats_imported FINAL`: total diff 0, by-date diff 0, and by-project diff 0. Totals: 180,151,363 calls, 8,322,568 errors, 503,552,981,006 summed latency ms.
 - Reads were not enabled. Same-day Postgres totals for `2026-05-21` were much larger than ClickHouse raw facts because the current image wrote raw facts by client event date while Postgres aggregates use processing date.
 - The temporary raw ClickHouse rows from that test were truncated and dual-write was disabled again. Current live flags after the safe stop: `CLICKHOUSE_ENABLED=true`, `CLICKHOUSE_DUAL_WRITE_ENABLED=false`, `CLICKHOUSE_READS_ENABLED=false`, `CLICKHOUSE_CUTOVER_DATE=2026-05-21`.
+- After commit `44f1e9e1f3415105c9eb8f96503a6bd5012ecf29`, production image semantics were verified: raw facts now write `event_date` from artifact processing day. Dual-write was re-enabled with reads still off and new raw ClickHouse rows landed under `2026-05-21` without worker insert warnings.
+- The bounded same-day import for `2026-05-21 <= date < 2026-05-22` copied 519,390 Postgres daily-stat rows into `api_endpoint_daily_stats_imported`.
+- Same-day totals keep moving while Postgres writes remain on. For an immediate read cutover on the same UTC day, ship `CLICKHOUSE_RAW_READS_AFTER`, run one final same-day backfill, then enable reads with `CLICKHOUSE_CUTOVER_DATE=2026-05-22` and `CLICKHOUSE_RAW_READS_AFTER=<final backfill completion UTC timestamp>`.
 
 Production pre-cutover checks:
 

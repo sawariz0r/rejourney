@@ -16,6 +16,11 @@ export type ClickHouseRegionStatsRow = {
     sumLatencyMs: string | number;
 };
 
+type RawReadsAfter = {
+    date: string;
+    timestamp: string;
+};
+
 function buildRawDateCondition(startDate?: string): string {
     return startDate ? 'AND event_date >= {startDate:Date}' : '';
 }
@@ -33,6 +38,36 @@ function getClickHouseCutoverDate(): string | undefined {
     return cutoverDate;
 }
 
+function getClickHouseRawReadsAfter(): RawReadsAfter | undefined {
+    const rawReadsAfter = config.CLICKHOUSE_RAW_READS_AFTER?.trim();
+    if (!rawReadsAfter) return undefined;
+
+    const parsed = new Date(rawReadsAfter);
+    if (Number.isNaN(parsed.getTime())) {
+        throw new Error(`Invalid CLICKHOUSE_RAW_READS_AFTER value: ${rawReadsAfter}`);
+    }
+
+    const iso = parsed.toISOString();
+    return {
+        date: iso.slice(0, 10),
+        timestamp: iso.slice(0, 23).replace('T', ' '),
+    };
+}
+
+function buildRawCutoverCondition(rawReadsAfter?: RawReadsAfter): string {
+    if (!rawReadsAfter) return 'AND event_date >= {cutoverDate:Date}';
+
+    return `
+              AND (
+                event_date >= {cutoverDate:Date}
+                OR (
+                  event_date = {rawReadsAfterDate:Date}
+                  AND inserted_at > toDateTime64({rawReadsAfter:String}, 3, 'UTC')
+                )
+              )
+        `;
+}
+
 export function canReadApiEndpointStatsFromClickHouse(): boolean {
     return isClickHouseReadsEnabled();
 }
@@ -44,10 +79,15 @@ export async function queryApiEndpointStatusRowsFromClickHouse(params: {
     if (!canReadApiEndpointStatsFromClickHouse() || params.projectIds.length === 0) return [];
 
     const cutoverDate = getClickHouseCutoverDate();
+    const rawReadsAfter = cutoverDate ? getClickHouseRawReadsAfter() : undefined;
     const queryParams = {
         projectIds: params.projectIds,
         ...(params.startDate ? { startDate: params.startDate } : {}),
         ...(cutoverDate ? { cutoverDate } : {}),
+        ...(rawReadsAfter ? {
+            rawReadsAfterDate: rawReadsAfter.date,
+            rawReadsAfter: rawReadsAfter.timestamp,
+        } : {}),
     };
     const query = cutoverDate
         ? `
@@ -75,7 +115,7 @@ export async function queryApiEndpointStatusRowsFromClickHouse(params: {
                 '' AS statusCodeBreakdownJson
             FROM api_endpoint_request_events
             WHERE project_id IN {projectIds:Array(UUID)}
-              AND event_date >= {cutoverDate:Date}
+              ${buildRawCutoverCondition(rawReadsAfter)}
               ${buildRawDateCondition(params.startDate)}
             GROUP BY endpoint, status_code
         `
@@ -109,10 +149,15 @@ export async function queryRegionStatsFromClickHouse(params: {
     if (!canReadApiEndpointStatsFromClickHouse()) return [];
 
     const cutoverDate = getClickHouseCutoverDate();
+    const rawReadsAfter = cutoverDate ? getClickHouseRawReadsAfter() : undefined;
     const queryParams = {
         projectId: params.projectId,
         startDate: params.startDate,
         ...(cutoverDate ? { cutoverDate } : {}),
+        ...(rawReadsAfter ? {
+            rawReadsAfterDate: rawReadsAfter.date,
+            rawReadsAfter: rawReadsAfter.timestamp,
+        } : {}),
     };
     const query = cutoverDate
         ? `
@@ -140,7 +185,7 @@ export async function queryRegionStatsFromClickHouse(params: {
                     sum(duration_ms) AS sumLatencyMs
                 FROM api_endpoint_request_events
                 WHERE project_id = {projectId:UUID}
-                  AND event_date >= {cutoverDate:Date}
+                  ${buildRawCutoverCondition(rawReadsAfter)}
                   AND event_date >= {startDate:Date}
                 GROUP BY region
             )

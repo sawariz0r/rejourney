@@ -222,7 +222,8 @@ export const KpiCardsGrid: React.FC<KpiCardsGridProps> = ({
                     const allowed = new Set(ids);
                     const filtered = parsed.visibleIds.filter((id): id is string => typeof id === 'string' && allowed.has(id));
                     if (filtered.length > 0) {
-                        setVisibleIds(filtered);
+                        const appended = ids.filter((id) => !filtered.includes(id));
+                        setVisibleIds([...filtered, ...appended]);
                     }
                 }
                 if (typeof parsed.showDetails === 'boolean') {

@@ -877,6 +877,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const [isFramesLoading, setIsFramesLoading] = useState(false);
     const [isReplayManifestLoading, setIsReplayManifestLoading] = useState(false);
     const [isReplayLoaderSettling, setIsReplayLoaderSettling] = useState(false);
+    const [revealedReplaySessionId, setRevealedReplaySessionId] = useState<string | null>(null);
     const [sessionLoadError, setSessionLoadError] = useState<SessionLoadErrorKind | null>(null);
     const [activityFilter, setActivityFilter] = useState<string>('all');
     const [currentPlaybackTime, setCurrentPlaybackTime] = useState<number>(0);
@@ -973,6 +974,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         }
 
         try {
+            setRevealedReplaySessionId(null);
             setIsCoreLoading(true);
             setIsTimelineLoading(true);
             setIsHierarchyLoading(true);
@@ -2716,6 +2718,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         return bestUrl || fallback;
     }, [isWebSession, currentPlaybackTime, eventTimestampToPlaybackSeconds, allTimelineEvents, fullSession, session]);
     const hasCurrentFullSession = Boolean(fullSession && fullSession.id === id);
+    const hasRevealedInitialReplay = revealedReplaySessionId === id;
     const recordingDeleted = (fullSession as any)?.recordingDeleted || session?.recordingDeleted || false;
     const hasSuccessfulRecording =
         (fullSession as any)?.hasSuccessfulRecording
@@ -2757,12 +2760,13 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         setIsReplayLoaderSettling(true);
         const settleTimer = window.setTimeout(() => {
             setIsReplayLoaderSettling(false);
+            setRevealedReplaySessionId(id ?? null);
         }, 140);
 
         return () => window.clearTimeout(settleTimer);
     }, [fullSession?.playbackMode, id, rrwebReplayEvents.length, rrwebReplaySegmentCount, shouldShowInitialReplayLoaderRaw]);
 
-    const shouldShowInitialReplayLoader = shouldShowInitialReplayLoaderRaw || isReplayLoaderSettling;
+    const shouldShowInitialReplayLoader = !hasRevealedInitialReplay && (shouldShowInitialReplayLoaderRaw || isReplayLoaderSettling);
 
     // ========================================================================
     // EARLY RETURNS (after all hooks)

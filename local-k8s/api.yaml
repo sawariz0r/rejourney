@@ -118,6 +118,12 @@ spec:
                   name: clickhouse-secret
                   key: CLICKHOUSE_CUTOVER_DATE
                   optional: true
+            - name: CLICKHOUSE_RAW_READS_AFTER
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-secret
+                  key: CLICKHOUSE_RAW_READS_AFTER
+                  optional: true
             - name: S3_ENDPOINT
               valueFrom:
                 secretKeyRef:
