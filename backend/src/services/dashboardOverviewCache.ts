@@ -1,6 +1,6 @@
 import { getRedis } from '../db/redis.js';
 
-export const OVERVIEW_CACHE_TTL_SECONDS = 60;
+export const OVERVIEW_CACHE_TTL_SECONDS = 300;
 
 type RedisClient = ReturnType<typeof getRedis>;
 

@@ -3485,4 +3485,101 @@ router.get(
 );
 
 
+/**
+ * Internal session core pre-warmer.
+ * GET /api/session/internal-prewarm/:id
+ *
+ * No user auth — only reachable from within the k8s cluster (session-lifecycle-worker).
+ * Computes and caches the /core response so the first real user request is a cache hit.
+ */
+router.get(
+    '/internal-prewarm/:id',
+    asyncHandler(async (req, res) => {
+        const sessionId = req.params.id;
+
+        const cached = await readCachedSessionDetail('core', sessionId);
+        if (cached) {
+            res.json({ cached: true });
+            return;
+        }
+
+        const [sessionResult] = await db
+            .select({ session: sessions, metrics: sessionMetrics })
+            .from(sessions)
+            .leftJoin(sessionMetrics, eq(sessions.id, sessionMetrics.sessionId))
+            .where(eq(sessions.id, sessionId))
+            .limit(1);
+
+        if (!sessionResult) {
+            res.status(404).end();
+            return;
+        }
+
+        const { session, metrics } = sessionResult;
+
+        const [artifactsList, aggregate, successorStartedAt] = await Promise.all([
+            getReadyArtifacts(session.id),
+            loadSessionWorkAggregate(session.id),
+            loadSuccessorSessionStartedAt({
+                sessionId: session.id,
+                projectId: session.projectId,
+                deviceId: session.deviceId,
+                startedAt: session.startedAt,
+            }),
+        ]);
+
+        const supersededByNewerVisitorSession = shouldTreatSessionAsSuperseded(session, aggregate, successorStartedAt);
+        const screenshotArtifacts = artifactsList.filter((a) => a.kind === 'screenshots');
+        const rrwebArtifacts = artifactsList.filter((a) => a.kind === 'rrweb');
+
+        const [replayBootstrap, stats] = await Promise.all([
+            loadVisualReplayBootstrap(session, screenshotArtifacts.length, rrwebArtifacts, 'none'),
+            computeSessionStats(session, metrics, artifactsList, false),
+        ]);
+
+        const basePayload = buildSessionBasePayload(
+            session,
+            metrics,
+            replayBootstrap.screenshotFrames,
+            screenshotArtifacts.length > 0,
+            deriveSessionPresentationState({
+                status: session.status,
+                platform: session.platform,
+                replayAvailable: session.replayAvailable,
+                recordingDeleted: session.recordingDeleted,
+                isReplayExpired: session.isReplayExpired,
+                lastIngestActivityAt: session.lastIngestActivityAt,
+                startedAt: session.startedAt,
+                endedAt: session.endedAt,
+                hasPendingWork: aggregate.hasPendingWork,
+                hasPendingProcessingWork: aggregate.hasPendingProcessingWork,
+                hasPendingReplayWork: aggregate.hasPendingReplayWork,
+                supersededByNewerVisitorSession,
+            }),
+            aggregate.latestReplayArtifactEndMs,
+        );
+
+        const responseBody = {
+            ...basePayload,
+            hasRecording: replayBootstrap.hasRecording,
+            playbackMode: replayBootstrap.playbackMode,
+            screenshotFrames: replayBootstrap.screenshotFrames,
+            screenshotFramesStatus: replayBootstrap.screenshotFramesStatus,
+            screenshotFrameCount: replayBootstrap.screenshotFrameCount,
+            screenshotFramesProcessedSegments: replayBootstrap.processedSegments,
+            screenshotFramesTotalSegments: replayBootstrap.totalSegments,
+            rrwebReplay: replayBootstrap.rrwebReplay,
+            stats,
+        };
+
+        if (replayBootstrap.screenshotFramesStatus !== 'preparing') {
+            const ttl = pickSessionCoreCacheTtl(session, aggregate);
+            await writeCachedSessionDetail('core', session.id, responseBody, ttl);
+        }
+
+        logger.info({ sessionId, event: 'session.core_prewarm_complete' }, 'session core prewarm complete');
+        res.json({ warmed: true });
+    }),
+);
+
 export default router;

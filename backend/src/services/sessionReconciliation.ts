@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { db, projects, recordingArtifacts, sessionMetrics, sessions } from '../db/client.js';
 import { logger } from '../logger.js';
+import { config } from '../config.js';
 import { updateDeviceUsage } from './recording.js';
 import { enqueueSessionBackupCandidate } from './sessionBackupQueue.js';
 import {
@@ -219,6 +220,14 @@ export async function reconcileSessionState(sessionId: string, now = new Date())
                 requestCount: 1,
                 minutesRecorded,
             });
+
+            // Fire-and-forget: pre-warm the session /core cache so the first
+            // user to open this session gets a Redis hit instead of waiting
+            // for S3 signed-URL generation inline in the request path.
+            if (config.INTERNAL_DASHBOARD_BASE_URL) {
+                fetch(`${config.INTERNAL_DASHBOARD_BASE_URL}/api/session/internal-prewarm/${sessionId}`)
+                    .catch((err) => logger.warn({ err, sessionId }, 'session.core_prewarm_request_failed'));
+            }
         }
 
         try {

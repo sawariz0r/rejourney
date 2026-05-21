@@ -127,6 +127,10 @@ const envSchema = z.object({
     ADDITIONAL_DASHBOARD_ORIGINS: z.string().optional(),
     PUBLIC_API_URL: z.string().optional(),
     PUBLIC_INGEST_URL: z.string().optional(),
+    // Internal service-to-service base URL for the api-dashboard pod.
+    // Set to http://api-dashboard:3000 in k8s so the lifecycle worker can
+    // trigger session core pre-warming without going through the public ingress.
+    INTERNAL_DASHBOARD_BASE_URL: z.string().optional(),
 
     // Limits
     MAX_RECORDING_MINUTES: z.string().transform(Number).default('10'),
