@@ -17,6 +17,7 @@ export const Heatmaps: React.FC = () => {
         <div className="rejourney-heatmaps-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-slate-900">
             <DashboardPageHeader
                 title="Heatmaps"
+                subtitle="Inspect interaction density by route or screen, with full-page maps for web journeys."
                 icon={<MousePointer2 className="w-6 h-6" />}
                 iconColor="bg-[#fce7f3]"
             >

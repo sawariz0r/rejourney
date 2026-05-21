@@ -548,6 +548,12 @@ class ReplayOrchestrator private constructor(private val context: Context) {
         captureNativeSheets = (cfg["captureNativeSheets"] as? Boolean) ?: true
         wifiRequired = (cfg["wifiOnly"] as? Boolean) ?: false
         frameBundleSize = (cfg["screenshotBatchSize"] as? Int) ?: 3
+        InteractionRecorder.shared?.configureRageTapDetection(
+            enabled = (cfg["detectRageTaps"] as? Boolean) ?: true,
+            threshold = (cfg["rageTapThreshold"] as? Int) ?: 3,
+            timeWindowMs = ((cfg["rageTapTimeWindow"] as? Number)?.toLong()) ?: 500L,
+            radius = ((cfg["rageTapRadius"] as? Number)?.toFloat()) ?: 50f
+        )
         SegmentDispatcher.shared.collectGeoLocation = (cfg["collectGeoLocation"] as? Boolean) ?: true
         SegmentDispatcher.shared.observeOnly = (cfg["observeOnly"] as? Boolean) ?: false
     }

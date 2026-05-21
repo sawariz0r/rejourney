@@ -40,6 +40,7 @@ interface JSErrorReport {
   osVersion?: string;
   appVersion?: string;
   status?: string;
+  canOpenReplay?: boolean;
 }
 
 const getStatusVariant = (status?: string): 'danger' | 'warning' | 'success' | 'neutral' | 'info' => {
@@ -123,6 +124,7 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
   }, [errorId, currentProject, contextLoading]);
 
   const stackText = errorData?.stack || '';
+  const canOpenReplay = Boolean(errorData?.sessionId && errorData?.canOpenReplay);
 
   const handleCopyStack = () => {
     if (!stackText) return;
@@ -167,7 +169,7 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
           <NeoCard variant="flat" className="p-8 text-center">
             <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-rose-500" />
             <p className="text-lg font-semibold text-slate-900">{fetchError || 'Error not found.'}</p>
-            <NeoButton variant="primary" className="mt-5" onClick={() => navigate(`${pathPrefix}/stability/errors`)}>
+            <NeoButton variant="primary" className="mt-5" onClick={() => navigate(`${pathPrefix}/stability?filter=errors`)}>
               Back to Errors
             </NeoButton>
           </NeoCard>
@@ -188,18 +190,20 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
           variant="secondary"
           size="sm"
           leftIcon={<ArrowLeft size={14} />}
-          onClick={() => navigate(`${pathPrefix}/stability/errors`)}
+          onClick={() => navigate(`${pathPrefix}/stability?filter=errors`)}
         >
           Back to Errors
         </NeoButton>
-        <NeoButton
-          variant="primary"
-          size="sm"
-          leftIcon={<Play size={14} />}
-          onClick={() => navigate(`${pathPrefix}/sessions/${errorData.sessionId}`)}
-        >
-          Replay Session
-        </NeoButton>
+        {canOpenReplay && (
+          <NeoButton
+            variant="primary"
+            size="sm"
+            leftIcon={<Play size={14} />}
+            onClick={() => navigate(`${pathPrefix}/sessions/${errorData.sessionId}`)}
+          >
+            Replay Session
+          </NeoButton>
+        )}
       </DashboardPageHeader>
 
       <div className="mx-auto w-full max-w-[1800px] space-y-4 px-6 pt-6">

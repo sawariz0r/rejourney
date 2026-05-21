@@ -33,8 +33,8 @@ import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 
 const formatCompact = (value: number): string => {
-  if (value >= 1_000_000) return `\${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `\${(value / 1_000).toFixed(1)}k`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
   return value.toString();
 };
 
@@ -111,7 +111,7 @@ export const ErrorsList: React.FC = () => {
 
     setExpandedGroup(targetGroup.fingerprint);
     setTimeout(() => {
-      const element = document.getElementById(`error-group-\${targetGroup.fingerprint}`);
+      const element = document.getElementById(`error-group-${targetGroup.fingerprint}`);
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
@@ -131,7 +131,7 @@ export const ErrorsList: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `error-trace-\${id}-\${Date.now()}.txt`;
+    link.download = `error-trace-${id}-${Date.now()}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -204,19 +204,20 @@ export const ErrorsList: React.FC = () => {
               const topDeviceLabel = formatDeviceModel(topDevice, 'Unknown');
               const versionList = Object.keys(group.affectedVersions);
               const topVersion = versionList[0] || '?';
+              const canOpenReplay = Boolean(group.sampleError?.sessionId && group.sampleError.canOpenReplay);
 
               return (
                 <div
                   key={group.fingerprint}
-                  id={`error-group-\${group.fingerprint}`}
-                  className={`transition-colors \${isExpanded ? 'bg-rose-50/20' : 'hover:bg-slate-50'}`}
+                  id={`error-group-${group.fingerprint}`}
+                  className={`transition-colors ${isExpanded ? 'bg-rose-50/20' : 'hover:bg-slate-50'}`}
                 >
                   <div
                     className="group/row flex cursor-pointer items-center gap-4 px-4 py-3"
                     onClick={() => setExpandedGroup(isExpanded ? null : group.fingerprint)}
                   >
                     <div className="flex w-6 shrink-0 justify-center">
-                      <div className={`h-2.5 w-2.5 rounded-full \${isExpanded ? 'bg-rose-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-slate-300 group-hover/row:bg-rose-400'} transition-all`} />
+                      <div className={`h-2.5 w-2.5 rounded-full ${isExpanded ? 'bg-rose-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-slate-300 group-hover/row:bg-rose-400'} transition-all`} />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -260,7 +261,7 @@ export const ErrorsList: React.FC = () => {
 
                     <div className="flex w-8 shrink-0 justify-end">
                       <div
-                        className={`flex h-6 w-6 items-center justify-center rounded text-slate-400 transition \${
+                        className={`flex h-6 w-6 items-center justify-center rounded text-slate-400 transition ${
                           isExpanded ? 'rotate-180 text-rose-600 bg-rose-100' : 'group-hover/row:bg-slate-200 group-hover/row:text-slate-600'
                         }`}
                       >
@@ -336,21 +337,21 @@ export const ErrorsList: React.FC = () => {
                               <p className="text-xs text-rose-700/80 mb-4 leading-relaxed">
                                 Watch the exact user journey leading up to this exception to understand the steps to reproduce.
                               </p>
-                              {group.sampleError.sessionId ? (
+                              {canOpenReplay ? (
                                 <NeoButton 
                                   variant="primary" 
                                   className="w-full justify-center bg-rose-500 hover:bg-rose-600 focus:ring-rose-500 text-white border-0 py-2 shadow-sm"
                                   onClick={(e) => {
                                       e.stopPropagation();
-                                      navigate(`\${pathPrefix}/sessions/\${group.sampleError.sessionId}`);
+                                      navigate(`${pathPrefix}/sessions/${group.sampleError.sessionId}`);
                                   }}
                                 >
                                   Play Session
                                 </NeoButton>
                               ) : (
-                                <NeoButton variant="secondary" disabled className="w-full justify-center">
-                                  No Session Linked
-                                </NeoButton>
+                                <p className="rounded-md border border-rose-200 bg-white px-3 py-2 text-xs font-medium text-rose-700">
+                                  Replay unavailable for this sampled occurrence.
+                                </p>
                               )}
                            </NeoCard>
 

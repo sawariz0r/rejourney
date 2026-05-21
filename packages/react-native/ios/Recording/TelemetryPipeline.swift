@@ -74,6 +74,21 @@ public final class TelemetryPipeline: NSObject {
     private var _lastTapY: UInt64 = 0
     private var _lastTapTs: Int64 = 0
     private var _lastResponseTs: Int64 = 0
+    private let _keyboardStateLock = NSLock()
+    private var _isKeyboardVisible = false
+
+    @objc public var isKeyboardVisible: Bool {
+        _keyboardStateLock.lock()
+        let cached = _isKeyboardVisible
+        _keyboardStateLock.unlock()
+
+        guard !cached, Thread.isMainThread else { return cached }
+        let scanned = _hasVisibleKeyboardWindow()
+        if scanned {
+            _setKeyboardVisible(true)
+        }
+        return scanned
+    }
     
     /// Call this when haptic feedback, animations, or other UI responses occur.
     /// This prevents the current tap from being marked as a "dead tap".
@@ -100,6 +115,17 @@ public final class TelemetryPipeline: NSObject {
         
         NotificationCenter.default.addObserver(self, selector: #selector(_appSuspending), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(_appSuspending), name: UIApplication.willTerminateNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(_keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(_keyboardDidShow), name: UIResponder.keyboardDidShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(_keyboardDidHide), name: UIResponder.keyboardDidHideNotification, object: nil)
+        if Thread.isMainThread {
+            _setKeyboardVisible(_hasVisibleKeyboardWindow())
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self._setKeyboardVisible(self._hasVisibleKeyboardWindow())
+            }
+        }
     }
     
     /// Pause the heartbeat timer when the app goes to background.
@@ -238,6 +264,42 @@ public final class TelemetryPipeline: NSObject {
                 self?._finishDrainIfNeeded()
             }
         }
+    }
+
+    @objc private func _keyboardWillShow() {
+        _setKeyboardVisible(true)
+        _cancelDeadTapTimer()
+    }
+
+    @objc private func _keyboardDidShow() {
+        _setKeyboardVisible(true)
+        _cancelDeadTapTimer()
+    }
+
+    @objc private func _keyboardDidHide() {
+        _setKeyboardVisible(_hasVisibleKeyboardWindow())
+    }
+
+    private func _setKeyboardVisible(_ visible: Bool) {
+        _keyboardStateLock.lock()
+        _isKeyboardVisible = visible
+        _keyboardStateLock.unlock()
+    }
+
+    private func _hasVisibleKeyboardWindow() -> Bool {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .contains { window in
+                guard !window.isHidden, window.alpha > 0.01, window.bounds.width > 0, window.bounds.height > 0 else {
+                    return false
+                }
+                let className = String(describing: type(of: window))
+                return className.contains("UIRemoteKeyboardWindow") ||
+                    className.contains("UITextEffectsWindow") ||
+                    className.contains("UIInputSetHostView") ||
+                    className.contains("UIKeyboard")
+            }
     }
     
     private func _endBackgroundTask() {
@@ -502,7 +564,7 @@ public final class TelemetryPipeline: NSObject {
         
         // Skip dead tap detection for interactive elements (buttons, touchables, etc.)
         // These are expected to respond, so we don't need to track "no response" as dead.
-        if isInteractive {
+        if isInteractive || isKeyboardVisible {
             // Interactive elements are assumed to respond — no dead tap timer needed
             return
         }
@@ -517,7 +579,7 @@ public final class TelemetryPipeline: NSObject {
             guard let self = self else { return }
             self._deadTapTimer = nil
             // Only fire dead tap if no response event occurred since this tap
-            if self._lastResponseTs <= self._lastTapTs {
+            if !self.isKeyboardVisible && self._lastResponseTs <= self._lastTapTs {
                 self.recordDeadTapEvent(label: self._lastTapLabel, x: self._lastTapX, y: self._lastTapY)
                 ReplayOrchestrator.shared.incrementDeadTapTally()
             }
@@ -527,6 +589,8 @@ public final class TelemetryPipeline: NSObject {
     }
     
     @objc public func recordRageTapEvent(label: String, x: UInt64, y: UInt64, count: Int) {
+        _cancelDeadTapTimer()
+        guard !isKeyboardVisible else { return }
         _enqueue([
             "type": "gesture",
             "gestureType": "rage_tap",
@@ -541,6 +605,7 @@ public final class TelemetryPipeline: NSObject {
     }
     
     @objc public func recordDeadTapEvent(label: String, x: UInt64, y: UInt64) {
+        guard !isKeyboardVisible else { return }
         _enqueue([
             "type": "gesture",
             "gestureType": "dead_tap",

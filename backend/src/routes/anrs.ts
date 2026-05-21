@@ -27,6 +27,14 @@ function excludeWebSyntheticLongTaskAnrs(): SQL {
     )`;
 }
 
+function canOpenReplayFromSessionFields(session: {
+    replayAvailable?: boolean | null;
+    recordingDeleted?: boolean | null;
+    isReplayExpired?: boolean | null;
+}): boolean {
+    return Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired;
+}
+
 /**
  * Get ANRs for a project
  */
@@ -101,6 +109,9 @@ router.get(
                 userDisplayId: sessions.userDisplayId,
                 anonymousHash: sessions.anonymousHash,
                 deviceId: sessions.deviceId,
+                replayAvailable: sessions.replayAvailable,
+                recordingDeleted: sessions.recordingDeleted,
+                isReplayExpired: sessions.isReplayExpired,
             })
             .from(anrs)
             .leftJoin(sessions, eq(anrs.sessionId, sessions.id))
@@ -120,6 +131,7 @@ router.get(
             occurrenceCount: number;
             userSet: Set<string>;
             groupKey: string;
+            canOpenReplay: boolean;
         };
 
         const groups = new Map<string, Group>();
@@ -132,6 +144,7 @@ router.get(
             });
             const fingerprint = generateANRFingerprint(stackTrace || anr.threadState || '');
             const groupKey = `anrgrp_${crypto.createHash('sha1').update(fingerprint).digest('hex').slice(0, 16)}`;
+            const canOpenReplay = canOpenReplayFromSessionFields(row);
 
             let group = groups.get(groupKey);
             if (!group) {
@@ -147,8 +160,14 @@ router.get(
                     occurrenceCount: 0,
                     userSet: new Set<string>(),
                     groupKey,
+                    canOpenReplay,
                 };
                 groups.set(groupKey, group);
+            }
+
+            if (!group.canOpenReplay && canOpenReplay) {
+                group.sessionId = anr.sessionId ?? null;
+                group.canOpenReplay = true;
             }
 
             group.occurrenceCount += anr.occurrenceCount ?? 1;
@@ -177,6 +196,7 @@ router.get(
             occurrenceCount: g.occurrenceCount,
             userCount: g.userSet.size,
             groupKey: g.groupKey,
+            canOpenReplay: g.canOpenReplay,
         }));
 
         res.json({
@@ -217,21 +237,29 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const [anr] = await db
-            .select()
+        const [row] = await db
+            .select({
+                anr: anrs,
+                replayAvailable: sessions.replayAvailable,
+                recordingDeleted: sessions.recordingDeleted,
+                isReplayExpired: sessions.isReplayExpired,
+            })
             .from(anrs)
+            .leftJoin(sessions, eq(anrs.sessionId, sessions.id))
             .where(and(eq(anrs.id, anrId), eq(anrs.projectId, projectId)))
             .limit(1);
 
-        if (!anr) {
+        if (!row) {
             throw ApiError.notFound('ANR not found');
         }
+        const anr = row.anr;
         res.json({
             ...anr,
             threadState: resolveAnrStackTrace({
                 threadState: anr.threadState,
                 deviceMetadata: anr.deviceMetadata,
             }),
+            canOpenReplay: canOpenReplayFromSessionFields(row),
         });
     })
 );

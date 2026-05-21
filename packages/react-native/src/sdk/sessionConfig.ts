@@ -29,6 +29,10 @@ export interface NativeStartOptions {
   captureScreen?: boolean;
   /** When true, telemetry is captured but visual recording is suppressed */
   observeOnly?: boolean;
+  detectRageTaps?: boolean;
+  rageTapThreshold?: number;
+  rageTapTimeWindow?: number;
+  rageTapRadius?: number;
 }
 
 export interface StartGateResult {
@@ -64,6 +68,19 @@ export function normalizeCaptureFps(captureFPS?: number): number | undefined {
     MIN_CAPTURE_FPS,
     Math.min(MAX_CAPTURE_FPS, Math.round(captureFPS))
   );
+}
+
+function normalizePositiveNumber(value?: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+
+  return value;
+}
+
+function normalizePositiveInteger(value?: number): number | undefined {
+  const normalized = normalizePositiveNumber(value);
+  return normalized === undefined ? undefined : Math.round(normalized);
 }
 
 export function buildNativeStartOptions(
@@ -123,6 +140,25 @@ export function buildNativeStartOptions(
     // visualCaptureEnabled. Without this, _applySettings defaults captureScreen to
     // true and clobbers the visualCaptureEnabled=false written by setRemoteConfig.
     options.captureScreen = false;
+  }
+
+  if (typeof config?.detectRageTaps === 'boolean') {
+    options.detectRageTaps = config.detectRageTaps;
+  }
+
+  const rageTapThreshold = normalizePositiveInteger(config?.rageTapThreshold);
+  if (rageTapThreshold !== undefined) {
+    options.rageTapThreshold = rageTapThreshold;
+  }
+
+  const rageTapTimeWindow = normalizePositiveInteger(config?.rageTapTimeWindow);
+  if (rageTapTimeWindow !== undefined) {
+    options.rageTapTimeWindow = rageTapTimeWindow;
+  }
+
+  const rageTapRadius = normalizePositiveNumber(config?.rageTapRadius);
+  if (rageTapRadius !== undefined) {
+    options.rageTapRadius = rageTapRadius;
   }
 
   return options;

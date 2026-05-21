@@ -1643,6 +1643,25 @@ export const getDemoFullSession = (sessionId?: string) => (
 const demoUserIds = (prefix: string, count: number) =>
     Array.from({ length: count }, (_, index) => `${prefix}-user-${String(index + 1).padStart(3, '0')}`);
 
+const demoStabilityLogs = (baseTime: string, area: string, issue: string, terminalEntry: string) => {
+    const levels = ['INFO', 'DEBUG', 'TRACE', 'DEBUG', 'INFO', 'WARN'];
+    const states = ['hydrating', 'normalizing', 'diffing', 'rendering', 'committing', 'observing'];
+    const entries = Array.from({ length: 44 }, (_, index) => {
+        const seconds = String((index * 3) % 60).padStart(2, '0');
+        const millis = String(100 + ((index * 37) % 899)).padStart(3, '0');
+        const level = levels[index % levels.length];
+        const state = states[index % states.length];
+        return `[${baseTime}:${seconds}.${millis}] ${level} ${area} issue=${issue} checkpoint=${String(index + 1).padStart(2, '0')} state=${state} requestId=req_demo_${String(index + 91).padStart(4, '0')} queueDepth=${(index % 9) + 1} payloadBytes=${1432 + index * 211} route="/checkout/summary?coupon=SPRING25&source=demo-fixture" viewState="cartSnapshot pendingPromotion normalizedTotals staleComponentBoundary retryBudget=${3 - (index % 3)}"`;
+    });
+    return [...entries, terminalEntry];
+};
+
+const demoLongStackFrames = (namespace: string, fileName: string, count: number = 38) =>
+    Array.from(
+        { length: count },
+        (_, index) => `    at ${namespace}.diagnosticFrame${String(index + 1).padStart(2, '0')} (${fileName}:${120 + index}:${17 + (index % 9)})`
+    ).join('\n');
+
 const demoIssueItems: Issue[] = [
     {
         id: 'issue-crash-1',
@@ -1869,6 +1888,12 @@ const demoCrashOverviewGroups = [
         affectedDevices: { 'iPhone 15 Pro': 132, 'iPhone 14': 92, 'iPhone 13': 50, 'iPad Pro 12.9"': 38 },
         affectedVersions: { '2.5.0': 171, '2.4.1': 96, '2.4.0': 45 },
         platform: 'ios',
+        logs: demoStabilityLogs(
+            '19:41',
+            'CheckoutCoordinator',
+            'promotion-total-null-line-items',
+            '[19:41:52.226] ERROR NSInvalidArgumentException selector=lineItems screen=Checkout cartId=cart_8f21'
+        ),
     },
     {
         id: 'crash-group-android-null-product-card',
@@ -1882,6 +1907,12 @@ const demoCrashOverviewGroups = [
         affectedDevices: { 'Samsung Galaxy S24': 88, 'Pixel 8 Pro': 61, 'Samsung Galaxy S23': 49, 'OnePlus 12': 30 },
         affectedVersions: { '2.5.0': 119, '2.4.1': 79, '2.4.0': 30 },
         platform: 'android',
+        logs: demoStabilityLogs(
+            '19:18',
+            'ProductCardFragment',
+            'null-price-display-string',
+            '[19:18:09.470] ERROR NullPointerException ProductCardFragment.kt:214 sku=JK-481 variant=midnight'
+        ),
     },
     {
         id: 'crash-group-exc-bad-access-image-cache',
@@ -1895,6 +1926,12 @@ const demoCrashOverviewGroups = [
         affectedDevices: { 'iPhone 15 Pro': 72, 'iPhone 15': 44, 'iPhone 14': 39, 'iPad Pro 12.9"': 21 },
         affectedVersions: { '2.4.1': 101, '2.4.0': 75 },
         platform: 'ios',
+        logs: demoStabilityLogs(
+            '18:55',
+            'ReplayThumbnailCell',
+            'released-surface-during-draw',
+            '[18:55:31.019] ERROR EXC_BAD_ACCESS address=0x0000000000000018 key=hero_tile_12 refCount=0'
+        ),
     },
     {
         id: 'crash-group-sigabrt-collection-mutated',
@@ -1981,7 +2018,8 @@ export const demoCrashReports: any[] = [
 3   RejourneyDemo                  0x0000000102f84a18 CartTotalView.recalculateTotals() + 88
 4   RejourneyDemo                  0x0000000102f83ef0 CheckoutViewController.refreshSummary() + 214
 5   RejourneyDemo                  0x0000000102f80d74 CheckoutCoordinator.applyPromotion(_:) + 119
-6   UIKitCore                      0x0000000188cf6c90 -[UIApplication sendAction:to:from:forEvent:]`,
+6   UIKitCore                      0x0000000188cf6c90 -[UIApplication sendAction:to:from:forEvent:]
+${demoLongStackFrames('CheckoutRecoveryPipeline', 'CheckoutRecoveryPipeline.swift', 42)}`,
     },
     {
         id: 'crash-android-null-product-card',
@@ -2134,7 +2172,8 @@ const demoErrorRecords = [
     at updateFunctionComponent (react-dom.development.js:19588:20)
     at beginWork (react-dom.development.js:21601:16)
     at performUnitOfWork (react-dom.development.js:26557:12)
-    at workLoopSync (react-dom.development.js:26466:5)`,
+    at workLoopSync (react-dom.development.js:26466:5)
+${demoLongStackFrames('CheckoutRenderGuard', 'CheckoutRenderGuard.tsx', 40)}`,
         screenName: 'Checkout',
         deviceModel: 'Chrome on Windows',
         osVersion: 'Windows 11',
@@ -2147,6 +2186,12 @@ const demoErrorRecords = [
         userCount: 321,
         affectedDevices: { 'Chrome on Windows': 253, 'Safari on iPhone': 176, 'Chrome on macOS': 152, 'Firefox on Linux': 103 },
         affectedVersions: { 'web-2026.05.1': 411, 'web-2026.05.0': 273 },
+        logs: demoStabilityLogs(
+            '20:05',
+            'CheckoutSummary',
+            'undefined-line-items',
+            '[20:05:11.096] ERROR TypeError Cannot read properties of undefined (reading "lineItems") cartId=web_cart_442'
+        ),
     },
     {
         id: 'err-payment-intent',
@@ -2175,6 +2220,12 @@ const demoErrorRecords = [
         userCount: 258,
         affectedDevices: { 'Chrome on Android': 171, 'Safari on iPhone': 132, 'Chrome on Windows': 96, 'Chrome on macOS': 73 },
         affectedVersions: { 'web-2026.05.1': 318, 'web-2026.05.0': 154 },
+        logs: demoStabilityLogs(
+            '19:46',
+            'PaymentSheet',
+            'stale-cart-token',
+            '[19:46:03.904] ERROR PaymentIntentError Payment validation rejected stale cart token token=cart_tok_stale_91'
+        ),
     },
     {
         id: 'err-inventory-timeout',
@@ -2202,6 +2253,12 @@ const demoErrorRecords = [
         userCount: 204,
         affectedDevices: { 'Chrome on Windows': 142, 'Edge on Windows': 88, 'Chrome on Android': 74, 'Safari on iPhone': 52 },
         affectedVersions: { 'web-2026.05.0': 229, 'web-2026.04.2': 127 },
+        logs: demoStabilityLogs(
+            '19:32',
+            'InventoryClient',
+            'variant-refresh-timeout',
+            '[19:32:25.384] ERROR UnhandledPromiseRejection Inventory refresh timed out after product variant change sku=SHOE-92 color=bone'
+        ),
     },
     {
         id: 'err-search-abort',
@@ -2309,6 +2366,7 @@ const demoErrorGroups = demoErrorRecords.map((error) => ({
         stack: error.stack,
         screenName: error.screenName,
         platform: error.platform,
+        logs: error.logs || [],
     },
 }));
 
@@ -2348,7 +2406,8 @@ const demoAnrRecords = [
     at com.rejourney.demo.checkout.CheckoutActivity.renderShippingOptions(CheckoutActivity.kt:332)
     at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:3123)
     at android.os.Looper.loopOnce(Looper.java:226)
-    at android.app.ActivityThread.main(ActivityThread.java:8910)`,
+    at android.app.ActivityThread.main(ActivityThread.java:8910)
+${demoLongStackFrames('ShippingMainThreadProbe', 'ShippingMainThreadProbe.kt', 39)}`,
         deviceMetadata: {
             deviceModel: 'Samsung Galaxy S24',
             model: 'Samsung Galaxy S24',
@@ -2362,6 +2421,12 @@ const demoAnrRecords = [
         occurrenceCount: 164,
         userCount: 97,
         groupKey: 'checkout-shipping-rates',
+        logs: demoStabilityLogs(
+            '19:58',
+            'CheckoutActivity',
+            'blocking-shipping-rates',
+            '[19:58:53.520] ERROR ANR detected main_thread_blocked durationMs=9400 addressId=addr_102'
+        ),
     },
     {
         id: 'anr-home-image-decode',
@@ -2389,6 +2454,12 @@ const demoAnrRecords = [
         occurrenceCount: 118,
         userCount: 73,
         groupKey: 'home-image-decode',
+        logs: demoStabilityLogs(
+            '19:23',
+            'HomeFeedViewController',
+            'image-decode-main-thread',
+            '[19:23:25.974] ERROR ANR detected image_decode_main_thread durationMs=7200 image=hero_04.png frameDrops=196'
+        ),
     },
     {
         id: 'anr-cart-diffable-snapshot',

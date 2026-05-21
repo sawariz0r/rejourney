@@ -35,11 +35,15 @@ export const SENSITIVE_QUERY_KEYS = [
 ];
 
 export const DEFAULT_ALLOWED_ATTRIBUTION_PARAMS = [
+  'utm_id',
   'utm_source',
   'utm_medium',
   'utm_campaign',
   'utm_term',
   'utm_content',
+  'utm_source_platform',
+  'utm_creative_format',
+  'utm_marketing_tactic',
 ];
 
 export const CLICK_ID_PARAMS = [

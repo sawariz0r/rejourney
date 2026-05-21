@@ -22,5 +22,6 @@ export type {
   RrwebChunkEnvelope,
   WebAttributionContext,
   WebDeviceInfo,
+  WebLinkClickContext,
   WebRecordingContext,
 } from './sdk/types.js';

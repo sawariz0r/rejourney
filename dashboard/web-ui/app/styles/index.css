@@ -535,6 +535,52 @@
     animation: scale-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
+  @keyframes dashboard-auth-transition-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.98);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes dashboard-auth-transition-progress {
+    0% {
+      transform: translateX(-100%);
+    }
+
+    55% {
+      transform: translateX(0);
+    }
+
+    100% {
+      transform: translateX(105%);
+    }
+  }
+
+  .dashboard-auth-transition {
+    animation: dashboard-auth-transition-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .dashboard-auth-transition-progress {
+    width: 70%;
+    animation: dashboard-auth-transition-progress 1.05s cubic-bezier(0.76, 0, 0.24, 1) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dashboard-auth-transition,
+    .dashboard-auth-transition-progress {
+      animation: none;
+    }
+
+    .dashboard-auth-transition-progress {
+      width: 100%;
+    }
+  }
+
   /* Reveal Utilities (for Intersection Observer) */
   .reveal {
     opacity: 0;
@@ -1153,6 +1199,159 @@
   }
 }
 
+.rejourney-project-settings-page :where(.dashboard-surface, .dashboard-panel) {
+  border-color: #dadce0 !important;
+  border-width: 1px !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.rejourney-project-settings-page :where(.dashboard-inner-surface) {
+  border-color: #dadce0 !important;
+  border-width: 1px !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.rejourney-project-settings-page :where(input:not([type="checkbox"]):not([type="range"]), textarea, select) {
+  border-color: #dadce0 !important;
+  border-radius: 0 !important;
+}
+
+.rejourney-project-settings-page :where(input:not([type="checkbox"]):not([type="range"]):focus, textarea:focus, select:focus) {
+  border-color: #0f172a !important;
+  box-shadow: 0 0 0 1px #0f172a !important;
+}
+
+.rejourney-project-settings-page :where(button, a),
+.rejourney-project-settings-page .rounded,
+.rejourney-project-settings-page .rounded-md,
+.rejourney-project-settings-page .rounded-lg,
+.rejourney-project-settings-page .rounded-xl,
+.rejourney-project-settings-page .rounded-2xl,
+.rejourney-project-settings-page .rounded-full,
+.rejourney-project-settings-page .rounded-none {
+  border-radius: 0 !important;
+}
+
+.rejourney-project-settings-page :where(button.border-2, a.border-2) {
+  border-color: #dadce0 !important;
+  border-width: 1px !important;
+  box-shadow: none !important;
+}
+
+.rejourney-project-settings-page :where(button.border-2:hover:not(:disabled), a.border-2:hover) {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.rejourney-project-settings-page :where(button.bg-black, .bg-black, .bg-slate-950) {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+
+.rejourney-project-settings-page :where(button.bg-black:hover:not(:disabled), .hover\:bg-slate-800:hover) {
+  background-color: #111827 !important;
+}
+
+.rejourney-project-settings-page :where(.bg-blue-50, .bg-cyan-50, .bg-\[\#67e8f9\]) {
+  background-color: #f8fafc !important;
+}
+
+.rejourney-project-settings-page .settings-option-card[aria-pressed="true"] {
+  border-color: #0f172a !important;
+  background: #f8fafc !important;
+  box-shadow: inset 3px 0 0 #0f172a !important;
+}
+
+.rejourney-project-settings-page .project-settings-status-pill {
+  border-radius: 0;
+  text-transform: uppercase;
+}
+
+.rejourney-project-settings-page .project-settings-status-neutral {
+  border-color: #dadce0;
+  background: #ffffff;
+  color: #334155;
+}
+
+.rejourney-project-settings-page .project-settings-status-success {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.rejourney-project-settings-page .project-settings-status-warning {
+  border-color: #facc15;
+  background: #fef9c3;
+  color: #713f12;
+}
+
+.rejourney-project-settings-page .project-settings-status-danger {
+  border-color: #fb7185;
+  background: #ffe4e6;
+  color: #881337;
+}
+
+.rejourney-project-settings-page .project-settings-platform-pill,
+.rejourney-project-settings-page .project-settings-stepper,
+.rejourney-project-settings-page .project-settings-switch,
+.rejourney-project-settings-page .project-settings-switch span,
+.rejourney-project-settings-page .project-settings-range-input,
+.rejourney-project-settings-page .project-settings-range-input::-webkit-slider-runnable-track,
+.rejourney-project-settings-page .project-settings-range-input::-webkit-slider-thumb,
+.rejourney-project-settings-page .project-settings-range-input::-moz-range-track,
+.rejourney-project-settings-page .project-settings-range-input::-moz-range-thumb {
+  border-radius: 0 !important;
+}
+
+.rejourney-project-settings-page .project-settings-switch-on {
+  border-color: #0f172a;
+  background: #0f172a;
+}
+
+.rejourney-project-settings-page .project-settings-range-card input[type="range"] {
+  accent-color: #0f172a;
+}
+
+.rejourney-project-settings-page .project-settings-range-input {
+  background: linear-gradient(to right, #0f172a 0%, #0f172a var(--range-progress), #dbe7f6 var(--range-progress), #dbe7f6 100%);
+}
+
+.rejourney-project-settings-page .project-settings-range-input::-webkit-slider-thumb,
+.rejourney-project-settings-page .project-settings-range-input::-moz-range-thumb {
+  background: #0f172a;
+  box-shadow: 0 0 0 1px #0f172a;
+}
+
+.rejourney-project-settings-page .project-settings-stepper button {
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.rejourney-project-settings-page .project-settings-stepper button:hover:not(:disabled) {
+  background: #ecfeff;
+}
+
+.rejourney-project-settings-page .project-settings-copy-button {
+  width: auto;
+  min-width: 3.5rem;
+  border-color: #dadce0;
+  border-radius: 0;
+  padding: 0 0.65rem;
+  color: #0f172a;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.rejourney-project-settings-page .project-settings-copy-button:hover {
+  border-color: #dadce0;
+  background: #f8fafd;
+  color: #0f172a;
+}
+
 .rejourney-api-page {
   background: #f8fafd !important;
   color: #202124;
@@ -1537,10 +1736,22 @@
 }
 
 .rejourney-heatmaps-page :where(.heatmap-workspace) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.rejourney-heatmaps-page :where(.dashboard-surface, .heatmap-summary-card) {
   background: #ffffff !important;
   border: 1px solid #dadce0 !important;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(60, 64, 67, 0.1), 0 1px 3px rgba(60, 64, 67, 0.08) !important;
+}
+
+.rejourney-heatmaps-page :where(.dashboard-inner-surface) {
+  background: #f8fafd !important;
+  border: 1px solid #dadce0 !important;
+  border-radius: 8px;
 }
 
 .rejourney-heatmaps-page :where(.border-black) {
@@ -1570,19 +1781,23 @@
   color: #202124 !important;
 }
 
-.rejourney-heatmaps-page :where(.heatmap-workspace-header) {
+.rejourney-heatmaps-page :where(.heatmap-panel-header) {
   border-color: #dadce0 !important;
 }
 
-.rejourney-heatmaps-page :where(.heatmap-stat-pill) {
-  min-width: 6.25rem;
-  border: 1px solid #dadce0;
-  border-radius: 999px;
-  background: #ffffff;
-  padding: 0.45rem 0.75rem;
+.rejourney-heatmaps-page :where(.heatmap-summary-card) {
+  transform: none !important;
 }
 
-.rejourney-heatmaps-page :where(.heatmap-stat-pill span, .heatmap-metric span) {
+.rejourney-heatmaps-page :where(.heatmap-summary-card:hover) {
+  box-shadow: 0 2px 6px rgba(60, 64, 67, 0.14) !important;
+}
+
+.rejourney-heatmaps-page :where(.heatmap-summary-icon) {
+  border: 1px solid #edf0f3;
+}
+
+.rejourney-heatmaps-page :where(.heatmap-metric span) {
   display: block;
   color: #6f7785;
   font-size: 0.66rem;
@@ -1590,27 +1805,16 @@
   line-height: 1;
 }
 
-.rejourney-heatmaps-page :where(.heatmap-stat-pill strong, .heatmap-metric strong) {
+.rejourney-heatmaps-page :where(.heatmap-metric strong) {
   display: block;
   margin-top: 0.25rem;
   color: #202124;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   font-weight: 650;
   line-height: 1;
 }
 
-.rejourney-heatmaps-page :where(.heatmap-focus-panel, .heatmap-priority-panel, .heatmap-version-comparison) {
-  border-color: #dadce0 !important;
-  border-radius: 8px;
-  box-shadow: none !important;
-}
-
-.rejourney-heatmaps-page :where(.heatmap-focus-panel > div:first-child, .heatmap-priority-panel > div:first-child, .heatmap-version-comparison > div:first-child) {
-  border-color: #dadce0 !important;
-}
-
 .rejourney-heatmaps-page :where(.heatmap-metric) {
-  min-width: 5.75rem;
   border: 1px solid #edf0f3;
   border-radius: 6px;
   background: #f8fafd;
@@ -1629,8 +1833,8 @@
 }
 
 .rejourney-heatmaps-page :where(.heatmap-browser-frame) {
-  border-color: #202124 !important;
-  box-shadow: 0 14px 26px rgba(60, 64, 67, 0.16) !important;
+  border-color: #dadce0 !important;
+  box-shadow: 0 12px 24px rgba(60, 64, 67, 0.12) !important;
 }
 
 .rejourney-heatmaps-page :where(.heatmap-browser-chrome) {
@@ -1638,7 +1842,21 @@
 }
 
 .rejourney-heatmaps-page :where(.heatmap-browser-screen) {
-  min-height: 340px;
+  min-height: 360px;
+}
+
+.rejourney-heatmaps-page :where(.heatmap-web-document-frame) {
+  background: #ffffff !important;
+}
+
+.rejourney-heatmaps-page :where(.heatmap-web-document-screen) {
+  width: 100%;
+  min-height: 420px;
+  border-radius: 0 0 10px 10px;
+}
+
+.rejourney-heatmaps-page :where(.heatmap-web-document-tile) {
+  min-height: 180px;
 }
 
 .rejourney-heatmaps-page :where(.heatmap-web-tile-screen) {
@@ -1659,6 +1877,7 @@
   border-radius: 8px;
   padding: 0.75rem;
   color: #3c4043;
+  border: 1px solid transparent;
   transition: background 0.16s ease, box-shadow 0.16s ease;
 }
 
@@ -1668,6 +1887,7 @@
 
 .rejourney-heatmaps-page :where(.heatmap-screen-row-selected) {
   background: #e8f0fe !important;
+  border-color: #c7d2fe !important;
   box-shadow: inset 3px 0 0 #1a73e8;
 }
 
@@ -1694,7 +1914,7 @@
 }
 
 .rejourney-heatmaps-page :where(.heatmap-version-card) {
-  width: 220px;
+  width: 230px;
   flex: 0 0 auto;
   border: 1px solid #dadce0;
   border-radius: 8px;
@@ -1705,7 +1925,7 @@
 }
 
 .rejourney-heatmaps-page :where(.heatmap-version-card:has(.heatmap-web-tile-screen)) {
-  width: 300px;
+  width: 260px;
 }
 
 .rejourney-heatmaps-page :where(.heatmap-version-card:hover) {
@@ -1749,6 +1969,10 @@
   font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+.rejourney-heatmaps-page :where(.heatmap-preview-stage) {
+  background: linear-gradient(#ffffff, #f8fafd);
 }
 
 .rejourney-heatmaps-page :where(.heatmap-tile) {

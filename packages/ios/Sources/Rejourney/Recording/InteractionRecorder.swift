@@ -295,6 +295,12 @@ private final class GestureAggregator: NSObject {
             } else if duration < _tapMaxDuration && state.maxDistance < _tapMaxDistance {
                 // Tap — short duration, small movement
                 let (target, isInteractive) = _resolveTarget(at: location, in: window)
+
+                if TelemetryPipeline.shared.isKeyboardVisible {
+                    _recentTaps.removeAll()
+                    recorder?.reportTap(location: location, target: target, isInteractive: true)
+                    return
+                }
                 
                 _recentTaps.append((location: location, time: now))
                 _pruneOldTaps(now: now)

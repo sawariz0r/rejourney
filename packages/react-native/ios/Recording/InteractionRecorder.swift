@@ -29,6 +29,7 @@ public final class InteractionRecorder: NSObject {
     private var _navigationStack: [String] = []
     private let _coalesceWindow: TimeInterval = 0.3
     private var _lastInteractionTimestampMs: UInt64 = 0
+    fileprivate var _rageTapSettings = RageTapSettings()
     
     private override init() {
         super.init()
@@ -54,6 +55,17 @@ public final class InteractionRecorder: NSObject {
     
     @objc public func latestInteractionTimestampMs() -> UInt64 {
         _lastInteractionTimestampMs
+    }
+
+    @objc public func configureRageTapDetection(enabled: Bool, threshold: Int, timeWindowMs: Int, radius: CGFloat) {
+        let settings = RageTapSettings(
+            enabled: enabled,
+            threshold: max(1, threshold),
+            timeWindow: max(0.001, CFAbsoluteTime(timeWindowMs) / 1000.0),
+            radius: max(1, radius)
+        )
+        _rageTapSettings = settings
+        _gestureAggregator?.updateRageTapSettings(settings)
     }
     
     @objc public func observeTextField(_ field: UITextField) {
@@ -201,6 +213,13 @@ public final class InteractionRecorder: NSObject {
     }
 }
 
+fileprivate struct RageTapSettings {
+    var enabled = true
+    var threshold = 3
+    var timeWindow: CFAbsoluteTime = 0.5
+    var radius: CGFloat = 50
+}
+
 private final class GestureAggregator: NSObject {
     
     weak var recorder: InteractionRecorder?
@@ -224,9 +243,7 @@ private final class GestureAggregator: NSObject {
     
     // Rage tap detection
     private var _recentTaps: [(location: CGPoint, time: CFAbsoluteTime)] = []
-    private let _rageTapThreshold = 3
-    private let _rageTapWindow: CFAbsoluteTime = 1.0
-    private let _rageTapRadius: CGFloat = 50
+    private var _rageTapSettings: RageTapSettings
     
     // Throttle pan events to avoid flooding
     private var _lastPanTime: CFAbsoluteTime = 0
@@ -234,7 +251,15 @@ private final class GestureAggregator: NSObject {
     
     init(delegate: InteractionRecorder) {
         self.recorder = delegate
+        self._rageTapSettings = delegate._rageTapSettings
         super.init()
+    }
+
+    func updateRageTapSettings(_ settings: RageTapSettings) {
+        _rageTapSettings = settings
+        if !settings.enabled {
+            _recentTaps.removeAll()
+        }
     }
     
     /// Process a raw touch event from UIWindow.sendEvent swizzle.
@@ -295,12 +320,25 @@ private final class GestureAggregator: NSObject {
             } else if duration < _tapMaxDuration && state.maxDistance < _tapMaxDistance {
                 // Tap — short duration, small movement
                 let (target, isInteractive) = _resolveTarget(at: location, in: window)
+
+                if TelemetryPipeline.shared.isKeyboardVisible {
+                    _recentTaps.removeAll()
+                    recorder?.reportTap(location: location, target: target, isInteractive: true)
+                    return
+                }
+
+                let rageTapSettings = _rageTapSettings
+                guard rageTapSettings.enabled else {
+                    _recentTaps.removeAll()
+                    recorder?.reportTap(location: location, target: target, isInteractive: isInteractive)
+                    return
+                }
                 
                 _recentTaps.append((location: location, time: now))
-                _pruneOldTaps(now: now)
+                _pruneOldTaps(now: now, window: rageTapSettings.timeWindow)
                 
-                let nearby = _recentTaps.filter { $0.location.distance(to: location) < _rageTapRadius }
-                if nearby.count >= _rageTapThreshold {
+                let nearby = _recentTaps.filter { $0.location.distance(to: location) < rageTapSettings.radius }
+                if nearby.count >= rageTapSettings.threshold {
                     recorder?.reportRageTap(location: location, count: nearby.count, target: target)
                     _recentTaps.removeAll()
                 } else {
@@ -320,8 +358,8 @@ private final class GestureAggregator: NSObject {
         }
     }
     
-    private func _pruneOldTaps(now: CFAbsoluteTime) {
-        let cutoff = now - _rageTapWindow
+    private func _pruneOldTaps(now: CFAbsoluteTime, window: CFAbsoluteTime) {
+        let cutoff = now - window
         _recentTaps.removeAll { $0.time < cutoff }
     }
     

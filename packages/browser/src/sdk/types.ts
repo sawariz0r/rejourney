@@ -33,10 +33,29 @@ export interface WebAttributionContext {
   campaign: string | null;
   term: string | null;
   content: string | null;
+  campaignId?: string | null;
+  sourcePlatform?: string | null;
+  creativeFormat?: string | null;
+  marketingTactic?: string | null;
+  utm?: Record<string, string>;
   clickIds: Record<string, string>;
   landingRoute: string;
   navigationType: 'navigate' | 'reload' | 'back_forward' | 'prerender' | 'unknown';
   channel: AcquisitionChannel;
+}
+
+export interface WebLinkClickContext {
+  href: string;
+  path: string | null;
+  host: string | null;
+  protocol: string | null;
+  text: string | null;
+  target: string | null;
+  rel: string | null;
+  download: boolean;
+  external: boolean;
+  sameOrigin: boolean;
+  modifierKey: boolean;
 }
 
 export interface NetworkRequestParams {
@@ -86,12 +105,17 @@ export interface RejourneyWebConfig {
   idleTimeout?: number | false;
   collectGeoLocation?: boolean;
   captureAttribution?: boolean;
+  autoTrackLinks?: boolean;
   attribution?: {
     allowedQueryParams?: string[];
     preserveClickIds?: boolean;
     captureReferrer?: boolean | 'domain-only';
     captureEntryUrl?: boolean | 'path-only';
     beforeSendAttribution?: (context: WebAttributionContext) => WebAttributionContext | null;
+  };
+  linkTracking?: {
+    allowedQueryParams?: string[];
+    captureText?: boolean;
   };
   ignoreBots?: boolean;
   recordAutomation?: boolean;
@@ -220,6 +244,15 @@ export type RejourneyEvent =
       colno?: number;
     }
   | {
+      type: 'log' | 'console_log';
+      timestamp: number;
+      level: string;
+      message: string;
+      name?: string;
+      properties?: Record<string, unknown>;
+      payload?: Record<string, unknown>;
+    }
+  | {
       type: 'anr' | 'long_task' | 'ui_freeze';
       timestamp: number;
       durationMs: number;
@@ -235,6 +268,8 @@ export type RejourneyEvent =
       screenName?: string;
       viewportWidth?: number;
       viewportHeight?: number;
+      documentWidth?: number;
+      documentHeight?: number;
       scrollX?: number;
       scrollY?: number;
       payload?: Record<string, unknown>;

@@ -38,10 +38,50 @@ declare global {
 }
 
 type LoginStep = 'email' | 'otp';
+type AuthTransitionState = 'idle' | 'checking' | 'verifying' | 'opening';
+
+const POST_LOGIN_TRANSITION_MIN_MS = 650;
 
 interface AuthPublicConfig {
     turnstileRequired: boolean;
     turnstileSiteKey?: string;
+}
+
+function AuthTransitionScreen({ state }: { state: Exclude<AuthTransitionState, 'idle'> }) {
+    const copy = state === 'verifying'
+        ? {
+            title: 'Verifying code',
+            detail: 'Preparing your dashboard session...',
+        }
+        : state === 'opening'
+            ? {
+                title: 'Opening dashboard',
+                detail: 'Loading your workspace...',
+            }
+            : {
+                title: 'Checking authentication',
+                detail: 'One moment...',
+            };
+
+    return (
+        <div className="public-readable-scope flex min-h-screen items-center justify-center bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] p-4 font-sans text-gray-900 [background-size:16px_16px]">
+            <div className="dashboard-auth-transition w-full max-w-sm border-2 border-black bg-white p-7 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center border-2 border-black bg-[#67e8f9] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                    <img
+                        src="/rejourneyIcon-removebg-preview.png"
+                        alt=""
+                        className="h-10 w-10 object-contain"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                </div>
+                <h1 className="text-xl font-black uppercase text-slate-950">{copy.title}</h1>
+                <p className="mt-2 text-xs font-mono font-bold uppercase text-gray-500">{copy.detail}</p>
+                <div className="mt-6 h-2 overflow-hidden border-2 border-black bg-white">
+                    <div className="dashboard-auth-transition-progress h-full bg-black" />
+                </div>
+            </div>
+        </div>
+    );
 }
 
 function isTurnstileReady() {
@@ -165,11 +205,32 @@ export default function LoginPage() {
     const [turnstileLoadError, setTurnstileLoadError] = useState<string | null>(null);
     const [isRetryingAuth, setIsRetryingAuth] = useState(false);
     const [isValidatingExistingSession, setIsValidatingExistingSession] = useState(false);
+    const [authTransitionState, setAuthTransitionState] = useState<AuthTransitionState>('idle');
     const turnstileRef = useRef<HTMLDivElement>(null);
     const turnstileWidgetId = useRef<string | null>(null);
     const turnstileForceReload = useRef(false);
+    const authTransitionStartedAt = useRef<number | null>(null);
+    const postLoginNavigationStarted = useRef(false);
+    const postLoginNavigationTimer = useRef<number | null>(null);
     const isTurnstileEnabled = isTurnstileRequired && Boolean(turnstileSiteKey);
     const shouldShowTurnstileArea = isTurnstileConfigLoading || isTurnstileRequired || Boolean(turnstileConfigError);
+
+    const startAuthTransition = useCallback((state: Exclude<AuthTransitionState, 'idle'>) => {
+        if (authTransitionStartedAt.current === null) {
+            authTransitionStartedAt.current = Date.now();
+        }
+        setAuthTransitionState(state);
+    }, []);
+
+    const resetAuthTransition = useCallback(() => {
+        authTransitionStartedAt.current = null;
+        postLoginNavigationStarted.current = false;
+        if (postLoginNavigationTimer.current !== null) {
+            window.clearTimeout(postLoginNavigationTimer.current);
+            postLoginNavigationTimer.current = null;
+        }
+        setAuthTransitionState('idle');
+    }, []);
 
     const removeTurnstileWidget = useCallback(() => {
         if (typeof window !== 'undefined' && window.turnstile && turnstileWidgetId.current) {
@@ -227,21 +288,42 @@ export default function LoginPage() {
         }
     }, [isTurnstileEnabled, requestFreshTurnstileWidget]);
 
-    const navigateToPostLoginDestination = useCallback(() => {
+    const getPostLoginDestination = useCallback(() => {
         if (typeof window === 'undefined') {
-            navigate('/dashboard/general', { replace: true });
-            return;
+            return '/dashboard/general';
         }
-
         const returnUrl = localStorage.getItem('returnUrl');
         if (returnUrl && returnUrl.startsWith('/')) {
             localStorage.removeItem('returnUrl');
-            navigate(returnUrl, { replace: true });
+            return returnUrl;
+        }
+
+        return '/dashboard/general';
+    }, []);
+
+    const navigateToPostLoginDestination = useCallback(() => {
+        if (postLoginNavigationStarted.current) {
             return;
         }
 
-        navigate('/dashboard/general', { replace: true });
-    }, [navigate]);
+        postLoginNavigationStarted.current = true;
+        startAuthTransition('opening');
+
+        const destination = getPostLoginDestination();
+        const startedAt = authTransitionStartedAt.current ?? Date.now();
+        const elapsed = Date.now() - startedAt;
+        const delay = Math.max(POST_LOGIN_TRANSITION_MIN_MS - elapsed, 0);
+
+        if (typeof window === 'undefined') {
+            navigate(destination, { replace: true });
+            return;
+        }
+
+        postLoginNavigationTimer.current = window.setTimeout(() => {
+            postLoginNavigationTimer.current = null;
+            navigate(destination, { replace: true });
+        }, delay);
+    }, [getPostLoginDestination, navigate, startAuthTransition]);
 
     const handleRetryAuthCheck = useCallback(async () => {
         setIsRetryingAuth(true);
@@ -263,6 +345,14 @@ export default function LoginPage() {
             localStorage.setItem('returnUrl', returnTo);
         }
     }, [searchParams]);
+
+    useEffect(() => {
+        return () => {
+            if (postLoginNavigationTimer.current !== null) {
+                window.clearTimeout(postLoginNavigationTimer.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -315,12 +405,16 @@ export default function LoginPage() {
                     return;
                 }
 
-                setIsTurnstileRequired(true);
+                // Auth config is a UX hint. The backend still enforces Turnstile
+                // on OTP requests when it is configured, so don't block local
+                // sign-in if this preflight route is unreachable.
+                console.warn('Unable to load auth configuration; continuing without a client-side security prompt.', err);
+                setIsTurnstileRequired(false);
                 setTurnstileSiteKey('');
                 setTurnstileToken(null);
                 setTurnstileLoadError(null);
                 setIsTurnstileLoading(false);
-                setTurnstileConfigError(err instanceof Error ? err.message : 'Unable to load auth configuration.');
+                setTurnstileConfigError(null);
             })
             .finally(() => {
                 if (!controller.signal.aborted) {
@@ -333,7 +427,7 @@ export default function LoginPage() {
 
     // Redirect if already authenticated
     useEffect(() => {
-        if (authLoading || !isAuthenticated) return;
+        if (authLoading || !isAuthenticated || postLoginNavigationStarted.current) return;
 
         let cancelled = false;
         setIsValidatingExistingSession(true);
@@ -520,22 +614,29 @@ export default function LoginPage() {
     const handleVerifyOtp = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        startAuthTransition('verifying');
         setIsLoading(true);
         try {
             const result = await login(email, otp);
             if (result.ok) {
-                // Post-login routing is handled by the auth effect above so
-                // returnUrl is applied exactly once for invite flows.
+                navigateToPostLoginDestination();
                 return;
             } else {
+                resetAuthTransition();
                 setError(result.message || authError || 'Invalid verification code');
             }
         } catch (err) {
+            resetAuthTransition();
             setError(err instanceof Error ? err.message : 'Invalid verification code');
         } finally {
             setIsLoading(false);
         }
     };
+
+    const handleGitHubLogin = useCallback(() => {
+        startAuthTransition('opening');
+        loginWithGitHub();
+    }, [loginWithGitHub, startAuthTransition]);
 
     const handleResendOtp = async () => {
         setStep('email');
@@ -556,14 +657,15 @@ export default function LoginPage() {
     };
 
     // Show loading state while checking authentication
-    if (authLoading || isValidatingExistingSession) {
+    if (authTransitionState !== 'idle' || authLoading || isValidatingExistingSession) {
         return (
-            <div className="public-readable-scope min-h-screen bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] flex items-center justify-center p-4 font-sans text-gray-900">
-                <div className="text-center">
-                    <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <div className="text-sm text-gray-500 font-mono uppercase">Checking authentication...</div>
-                </div>
-            </div>
+            <AuthTransitionScreen
+                state={authTransitionState !== 'idle'
+                    ? authTransitionState
+                    : isValidatingExistingSession
+                        ? 'opening'
+                        : 'checking'}
+            />
         );
     }
 
@@ -606,7 +708,7 @@ export default function LoginPage() {
                             {/* GitHub OAuth Button */}
                             <button
                                 type="button"
-                                onClick={loginWithGitHub}
+                                onClick={handleGitHubLogin}
                                 className="w-full flex items-center justify-center gap-3 rounded-none bg-[#24292f] text-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all h-12 font-black uppercase tracking-widest text-sm"
                             >
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

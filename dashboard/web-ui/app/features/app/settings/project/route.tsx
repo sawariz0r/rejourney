@@ -12,7 +12,6 @@ import { Modal } from '~/shared/ui/core/Modal';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { SettingsLayout } from '~/shell/components/layout/SettingsLayout';
 import { InfoTooltip } from '~/shared/ui/core/InfoTooltip';
-import { Copy, Plus, Minus, Trash2, Key, AlertTriangle, CheckCircle, Shield, Check, Settings, Save, AlertOctagon, Smartphone, MonitorSmartphone, Percent, Globe } from 'lucide-react';
 import { formatWebAllowedDomainsInput, getAndroidPackageError, getIosBundleIdError, getWebAllowedDomainsError, parseWebAllowedDomainsInput } from '~/shared/lib/validation';
 import {
   getProject,
@@ -35,34 +34,22 @@ type RecordingFps = 1 | 2 | 3;
 type ProjectSettingsTone = 'blue' | 'emerald' | 'amber' | 'rose' | 'slate';
 
 const PROJECT_SETTINGS_TONES: Record<ProjectSettingsTone, {
-  accent: string;
-  icon: string;
   pill: string;
 }> = {
   blue: {
-    accent: 'bg-[#1a73e8]',
-    icon: 'border-blue-100 bg-blue-50 text-blue-700',
-    pill: 'border-blue-100 bg-blue-50 text-blue-700',
+    pill: 'project-settings-status-neutral',
   },
   emerald: {
-    accent: 'bg-emerald-500',
-    icon: 'border-emerald-100 bg-emerald-50 text-emerald-700',
-    pill: 'border-emerald-100 bg-emerald-50 text-emerald-700',
+    pill: 'project-settings-status-success',
   },
   amber: {
-    accent: 'bg-amber-400',
-    icon: 'border-amber-100 bg-amber-50 text-amber-700',
-    pill: 'border-amber-100 bg-amber-50 text-amber-700',
+    pill: 'project-settings-status-warning',
   },
   rose: {
-    accent: 'bg-rose-500',
-    icon: 'border-rose-100 bg-rose-50 text-rose-700',
-    pill: 'border-rose-100 bg-rose-50 text-rose-700',
+    pill: 'project-settings-status-danger',
   },
   slate: {
-    accent: 'bg-slate-300',
-    icon: 'border-slate-200 bg-slate-50 text-slate-600',
-    pill: 'border-slate-200 bg-slate-50 text-slate-600',
+    pill: 'project-settings-status-neutral',
   },
 };
 
@@ -70,8 +57,6 @@ interface SettingsSectionProps {
   id: string;
   title: string;
   description: string;
-  icon: React.ReactNode;
-  tone?: ProjectSettingsTone;
   action?: React.ReactNode;
   children: React.ReactNode;
 }
@@ -80,22 +65,15 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   id,
   title,
   description,
-  icon,
-  tone = 'blue',
   action,
   children,
 }) => {
-  const toneClasses = PROJECT_SETTINGS_TONES[tone];
   return (
     <section id={id} className="project-settings-section dashboard-surface scroll-mt-24 overflow-hidden">
-      <div className={`project-settings-section-accent ${toneClasses.accent}`} />
       <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className={`project-settings-section-icon ${toneClasses.icon}`}>{icon}</div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-black">{title}</h2>
-            <p className="mt-1 max-w-2xl text-xs font-medium leading-5 text-slate-500">{description}</p>
-          </div>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-black">{title}</h2>
+          <p className="mt-1 max-w-2xl text-xs font-medium leading-5 text-slate-500">{description}</p>
         </div>
         {action}
       </div>
@@ -109,18 +87,14 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
 interface SettingRowProps {
   title: string;
   description?: string;
-  icon?: React.ReactNode;
   children: React.ReactNode;
 }
 
-const SettingRow: React.FC<SettingRowProps> = ({ title, description, icon, children }) => (
+const SettingRow: React.FC<SettingRowProps> = ({ title, description, children }) => (
   <div className="project-settings-row grid gap-4 px-5 py-4 lg:grid-cols-[minmax(220px,0.62fr)_minmax(0,1fr)] lg:items-start">
-    <div className="flex min-w-0 gap-3">
-      {icon && <div className="project-settings-row-icon">{icon}</div>}
-      <div className="min-w-0">
-        <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
-        {description && <p className="mt-1 max-w-md text-xs font-medium leading-5 text-slate-500">{description}</p>}
-      </div>
+    <div className="min-w-0">
+      <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
+      {description && <p className="mt-1 max-w-md text-xs font-medium leading-5 text-slate-500">{description}</p>}
     </div>
     <div className="min-w-0">
       {children}
@@ -211,7 +185,7 @@ const RangeSetting: React.FC<RangeSettingProps> = ({
             disabled={disabled || value <= min}
             aria-label={`Decrease ${label}`}
           >
-            <Minus className="h-4 w-4" />
+            -
           </button>
           <span className="project-settings-stepper-value">{value}{unit}</span>
           <button
@@ -220,7 +194,7 @@ const RangeSetting: React.FC<RangeSettingProps> = ({
             disabled={disabled || value >= max}
             aria-label={`Increase ${label}`}
           >
-            <Plus className="h-4 w-4" />
+            +
           </button>
         </div>
       </div>
@@ -244,8 +218,8 @@ const RangeSetting: React.FC<RangeSettingProps> = ({
         <span>{min}{unit}</span><span>{max}{unit}</span>
       </div>
       {(saveState || error) && (
-        <p className={`mt-2 flex items-center gap-1 text-xs font-semibold ${error ? 'text-red-600' : 'text-slate-500'}`}>
-          {error ? <AlertTriangle className="h-3 w-3" /> : null}{error || saveState}
+        <p className={`mt-2 text-xs font-semibold ${error ? 'text-red-600' : 'text-slate-500'}`}>
+          {error || saveState}
         </p>
       )}
     </div>
@@ -1051,15 +1025,13 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
   if (error || !project) {
     return (
       <SettingsLayout
-        className="rejourney-settings-page rejourney-project-settings-page"
+        className="rejourney-project-settings-page"
         title="Project Settings"
         description="Configure project"
-        icon={<Settings className="w-6 h-6" />}
         iconColor="bg-[#f4f4f5]"
       >
         <NeoCard className="p-6 border-rose-600 bg-rose-50">
           <div className="flex gap-4 items-center">
-            <AlertTriangle className="text-rose-600 w-6 h-6" />
             <div>
               <h3 className="text-rose-900 font-semibold uppercase tracking-tight">Error Loading Project</h3>
               <p className="text-rose-700 text-sm font-bold mt-1">{error || 'Project not found'}</p>
@@ -1097,30 +1069,27 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
     ? 'slate'
     : recordingEnabled
       ? 'emerald'
-      : 'blue';
-  const copyIcon = (field: string) => copiedField === field
-    ? <Check className="h-4 w-4 text-emerald-600" />
-    : <Copy className="h-4 w-4" />;
+      : 'slate';
+  const copyLabel = (field: string) => copiedField === field ? 'Copied' : 'Copy';
   const platformLabels: string[] = Array.isArray(project.platforms) && project.platforms.length > 0
     ? project.platforms.map((platform: string) => String(platform))
     : [];
   const platformCountLabel = platformLabels.length === 1 ? '1 platform' : `${platformLabels.length} platforms`;
   const privacyTone: ProjectSettingsTone = textInputMasking === 'all' ? 'emerald' : 'amber';
   const navItems = [
-    { href: '#project-profile', label: 'Project Profile', detail: platformCountLabel, tone: 'blue' as ProjectSettingsTone, icon: <Settings className="h-4 w-4" /> },
-    { href: '#sdk-intake', label: 'SDK Intake', detail: observabilityLabel, tone: observabilityTone, icon: <Shield className="h-4 w-4" /> },
-    { href: '#capture-budget', label: 'Replay Quality', detail: `${displayedSampleRate}% sample`, tone: 'emerald' as ProjectSettingsTone, icon: <Percent className="h-4 w-4" /> },
-    { href: '#privacy', label: 'Privacy', detail: textInputMasking === 'all' ? 'Mask all inputs' : 'Secure only', tone: privacyTone, icon: <CheckCircle className="h-4 w-4" /> },
-    { href: '#developer-setup', label: 'Developer Setup', detail: isSelfHosted ? `${apiKeys.length} API keys` : 'Client keys', tone: 'slate' as ProjectSettingsTone, icon: <Key className="h-4 w-4" /> },
-    ...(canEdit ? [{ href: '#danger-zone', label: 'Danger Zone', detail: 'Protected action', tone: 'rose' as ProjectSettingsTone, icon: <AlertOctagon className="h-4 w-4" /> }] : []),
+    { href: '#project-profile', label: 'Project Profile', detail: platformCountLabel },
+    { href: '#sdk-intake', label: 'SDK Intake', detail: observabilityLabel },
+    { href: '#capture-budget', label: 'Replay Quality', detail: `${displayedSampleRate}% sample` },
+    { href: '#privacy', label: 'Privacy', detail: textInputMasking === 'all' ? 'Mask all inputs' : 'Secure only' },
+    { href: '#developer-setup', label: 'Developer Setup', detail: isSelfHosted ? `${apiKeys.length} API keys` : 'Client keys' },
+    ...(canEdit ? [{ href: '#danger-zone', label: 'Danger Zone', detail: 'Protected action' }] : []),
   ];
 
   return (
     <SettingsLayout
-      className="rejourney-settings-page rejourney-project-settings-page"
+      className="rejourney-project-settings-page"
       title="Project Settings"
       description={`Configure ${project.name}`}
-      icon={<Settings className="w-6 h-6" />}
       iconColor="bg-[#f4f4f5]"
       headerAction={!canEdit ? <NeoBadge variant="warning">View Only</NeoBadge> : undefined}
     >
@@ -1138,7 +1107,6 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
           <nav className="mt-3 space-y-1" aria-label="Project settings sections">
             {navItems.map((item) => (
               <a key={item.href} href={item.href} className="project-settings-rail-item">
-                <span className={`project-settings-rail-icon ${PROJECT_SETTINGS_TONES[item.tone].icon}`}>{item.icon}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-slate-900">{item.label}</span>
                   <span className="block truncate text-xs font-medium text-slate-500">{item.detail}</span>
@@ -1153,14 +1121,11 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             id="project-profile"
             title="Project Profile"
             description="The human name and client app identifiers Rejourney uses to accept sessions."
-            icon={<Settings className="h-5 w-5" />}
-            tone="blue"
             action={<StatusPill label={platformCountLabel} tone="slate" />}
           >
             <SettingRow
               title="Project name"
               description="Shown throughout the dashboard, alerts, and project switcher."
-              icon={<Settings className="h-4 w-4" />}
             >
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                 <Input
@@ -1177,14 +1142,13 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                   variant="primary"
                   onClick={handleSaveName}
                   disabled={!canEdit || isSaving || !appName || appName === project.name}
-                  leftIcon={<Save className="h-4 w-4" />}
                 >
                   {isSaving ? 'Saving...' : 'Save'}
                 </NeoButton>
               </div>
               {saveError && (
-                <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-red-600">
-                  <AlertTriangle className="h-4 w-4" /> {saveError}
+                <p className="mt-2 text-xs font-semibold text-red-600">
+                  {saveError}
                 </p>
               )}
             </SettingRow>
@@ -1192,20 +1156,17 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             <SettingRow
               title="App identifiers"
               description="Keep these aligned with the apps that send sessions to this project."
-              icon={<Smartphone className="h-4 w-4" />}
             >
               <div className="mb-3 flex flex-wrap gap-2">
                 {platformLabels.length > 0 ? platformLabels.map((platform) => (
                   <span key={platform} className="project-settings-platform-pill">
-                    {platform === 'web' ? <Globe className="h-3.5 w-3.5" /> : platform === 'ios' ? <Smartphone className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
                     {platform}
                   </span>
                 )) : <span className="text-xs font-semibold text-slate-400">No platforms configured</span>}
               </div>
               <div className="grid gap-3 lg:grid-cols-2">
                 <div className="project-settings-field-card dashboard-inner-surface bg-white p-4">
-                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <Smartphone className="h-4 w-4" />
+                  <label className="mb-2 block text-sm font-semibold text-slate-900">
                     iOS Bundle ID
                   </label>
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -1237,19 +1198,18 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                         }
                       }}
                     >
-                      <Save className="h-4 w-4" /> Save
+                      Save
                     </NeoButton>
                   </div>
                   {iosBundleError && (
-                    <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-red-600">
-                      <AlertTriangle className="h-3 w-3" /> {iosBundleError}
+                    <p className="mt-2 text-xs font-semibold text-red-600">
+                      {iosBundleError}
                     </p>
                   )}
                 </div>
 
                 <div className="project-settings-field-card dashboard-inner-surface bg-white p-4">
-                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <Shield className="h-4 w-4" />
+                  <label className="mb-2 block text-sm font-semibold text-slate-900">
                     Android Package Name
                   </label>
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -1281,12 +1241,12 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                         }
                       }}
                     >
-                      <Save className="h-4 w-4" /> Save
+                      Save
                     </NeoButton>
                   </div>
                   {androidPackageError && (
-                    <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-red-600">
-                      <AlertTriangle className="h-3 w-3" /> {androidPackageError}
+                    <p className="mt-2 text-xs font-semibold text-red-600">
+                      {androidPackageError}
                     </p>
                   )}
                 </div>
@@ -1296,7 +1256,6 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             <SettingRow
               title="Web allowed domains"
               description="Browser origins that can authenticate with the shared project key."
-              icon={<Globe className="h-4 w-4" />}
             >
               <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -1312,7 +1271,6 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                   size="sm"
                   disabled={!canEdit || isSavingWebDomains || !hasWebAllowedDomainsChanges || !!webAllowedDomainsValidationError}
                   onClick={handleSaveWebAllowedDomains}
-                  leftIcon={<Save className="h-4 w-4" />}
                 >
                   {isSavingWebDomains ? 'Saving...' : 'Save'}
                 </NeoButton>
@@ -1329,8 +1287,8 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                 className="min-h-[88px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-sm font-semibold text-slate-900 placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
               />
               {(webDomainsSaveError || webAllowedDomainsValidationError) && (
-                <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-red-600">
-                  <AlertTriangle className="h-3 w-3" /> {webDomainsSaveError || webAllowedDomainsValidationError}
+                <p className="mt-2 text-xs font-semibold text-red-600">
+                  {webDomainsSaveError || webAllowedDomainsValidationError}
                 </p>
               )}
             </SettingRow>
@@ -1340,14 +1298,11 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             id="sdk-intake"
             title="SDK Intake"
             description="Gate incoming data before it becomes replay, analytics, and diagnostics."
-            icon={<Shield className="h-5 w-5" />}
-            tone={observabilityTone}
             action={<StatusPill label={observabilityLabel} tone={observabilityTone} />}
           >
             <SettingRow
               title="SDK collection"
               description="Master project switch for new events and diagnostics."
-              icon={<Shield className="h-4 w-4" />}
             >
               <div className="project-settings-toggle-card dashboard-inner-surface flex items-center justify-between gap-4 bg-white p-4">
                 <div className="min-w-0">
@@ -1366,7 +1321,6 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             <SettingRow
               title="Session replay"
               description="Controls whether captured sessions include replay media."
-              icon={<MonitorSmartphone className="h-4 w-4" />}
             >
               <div className="project-settings-toggle-card dashboard-inner-surface flex items-center justify-between gap-4 bg-white p-4">
                 <div className="min-w-0">
@@ -1391,13 +1345,10 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             id="capture-budget"
             title="Replay Quality"
             description="Set capture length, sample volume, and mobile frame rate without hunting through separate panels."
-            icon={<Percent className="h-5 w-5" />}
-            tone="emerald"
           >
             <SettingRow
               title="Capture budgets"
               description="Balanced defaults keep replays useful while limiting device and storage cost."
-              icon={<MonitorSmartphone className="h-4 w-4" />}
             >
               <div className="grid gap-3 lg:grid-cols-2">
                 <RangeSetting
@@ -1460,14 +1411,11 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             id="privacy"
             title="Privacy"
             description="Choose the default masking posture for text fields in replay."
-            icon={<CheckCircle className="h-5 w-5" />}
-            tone={privacyTone}
             action={<StatusPill label={isSavingMasking ? 'Saving' : textInputMasking === 'all' ? 'Privacy first' : 'Debug detail'} tone={privacyTone} />}
           >
             <SettingRow
               title="Text input masking"
               description="Use stricter masking for sensitive projects, or expose non-secure fields when debugging needs it."
-              icon={<Shield className="h-4 w-4" />}
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
@@ -1479,7 +1427,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                 >
                   <div className="mb-3 flex items-center justify-between">
                     <span className="text-sm font-semibold text-slate-900">Mask All Inputs</span>
-                    {textInputMasking === 'all' && <CheckCircle className="h-4 w-4 text-emerald-700" />}
+                    {textInputMasking === 'all' && <span className="text-xs font-semibold uppercase text-slate-500">Selected</span>}
                   </div>
                   <div className="space-y-2">
                     <div className="h-3 w-24 max-w-full rounded bg-slate-900" />
@@ -1495,7 +1443,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                 >
                   <div className="mb-3 flex items-center justify-between">
                     <span className="text-sm font-semibold text-slate-900">Secure Fields Only</span>
-                    {textInputMasking === 'secure_only' && <CheckCircle className="h-4 w-4 text-amber-700" />}
+                    {textInputMasking === 'secure_only' && <span className="text-xs font-semibold uppercase text-slate-500">Selected</span>}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="rounded border border-slate-200 bg-white p-2">
@@ -1510,8 +1458,8 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                 </button>
               </div>
               {maskingSaveError && (
-                <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-red-600">
-                  <AlertTriangle className="h-3 w-3" /> {maskingSaveError}
+                <p className="mt-3 text-xs font-semibold text-red-600">
+                  {maskingSaveError}
                 </p>
               )}
             </SettingRow>
@@ -1521,18 +1469,15 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             id="developer-setup"
             title="Developer Setup"
             description="The stable identifiers needed by SDK setup, support, and backend integrations."
-            icon={<Key className="h-5 w-5" />}
-            tone="slate"
           >
             <SettingRow
               title="Client identifiers"
               description="Project ID and public key are safe to use in client SDK configuration."
-              icon={<Key className="h-4 w-4" />}
             >
               <div className="grid gap-3 lg:grid-cols-2">
                 <div>
-                  <div className="mb-1 flex items-center gap-2 text-xs font-medium text-slate-500">
-                    <Key className="h-3 w-3" /> Project ID
+                  <div className="mb-1 text-xs font-medium text-slate-500">
+                    Project ID
                   </div>
                   <div className="project-settings-code-row dashboard-inner-surface flex items-center gap-2 bg-white px-3 py-2">
                     <code className="min-w-0 flex-1 break-all font-mono text-xs font-semibold text-slate-900">{project.id}</code>
@@ -1543,13 +1488,13 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                       title="Copy Project ID"
                       aria-label="Copy Project ID"
                     >
-                      {copyIcon('projectId')}
+                      {copyLabel('projectId')}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <div className="mb-1 flex items-center gap-2 text-xs font-medium text-slate-500">
-                    <Shield className="h-3 w-3" /> Public Key
+                  <div className="mb-1 text-xs font-medium text-slate-500">
+                    Public Key
                   </div>
                   <div className="project-settings-code-row dashboard-inner-surface flex items-center gap-2 bg-white px-3 py-2">
                     <code className="min-w-0 flex-1 truncate font-mono text-xs font-semibold text-slate-900">{project.publicKey}</code>
@@ -1560,7 +1505,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                       title="Copy Public Key"
                       aria-label="Copy Public Key"
                     >
-                      {copyIcon('publicKey')}
+                      {copyLabel('publicKey')}
                     </button>
                   </div>
                 </div>
@@ -1571,7 +1516,6 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
               <SettingRow
                 title="API keys"
                 description="Secret keys for backend administrative access in self-hosted deployments."
-                icon={<Shield className="h-4 w-4" />}
               >
                 <div className="project-settings-api-keys">
                   <div className="mb-3 flex items-center justify-between gap-3">
@@ -1581,21 +1525,19 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                       variant="secondary"
                       disabled={!canEdit}
                       onClick={() => { setShowCreateKeyModal(true); setCreatedApiKey(null); }}
-                      leftIcon={<Plus className="h-4 w-4" />}
                     >
                       Create
                     </NeoButton>
                   </div>
                   {keyError && (
-                    <p className="mb-3 flex items-center gap-1 text-xs font-semibold text-red-600">
-                      <AlertTriangle className="h-3 w-3" /> {keyError}
+                    <p className="mb-3 text-xs font-semibold text-red-600">
+                      {keyError}
                     </p>
                   )}
                   {isLoadingKeys ? (
                     <div className="dashboard-inner-surface py-6 text-center text-sm font-semibold text-slate-500 animate-pulse">Loading keys...</div>
                   ) : apiKeys.length === 0 ? (
                     <div className="dashboard-inner-surface border-dashed py-8 text-center">
-                      <Key className="mx-auto mb-2 h-8 w-8 text-slate-300" />
                       <p className="text-xs font-semibold text-slate-500">No API keys created yet</p>
                     </div>
                   ) : (
@@ -1635,21 +1577,17 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
               id="danger-zone"
               title="Danger Zone"
               description="Permanent project deletion lives alone so it is visible but never mixed with routine setup."
-              icon={<AlertOctagon className="h-5 w-5" />}
-              tone="rose"
               action={<StatusPill label="Irreversible" tone="rose" />}
             >
               <SettingRow
                 title="Delete project"
                 description="All recordings, analytics, and project data will be permanently removed."
-                icon={<Trash2 className="h-4 w-4" />}
               >
                 <div className="dashboard-inner-surface flex flex-col justify-between gap-4 border-rose-200 bg-rose-50 p-4 sm:flex-row sm:items-center">
                   <p className="text-sm font-medium text-rose-700">Requires the project name and email verification code.</p>
                   <NeoButton
                     variant="danger"
                     onClick={() => setShowDeleteModal(true)}
-                    leftIcon={<Trash2 className="h-4 w-4" />}
                     className="shrink-0"
                   >
                     Delete Project
@@ -1687,7 +1625,6 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
         >
           <div className="space-y-4 py-2">
             <div className="flex gap-3 border border-amber-200 bg-amber-50 p-4 text-amber-900">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div className="space-y-2 text-sm font-bold">
                 <p>
                   Increasing capture FPS may result in performance issues and higher battery usage.
@@ -1726,8 +1663,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
         >
           {createdApiKey ? (
             <div className="space-y-4">
-              <div className="bg-green-50 text-green-700 p-3 rounded-md border border-green-200 flex items-start gap-2 text-sm font-bold">
-                <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="bg-green-50 text-green-700 p-3 border border-green-200 text-sm font-bold">
                 <div>
                   <strong>KEY CREATED!</strong> Securely store this key now. It will not be shown again.
                 </div>
@@ -1743,7 +1679,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                     size="sm"
                     onClick={() => navigator.clipboard.writeText(createdApiKey.key)}
                   >
-                    <Copy className="w-4 h-4" />
+                    Copy
                   </NeoButton>
                 </div>
               </div>
@@ -1753,8 +1689,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
               <p className="text-slate-600 text-sm font-medium">
                 This will create a new API key with full access scopes for the <strong>{project.name}</strong> project.
               </p>
-              <div className="bg-rose-50 text-rose-800 p-3 rounded-md border border-rose-200 text-xs flex gap-2 font-bold">
-                <Shield className="w-4 h-4 shrink-0" />
+              <div className="bg-rose-50 text-rose-800 p-3 border border-rose-200 text-xs font-bold">
                 Usually you only need the Public Key for client-side recording. Secret API keys are for backend administrative access.
               </div>
             </div>
@@ -1794,9 +1729,9 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
           }
         >
           <div className="space-y-5">
-            <div className="bg-red-50 border border-red-200 rounded-md p-4">
-              <div className="flex gap-2 text-red-800 font-semibold mb-2 items-center">
-                <AlertTriangle className="w-5 h-5" /> Warning: Final Confirmation
+            <div className="bg-red-50 border border-red-200 p-4">
+              <div className="text-red-800 font-semibold mb-2">
+                Warning: Final Confirmation
               </div>
               <p className="text-red-700 text-sm">
                 This action will permanently purge <strong>{project.name}</strong> from the database. All recordings, analytics, funnel data, and user sessions will be immediately destroyed. This action <strong>cannot</strong> be undone.
@@ -1828,7 +1763,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
                 {isSendingDeleteOtp ? 'Sending OTP...' : deleteOtpSent ? 'Resend OTP' : 'Send OTP to Email'}
               </NeoButton>
               {deleteOtpMessage && (
-                <p className="text-sm text-green-700 bg-green-50 border border-green-200 p-2 rounded">{deleteOtpMessage}</p>
+                <p className="text-sm text-green-700 bg-green-50 border border-green-200 p-2">{deleteOtpMessage}</p>
               )}
             </div>
 
@@ -1849,7 +1784,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
             )}
 
             {deleteError && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-100 p-2 rounded">{deleteError}</div>
+              <div className="text-sm text-red-600 bg-red-50 border border-red-100 p-2">{deleteError}</div>
             )}
           </div>
         </Modal>

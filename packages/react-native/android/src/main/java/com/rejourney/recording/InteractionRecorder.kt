@@ -18,6 +18,7 @@ package com.rejourney.recording
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Rect
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
@@ -27,6 +28,8 @@ import android.view.Window
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import java.lang.ref.WeakReference
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
@@ -61,6 +64,8 @@ class InteractionRecorder private constructor(private val context: Context) {
     private val navigationStack = mutableListOf<String>()
     private val coalesceWindow: Long = 300 // ms
     private val lastInteractionTimestampMs = AtomicLong(0L)
+    internal var rageTapSettings = RageTapSettings()
+        private set
     
     internal var currentActivity: WeakReference<Activity>? = null
 
@@ -114,6 +119,35 @@ class InteractionRecorder private constructor(private val context: Context) {
     }
     
     fun latestInteractionTimestampMs(): Long = lastInteractionTimestampMs.get()
+
+    internal fun configureRageTapDetection(
+        enabled: Boolean,
+        threshold: Int,
+        timeWindowMs: Long,
+        radius: Float
+    ) {
+        val settings = RageTapSettings(
+            enabled = enabled,
+            threshold = threshold.coerceAtLeast(1),
+            timeWindowMs = timeWindowMs.coerceAtLeast(1L),
+            radius = radius.coerceAtLeast(1f)
+        )
+        rageTapSettings = settings
+        gestureAggregator?.updateRageTapSettings(settings)
+    }
+
+    internal fun isKeyboardVisible(): Boolean {
+        val activity = currentActivity?.get() ?: return false
+        val decorView = activity.window?.decorView ?: return false
+        ViewCompat.getRootWindowInsets(decorView)?.let { insets ->
+            if (insets.isVisible(WindowInsetsCompat.Type.ime())) return true
+        }
+
+        val visibleFrame = Rect()
+        decorView.getWindowVisibleDisplayFrame(visibleFrame)
+        val obscuredHeight = decorView.rootView.height - visibleFrame.bottom
+        return obscuredHeight > decorView.rootView.height * 0.15f
+    }
     
     fun observeTextField(field: EditText) {
         if (inputObservers.any { it.get() === field }) return
@@ -269,6 +303,13 @@ class InteractionRecorder private constructor(private val context: Context) {
     }
 }
 
+internal data class RageTapSettings(
+    val enabled: Boolean = true,
+    val threshold: Int = 3,
+    val timeWindowMs: Long = 500,
+    val radius: Float = 50f
+)
+
 data class PointF(val x: Float, val y: Float) {
     fun distance(to: PointF): Float {
         val dx = x - to.x
@@ -292,9 +333,7 @@ private class GestureAggregator(
     private val scaleDetector: ScaleGestureDetector
     
     private val recentTaps = mutableListOf<Pair<PointF, Long>>()
-    private val rageTapThreshold = 3
-    private val rageTapWindow: Long = 1000
-    private val rageTapRadius: Float = 50f
+    private var rageTapSettings = recorder.rageTapSettings
     
     // Throttle pan/pinch/rotation events
     private var lastThrottleTime: Long = 0
@@ -477,12 +516,26 @@ private class GestureAggregator(
     // --- Tap / rage-tap ---
     
     private fun handleTap(location: PointF, target: String) {
+        if (recorder.isKeyboardVisible()) {
+            recentTaps.clear()
+            recorder.reportTap(location, target, true)
+            return
+        }
+
+        val settings = rageTapSettings
+        if (!settings.enabled) {
+            recentTaps.clear()
+            val isInteractive = isViewInteractive(location)
+            recorder.reportTap(location, target, isInteractive)
+            return
+        }
+
         val now = System.currentTimeMillis()
         recentTaps.add(Pair(location, now))
-        pruneOldTaps()
+        pruneOldTaps(settings.timeWindowMs)
         
-        val nearby = recentTaps.filter { it.first.distance(location) < rageTapRadius }
-        if (nearby.size >= rageTapThreshold) {
+        val nearby = recentTaps.filter { it.first.distance(location) < settings.radius }
+        if (nearby.size >= settings.threshold) {
             recorder.reportRageTap(location, nearby.size, target)
             recentTaps.clear()
         } else {
@@ -491,8 +544,15 @@ private class GestureAggregator(
         }
     }
     
-    private fun pruneOldTaps() {
-        val cutoff = System.currentTimeMillis() - rageTapWindow
+    fun updateRageTapSettings(settings: RageTapSettings) {
+        rageTapSettings = settings
+        if (!settings.enabled) {
+            recentTaps.clear()
+        }
+    }
+
+    private fun pruneOldTaps(windowMs: Long) {
+        val cutoff = System.currentTimeMillis() - windowMs
         recentTaps.removeIf { it.second < cutoff }
     }
     

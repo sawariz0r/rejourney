@@ -29,6 +29,7 @@ type TabThemeKey =
     | 'heatmaps'
     | 'devices'
     | 'geo'
+    | 'stability'
     | 'crashes'
     | 'anrs'
     | 'errors'
@@ -102,6 +103,14 @@ const TAB_THEME_MAP: Record<TabThemeKey, TabTheme> = {
         badgeText: '#0f172a',
         idleBg: '#eff6ff',
         idleHoverBg: '#dbeafe',
+    },
+    stability: {
+        shortLabel: 'STB',
+        accent: '#f97316',
+        badgeBg: '#ffedd5',
+        badgeText: '#0f172a',
+        idleBg: '#fff7ed',
+        idleHoverBg: '#ffedd5',
     },
     crashes: {
         shortLabel: 'CRH',
@@ -180,6 +189,7 @@ function getTabThemeKey(path: string, tabId: string): TabThemeKey {
     if (normalizedPath.startsWith('/analytics/geo')) return 'geo';
     if (normalizedPath.startsWith('/sessions')) return 'sessions';
     if (normalizedPath.startsWith('/alerts')) return 'alerts';
+    if (normalizedPath === '/stability') return 'stability';
     if (normalizedPath.startsWith('/stability/crashes')) return 'crashes';
     if (normalizedPath.startsWith('/stability/anrs')) return 'anrs';
     if (normalizedPath.startsWith('/stability/errors')) return 'errors';

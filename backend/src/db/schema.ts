@@ -886,6 +886,12 @@ export const screenTouchHeatmaps = pgTable(
         // Timestamp (in ms since epoch) when this screen was first seen in the sample session
         // Used to extract the correct replay thumbnail frame for this screen
         screenFirstSeenMs: bigint('screen_first_seen_ms', { mode: 'number' }),
+        // Largest observed document and viewport dimensions for web routes.
+        // Native screens leave these null and continue using viewport-normalized buckets.
+        pageWidth: integer('page_width'),
+        pageHeight: integer('page_height'),
+        viewportWidth: integer('viewport_width'),
+        viewportHeight: integer('viewport_height'),
         updatedAt: timestamp('updated_at').defaultNow().notNull(),
     },
     (table) => [

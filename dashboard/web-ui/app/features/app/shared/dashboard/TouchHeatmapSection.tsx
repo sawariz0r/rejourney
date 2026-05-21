@@ -169,6 +169,10 @@ interface PreviewHeatmapScreen {
     touchHotspots?: HeatmapHotspot[];
     evidenceSessionId?: string | null;
     platform?: string | null;
+    pageWidth?: number | null;
+    pageHeight?: number | null;
+    viewportWidth?: number | null;
+    viewportHeight?: number | null;
 }
 
 interface EnrichedHeatmapScreen extends AlltimeHeatmapScreen {
@@ -285,7 +289,7 @@ function buildBrewCoffeeDemoHeatmaps(): { screens: EnrichedHeatmapScreen[]; scre
         eventsByScreen.set(screenName, list);
     }
 
-    const screens = navigationEvents
+    const mobileScreens = navigationEvents
         .filter((event: any, index: number, events: any[]) => events.findIndex((candidate: any) => candidate.screenName === event.screenName) === index)
         .map((event: any, index: number): EnrichedHeatmapScreen => {
             const name = event.screenName || event.screen || event.viewId;
@@ -329,6 +333,48 @@ function buildBrewCoffeeDemoHeatmaps(): { screens: EnrichedHeatmapScreen[]; scre
         })
         .filter((screen) => (screen.touchHotspots?.length || 0) > 0)
         .sort((a, b) => b.rangeImpactScore - a.rangeImpactScore);
+
+    const webScreens: EnrichedHeatmapScreen[] = [{
+        name: '/pricing',
+        visits: 3240,
+        rageTaps: 38,
+        errors: 7,
+        exitRate: 18.6,
+        frictionScore: 142,
+        screenshotUrl: null,
+        sessionIds: ['demo-web-session-001'],
+        screenFirstSeenMs: Number(brewCoffeeReplayFixture.startTime) + 12_000,
+        touchHotspots: [
+            { x: 0.78, y: 0.08, intensity: 0.72, isRageTap: false },
+            { x: 0.36, y: 0.18, intensity: 0.88, isRageTap: false },
+            { x: 0.68, y: 0.31, intensity: 0.66, isRageTap: false },
+            { x: 0.54, y: 0.48, intensity: 1, isRageTap: true },
+            { x: 0.42, y: 0.62, intensity: 0.74, isRageTap: false },
+            { x: 0.72, y: 0.79, intensity: 0.82, isRageTap: true },
+            { x: 0.5, y: 0.91, intensity: 0.58, isRageTap: false },
+        ],
+        rangeVisits: 940,
+        rangeRageTaps: 38,
+        rangeErrors: 7,
+        rangeExitRate: 18.6,
+        rangeFrictionScore: 142,
+        rangeImpactScore: 128,
+        rangeRageTapRatePer100: 4,
+        rangeErrorRatePer100: 0.7,
+        rangeIncidentRatePer100: 23.3,
+        rangeEstimatedAffectedSessions: 175,
+        primarySignal: 'exits',
+        confidence: 'high',
+        priority: 'critical',
+        evidenceSessionId: null,
+        platform: 'web',
+        pageWidth: 1440,
+        pageHeight: 4200,
+        viewportWidth: 1440,
+        viewportHeight: 900,
+    }];
+
+    const screens = [...mobileScreens, ...webScreens].sort((a, b) => b.rangeImpactScore - a.rangeImpactScore);
 
     const versionScreens: HeatmapIterationScreen[] = screens.map((screen) => ({
         name: screen.name,
@@ -458,6 +504,62 @@ function compareVersionLabels(a: string, b: string): number {
     return aNormalized.localeCompare(bNormalized, undefined, { numeric: true });
 }
 
+const formatCompactCount = (value: number): string => {
+    if (!Number.isFinite(value)) return '0';
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+    return Math.round(value).toLocaleString();
+};
+
+const getPositiveMetric = (value: number | null | undefined): number | null => (
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+);
+
+function getHeatmapFrameDimensions(screen: PreviewHeatmapScreen, isWebViewer: boolean) {
+    if (!isWebViewer) {
+        const viewportWidth = getPositiveMetric(screen.viewportWidth) ?? 393;
+        const viewportHeight = getPositiveMetric(screen.viewportHeight) ?? 852;
+        return {
+            pageWidth: viewportWidth,
+            pageHeight: viewportHeight,
+            viewportWidth,
+            viewportHeight,
+            pageRatio: viewportHeight / viewportWidth,
+            viewportPercent: 100,
+            hasFullPageMeta: false,
+        };
+    }
+
+    const viewportWidth = getPositiveMetric(screen.viewportWidth) ?? 1440;
+    const viewportHeight = getPositiveMetric(screen.viewportHeight) ?? 900;
+    const rawPageWidth = getPositiveMetric(screen.pageWidth) ?? viewportWidth;
+    const rawPageHeight = getPositiveMetric(screen.pageHeight) ?? Math.max(viewportHeight, Math.round(viewportHeight * 1.65));
+    const hasFullPageMeta = rawPageHeight > viewportHeight * 1.08;
+    const pageRatio = Math.max(1.05, Math.min(5.5, rawPageHeight / Math.max(rawPageWidth, 1)));
+    const pageWidth = rawPageWidth;
+    const pageHeight = Math.round(pageWidth * pageRatio);
+    const viewportPercent = Math.max(8, Math.min(100, (viewportHeight / Math.max(pageHeight, 1)) * 100));
+
+    return {
+        pageWidth,
+        pageHeight,
+        viewportWidth,
+        viewportHeight,
+        pageRatio,
+        viewportPercent,
+        hasFullPageMeta,
+    };
+}
+
+function buildViewportGuideStops(pageHeight: number, viewportHeight: number): number[] {
+    if (pageHeight <= 0 || viewportHeight <= 0 || pageHeight <= viewportHeight * 1.25) return [];
+    const count = Math.min(12, Math.floor(pageHeight / viewportHeight));
+    return Array.from({ length: count }, (_, index) => ((index + 1) * viewportHeight / pageHeight) * 100)
+        .filter((position) => position > 0 && position < 98);
+}
+
+const WEB_DOCUMENT_SECTION_TOPS = [12, 28, 45, 63, 80];
+
 const HeatmapPreview: React.FC<{
     screen: PreviewHeatmapScreen;
     compact?: boolean;
@@ -468,6 +570,7 @@ const HeatmapPreview: React.FC<{
 }> = ({ screen, compact = false, tile = false, showLegend = true, viewerMode = 'auto', projectPlatforms = [] }) => {
     const [blobUrl, setBlobUrl] = useState<string | null>(null);
     const [imageLoaded, setImageLoaded] = useState(false);
+    const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [downloadProgress, setDownloadProgress] = useState(0);
     const [webReplayPreview, setWebReplayPreview] = useState<WebReplayPreviewState | null>(null);
@@ -480,6 +583,13 @@ const HeatmapPreview: React.FC<{
 
     const resolvedViewer = resolveHeatmapViewer(screen, viewerMode, projectPlatforms);
     const isWebViewer = resolvedViewer === 'web';
+    const frameDimensions = getHeatmapFrameDimensions(screen, isWebViewer);
+    const viewportGuideStops = useMemo(
+        () => isWebViewer && !tile
+            ? buildViewportGuideStops(frameDimensions.pageHeight, frameDimensions.viewportHeight)
+            : [],
+        [frameDimensions.pageHeight, frameDimensions.viewportHeight, isWebViewer, tile],
+    );
     const replayPreviewSessionId = isWebViewer && !screen.screenshotUrl ? screen.evidenceSessionId || null : null;
 
     const fullCoverUrl = screen.screenshotUrl
@@ -493,6 +603,7 @@ const HeatmapPreview: React.FC<{
         const fetchStartedAt = Date.now();
         setLoadError(null);
         setImageLoaded(false);
+        setImageNaturalSize(null);
         setDownloadProgress(0);
 
         heatmapDebug('HeatmapPreview effect start', {
@@ -784,29 +895,63 @@ const HeatmapPreview: React.FC<{
     );
 
     const displayRoute = getDisplayRoute(screen.name);
+    const documentAspectStyle = isWebViewer
+        ? { aspectRatio: `${frameDimensions.pageWidth} / ${frameDimensions.pageHeight}` }
+        : undefined;
+    const tileAspectStyle = isWebViewer ? { aspectRatio: '5 / 6' } : undefined;
+    const imageRatio = imageNaturalSize ? imageNaturalSize.height / Math.max(imageNaturalSize.width, 1) : null;
+    const useImageAsFullDocument = !isWebViewer || !imageRatio || Math.abs(imageRatio - frameDimensions.pageRatio) < 0.5 || !frameDimensions.hasFullPageMeta;
+    const firstViewportImageStyle = isWebViewer && !useImageAsFullDocument
+        ? { height: `${frameDimensions.viewportPercent}%` }
+        : undefined;
     const widthClass = tile
         ? isWebViewer
             ? 'w-full'
             : 'w-full'
-        : `mx-auto w-full ${isWebViewer ? 'max-w-[920px]' : compact ? 'max-w-[310px]' : 'max-w-[360px]'}`;
+        : `mx-auto w-full ${isWebViewer ? 'max-w-[760px]' : compact ? 'max-w-[310px]' : 'max-w-[360px]'}`;
     const frameClass = isWebViewer
-        ? 'heatmap-browser-frame overflow-hidden rounded-xl border-2 border-black bg-white shadow-neo'
+        ? 'heatmap-browser-frame heatmap-web-document-frame overflow-hidden rounded-xl border-2 border-black bg-white shadow-neo'
         : 'heatmap-phone-frame rounded-[28px] border-2 border-black bg-black p-3 shadow-neo';
     const screenClass = isWebViewer
-        ? `heatmap-browser-screen relative overflow-hidden bg-slate-950 ${compact ? 'aspect-[16/10]' : 'aspect-[16/9]'}`
+        ? 'heatmap-browser-screen heatmap-web-document-screen relative overflow-hidden bg-white'
         : 'heatmap-phone-screen relative aspect-[9/19] overflow-hidden rounded-[24px] bg-slate-800';
     const tileScreenClass = isWebViewer
-        ? 'heatmap-tile-screen heatmap-web-tile-screen relative aspect-[16/10] overflow-hidden rounded-lg border-2 border-black bg-slate-950 shadow-neo-sm'
+        ? 'heatmap-tile-screen heatmap-web-tile-screen heatmap-web-document-tile relative overflow-hidden rounded-lg border-2 border-black bg-white shadow-neo-sm'
         : 'heatmap-tile-screen relative mx-auto aspect-[9/19] max-h-[500px] w-full max-w-[184px] overflow-hidden rounded-2xl border-2 border-black bg-slate-800 shadow-neo-sm';
-    const imageFitClass = isWebViewer ? 'object-contain' : 'object-cover';
+    const imageFitClass = isWebViewer && useImageAsFullDocument ? 'object-cover' : isWebViewer ? 'object-cover' : 'object-cover';
     const placeholderClass = isWebViewer
-        ? 'bg-[linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px)] bg-[length:32px_32px] bg-slate-950'
+        ? 'bg-transparent'
         : 'bg-[#111827]';
 
     const previewInner = (
         <>
+            {isWebViewer && (
+                <div className="pointer-events-none absolute inset-0 bg-white">
+                    <div
+                        className="absolute inset-x-0 top-0 border-b border-slate-200 bg-[linear-gradient(90deg,rgba(148,163,184,0.16)_1px,transparent_1px),linear-gradient(rgba(148,163,184,0.16)_1px,transparent_1px)] bg-[length:32px_32px]"
+                        style={{ height: `${frameDimensions.viewportPercent}%` }}
+                    />
+                    {WEB_DOCUMENT_SECTION_TOPS.map((top, index) => (
+                        <span
+                            key={`section-${top}`}
+                            className={`absolute left-[7%] right-[7%] rounded-md ${index % 2 === 0 ? 'bg-slate-100' : 'bg-slate-50'}`}
+                            style={{ top: `${top}%`, height: `${index === 0 ? 7 : index === 4 ? 10 : 8}%` }}
+                        />
+                    ))}
+                    {viewportGuideStops.map((top) => (
+                        <span
+                            key={`viewport-${top.toFixed(2)}`}
+                            className="absolute inset-x-0 border-t border-dashed border-slate-300/80"
+                            style={{ top: `${top}%` }}
+                        />
+                    ))}
+                </div>
+            )}
             {webReplayPreview ? (
-                <div className="absolute inset-0 bg-white">
+                <div
+                    className={isWebViewer ? 'absolute inset-x-0 top-0 bg-white' : 'absolute inset-0 bg-white'}
+                    style={isWebViewer ? { height: `${frameDimensions.viewportPercent}%` } : undefined}
+                >
                     <WebReplayPlayer
                         events={webReplayPreview.events}
                         currentTime={webReplayPreview.currentTime}
@@ -819,13 +964,18 @@ const HeatmapPreview: React.FC<{
                 <img
                     src={blobUrl}
                     alt={screen.name}
-                    className={`absolute inset-0 h-full w-full ${imageFitClass} transition-opacity duration-200 ${imageLoaded ? 'opacity-95' : 'opacity-0'}`}
-                    onLoad={() => {
+                    className={`${isWebViewer && !useImageAsFullDocument ? 'absolute inset-x-0 top-0 w-full' : 'absolute inset-0 h-full w-full'} ${imageFitClass} transition-opacity duration-200 ${imageLoaded ? 'opacity-95' : 'opacity-0'}`}
+                    style={firstViewportImageStyle}
+                    onLoad={(event) => {
                         heatmapDebug('Screenshot image element loaded successfully', {
                             screenName: screen.name,
                             blobUrl,
                         });
                         setImageLoaded(true);
+                        setImageNaturalSize({
+                            width: event.currentTarget.naturalWidth,
+                            height: event.currentTarget.naturalHeight,
+                        });
                     }}
                     onError={(event) => {
                         console.error(`${TOUCH_HEATMAP_DEBUG_PREFIX} Screenshot image element failed to render`, {
@@ -837,7 +987,7 @@ const HeatmapPreview: React.FC<{
                     }}
                 />
             ) : (
-                <div className={`absolute inset-0 flex flex-col items-center justify-center p-4 text-center ${placeholderClass}`}>
+                <div className={`absolute ${isWebViewer ? 'inset-x-0 top-0' : 'inset-0'} flex flex-col items-center justify-center p-4 text-center ${placeholderClass}`} style={isWebViewer ? { height: `${frameDimensions.viewportPercent}%` } : undefined}>
                     {isWebViewer ? (
                         <Monitor className="mb-2 h-8 w-8 text-[#67e8f9]" />
                     ) : (
@@ -885,7 +1035,7 @@ const HeatmapPreview: React.FC<{
     return (
         <div className={`${widthClass} shrink-0`}>
             {tile ? (
-                <div ref={containerRef} className={tileScreenClass}>
+                <div ref={containerRef} className={tileScreenClass} style={tileAspectStyle}>
                     {previewInner}
                 </div>
             ) : (
@@ -900,7 +1050,7 @@ const HeatmapPreview: React.FC<{
                             </span>
                         </div>
                     )}
-                    <div ref={containerRef} className={screenClass}>
+                    <div ref={containerRef} className={screenClass} style={documentAspectStyle}>
                         {previewInner}
                     </div>
                 </div>
@@ -1079,6 +1229,10 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
                 screenshotUrl: screen.screenshotUrl ?? iterationFallback?.screenshotUrl ?? fallback?.screenshotUrl ?? null,
                 screenFirstSeenMs: screen.screenFirstSeenMs ?? iterationFallback?.screenFirstSeenMs ?? fallback?.screenFirstSeenMs ?? null,
                 evidenceSessionId: screen.evidenceSessionId ?? iterationFallback?.evidenceSessionId ?? fallback?.evidenceSessionId ?? null,
+                pageWidth: screen.pageWidth ?? iterationFallback?.pageWidth ?? fallback?.pageWidth ?? null,
+                pageHeight: screen.pageHeight ?? iterationFallback?.pageHeight ?? fallback?.pageHeight ?? null,
+                viewportWidth: screen.viewportWidth ?? iterationFallback?.viewportWidth ?? fallback?.viewportWidth ?? null,
+                viewportHeight: screen.viewportHeight ?? iterationFallback?.viewportHeight ?? fallback?.viewportHeight ?? null,
                 touchHotspots: screen.touchHotspots?.length
                     ? screen.touchHotspots
                     : iterationFallback?.touchHotspots?.length
@@ -1113,6 +1267,10 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
                 lastSeenAt: lastUpdated || null,
                 evidenceSessionId: screen.evidenceSessionId,
                 touchHotspots: screen.touchHotspots || [],
+                pageWidth: screen.pageWidth ?? null,
+                pageHeight: screen.pageHeight ?? null,
+                viewportWidth: screen.viewportWidth ?? null,
+                viewportHeight: screen.viewportHeight ?? null,
             })),
         }];
     }, [iterationScreenByName, lastUpdated, screenByName, screenIteration?.versions, sortedScreens]);
@@ -1138,21 +1296,10 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
 
     const projectPlatforms = selectedProject?.platforms || [];
     const selectedViewer = selectedScreen ? resolveHeatmapViewer(selectedScreen, 'auto', projectPlatforms) : 'mobile';
-    const selectedScreenLabel = selectedViewer === 'web' ? 'Selected route' : 'Selected screen';
-
-    const heatmapTotals = useMemo(() => {
-        const visits = sortedScreens.reduce((sum, screen) => sum + (screen.rangeVisits || 0), 0);
-        const touches = sortedScreens.reduce((sum, screen) => sum + (screen.visits || 0), 0);
-        const rageTaps = sortedScreens.reduce((sum, screen) => sum + (screen.rangeRageTaps || 0), 0);
-        const errors = sortedScreens.reduce((sum, screen) => sum + (screen.rangeErrors || 0), 0);
-        const affected = sortedScreens.reduce((sum, screen) => sum + (screen.rangeEstimatedAffectedSessions || 0), 0);
-
-        return { visits, touches, rageTaps, errors, affected };
-    }, [sortedScreens]);
 
     if (!selectedProject?.id && !isDemoMode) {
         return (
-            <section className={`border-2 border-black bg-white p-6 shadow-neo ${className}`.trim()}>
+            <section className={`dashboard-surface p-6 ${className}`.trim()}>
                 <p className="text-sm font-semibold text-slate-600">Select a project to view touch heatmaps.</p>
             </section>
         );
@@ -1160,9 +1307,9 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
 
     if (isLoading) {
         return (
-            <section className={`border-2 border-black bg-white p-6 shadow-neo ${className}`.trim()}>
-                <div className="flex items-center gap-3 text-sm font-black uppercase text-black">
-                    <MousePointer2 className="h-4 w-4 animate-pulse text-black" />
+            <section className={`dashboard-surface p-6 ${className}`.trim()}>
+                <div className="flex items-center gap-3 text-sm font-black text-slate-900">
+                    <MousePointer2 className="h-4 w-4 animate-pulse text-[#1a73e8]" />
                     Building interaction heatmaps...
                 </div>
                 <div className="mt-4 h-72 animate-pulse dashboard-inner-surface" />
@@ -1172,10 +1319,10 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
 
     if (!sortedScreens.length) {
         return (
-            <section className={`border-2 border-black bg-white p-6 shadow-neo ${className}`.trim()}>
-                <div className={`flex flex-col items-center justify-center border-2 border-dashed border-black bg-[#ecfeff] text-center ${compact ? 'min-h-[180px]' : 'min-h-[220px]'}`}>
-                    <MousePointer2 className="mb-3 h-10 w-10 text-black" />
-                    <p className="text-sm font-black uppercase text-black">No touch heatmap data available yet</p>
+            <section className={`dashboard-surface p-6 ${className}`.trim()}>
+                <div className={`dashboard-inner-surface flex flex-col items-center justify-center border-dashed text-center ${compact ? 'min-h-[180px]' : 'min-h-[220px]'}`}>
+                    <MousePointer2 className="mb-3 h-10 w-10 text-[#1a73e8]" />
+                    <p className="text-sm font-black text-slate-900">No touch heatmap data available yet</p>
                     <p className="mt-1 text-xs font-semibold text-slate-600">Heatmaps populate after users interact with tracked screens.</p>
                     {partialError && (
                         <p className="mt-3 text-xs font-medium text-rose-700">{partialError}</p>
@@ -1186,66 +1333,23 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
     }
 
     return (
-        <section className={`heatmap-workspace border-2 border-black bg-white shadow-neo ${className}`.trim()}>
-            <div className={compact ? 'space-y-5 p-4' : 'space-y-5 p-4 sm:p-5'}>
-                <div className="heatmap-workspace-header flex flex-col gap-3 border-b border-black/80 pb-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Interaction Heatmap</h2>
-                        <p className="mt-1 text-sm text-slate-500">Prioritized screens by touch intensity, rage taps, and affected sessions.</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-                        <div className="heatmap-stat-pill">
-                            <span>Screens</span>
-                            <strong>{sortedScreens.length.toLocaleString()}</strong>
-                        </div>
-                        <div className="heatmap-stat-pill">
-                            <span>Touches</span>
-                            <strong>{heatmapTotals.touches.toLocaleString()}</strong>
-                        </div>
-                        <div className="heatmap-stat-pill">
-                            <span>Rage taps</span>
-                            <strong>{heatmapTotals.rageTaps.toLocaleString()}</strong>
-                        </div>
-                        <div className="heatmap-stat-pill">
-                            <span>Affected</span>
-                            <strong>{heatmapTotals.affected.toLocaleString()}</strong>
-                        </div>
-                    </div>
+        <section className={`heatmap-workspace space-y-5 ${className}`.trim()}>
+            {partialError && (
+                <div className="dashboard-surface border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+                    {partialError}
                 </div>
+            )}
 
-                {partialError && (
-                    <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                        {partialError}
-                    </div>
-                )}
+            {selectedScreen && (
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+                    <div className="heatmap-focus-panel dashboard-surface min-w-0 overflow-hidden">
+                        <div className="heatmap-panel-header flex flex-col gap-4 border-b border-slate-200 px-5 py-4">
+                            <div className="min-w-0 flex-1">
+                                <h2 className="truncate text-xl font-black text-slate-950" title={selectedScreen.name}>{selectedScreen.name}</h2>
 
-                {selectedScreen && (
-                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-                        <div className="heatmap-focus-panel min-w-0 border border-black bg-white p-4">
-                            <div className="mb-4 flex flex-col gap-3 border-b border-black/80 pb-4 md:flex-row md:items-start md:justify-between">
-                                <div className="min-w-0 flex-1">
-                                    <div className="text-[11px] font-semibold uppercase text-slate-500">{selectedScreenLabel}</div>
-                                    <h3 className="mt-1 truncate text-xl font-semibold text-black" title={selectedScreen.name}>{selectedScreen.name}</h3>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 text-right sm:flex sm:flex-wrap sm:justify-end">
-                                    <div className="heatmap-metric">
-                                        <span>Visits</span>
-                                        <strong>{selectedScreen.rangeVisits.toLocaleString()}</strong>
-                                    </div>
-                                    <div className="heatmap-metric">
-                                        <span>Incident /100</span>
-                                        <strong>{selectedScreen.rangeIncidentRatePer100.toFixed(1)}</strong>
-                                    </div>
-                                    <div className="heatmap-metric">
-                                        <span>Exit</span>
-                                        <strong>{selectedScreen.rangeExitRate.toFixed(1)}%</strong>
-                                    </div>
-                                    <div className="heatmap-metric">
-                                        <span>Impact</span>
-                                        <strong>{selectedScreen.rangeImpactScore.toFixed(0)}</strong>
-                                    </div>
-                                </div>
                             </div>
+                        </div>
+                        <div className="heatmap-preview-stage px-4 py-5 sm:px-5">
                             <HeatmapPreview
                                 screen={selectedScreen}
                                 compact={compact}
@@ -1254,93 +1358,93 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
                                 projectPlatforms={projectPlatforms}
                             />
                         </div>
-
-                        <aside className="heatmap-priority-panel border border-black bg-white">
-                            <div className="border-b border-black/80 px-4 py-3">
-                                <h3 className="text-sm font-semibold text-black">Priority Screens</h3>
-                                <p className="mt-1 text-xs text-slate-500">Choose the screen to inspect.</p>
-                            </div>
-                            <div className="max-h-[640px] overflow-y-auto p-2">
-                                {sortedScreens.map((screen, index) => {
-                                    const selected = screen.name === selectedScreen.name;
-                                    return (
-                                        <button
-                                            key={screen.name}
-                                            type="button"
-                                            onClick={() => setSelectedScreenName(screen.name)}
-                                            className={`heatmap-screen-row ${selected ? 'heatmap-screen-row-selected' : ''}`}
-                                        >
-                                            <span className="heatmap-screen-rank">{String(index + 1).padStart(2, '0')}</span>
-                                            <span className="min-w-0 flex-1 text-left">
-                                                <span className="block truncate text-sm font-semibold text-slate-900">{screen.name}</span>
-                                                <span className="mt-0.5 block text-xs text-slate-500">
-                                                    {screen.rangeVisits.toLocaleString()} visits / {screen.rangeIncidentRatePer100.toFixed(1)} incidents per 100
-                                                </span>
-                                            </span>
-                                            <span className="heatmap-impact-score">{screen.rangeImpactScore.toFixed(0)}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </aside>
                     </div>
-                )}
 
-                <div className="heatmap-version-comparison border border-black bg-white">
-                    <div className="flex flex-col gap-2 border-b border-black/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <h3 className="text-sm font-semibold text-black">Version Trend</h3>
-                            <p className="mt-1 text-xs text-slate-500">
-                                {selectedScreen ? `${selectedScreen.name} across app versions.` : 'Compare the selected screen across app versions.'}
-                            </p>
+                    <aside className="heatmap-priority-panel dashboard-surface overflow-hidden">
+                        <div className="heatmap-panel-header border-b border-slate-200 px-4 py-3">
+                            <h3 className="text-sm font-black text-slate-950">Priority {selectedViewer === 'web' ? 'Routes' : 'Screens'}</h3>
+                            <p className="mt-1 text-xs font-medium text-slate-500">Sorted by impact, incident rate, and visit volume.</p>
                         </div>
-                        {lastUpdated && (
-                            <span className="text-xs font-medium text-slate-500">
-                                Updated {new Date(lastUpdated).toLocaleString()}
-                            </span>
-                        )}
-                    </div>
-                    <div className={`dashboard-mobile-scroll overflow-x-auto ${compact ? 'p-3' : 'p-4'}`}>
-                        <div className="heatmap-version-strip flex min-w-max items-stretch gap-3">
-                            {versionGroups.map((version, versionIndex) => {
-                                const screen = version.screens.find((candidate) => candidate.name === selectedScreenName);
-                                if (!screen) return null;
-                                const isSelectedScreen = screen.name === selectedScreenName;
-
+                        <div className="max-h-[720px] overflow-y-auto p-2">
+                            {sortedScreens.map((screen, index) => {
+                                const selected = screen.name === selectedScreen.name;
                                 return (
-                                    <article
-                                        key={`${version.appVersion}-${versionIndex}-${screen.name}`}
-                                        className={`heatmap-version-card ${isSelectedScreen ? 'heatmap-version-card-selected' : ''}`}
-                                        role="button"
-                                        tabIndex={0}
+                                    <button
+                                        key={screen.name}
+                                        type="button"
                                         onClick={() => setSelectedScreenName(screen.name)}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Enter' || event.key === ' ') {
-                                                event.preventDefault();
-                                                setSelectedScreenName(screen.name);
-                                            }
-                                        }}
+                                        className={`heatmap-screen-row ${selected ? 'heatmap-screen-row-selected' : ''}`}
                                     >
-                                        <div className="heatmap-version-card-header">
-                                            <strong>v{version.appVersion}</strong>
-                                            <span>{version.sessions.toLocaleString()} sessions</span>
-                                        </div>
-                                        <HeatmapPreview
-                                            screen={screen}
-                                            compact
-                                            tile
-                                            showLegend={false}
-                                            viewerMode="auto"
-                                            projectPlatforms={projectPlatforms}
-                                        />
-                                        <div className="heatmap-version-metrics">
-                                            <span>{screen.visits.toLocaleString()} visits</span>
-                                            <span>{screen.incidentRatePer100.toFixed(1)} /100</span>
-                                        </div>
-                                    </article>
+                                        <span className="heatmap-screen-rank">{String(index + 1).padStart(2, '0')}</span>
+                                        <span className="min-w-0 flex-1 text-left">
+                                            <span className="block truncate text-sm font-black text-slate-900">{screen.name}</span>
+                                            <span className="mt-0.5 block text-xs font-medium text-slate-500">
+                                                {formatCompactCount(screen.rangeVisits)} visits / {screen.rangeIncidentRatePer100.toFixed(1)} incidents per 100
+                                            </span>
+                                        </span>
+                                        <span className="heatmap-impact-score">{screen.rangeImpactScore.toFixed(0)}</span>
+                                    </button>
                                 );
                             })}
                         </div>
+                    </aside>
+                </div>
+            )}
+
+            <div className="heatmap-version-comparison dashboard-surface overflow-hidden">
+                <div className="heatmap-panel-header flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 className="text-sm font-black text-slate-950">Version Trend</h3>
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                            {selectedScreen ? `${selectedScreen.name} across app versions.` : 'Compare the selected screen across app versions.'}
+                        </p>
+                    </div>
+                    {lastUpdated && (
+                        <span className="text-xs font-medium text-slate-500">
+                            Updated {new Date(lastUpdated).toLocaleString()}
+                        </span>
+                    )}
+                </div>
+                <div className={`dashboard-mobile-scroll overflow-x-auto ${compact ? 'p-3' : 'p-4'}`}>
+                    <div className="heatmap-version-strip flex min-w-max items-stretch gap-3">
+                        {versionGroups.map((version, versionIndex) => {
+                            const screen = version.screens.find((candidate) => candidate.name === selectedScreenName);
+                            if (!screen) return null;
+                            const isSelectedScreen = screen.name === selectedScreenName;
+
+                            return (
+                                <article
+                                    key={`${version.appVersion}-${versionIndex}-${screen.name}`}
+                                    className={`heatmap-version-card ${isSelectedScreen ? 'heatmap-version-card-selected' : ''}`}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => setSelectedScreenName(screen.name)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault();
+                                            setSelectedScreenName(screen.name);
+                                        }
+                                    }}
+                                >
+                                    <div className="heatmap-version-card-header">
+                                        <strong>v{version.appVersion}</strong>
+                                        <span>{formatCompactCount(version.sessions)} sessions</span>
+                                    </div>
+                                    <HeatmapPreview
+                                        screen={screen}
+                                        compact
+                                        tile
+                                        showLegend={false}
+                                        viewerMode="auto"
+                                        projectPlatforms={projectPlatforms}
+                                    />
+                                    <div className="heatmap-version-metrics">
+                                        <span>{formatCompactCount(screen.visits)} visits</span>
+                                        <span>{screen.incidentRatePer100.toFixed(1)} /100</span>
+                                    </div>
+                                </article>
+                            );
+                        })}
                     </div>
                 </div>
             </div>

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     BookOpen,
-    ChevronLeft,
     ChevronRight,
     Check,
     Copy,
@@ -49,7 +48,7 @@ import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { MiniSessionCard } from '~/shared/ui/core/MiniSessionCard';
 import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
-import { Issue, RecordingSession } from '~/shared/types';
+import { RecordingSession } from '~/shared/types';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 
 const toUtcDateKey = (value: string): string | null => {
@@ -154,56 +153,6 @@ function sessionUserKey(session: RecordingSession): string {
     if (session.deviceId) return session.deviceId;
     return session.id;
 }
-
-function buildIssueSparkline(dailyEvents?: Record<string, number>): number[] {
-    const defaultSparkline = Array(14).fill(0);
-    if (!dailyEvents) return defaultSparkline;
-
-    const sparkline = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (let i = 13; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(today.getDate() - i);
-        const dateKey = d.toISOString().split('T')[0];
-        const raw = dailyEvents[dateKey];
-        const value = typeof raw === 'number' ? raw : Number(raw);
-        sparkline.push(Number.isFinite(value) && value > 0 ? value : 0);
-    }
-
-    if (sparkline.every((v) => v === 0) && Object.keys(dailyEvents).length > 0) {
-        return Object.entries(dailyEvents)
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .slice(-14)
-            .map(([, raw]) => {
-                const value = typeof raw === 'number' ? raw : Number(raw);
-                return Number.isFinite(value) ? Math.max(0, value) : 0;
-            });
-    }
-
-    return sparkline;
-}
-
-const ISSUE_TYPE_COLOR: Record<Issue['issueType'], string> = {
-    error: '#f9a8d4',
-    crash: '#ef4444',
-    anr: '#8b5cf6',
-    rage_tap: '#ec4899',
-    api_latency: '#6366f1',
-    ux_friction: '#f9a8d4',
-    performance: '#06b6d4',
-};
-
-const ISSUE_TYPE_BADGE_VARIANT: Record<Issue['issueType'], 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'anr' | 'rage' | 'dead_tap' | 'slow_start' | 'slow_api' | 'low_exp'> = {
-    error: 'warning',
-    crash: 'danger',
-    anr: 'anr',
-    rage_tap: 'rage',
-    api_latency: 'slow_api',
-    ux_friction: 'low_exp',
-    performance: 'info',
-};
 
 interface RecommendedSession {
     session: RecordingSession;
@@ -693,36 +642,6 @@ function buildRecommendedSessions(sessions: RecordingSession[]): RecommendedSess
     return picks;
 }
 
-const IssueSparkline: React.FC<{ dailyEvents?: Record<string, number>; color: string }> = ({ dailyEvents, color }) => {
-    const values = buildIssueSparkline(dailyEvents);
-    if (values.length === 0 || values.every((v) => v === 0)) {
-        return (
-            <div className="h-6 w-20 flex items-end gap-px">
-                {Array(14).fill(0).map((_, i) => (
-                    <div key={i} className="flex-1 rounded-sm bg-slate-100" style={{ height: '2px' }} />
-                ))}
-            </div>
-        );
-    }
-    const max = Math.max(...values, 1);
-    return (
-        <div className="h-6 w-20 flex items-end gap-px">
-            {values.map((value, index) => (
-                <div
-                    key={index}
-                    title={`${value}`}
-                    className="flex-1 rounded-sm"
-                    style={{
-                        height: `${Math.max(12, (value / max) * 100)}%`,
-                        backgroundColor: color,
-                        opacity: 0.85,
-                    }}
-                />
-            ))}
-        </div>
-    );
-};
-
 const EmptyStateCard: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => (
     <div className="border-2 border-dashed border-black bg-[#f8fafc] px-6 py-10 text-center shadow-neo-sm">
         <p className="text-sm font-extrabold text-black">{title}</p>
@@ -796,11 +715,26 @@ type MomentumCard = {
 
 const RETRO_CARD_ACCENTS = ['#67e8f9', '#86efac', '#f9a8d4', '#c4b5fd'];
 const DIRECT_REFERRAL_LABEL = 'Direct / none';
+const NO_UTM_LABEL = 'No UTM tag';
 
 type ReferralSourceRow = {
+    key: string;
     source: string;
+    detail?: string;
     count: number;
     share: number;
+};
+
+type ReferralSourceMode = 'referrer' | 'utm';
+
+type UtmAttribution = {
+    source: string | null;
+    medium: string | null;
+    campaign: string | null;
+    campaignId: string | null;
+    term: string | null;
+    content: string | null;
+    sourcePlatform: string | null;
 };
 
 function readMetadataStringValue(metadata: Record<string, unknown> | undefined, keys: string[]): string | null {
@@ -857,6 +791,56 @@ function getSessionReferralSource(session: RecordingSession): string {
     );
 }
 
+function normalizeUtmValue(value: string | null | undefined): string | null {
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    if (['none', 'null', 'undefined', '(not set)'].includes(raw.toLowerCase())) return null;
+    return raw.length > 64 ? `${raw.slice(0, 61)}...` : raw;
+}
+
+function getSessionUtmAttribution(session: RecordingSession): UtmAttribution {
+    const metadata = session.metadata;
+    return {
+        source: normalizeUtmValue(readMetadataStringValue(metadata, ['utm_source', 'webAttributionSource'])),
+        medium: normalizeUtmValue(readMetadataStringValue(metadata, ['utm_medium', 'webAttributionMedium'])),
+        campaign: normalizeUtmValue(readMetadataStringValue(metadata, ['utm_campaign', 'webAttributionCampaign'])),
+        campaignId: normalizeUtmValue(readMetadataStringValue(metadata, ['utm_id', 'webAttributionCampaignId'])),
+        term: normalizeUtmValue(readMetadataStringValue(metadata, ['utm_term', 'webAttributionTerm'])),
+        content: normalizeUtmValue(readMetadataStringValue(metadata, ['utm_content', 'webAttributionContent'])),
+        sourcePlatform: normalizeUtmValue(readMetadataStringValue(metadata, ['utm_source_platform', 'webAttributionSourcePlatform'])),
+    };
+}
+
+function getUtmRowParts(utm: UtmAttribution): { key: string; source: string; detail: string } {
+    if (!utm.source && !utm.medium && !utm.campaign && !utm.campaignId && !utm.term && !utm.content && !utm.sourcePlatform) {
+        return { key: '__no_utm__', source: NO_UTM_LABEL, detail: 'No campaign parameters captured' };
+    }
+
+    const source = utm.campaign || utm.campaignId || utm.source || 'Unnamed campaign';
+    const detailParts = [
+        utm.campaign && utm.campaignId ? `id ${utm.campaignId}` : null,
+        utm.source ? `source ${utm.source}` : null,
+        utm.medium ? `medium ${utm.medium}` : null,
+        !utm.medium && utm.sourcePlatform ? `platform ${utm.sourcePlatform}` : null,
+        !utm.campaign && !utm.campaignId && utm.content ? `content ${utm.content}` : null,
+        !utm.campaign && !utm.campaignId && !utm.content && utm.term ? `term ${utm.term}` : null,
+    ].filter((part): part is string => Boolean(part));
+
+    return {
+        key: [
+            utm.campaign || '',
+            utm.campaignId || '',
+            utm.source || '',
+            utm.medium || '',
+            utm.content || '',
+            utm.term || '',
+            utm.sourcePlatform || '',
+        ].join('::'),
+        source,
+        detail: detailParts.join(' / ') || 'Campaign parameters captured',
+    };
+}
+
 export const GeneralOverview: React.FC = () => {
     const { selectedProject } = useSessionData();
     const pathPrefix = usePathPrefix();
@@ -874,20 +858,17 @@ export const GeneralOverview: React.FC = () => {
     const [deepMetrics, setDeepMetrics] = useState<ObservabilityDeepMetrics | null>(null);
     const [engagementTrends, setEngagementTrends] = useState<UserEngagementTrends | null>(null);
     const [geoSummary, setGeoSummary] = useState<GeoSummary | null>(null);
-    const [issues, setIssues] = useState<Issue[]>([]);
     const [sessions, setSessions] = useState<RecordingSession[]>([]);
     const [webReferralSessions, setWebReferralSessions] = useState<RecordingSession[]>([]);
     const [isReferralLoading, setIsReferralLoading] = useState(false);
     const [retentionCohortRows, setRetentionCohortRows] = useState<RetentionCohortRow[]>([]);
-    const [topIssuesPage, setTopIssuesPage] = useState(0);
     const [copiedTopUserKey, setCopiedTopUserKey] = useState<string | null>(null);
     const [copiedPublicKey, setCopiedPublicKey] = useState(false);
     const [copiedDocsPrompt, setCopiedDocsPrompt] = useState(false);
     const [copiedContactEmail, setCopiedContactEmail] = useState(false);
+    const [referralSourceMode, setReferralSourceMode] = useState<ReferralSourceMode>('referrer');
     const [selectedCustomEventNames, setSelectedCustomEventNames] = useState<string[]>([]);
     const [customEventSelectionTouched, setCustomEventSelectionTouched] = useState(false);
-
-    const TOP_ISSUES_PAGE_SIZE = 5;
 
     useEffect(() => {
         if (!selectedProject?.id) {
@@ -898,7 +879,6 @@ export const GeneralOverview: React.FC = () => {
             setDeepMetrics(null);
             setEngagementTrends(null);
             setGeoSummary(null);
-            setIssues([]);
             setRetentionCohortRows([]);
             return;
         }
@@ -917,7 +897,6 @@ export const GeneralOverview: React.FC = () => {
                 setEngagementTrends(overviewData.engagementTrends || null);
                 setGeoSummary(overviewData.geoSummary || null);
                 setRetentionCohortRows(overviewData.retention?.rows || []);
-                setIssues(overviewData.issues || []);
 
                 if (overviewData.failedSections?.length) {
                     setPartialError(`Some widgets unavailable (${overviewData.failedSections.join(', ')}).`);
@@ -933,7 +912,6 @@ export const GeneralOverview: React.FC = () => {
                 setEngagementTrends(null);
                 setGeoSummary(null);
                 setRetentionCohortRows([]);
-                setIssues([]);
                 setPartialError('General overview unavailable.');
             })
             .finally(() => {
@@ -1021,10 +999,6 @@ export const GeneralOverview: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform]);
-
-    useEffect(() => {
-        setTopIssuesPage(0);
     }, [selectedProject?.id, timeRange, platform]);
 
     const trendChartData = useMemo<TrendChartRow[]>(() => {
@@ -1137,18 +1111,35 @@ export const GeneralOverview: React.FC = () => {
 
     const referralSummary = useMemo(() => {
         const webSessions = webReferralSessions.filter((session) => session.platform === 'web');
-        const counts = new Map<string, number>();
+        const rowsByKey = new Map<string, ReferralSourceRow>();
 
         for (const session of webSessions) {
-            const source = getSessionReferralSource(session);
-            counts.set(source, (counts.get(source) || 0) + 1);
+            const referralSource = referralSourceMode === 'referrer' ? getSessionReferralSource(session) : null;
+            const parts = referralSourceMode === 'utm'
+                ? getUtmRowParts(getSessionUtmAttribution(session))
+                : {
+                    key: referralSource || DIRECT_REFERRAL_LABEL,
+                    source: referralSource || DIRECT_REFERRAL_LABEL,
+                    detail: undefined,
+                };
+            const existing = rowsByKey.get(parts.key);
+            if (existing) {
+                existing.count += 1;
+            } else {
+                rowsByKey.set(parts.key, {
+                    key: parts.key,
+                    source: parts.source,
+                    detail: parts.detail,
+                    count: 1,
+                    share: 0,
+                });
+            }
         }
 
-        const rows: ReferralSourceRow[] = [...counts.entries()]
-            .map(([source, count]) => ({
-                source,
-                count,
-                share: webSessions.length > 0 ? (count / webSessions.length) * 100 : 0,
+        const rows: ReferralSourceRow[] = [...rowsByKey.values()]
+            .map((row) => ({
+                ...row,
+                share: webSessions.length > 0 ? (row.count / webSessions.length) * 100 : 0,
             }))
             .sort((a, b) => {
                 if (b.count !== a.count) return b.count - a.count;
@@ -1160,7 +1151,7 @@ export const GeneralOverview: React.FC = () => {
             total: webSessions.length,
             rows,
         };
-    }, [webReferralSessions]);
+    }, [referralSourceMode, webReferralSessions]);
     const isMobileLens = platform === 'mobile';
 
     const engagementMixChartData = useMemo<EngagementMixChartRow[]>(() => {
@@ -1462,30 +1453,6 @@ export const GeneralOverview: React.FC = () => {
         ));
     }, []);
 
-    const sortedIssues = useMemo(() => {
-        return [...issues].sort((a, b) => {
-            if (b.eventCount !== a.eventCount) return b.eventCount - a.eventCount;
-            return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
-        });
-    }, [issues]);
-
-    const topIssuesTotalPages = useMemo(() => {
-        if (sortedIssues.length === 0) return 0;
-        return Math.max(1, Math.ceil(sortedIssues.length / TOP_ISSUES_PAGE_SIZE));
-    }, [sortedIssues.length]);
-
-    useEffect(() => {
-        if (topIssuesTotalPages === 0) return;
-        if (topIssuesPage <= topIssuesTotalPages - 1) return;
-        setTopIssuesPage(Math.max(0, topIssuesTotalPages - 1));
-    }, [topIssuesPage, topIssuesTotalPages]);
-
-    const topIssues = useMemo(() => {
-        if (sortedIssues.length === 0) return [];
-        const start = topIssuesPage * TOP_ISSUES_PAGE_SIZE;
-        return sortedIssues.slice(start, start + TOP_ISSUES_PAGE_SIZE);
-    }, [sortedIssues, topIssuesPage]);
-
     const recommendedSessions = useMemo(
         () => buildRecommendedSessions(sessions),
         [sessions],
@@ -1578,10 +1545,9 @@ export const GeneralOverview: React.FC = () => {
             || (deepMetrics?.dataWindow?.analyzedSessions ?? 0) > 0
             || (engagementTrends?.daily?.length ?? 0) > 0
             || (geoSummary?.countries?.length ?? 0) > 0
-            || issues.length > 0
             || (!isMobileLens && referralSummary.total > 0)
         );
-    }, [trendChartData, overviewObs, deepMetrics, engagementTrends, geoSummary, issues.length, referralSummary.total, isMobileLens]);
+    }, [trendChartData, overviewObs, deepMetrics, engagementTrends, geoSummary, referralSummary.total, isMobileLens]);
 
     if (isLoading && selectedProject?.id) {
         return <DashboardGhostLoader variant="general" />;
@@ -1798,7 +1764,29 @@ export const GeneralOverview: React.FC = () => {
                                 </div>
                                 </GA4Card>
 
-                                <GA4Card title="Referral sources" className="xl:col-span-4" accentClassName="bg-[#f9a8d4]">
+                                <GA4Card
+                                    title="Referral sources"
+                                    className="xl:col-span-4"
+                                    accentClassName="bg-[#f9a8d4]"
+                                    action={(
+                                        <div className="inline-flex overflow-hidden border border-black bg-white text-[10px] font-black uppercase">
+                                            {([
+                                                ['referrer', 'Referrers'],
+                                                ['utm', 'UTM'],
+                                            ] as const).map(([mode, label]) => (
+                                                <button
+                                                    key={mode}
+                                                    type="button"
+                                                    aria-pressed={referralSourceMode === mode}
+                                                    onClick={() => setReferralSourceMode(mode)}
+                                                    className={`min-h-7 px-2.5 transition ${referralSourceMode === mode ? 'bg-black text-white' : 'text-black hover:bg-[#f8fafc]'}`}
+                                                >
+                                                    {label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                >
                                 {isMobileLens ? (
                                     <div className="flex flex-1 items-center justify-center py-8 text-center text-xs text-slate-400">
                                         Referral sources are only captured for web sessions. Mobile attribution will appear in the appropriate acquisition view.
@@ -1815,10 +1803,10 @@ export const GeneralOverview: React.FC = () => {
                                 ) : referralSummary.rows.length > 0 ? (
                                     <div className="space-y-2">
                                         {referralSummary.rows.map((row) => (
-                                            <div key={row.source} className="group min-w-0">
+                                            <div key={row.key} className="group min-w-0">
                                                 <div className="flex min-w-0 items-center gap-3">
                                                     <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center border border-black bg-[#eef4ff] text-xs font-black uppercase text-black">
-                                                        {row.source === DIRECT_REFERRAL_LABEL ? (
+                                                        {row.source === DIRECT_REFERRAL_LABEL || row.source === NO_UTM_LABEL ? (
                                                             <Globe2 className="h-4 w-4" />
                                                         ) : (
                                                             row.source.slice(0, 1)
@@ -1829,6 +1817,11 @@ export const GeneralOverview: React.FC = () => {
                                                             <span className="truncate text-sm font-semibold text-[#202124]" title={row.source}>{row.source}</span>
                                                             <span className="shrink-0 font-mono text-xs font-semibold text-slate-500">{formatCompact(row.count)}</span>
                                                         </div>
+                                                        {row.detail ? (
+                                                            <div className="mt-0.5 truncate text-[10px] font-semibold uppercase text-slate-400" title={row.detail}>
+                                                                {row.detail}
+                                                            </div>
+                                                        ) : null}
                                                         <div className="mt-1 h-1.5 border border-[#dadce0] bg-white">
                                                             <div className="h-full bg-[#1a73e8]" style={{ width: `${Math.max(6, row.share)}%` }} />
                                                         </div>
@@ -1839,7 +1832,7 @@ export const GeneralOverview: React.FC = () => {
                                     </div>
                                 ) : (
                                     <div className="flex flex-1 items-center justify-center py-8 text-center text-xs text-slate-400">
-                                        No web referral sources observed for this filter.
+                                        {referralSourceMode === 'utm' ? 'No web UTM attribution observed for this filter.' : 'No web referral sources observed for this filter.'}
                                     </div>
                                 )}
                                 </GA4Card>
@@ -2228,112 +2221,6 @@ export const GeneralOverview: React.FC = () => {
                                 )}
                             </GA4Card>
                             </div>
-
-                            <section className="space-y-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                <h2 className="border-2 border-black bg-[#fb7185] px-3 py-1.5 text-base font-extrabold text-black shadow-neo-sm">Top Issues</h2>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {topIssuesTotalPages > 1 && (
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                type="button"
-                                                onClick={() => setTopIssuesPage((prev) => Math.max(0, prev - 1))}
-                                                disabled={topIssuesPage === 0}
-                                                className="inline-flex h-8 w-8 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:bg-[#f4f4f5] hover:shadow-neo disabled:pointer-events-none disabled:opacity-40"
-                                                aria-label="Previous issues page"
-                                            >
-                                                <ChevronLeft className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setTopIssuesPage((prev) => Math.min(topIssuesTotalPages - 1, prev + 1))}
-                                                disabled={topIssuesPage >= topIssuesTotalPages - 1}
-                                                className="inline-flex h-8 w-8 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:bg-[#f4f4f5] hover:shadow-neo disabled:pointer-events-none disabled:opacity-40"
-                                                aria-label="Next issues page"
-                                            >
-                                                <ChevronRight className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    )}
-                                    <NeoBadge variant="neutral" size="sm" className="rounded-none border-black bg-white text-black shadow-neo-sm">
-                                        Page {sortedIssues.length === 0 ? '0/0' : `${topIssuesPage + 1}/${topIssuesTotalPages}`}
-                                    </NeoBadge>
-                                    <NeoBadge variant="neutral" size="sm" className="rounded-none border-black bg-white text-black shadow-neo-sm">
-                                        {sortedIssues.length} total
-                                    </NeoBadge>
-                                </div>
-                            </div>
-
-                            {topIssues.length === 0 ? (
-                                <EmptyStateCard
-                                    title="No issues in this window"
-                                    subtitle="Issue groups appear here as they are detected."
-                                />
-                            ) : (
-                                <div className="overflow-hidden border-2 border-black bg-white shadow-neo">
-                                    <div className="divide-y-2 divide-black">
-                                        {topIssues.map((issue) => {
-                                            const issueColor = ISSUE_TYPE_COLOR[issue.issueType] || '#64748b';
-                                            return (
-                                                <div
-                                                    key={issue.id}
-                                                    className="flex flex-col gap-3 px-5 py-3.5 transition-colors hover:bg-[#f8fafc] md:flex-row md:items-center"
-                                                >
-                                                    <NeoBadge variant={ISSUE_TYPE_BADGE_VARIANT[issue.issueType] || 'neutral'} size="sm" className="rounded-none border-black font-bold uppercase shadow-neo-sm">
-                                                        {issue.issueType.replace('_', ' ')}
-                                                    </NeoBadge>
-
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="truncate text-sm font-extrabold text-black">
-                                                            {issue.title}
-                                                        </div>
-                                                        <div className="truncate text-[11px] text-slate-500 mt-0.5">
-                                                            {issue.subtitle || issue.culprit || '—'}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="hidden md:block shrink-0">
-                                                        <IssueSparkline dailyEvents={issue.dailyEvents} color={issueColor} />
-                                                    </div>
-
-                                                    <div className="hidden shrink-0 items-center gap-4 text-right sm:flex">
-                                                        <div>
-                                                            <div className="text-[10px] font-bold uppercase text-slate-400">Events</div>
-                                                            <div className="text-sm font-black text-slate-900">{formatCompact(issue.eventCount)}</div>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-[10px] font-bold uppercase text-slate-400">Users</div>
-                                                            <div className="text-sm font-black text-slate-900">{formatCompact(issue.userCount)}</div>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-[10px] font-bold uppercase text-slate-400">Last</div>
-                                                            <div className="text-xs font-bold text-slate-700">{formatLastSeen(issue.lastSeen)}</div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex w-full flex-wrap items-center gap-2 shrink-0 md:w-auto">
-                                                        <Link
-                                                            to={`${pathPrefix}/general/${issue.id}`}
-                                                            className="border-2 border-black bg-white px-2.5 py-1 text-[11px] font-bold text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
-                                                        >
-                                                            View
-                                                        </Link>
-                                                        {issue.sampleSessionId && (
-                                                            <Link
-                                                                to={`${pathPrefix}/sessions/${issue.sampleSessionId}`}
-                                                                className="border-2 border-black bg-[#67e8f9] px-2.5 py-1 text-[11px] font-bold text-black shadow-neo-sm transition hover:-translate-y-0.5 hover:bg-[#22d3ee] hover:shadow-neo"
-                                                            >
-                                                                Replay
-                                                            </Link>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-                            </section>
 
                             <section className="space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">

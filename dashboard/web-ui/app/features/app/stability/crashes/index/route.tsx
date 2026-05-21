@@ -221,6 +221,7 @@ export const CrashesList: React.FC = () => {
               const topDeviceLabel = formatDeviceModel(topDevice, 'Unknown');
               const versionList = Object.keys(group.affectedVersions);
               const topVersion = versionList[0] || '?';
+              const canOpenReplay = Boolean(group.sampleSessionId && group.canOpenReplay);
 
               return (
                 <div
@@ -360,7 +361,7 @@ export const CrashesList: React.FC = () => {
                                   <p className="text-xs text-rose-700/80 mb-4 leading-relaxed">
                                     Watch the exact user journey up to the fatal crash sequence.
                                   </p>
-                                  {group.sampleSessionId ? (
+                                  {canOpenReplay ? (
                                     <NeoButton 
                                       variant="primary" 
                                       className="w-full justify-center bg-rose-500 hover:bg-rose-600 focus:ring-rose-500 text-white border-0 py-2 shadow-sm"
@@ -372,9 +373,9 @@ export const CrashesList: React.FC = () => {
                                       Play Session
                                     </NeoButton>
                                   ) : (
-                                    <NeoButton variant="secondary" disabled className="w-full justify-center">
-                                      No Session Linked
-                                    </NeoButton>
+                                    <p className="rounded-md border border-rose-200 bg-white px-3 py-2 text-xs font-medium text-rose-700">
+                                      Replay unavailable for this sampled crash.
+                                    </p>
                                   )}
                                </NeoCard>
 

@@ -509,6 +509,10 @@ class RejourneyModuleImpl(
         if (options.hasKey("observeOnly")) config["observeOnly"] = options.getBoolean("observeOnly")
         if (options.hasKey("textInputMasking")) config["textInputMasking"] = options.getString("textInputMasking") ?: "all"
         if (options.hasKey("captureNativeSheets")) config["captureNativeSheets"] = options.getBoolean("captureNativeSheets")
+        if (options.hasKey("detectRageTaps")) config["detectRageTaps"] = options.getBoolean("detectRageTaps")
+        if (options.hasKey("rageTapThreshold")) config["rageTapThreshold"] = options.getInt("rageTapThreshold").coerceAtLeast(1)
+        if (options.hasKey("rageTapTimeWindow")) config["rageTapTimeWindow"] = options.getInt("rageTapTimeWindow").coerceAtLeast(1)
+        if (options.hasKey("rageTapRadius")) config["rageTapRadius"] = options.getDouble("rageTapRadius").coerceAtLeast(1.0)
         
         if (options.hasKey("fps")) {
             val fps = options.getInt("fps").coerceIn(1, 30)
@@ -801,14 +805,17 @@ class RejourneyModuleImpl(
             return
         }
 
-        // Handle dead_tap events from JS-side detection
-        // Native view hierarchy inspection is unreliable in React Native,
-        // so dead tap detection runs in JS and reports back via logEvent.
+        // Handle legacy/direct dead_tap events while native-side detection owns
+        // the automatic dead tap pipeline.
         if (eventType == "dead_tap") {
             val detailsMap = details.toHashMap()
             val x = (detailsMap["x"] as? Number)?.toLong()?.coerceAtLeast(0) ?: 0L
             val y = (detailsMap["y"] as? Number)?.toLong()?.coerceAtLeast(0) ?: 0L
             val label = detailsMap["label"]?.toString() ?: "unknown"
+            if (InteractionRecorder.shared?.isKeyboardVisible() == true) {
+                promise.resolve(createResultMap(true))
+                return
+            }
             TelemetryPipeline.shared?.recordDeadTapEvent(label, x, y)
             ReplayOrchestrator.shared?.incrementDeadTapTally()
             promise.resolve(createResultMap(true))

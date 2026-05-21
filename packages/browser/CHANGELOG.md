@@ -1,5 +1,13 @@
 # @rejourneyco/browser Release Notes
 
+## 0.2.0 - 2026-05-21
+
+### Added
+
+- UTM tracking for web replays, including first-touch campaign metadata and referral attribution.
+- Console Logs For Every Replay, with browser console output captured as replay timeline events by default.
+- JS API Call Tracking for `fetch` and `XMLHttpRequest` requests, including timing, method, status, and URL telemetry.
+
 ## 0.1.0 - 2026-05-17
 
 First public release of the Rejourney web SDK.

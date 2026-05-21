@@ -11,6 +11,7 @@ import {
   safeSetTimeout,
 } from './browser.js';
 import { classifyWebClient } from './botDetection.js';
+import { cleanupConsoleTracking, initConsoleTracking } from './consoleTracking.js';
 import { applyRemoteConfig, fetchRemoteConfig, isDomainAllowed, isSampledIn, mergeWebConfig, normalizeBaseUrl } from './config.js';
 import { DEFAULT_API_URL, SDK_VERSION } from './constants.js';
 import { collectWebDeviceInfoWithHints } from './deviceInfo.js';
@@ -67,6 +68,7 @@ export class RejourneyWebClient implements RejourneyAPI {
   private metadata: Record<string, PrimitiveMetadataValue> = {};
   private pendingEvents: RejourneyEvent[] = [];
   private consent: RejourneyConsentState = { analytics: true, replay: true };
+  private startWhenConsentGranted = false;
   private deviceInfo: WebDeviceInfo | null = null;
   private currentScreen: string | null = null;
   private maxSessionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -129,13 +131,22 @@ export class RejourneyWebClient implements RejourneyAPI {
   }
 
   setConsent(consent: RejourneyConsentState): void {
+    const hadNoConsent = this.consent.analytics === false && this.consent.replay === false;
     this.consent = { ...this.consent, ...consent };
     if (consent.replay === false && this.recorder) {
       this.recorder.stop();
       this.recorder = null;
     }
     if (consent.analytics === false && consent.replay === false) {
+      this.startWhenConsentGranted = false;
       void this.stop().then(() => clearAllQueues());
+      return;
+    }
+
+    const hasConsent = this.consent.analytics !== false || this.consent.replay !== false;
+    if (hadNoConsent && hasConsent && this.startWhenConsentGranted && !this.session) {
+      this.startWhenConsentGranted = false;
+      void this.start();
     }
   }
 
@@ -280,7 +291,11 @@ export class RejourneyWebClient implements RejourneyAPI {
     if (this.session) return true;
     if (!isBrowser()) return false;
     if (this.config.enabled === false) return false;
-    if (this.consent.analytics === false && this.consent.replay === false) return false;
+    if (this.consent.analytics === false && this.consent.replay === false) {
+      this.startWhenConsentGranted = true;
+      return false;
+    }
+    this.startWhenConsentGranted = false;
 
     const classification = await classifyWebClient(this.config);
     if (!classification.shouldRecord) {
@@ -417,12 +432,13 @@ export class RejourneyWebClient implements RejourneyAPI {
       });
     }
 
-    initInteractionTracking(() => this.currentScreen, (event) => this.queueEvent(event));
+    initInteractionTracking(() => this.currentScreen, (event) => this.queueEvent(event), this.config);
 
     if (this.config.autoTrackNetwork !== false) {
       initNetworkInterceptor((request) => this.logNetworkRequest(request), this.config);
     }
 
+    initConsoleTracking(this.config, (event) => this.queueEvent(event));
     initErrorTracking(this.config, (event) => this.queueEvent(event));
     initLifecycleTracking({
       onHidden: () => void this.handleHidden('visibility_hidden'),
@@ -815,6 +831,7 @@ export class RejourneyWebClient implements RejourneyAPI {
     cleanupErrorTracking();
     cleanupLifecycleTracking();
     cleanupInteractionTracking();
+    cleanupConsoleTracking();
     disableNetworkInterceptor();
     this.uploadQueue?.stopTimers();
     const uploadsFlushed = await this.uploadQueue?.flushAll() ?? true;
@@ -862,6 +879,9 @@ export class RejourneyWebClient implements RejourneyAPI {
     }
 
     this.uploadQueue?.queueEvent(event);
+    if (event.type === 'link_click') {
+      void this.uploadQueue?.flushEvents();
+    }
   }
 
   private logNetworkRequest(request: NetworkRequestParams): void {

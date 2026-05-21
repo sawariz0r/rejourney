@@ -473,6 +473,12 @@ public final class ReplayOrchestrator: NSObject {
         captureNativeSheets = cfg["captureNativeSheets"] as? Bool ?? true
         wifiRequired = cfg["wifiOnly"] as? Bool ?? false
         frameBundleSize = cfg["screenshotBatchSize"] as? Int ?? 3
+        InteractionRecorder.shared.configureRageTapDetection(
+            enabled: cfg["detectRageTaps"] as? Bool ?? true,
+            threshold: cfg["rageTapThreshold"] as? Int ?? 3,
+            timeWindowMs: cfg["rageTapTimeWindow"] as? Int ?? 500,
+            radius: CGFloat(cfg["rageTapRadius"] as? Double ?? 50)
+        )
         SegmentDispatcher.shared.collectGeoLocation = cfg["collectGeoLocation"] as? Bool ?? true
         SegmentDispatcher.shared.observeOnly = cfg["observeOnly"] as? Bool ?? false
     }

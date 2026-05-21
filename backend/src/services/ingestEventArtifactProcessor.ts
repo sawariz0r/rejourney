@@ -24,11 +24,24 @@ const WEB_ATTRIBUTION_METADATA_KEYS = [
     'webAttributionCampaign',
     'webAttributionTerm',
     'webAttributionContent',
+    'webAttributionCampaignId',
+    'webAttributionSourcePlatform',
+    'webAttributionCreativeFormat',
+    'webAttributionMarketingTactic',
     'webAttributionChannel',
     'webLandingRoute',
     'webEntryPath',
     'webEntryUrl',
     'webNavigationType',
+    'utm_id',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_term',
+    'utm_content',
+    'utm_source_platform',
+    'utm_creative_format',
+    'utm_marketing_tactic',
 ] as const;
 
 function parseMaybeGzippedJson(data: Buffer): any {
@@ -63,17 +76,42 @@ function extractWebAttribution(event: any): any | null {
     return attribution && typeof attribution === 'object' ? attribution : null;
 }
 
-function buildWebAttributionMetadata(event: any): Record<string, string> {
+export function buildWebAttributionMetadata(event: any): Record<string, string> {
     const attribution = extractWebAttribution(event);
     if (!attribution) return {};
 
+    const entryQuery = attribution.entryQuery && typeof attribution.entryQuery === 'object' ? attribution.entryQuery : {};
+    const readQueryValue = (queryKey: string) => {
+        const directValue = normalizeMetadataString(entryQuery[queryKey]) || normalizeMetadataString(entryQuery[queryKey.toLowerCase()]);
+        if (directValue) return directValue;
+        const normalizedKey = queryKey.toLowerCase();
+        for (const [key, value] of Object.entries(entryQuery)) {
+            if (key.toLowerCase() === normalizedKey) {
+                return normalizeMetadataString(value);
+            }
+        }
+        return null;
+    };
+    const readAttributionValue = (field: string, queryKey: string) => (
+        normalizeMetadataString(attribution[field]) ||
+        readQueryValue(queryKey)
+    );
+    const source = readAttributionValue('source', 'utm_source');
+    const medium = readAttributionValue('medium', 'utm_medium');
+    const campaign = readAttributionValue('campaign', 'utm_campaign');
+    const term = readAttributionValue('term', 'utm_term');
+    const content = readAttributionValue('content', 'utm_content');
+    const campaignId = readAttributionValue('campaignId', 'utm_id');
+    const sourcePlatform = readAttributionValue('sourcePlatform', 'utm_source_platform');
+    const creativeFormat = readAttributionValue('creativeFormat', 'utm_creative_format');
+    const marketingTactic = readAttributionValue('marketingTactic', 'utm_marketing_tactic');
     const referrerDomain =
         normalizeMetadataString(attribution.referrerDomain) ||
         hostnameFromUrl(attribution.referrer);
     const channel = normalizeMetadataString(attribution.channel, 128);
     const webReferral =
         referrerDomain ||
-        normalizeMetadataString(attribution.source, 256) ||
+        normalizeMetadataString(source, 256) ||
         (channel === 'direct' ? 'Direct' : null);
 
     const updates: Record<string, string> = {};
@@ -85,16 +123,29 @@ function buildWebAttributionMetadata(event: any): Record<string, string> {
     assign('webReferral', webReferral);
     assign('webReferrer', attribution.referrer, 2048);
     assign('webReferrerDomain', referrerDomain);
-    assign('webAttributionSource', attribution.source);
-    assign('webAttributionMedium', attribution.medium);
-    assign('webAttributionCampaign', attribution.campaign);
-    assign('webAttributionTerm', attribution.term);
-    assign('webAttributionContent', attribution.content);
+    assign('webAttributionSource', source);
+    assign('webAttributionMedium', medium);
+    assign('webAttributionCampaign', campaign);
+    assign('webAttributionTerm', term);
+    assign('webAttributionContent', content);
+    assign('webAttributionCampaignId', campaignId);
+    assign('webAttributionSourcePlatform', sourcePlatform);
+    assign('webAttributionCreativeFormat', creativeFormat);
+    assign('webAttributionMarketingTactic', marketingTactic);
     assign('webAttributionChannel', channel);
     assign('webLandingRoute', attribution.landingRoute);
     assign('webEntryPath', attribution.entryPath);
     assign('webEntryUrl', attribution.entryUrl, 2048);
     assign('webNavigationType', attribution.navigationType, 128);
+    assign('utm_id', campaignId);
+    assign('utm_source', source);
+    assign('utm_medium', medium);
+    assign('utm_campaign', campaign);
+    assign('utm_term', term);
+    assign('utm_content', content);
+    assign('utm_source_platform', sourcePlatform);
+    assign('utm_creative_format', creativeFormat);
+    assign('utm_marketing_tactic', marketingTactic);
 
     return updates;
 }
@@ -234,24 +285,48 @@ export async function processEventsArtifact(job: any, session: any, metrics: any
     // Track current screen for touch coordinate association
     let currentScreen: string | null = null;
 
-    // Screen touch heatmap data: screenName -> { touchBuckets, rageTapBuckets, touchCount, rageTapCount, firstSeenMs }
+    type HeatmapCoordinateFrame = {
+        width: number;
+        height: number;
+        pageWidth: number | null;
+        pageHeight: number | null;
+        viewportWidth: number;
+        viewportHeight: number;
+        usesPageCoordinates: boolean;
+    };
+
+    // Screen touch heatmap data: screenName -> aggregated coordinate buckets and the largest observed frame dimensions.
     const screenHeatmapData: Record<string, {
         touchBuckets: Record<string, number>;
         rageTapBuckets: Record<string, number>;
         totalTouches: number;
         totalRageTaps: number;
         firstSeenMs: number | null; // Timestamp when this screen was first seen in this session
+        pageWidth: number | null;
+        pageHeight: number | null;
+        viewportWidth: number | null;
+        viewportHeight: number | null;
     }> = {};
 
     // Helper to bucket coordinates to grid cells (50 columns x 100 rows for fine-grained heatmaps)
-    const bucketCoordinate = (x: number, y: number, screenWidth: number, screenHeight: number): string => {
+    const bucketCoordinate = (x: number, y: number, frame: HeatmapCoordinateFrame): string => {
         // Normalize to 0-1 range
-        const normX = Math.max(0, Math.min(1, x / screenWidth));
-        const normY = Math.max(0, Math.min(1, y / screenHeight));
+        const normX = Math.max(0, Math.min(1, x / frame.width));
+        const normY = Math.max(0, Math.min(1, y / frame.height));
         // Bucket to fine grid (50 columns x 100 rows) for more precise heatmap data
         const bucketX = Math.floor(normX * 50) / 50;
         const bucketY = Math.floor(normY * 100) / 100;
         return `${bucketX.toFixed(2)},${bucketY.toFixed(2)}`;
+    };
+
+    const coercePositiveNumber = (value: unknown): number | null => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    };
+
+    const coerceNumber = (value: unknown): number | null => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
     };
 
     const eventTimestampMs = (event: any): number | null => {
@@ -279,6 +354,10 @@ export async function processEventsArtifact(job: any, session: any, metrics: any
                 totalTouches: 0,
                 totalRageTaps: 0,
                 firstSeenMs,
+                pageWidth: null,
+                pageHeight: null,
+                viewportWidth: null,
+                viewportHeight: null,
             };
         } else if (!screenHeatmapData[screenName].firstSeenMs && firstSeenMs) {
             screenHeatmapData[screenName].firstSeenMs = firstSeenMs;
@@ -296,25 +375,57 @@ export async function processEventsArtifact(job: any, session: any, metrics: any
         return screenName;
     };
 
-    const getCoordinateFrame = (event: any): { width: number; height: number } => {
-        const width = Number(
+    const getCoordinateFrame = (event: any): HeatmapCoordinateFrame => {
+        const viewportWidth = coercePositiveNumber(
             event?.viewportWidth ??
             event?.payload?.viewportWidth ??
             deviceInfo?.viewportWidth ??
             deviceInfo?.screenWidth ??
             375
-        );
-        const height = Number(
+        ) ?? 375;
+        const viewportHeight = coercePositiveNumber(
             event?.viewportHeight ??
             event?.payload?.viewportHeight ??
             deviceInfo?.viewportHeight ??
             deviceInfo?.screenHeight ??
             812
+        ) ?? 812;
+        const documentWidth = coercePositiveNumber(event?.documentWidth ?? event?.payload?.documentWidth);
+        const documentHeight = coercePositiveNumber(event?.documentHeight ?? event?.payload?.documentHeight);
+        const scrollX = coerceNumber(event?.scrollX ?? event?.payload?.scrollX) ?? 0;
+        const scrollY = coerceNumber(event?.scrollY ?? event?.payload?.scrollY) ?? 0;
+        const hasDocumentFrame = Boolean(documentWidth && documentHeight);
+        const usesPageCoordinates = Boolean(
+            hasDocumentFrame &&
+            (
+                (documentWidth ?? 0) > viewportWidth * 1.02 ||
+                (documentHeight ?? 0) > viewportHeight * 1.02 ||
+                scrollX > 0 ||
+                scrollY > 0
+            )
         );
+
         return {
-            width: Number.isFinite(width) && width > 0 ? width : 375,
-            height: Number.isFinite(height) && height > 0 ? height : 812,
+            width: usesPageCoordinates ? documentWidth! : viewportWidth,
+            height: usesPageCoordinates ? documentHeight! : viewportHeight,
+            pageWidth: usesPageCoordinates ? documentWidth : null,
+            pageHeight: usesPageCoordinates ? documentHeight : null,
+            viewportWidth,
+            viewportHeight,
+            usesPageCoordinates,
         };
+    };
+
+    const updateHeatmapFrameStats = (
+        stats: (typeof screenHeatmapData)[string],
+        frame: HeatmapCoordinateFrame,
+    ) => {
+        stats.viewportWidth = Math.max(stats.viewportWidth ?? 0, Math.round(frame.viewportWidth));
+        stats.viewportHeight = Math.max(stats.viewportHeight ?? 0, Math.round(frame.viewportHeight));
+        if (frame.usesPageCoordinates && frame.pageWidth && frame.pageHeight) {
+            stats.pageWidth = Math.max(stats.pageWidth ?? 0, Math.round(frame.pageWidth));
+            stats.pageHeight = Math.max(stats.pageHeight ?? 0, Math.round(frame.pageHeight));
+        }
     };
 
     const addHeatmapTouch = (
@@ -330,9 +441,12 @@ export async function processEventsArtifact(job: any, session: any, metrics: any
         const tapY = Number(y);
         if (!Number.isFinite(tapX) || !Number.isFinite(tapY) || tapX < 0 || tapY < 0) return;
 
-        const { width, height } = getCoordinateFrame(event);
-        const bucket = bucketCoordinate(tapX, tapY, width, height);
+        const frame = getCoordinateFrame(event);
+        const scrollX = frame.usesPageCoordinates ? (coerceNumber(event?.scrollX ?? event?.payload?.scrollX) ?? 0) : 0;
+        const scrollY = frame.usesPageCoordinates ? (coerceNumber(event?.scrollY ?? event?.payload?.scrollY) ?? 0) : 0;
+        const bucket = bucketCoordinate(tapX + scrollX, tapY + scrollY, frame);
         const stats = ensureHeatmapStats(screenName, firstSeenMs);
+        updateHeatmapFrameStats(stats, frame);
         stats.touchBuckets[bucket] = (stats.touchBuckets[bucket] || 0) + 1;
         stats.totalTouches++;
 
@@ -686,6 +800,10 @@ export async function processEventsArtifact(job: any, session: any, metrics: any
                             totalRageTaps: heatmapStats.totalRageTaps,
                             sampleSessionId: job.sessionId,
                             screenFirstSeenMs: heatmapStats.firstSeenMs,
+                            pageWidth: heatmapStats.pageWidth,
+                            pageHeight: heatmapStats.pageHeight,
+                            viewportWidth: heatmapStats.viewportWidth,
+                            viewportHeight: heatmapStats.viewportHeight,
                             updatedAt: new Date(),
                         })
                         .onConflictDoUpdate({
@@ -721,6 +839,10 @@ export async function processEventsArtifact(job: any, session: any, metrics: any
                                 // Keep the earlier sample session if already present
                                 sampleSessionId: sql`COALESCE(${screenTouchHeatmaps.sampleSessionId}, EXCLUDED.sample_session_id)`,
                                 screenFirstSeenMs: sql`COALESCE(${screenTouchHeatmaps.screenFirstSeenMs}, EXCLUDED.screen_first_seen_ms)`,
+                                pageWidth: sql`NULLIF(GREATEST(COALESCE(${screenTouchHeatmaps.pageWidth}, 0), COALESCE(EXCLUDED.page_width, 0)), 0)`,
+                                pageHeight: sql`NULLIF(GREATEST(COALESCE(${screenTouchHeatmaps.pageHeight}, 0), COALESCE(EXCLUDED.page_height, 0)), 0)`,
+                                viewportWidth: sql`NULLIF(GREATEST(COALESCE(${screenTouchHeatmaps.viewportWidth}, 0), COALESCE(EXCLUDED.viewport_width, 0)), 0)`,
+                                viewportHeight: sql`NULLIF(GREATEST(COALESCE(${screenTouchHeatmaps.viewportHeight}, 0), COALESCE(EXCLUDED.viewport_height, 0)), 0)`,
                                 updatedAt: new Date(),
                             }
                         });

@@ -10,6 +10,10 @@ export function FixtureTestPanel() {
   const [resourceErrorVisible, setResourceErrorVisible] = useState(false);
 
   function logCustomEvent() {
+    console.info('Rejourney web fixture custom event', {
+      plan,
+      source: 'next_fixture',
+    });
     Rejourney.logEvent('web_fixture_custom_event', {
       plan,
       source: 'next_fixture',

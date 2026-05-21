@@ -38,6 +38,10 @@ COPY packages/browser/package.json packages/browser/
 # Install dependencies (from root)
 RUN --mount=type=cache,target=/root/.npm npm ci --legacy-peer-deps --ignore-scripts
 
+# Build the local browser SDK used by the dashboard.
+COPY packages/browser/ packages/browser/
+RUN npm --workspace @rejourneyco/browser run prepack
+
 # Copy web-ui source code
 COPY dashboard/web-ui/ dashboard/web-ui/
 
@@ -73,6 +77,10 @@ COPY packages/browser/package.json packages/browser/
 
 # Install production dependencies only (from root)
 RUN --mount=type=cache,target=/root/.npm npm ci --legacy-peer-deps --omit=dev --ignore-scripts
+
+# Runtime installs link @rejourneyco/browser to the local workspace package.
+# Carry over the compiled SDK files required by its package exports.
+COPY --from=build /app/packages/browser/dist packages/browser/dist
 
 # Copy the built application and server
 COPY --from=build /app/dashboard/web-ui/build dashboard/web-ui/build

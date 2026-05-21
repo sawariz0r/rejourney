@@ -86,6 +86,7 @@ export const ANRDetail: React.FC<{ anrId?: string; projectId?: string }> = ({
 
   const threadState = anr?.threadState || '';
   const deviceMeta = anr?.deviceMetadata || {};
+  const canOpenReplay = Boolean(anr?.sessionId && anr?.canOpenReplay);
 
   const handleCopyStack = () => {
     if (!threadState) return;
@@ -129,7 +130,7 @@ export const ANRDetail: React.FC<{ anrId?: string; projectId?: string }> = ({
           <NeoCard variant="flat" className="p-8 text-center">
             <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-violet-500" />
             <p className="text-lg font-semibold text-slate-900">{error || 'ANR not found.'}</p>
-            <NeoButton variant="primary" className="mt-5" onClick={() => navigate(`${pathPrefix}/stability/anrs`)}>
+            <NeoButton variant="primary" className="mt-5" onClick={() => navigate(`${pathPrefix}/stability?filter=anrs`)}>
               Back to ANRs
             </NeoButton>
           </NeoCard>
@@ -150,18 +151,20 @@ export const ANRDetail: React.FC<{ anrId?: string; projectId?: string }> = ({
           variant="secondary"
           size="sm"
           leftIcon={<ArrowLeft size={14} />}
-          onClick={() => navigate(`${pathPrefix}/stability/anrs`)}
+          onClick={() => navigate(`${pathPrefix}/stability?filter=anrs`)}
         >
           Back to ANRs
         </NeoButton>
-        <NeoButton
-          variant="primary"
-          size="sm"
-          leftIcon={<Play size={14} />}
-          onClick={() => navigate(`${pathPrefix}/sessions/${anr.sessionId}`)}
-        >
-          Replay Session
-        </NeoButton>
+        {canOpenReplay && (
+          <NeoButton
+            variant="primary"
+            size="sm"
+            leftIcon={<Play size={14} />}
+            onClick={() => navigate(`${pathPrefix}/sessions/${anr.sessionId}`)}
+          >
+            Replay Session
+          </NeoButton>
+        )}
       </DashboardPageHeader>
 
       <div className="mx-auto w-full max-w-[1800px] space-y-4 px-6 pt-6">

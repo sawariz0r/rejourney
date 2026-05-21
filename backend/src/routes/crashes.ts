@@ -4,10 +4,18 @@
 
 import { Router } from 'express';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { db, crashes, projects, teamMembers } from '../db/client.js';
+import { db, crashes, projects, sessions, teamMembers } from '../db/client.js';
 import { sessionAuth, asyncHandler, ApiError } from '../middleware/index.js';
 
 const router = Router();
+
+function canOpenReplayFromSessionFields(session: {
+    replayAvailable?: boolean | null;
+    recordingDeleted?: boolean | null;
+    isReplayExpired?: boolean | null;
+}): boolean {
+    return Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired;
+}
 
 /**
  * Get crashes for a project
@@ -91,19 +99,27 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const [crash] = await db
-            .select()
+        const [row] = await db
+            .select({
+                crash: crashes,
+                replayAvailable: sessions.replayAvailable,
+                recordingDeleted: sessions.recordingDeleted,
+                isReplayExpired: sessions.isReplayExpired,
+            })
             .from(crashes)
+            .leftJoin(sessions, eq(crashes.sessionId, sessions.id))
             .where(and(eq(crashes.id, crashId), eq(crashes.projectId, projectId)))
             .limit(1);
 
-        if (!crash) {
+        if (!row) {
             throw ApiError.notFound('Crash not found');
         }
+        const crash = row.crash;
 
         res.json({
             ...crash,
             stackTrace: crash.stackTrace || null,
+            canOpenReplay: canOpenReplayFromSessionFields(row),
         });
     })
 );

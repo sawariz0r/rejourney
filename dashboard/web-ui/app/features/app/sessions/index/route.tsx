@@ -18,12 +18,10 @@ import {
   Wifi,
   Signal,
   Globe,
-  Activity,
   Filter,
   Loader,
   Gauge,
   User,
-  Database,
   X,
   MonitorSmartphone,
 } from 'lucide-react';
@@ -789,200 +787,8 @@ export const RecordingsList: React.FC = () => {
 
       {/* List Content — table header sticks when scrolling */}
       <div className="flex-1 w-full max-w-full px-4 sm:px-6 pt-4 pb-24">
-        <div className="space-y-3 md:hidden">
-          {paginatedSessions.length === 0 && (
-            <div className="border-2 border-black bg-white p-8 text-center shadow-neo">
-              <div className="mx-auto mb-4 inline-flex items-center justify-center border-2 border-black bg-[#86efac] p-4 shadow-neo-sm">
-                <Smartphone className="w-8 h-8 text-black" />
-              </div>
-              <h3 className="text-base font-black uppercase text-black mb-1">
-                {selectedProjectId ? 'No Sessions Found' : 'No Project Selected'}
-              </h3>
-              <p className="text-slate-600 text-sm font-semibold">
-                {selectedProjectId
-                  ? 'Adjust your filters or search query'
-                  : 'Select or create a project to view replay data.'}
-              </p>
-            </div>
-          )}
-
-          {paginatedSessions.map((session) => {
-            const screensCount = (session as any).screensVisited?.length || 0;
-            const userId = session.userId || (session as any).anonymousDisplayName || 'Anonymous';
-            const hasSlowStart = ((session as any).appStartupTimeMs || 0) > 3000;
-            const hasSlowApi = (session.apiAvgResponseMs || 0) > 1000;
-            const hasDeadTaps = ((session as any).deadTapCount || 0) > 0;
-            const geoDisplay = formatGeoDisplay((session as any).geoLocation);
-            const hasReplay = hasSuccessfulRecording(session);
-            const effectiveStatus = (session as any).effectiveStatus || session.status;
-            const canOpenReplay = (session as any).canOpenReplay ?? hasReplay;
-            const isLiveIngest = Boolean((session as any).isLiveIngest);
-            const isBackgroundProcessing = Boolean((session as any).isBackgroundProcessing);
-            const displayDeviceModel = formatDeviceModel(session.deviceModel);
-            const webSession = isWebSession(session);
-            const webEnvironment = webSession ? getWebSessionEnvironment(session) : null;
-            const platformLabel = getPlatformLabel(session);
-            const canNavigateToSession =
-              canOpenReplay ||
-              isLiveIngest ||
-              isBackgroundProcessing ||
-              effectiveStatus === 'processing' ||
-              effectiveStatus === 'pending' ||
-              session.status === 'processing' ||
-              session.status === 'pending' ||
-              hasReplay;
-            const hasIssues = (session.crashCount || 0) > 0 ||
-              ((session as any).anrCount || 0) > 0 ||
-              ((session as any).errorCount || 0) > 0 ||
-              (session.rageTapCount || 0) > 0 ||
-              hasDeadTaps ||
-              hasSlowStart || hasSlowApi;
-            const cardAccent = getRowAccentColor(session, hasIssues, !canNavigateToSession, hasSlowStart, hasSlowApi);
-
-            return (
-              <article
-                key={session.id}
-                className={`border-2 border-black bg-white p-4 shadow-neo-sm transition-all ${canNavigateToSession ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-neo' : ''}`}
-                style={{ borderLeftColor: cardAccent, borderLeftWidth: '4px' }}
-                onClick={() => canNavigateToSession && navigate(`${pathPrefix}/sessions/${session.id}`)}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-	                    <div className="flex min-w-0 items-center gap-2">
-	                      <span
-	                        className={`inline-flex h-5 w-5 shrink-0 items-center justify-center border ${getPlatformIndicatorClass(!canNavigateToSession, hasIssues)}`}
-	                        title={`${platformLabel} session${hasIssues ? ' with issues' : ''}`}
-	                      >
-	                        <SessionPlatformIcon session={session} className="h-3 w-3" />
-	                      </span>
-	                      <h3 className="truncate font-mono text-sm font-semibold text-slate-900" title={userId}>{userId}</h3>
-	                    </div>
-	                    {webSession ? (
-	                      <div className="mt-1 space-y-1 text-[11px] font-medium uppercase text-slate-500">
-	                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-	                          <span title={webEnvironment?.browserTitle}>{webEnvironment?.browserLabel}</span>
-	                          <span className="h-1 w-1 bg-black"></span>
-	                          <span title={webEnvironment?.osTitle}>{webEnvironment?.osLabel}</span>
-	                        </div>
-	                      </div>
-	                    ) : (
-	                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
-	                        <span title={session.deviceModel}>{displayDeviceModel}</span>
-	                        <span>v{session.appVersion || '?.?.?'}</span>
-	                        <span>{geoDisplay.hasLocation ? geoDisplay.fullLabel : 'Location unknown'}</span>
-	                      </div>
-	                    )}
-	                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (canNavigateToSession) navigate(`${pathPrefix}/sessions/${session.id}`);
-                    }}
-                    disabled={!canNavigateToSession}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center border-2 border-black bg-[#67e8f9] text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-40"
-                    title={canNavigateToSession ? 'Open Replay' : 'Replay unavailable'}
-                  >
-                    <Play size={15} className={canNavigateToSession ? 'fill-current' : ''} />
-                  </button>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
-                  <div className="border-2 border-black bg-[#f8fafc] px-2 py-2 shadow-neo-sm">
-                    <div className="text-[9px] font-black uppercase text-slate-600">Duration</div>
-                    <div className="mt-1 font-mono text-[11px] font-semibold text-slate-900">
-                      {isLiveIngest || (!canOpenReplay && isBackgroundProcessing)
-                        ? 'Live'
-                        : `${Math.floor(session.durationSeconds / 60)}:${String(session.durationSeconds % 60).padStart(2, '0')}`}
-                    </div>
-                  </div>
-                  <div className="border-2 border-black bg-[#f8fafc] px-2 py-2 shadow-neo-sm">
-                    <div className="text-[9px] font-black uppercase text-slate-600">Screens</div>
-                    <div className="mt-1 font-mono text-[11px] font-semibold text-slate-900">{screensCount}</div>
-                  </div>
-                  <div className="col-span-2 border-2 border-black bg-[#f8fafc] px-2 py-2 shadow-neo-sm sm:col-span-1">
-                    <div className="text-[9px] font-black uppercase text-slate-600">Avg API</div>
-                    <div className="mt-1 font-mono text-[11px] font-semibold text-slate-900">{session.apiAvgResponseMs ? `${Math.round(session.apiAvgResponseMs)}ms` : '-'}</div>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {session.isFirstSession && (
-                    <span
-                      className="inline-flex items-center border-2 border-black bg-[#86efac] px-2 py-0.5 text-[10px] font-black uppercase text-black shadow-neo-sm"
-                      title="First recorded session for this visitor in this project"
-                    >
-                      NEW USER
-                    </span>
-                  )}
-                  {!hasIssues && (
-                    <span className="inline-flex items-center border border-[#15803d] bg-[#dcfce7] px-2 py-0.5 text-[10px] font-black uppercase text-[#14532d]">
-                      HEALTHY
-                    </span>
-                  )}
-                  {(session.crashCount || 0) > 0 && <NeoBadge variant="danger" size="sm">CRASH</NeoBadge>}
-                  {((session as any).anrCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ANR</NeoBadge>}
-                  {((session as any).errorCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ERR</NeoBadge>}
-                  {(session.rageTapCount || 0) > 0 && <NeoBadge variant="danger" size="sm">RAGE</NeoBadge>}
-                  {hasDeadTaps && <NeoBadge variant="neutral" size="sm">DEAD</NeoBadge>}
-                  {hasSlowStart && <NeoBadge variant="neutral" size="sm">SLOW</NeoBadge>}
-                  {hasSlowApi && <NeoBadge variant="neutral" size="sm">API</NeoBadge>}
-                </div>
-              </article>
-            );
-          })}
-
-          {filteredSessions.length > 0 && (
-            <div className="border-2 border-black bg-white p-3 shadow-neo-sm">
-              <div className="text-center text-xs font-bold text-slate-500">
-                Showing <span className="text-slate-900">{startIndex}-{endIndex}</span> of{' '}
-                <span className="text-slate-900">{filteredSessions.length.toLocaleString()}</span> loaded
-              </div>
-
-              <div className="mt-3 flex items-center justify-center gap-1">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="border-2 border-black bg-white p-2 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-30"
-                  title="Previous page"
-                >
-                  <ChevronLeft size={15} />
-                </button>
-                <span className="min-w-[7rem] px-3 py-2 text-center text-xs font-bold text-slate-700">
-                  Page {currentPage} of {totalPages || 1}
-                </span>
-                <button
-                  onClick={async () => {
-                    if (currentPage === totalPages && hasMore && !isLoadingMore) {
-                      await handleLoadMore();
-                      setCurrentPage(p => p + 1);
-                    } else if (currentPage < totalPages) {
-                      setCurrentPage(p => p + 1);
-                    }
-                  }}
-                  disabled={(currentPage >= totalPages && !hasMore) || isLoadingMore}
-                  className="border-2 border-black bg-white p-2 shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-30"
-                  title="Next page"
-                >
-                  <ChevronRight size={15} />
-                </button>
-              </div>
-
-              {hasMore && currentPage >= totalPages && (
-                <button
-                  onClick={handleLoadMore}
-                  disabled={isLoadingMore}
-                  className="mt-3 inline-flex w-full items-center justify-center border-2 border-black bg-[#86efac] px-3 py-2 text-xs font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isLoadingMore ? <Loader size={13} className="mr-2 animate-spin" /> : null}
-                  Load More
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="hidden overflow-x-auto md:block">
-        <div className="w-full overflow-hidden border-2 border-black bg-white shadow-neo">
+        <div className="dashboard-mobile-scroll overflow-x-auto">
+        <div className="w-full min-w-[540px] overflow-hidden border-2 border-black bg-white shadow-neo md:min-w-0">
           <table className="w-full table-fixed border-collapse">
             <thead>
               <tr className="border-b-2 border-black bg-[#cffafe]">
@@ -1030,7 +836,6 @@ export const RecordingsList: React.FC = () => {
               // Performance issue detection
               const hasSlowStart = ((session as any).appStartupTimeMs || 0) > 3000;
               const hasSlowApi = (session.apiAvgResponseMs || 0) > 1000;
-              const durationMinutes = session.durationSeconds / 60;
               const hasDeadTaps = ((session as any).deadTapCount || 0) > 0;
               const geoDisplay = formatGeoDisplay((session as any).geoLocation);
 

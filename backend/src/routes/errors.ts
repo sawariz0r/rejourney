@@ -6,10 +6,18 @@
 
 import { Router } from 'express';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { db, errors, projects, teamMembers } from '../db/client.js';
+import { db, errors, projects, sessions, teamMembers } from '../db/client.js';
 import { sessionAuth, asyncHandler, ApiError } from '../middleware/index.js';
 
 const router = Router();
+
+function canOpenReplayFromSessionFields(session: {
+    replayAvailable?: boolean | null;
+    recordingDeleted?: boolean | null;
+    isReplayExpired?: boolean | null;
+}): boolean {
+    return Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired;
+}
 
 /**
  * Get errors for a project
@@ -93,17 +101,26 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const [error] = await db
-            .select()
+        const [row] = await db
+            .select({
+                error: errors,
+                replayAvailable: sessions.replayAvailable,
+                recordingDeleted: sessions.recordingDeleted,
+                isReplayExpired: sessions.isReplayExpired,
+            })
             .from(errors)
+            .leftJoin(sessions, eq(errors.sessionId, sessions.id))
             .where(and(eq(errors.id, errorId), eq(errors.projectId, projectId)))
             .limit(1);
 
-        if (!error) {
+        if (!row) {
             throw ApiError.notFound('Error not found');
         }
 
-        res.json(error);
+        res.json({
+            ...row.error,
+            canOpenReplay: canOpenReplayFromSessionFields(row),
+        });
     })
 );
 

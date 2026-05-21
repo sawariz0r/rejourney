@@ -37,6 +37,8 @@ export interface RejourneyConfig {
   rageTapThreshold?: number;
   /** Rage tap time window in ms (default: 500) */
   rageTapTimeWindow?: number;
+  /** Rage tap clustering radius in points/dp (default: 50) */
+  rageTapRadius?: number;
   /** Enable debug logging (default: false) */
   debug?: boolean;
   /**

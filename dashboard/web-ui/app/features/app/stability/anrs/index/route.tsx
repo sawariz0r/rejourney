@@ -32,8 +32,8 @@ import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 
 const formatCompact = (value: number): string => {
-  if (value >= 1_000_000) return `\${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `\${(value / 1_000).toFixed(1)}k`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
   return value.toString();
 };
 
@@ -105,7 +105,7 @@ export const ANRsList: React.FC = () => {
 
     let attempts = 0;
     const scrollInterval = setInterval(() => {
-      const element = document.getElementById(`anr-item-\${targetAnr.id}`);
+      const element = document.getElementById(`anr-item-${targetAnr.id}`);
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         clearInterval(scrollInterval);
@@ -131,7 +131,7 @@ export const ANRsList: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `anr-thread-\${id}-\${Date.now()}.txt`;
+    link.download = `anr-thread-${id}-${Date.now()}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -203,19 +203,20 @@ export const ANRsList: React.FC = () => {
               const deviceModel = formatDeviceModel(rawDeviceModel);
               const appVersion = anr.deviceMetadata?.appVersion || '?';
               const shortThread = anr.threadState?.split('\n')[0] || 'App Not Responding';
+              const canOpenReplay = Boolean(anr.sessionId && anr.canOpenReplay);
               
               return (
                 <div
                   key={anr.id}
-                  id={`anr-item-\${anr.id}`}
-                  className={`transition-colors \${isExpanded ? 'bg-violet-50/20' : 'hover:bg-slate-50'}`}
+                  id={`anr-item-${anr.id}`}
+                  className={`transition-colors ${isExpanded ? 'bg-violet-50/20' : 'hover:bg-slate-50'}`}
                 >
                   <div
                     className="group/row flex cursor-pointer items-center gap-4 px-4 py-3"
                     onClick={() => setExpandedAnr(isExpanded ? null : anr.id)}
                   >
                     <div className="flex w-6 shrink-0 justify-center">
-                      <div className={`h-2.5 w-2.5 rounded-full \${isExpanded ? 'bg-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]' : 'bg-slate-300 group-hover/row:bg-violet-400'} transition-all`} />
+                      <div className={`h-2.5 w-2.5 rounded-full ${isExpanded ? 'bg-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]' : 'bg-slate-300 group-hover/row:bg-violet-400'} transition-all`} />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -256,7 +257,7 @@ export const ANRsList: React.FC = () => {
 
                     <div className="flex w-8 justify-end shrink-0">
                       <div
-                        className={`flex h-6 w-6 items-center justify-center rounded text-slate-400 transition \${
+                        className={`flex h-6 w-6 items-center justify-center rounded text-slate-400 transition ${
                           isExpanded ? 'rotate-180 text-violet-600 bg-violet-100' : 'group-hover/row:bg-slate-200 group-hover/row:text-slate-600'
                         }`}
                       >
@@ -330,21 +331,21 @@ export const ANRsList: React.FC = () => {
                                   <p className="text-xs text-violet-700/80 mb-4 leading-relaxed">
                                     Watch the session leading to the ANR to trace user behavior preceding the UI thread block.
                                   </p>
-                                  {anr.sessionId ? (
+                                  {canOpenReplay ? (
                                     <NeoButton 
                                       variant="primary" 
                                       className="w-full justify-center bg-violet-500 hover:bg-violet-600 focus:ring-violet-500 text-white border-0 py-2 shadow-sm"
                                       onClick={(e) => {
                                           e.stopPropagation();
-                                          navigate(`\${pathPrefix}/sessions/\${anr.sessionId}`);
+                                          navigate(`${pathPrefix}/sessions/${anr.sessionId}`);
                                       }}
                                     >
                                       Play Session
                                     </NeoButton>
                                   ) : (
-                                    <NeoButton variant="secondary" disabled className="w-full justify-center">
-                                      No Session Linked
-                                    </NeoButton>
+                                    <p className="rounded-md border border-violet-200 bg-white px-3 py-2 text-xs font-medium text-violet-700">
+                                      Replay unavailable for this sampled ANR.
+                                    </p>
                                   )}
                                </NeoCard>
 

@@ -22,9 +22,6 @@ import {
   ChevronDown,
   Check,
   Apple,
-  Terminal,
-  AlertOctagon,
-  Clock,
   MessageSquareWarning,
   Mail,
   AlertTriangle,
@@ -250,6 +247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { path: p('/general'), label: 'General', icon: MessageSquareWarning },
         { path: p('/sessions'), label: 'Replays', icon: Database },
+        { path: p('/stability'), label: 'Stability', icon: AlertTriangle },
       ],
     },
     {
@@ -260,14 +258,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { path: p('/analytics/heatmaps'), label: 'Heatmaps', icon: Flame },
         { path: p('/analytics/devices'), label: 'Devices', icon: Smartphone },
         { path: p('/analytics/geo'), label: 'Geographic', icon: Globe },
-      ],
-    },
-    {
-      section: 'Stability',
-      items: [
-        { path: p('/stability/crashes'), label: 'Crashes', icon: AlertOctagon },
-        { path: p('/stability/anrs'), label: 'ANRs', icon: Clock },
-        { path: p('/stability/errors'), label: 'Errors', icon: Terminal },
       ],
     },
     {
@@ -298,14 +288,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const NAV_ACCENT: Record<string, string> = {
     '/general':            '#22d3ee',
     '/sessions':           '#22d3ee',
+    '/stability':          '#f97316',
     '/analytics/api':      '#4ade80',
     '/analytics/journeys': '#f472b6',
     '/analytics/heatmaps': '#f472b6',
     '/analytics/devices':  '#a78bfa',
     '/analytics/geo':      '#38bdf8',
-    '/stability/crashes':  '#f87171',
-    '/stability/anrs':     '#a78bfa',
-    '/stability/errors':   '#fb923c',
     '/alerts/emails':      '#fbbf24',
   };
 

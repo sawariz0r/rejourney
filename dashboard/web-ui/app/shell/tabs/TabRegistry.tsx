@@ -8,9 +8,7 @@ import {
     Smartphone,
     Globe,
     Flame,
-    AlertOctagon,
-    Clock,
-    Terminal,
+    AlertTriangle,
     Mail,
     Play,
     Settings,
@@ -69,12 +67,7 @@ const loadGeo = () => import('~/features/app/analytics/geo/route').then((module)
 const loadJourneys = () => import('~/features/app/analytics/journeys/route').then((module) => ({ default: module.Journeys }));
 const loadHeatmaps = () => import('~/features/app/analytics/heatmaps/route').then((module) => ({ default: module.Heatmaps }));
 const loadAlertEmails = () => import('~/features/app/alerts/email/route').then((module) => ({ default: module.AlertEmails }));
-const loadCrashesList = () => import('~/features/app/stability/crashes/index/route').then((module) => ({ default: module.CrashesList }));
-const loadCrashDetail = () => import('~/features/app/stability/crashes/detail/route').then((module) => ({ default: module.CrashDetail }));
-const loadANRsList = () => import('~/features/app/stability/anrs/index/route').then((module) => ({ default: module.ANRsList }));
-const loadANRDetail = () => import('~/features/app/stability/anrs/detail/route').then((module) => ({ default: module.ANRDetail }));
-const loadErrorsList = () => import('~/features/app/stability/errors/index/route').then((module) => ({ default: module.ErrorsList }));
-const loadErrorDetail = () => import('~/features/app/stability/errors/detail/route').then((module) => ({ default: module.ErrorDetail }));
+const loadStability = () => import('~/features/app/stability/index/route').then((module) => ({ default: module.Stability }));
 const loadTeamSettings = () => import('~/features/app/team/route').then((module) => ({ default: module.TeamSettings }));
 const loadBillingSettings = () => import('~/features/app/billing/route').then((module) => ({ default: module.BillingSettings }));
 const loadAccountSettings = () => import('~/features/app/account/route').then((module) => ({ default: module.AccountSettings }));
@@ -158,33 +151,18 @@ const routes: RouteDefinition[] = [
         },
     },
     {
-        pattern: '/stability/crashes',
-        getInfo: () => ({ id: 'stability-crashes', title: 'Crashes', icon: AlertOctagon }),
-        Component: React.lazy(loadCrashesList),
-        loadComponent: loadCrashesList,
+        pattern: '/stability',
+        getInfo: () => ({ id: 'stability', title: 'Stability', icon: AlertTriangle }),
+        Component: React.lazy(loadStability),
+        loadComponent: loadStability,
         prefetchData: async ({ projectId, timeRange }) => {
             if (!projectId) return;
-            await getCrashesOverview(projectId, timeRange || DEFAULT_PREFETCH_TIME_RANGE);
-        },
-    },
-    {
-        pattern: '/stability/anrs',
-        getInfo: () => ({ id: 'stability-anrs', title: 'ANRs', icon: Clock }),
-        Component: React.lazy(loadANRsList),
-        loadComponent: loadANRsList,
-        prefetchData: async ({ projectId, timeRange }) => {
-            if (!projectId) return;
-            await getANRsOverview(projectId, timeRange || DEFAULT_PREFETCH_TIME_RANGE);
-        },
-    },
-    {
-        pattern: '/stability/errors',
-        getInfo: () => ({ id: 'stability-errors', title: 'Errors', icon: Terminal }),
-        Component: React.lazy(loadErrorsList),
-        loadComponent: loadErrorsList,
-        prefetchData: async ({ projectId, timeRange }) => {
-            if (!projectId) return;
-            await getErrorsOverview(projectId, timeRange || DEFAULT_PREFETCH_TIME_RANGE);
+            const range = timeRange || DEFAULT_PREFETCH_TIME_RANGE;
+            await Promise.allSettled([
+                getCrashesOverview(projectId, range),
+                getANRsOverview(projectId, range),
+                getErrorsOverview(projectId, range),
+            ]);
         },
     },
     {
@@ -215,27 +193,6 @@ const routes: RouteDefinition[] = [
         Component: React.lazy(loadRecordingDetail),
         loadComponent: loadRecordingDetail,
         getProps: (p) => ({ sessionId: p.sessionId }),
-    },
-    {
-        pattern: '/stability/crashes/:projectId/:crashId',
-        getInfo: (p) => ({ id: `crash-${p.crashId}`, title: `Crash ${(p.crashId || '').substring(0, 8)}...`, icon: AlertOctagon }),
-        Component: React.lazy(loadCrashDetail),
-        loadComponent: loadCrashDetail,
-        getProps: (p) => ({ crashId: p.crashId, projectId: p.projectId }),
-    },
-    {
-        pattern: '/stability/anrs/:projectId/:anrId',
-        getInfo: (p) => ({ id: `anr-${p.anrId}`, title: `ANR ${(p.anrId || '').substring(0, 8)}...`, icon: Clock }),
-        Component: React.lazy(loadANRDetail),
-        loadComponent: loadANRDetail,
-        getProps: (p) => ({ anrId: p.anrId, projectId: p.projectId }),
-    },
-    {
-        pattern: '/stability/errors/:projectId/:errorId',
-        getInfo: (p) => ({ id: `error-${p.errorId}`, title: `Error ${(p.errorId || '').substring(0, 8)}...`, icon: Terminal }),
-        Component: React.lazy(loadErrorDetail),
-        loadComponent: loadErrorDetail,
-        getProps: (p) => ({ errorId: p.errorId, projectId: p.projectId }),
     },
     { pattern: '/team', getInfo: () => ({ id: 'team', title: 'Team', icon: Users }), Component: React.lazy(loadTeamSettings), loadComponent: loadTeamSettings },
     { pattern: '/billing', getInfo: () => ({ id: 'billing', title: 'Billing', icon: CreditCard }), Component: React.lazy(loadBillingSettings), loadComponent: loadBillingSettings },

@@ -92,6 +92,7 @@ export const CrashDetail: React.FC<{ crashId?: string; projectId?: string }> = (
   }, [crashId, currentProject, contextLoading]);
 
   const stackTrace = crash?.stackTrace || '';
+  const canOpenReplay = Boolean(crash?.sessionId && crash?.canOpenReplay);
 
   const handleCopyStack = () => {
     if (!stackTrace) return;
@@ -135,7 +136,7 @@ export const CrashDetail: React.FC<{ crashId?: string; projectId?: string }> = (
           <NeoCard variant="flat" className="p-8 text-center">
             <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-rose-500" />
             <p className="text-lg font-semibold text-slate-900">{error || 'Crash not found.'}</p>
-            <NeoButton variant="primary" className="mt-5" onClick={() => navigate(`${pathPrefix}/stability/crashes`)}>
+            <NeoButton variant="primary" className="mt-5" onClick={() => navigate(`${pathPrefix}/stability?filter=crashes`)}>
               Back to Crashes
             </NeoButton>
           </NeoCard>
@@ -156,18 +157,20 @@ export const CrashDetail: React.FC<{ crashId?: string; projectId?: string }> = (
           variant="secondary"
           size="sm"
           leftIcon={<ArrowLeft size={14} />}
-          onClick={() => navigate(`${pathPrefix}/stability/crashes`)}
+          onClick={() => navigate(`${pathPrefix}/stability?filter=crashes`)}
         >
           Back to Crashes
         </NeoButton>
-        <NeoButton
-          variant="primary"
-          size="sm"
-          leftIcon={<Play size={14} />}
-          onClick={() => navigate(`${pathPrefix}/sessions/${crash.sessionId}`)}
-        >
-          Replay Session
-        </NeoButton>
+        {canOpenReplay && (
+          <NeoButton
+            variant="primary"
+            size="sm"
+            leftIcon={<Play size={14} />}
+            onClick={() => navigate(`${pathPrefix}/sessions/${crash.sessionId}`)}
+          >
+            Replay Session
+          </NeoButton>
+        )}
       </DashboardPageHeader>
 
       <div className="mx-auto w-full max-w-[1800px] space-y-4 px-6 pt-6">

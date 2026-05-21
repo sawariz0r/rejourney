@@ -443,9 +443,18 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
         const verifiedUser = normalizeAuthUser(verifyData.user);
         setUser(verifiedUser);
         userRef.current = verifiedUser;
+        setAuthServiceUnavailable(false);
+
+        // The OTP verification response already proves the session cookie was
+        // issued. Let the route transition start immediately; the dashboard
+        // loader will hydrate the full shell, and this refresh backfills any
+        // richer user fields without holding the user on the auth screen.
+        void refreshUser();
+        return { ok: true };
       }
 
-      // Fetch user data after successful login
+      // Older auth responses may omit user data; keep the previous validation
+      // path for that compatibility case.
       const refreshedUser = await refreshUser();
       setAuthServiceUnavailable(false);
       return refreshedUser

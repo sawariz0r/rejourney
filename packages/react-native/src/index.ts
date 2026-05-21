@@ -736,7 +736,7 @@ export const Rejourney: RejourneyAPI = {
           detectRageTaps: _storedConfig?.detectRageTaps !== false,
           rageTapThreshold: _storedConfig?.rageTapThreshold ?? 3,
           rageTapTimeWindow: _storedConfig?.rageTapTimeWindow ?? 500,
-          rageTapRadius: 50,
+          rageTapRadius: _storedConfig?.rageTapRadius ?? 50,
           trackJSErrors: true,
           trackPromiseRejections: true,
           trackReactNativeErrors: true,
@@ -1453,9 +1453,10 @@ function _reinitAutoTrackingForNewSession(): void {
     // 2. Re-initialize auto-tracking with the same config
     getAutoTracking().initAutoTracking(
       {
+        detectRageTaps: _storedConfig?.detectRageTaps !== false,
         rageTapThreshold: _storedConfig?.rageTapThreshold ?? 3,
         rageTapTimeWindow: _storedConfig?.rageTapTimeWindow ?? 500,
-        rageTapRadius: 50,
+        rageTapRadius: _storedConfig?.rageTapRadius ?? 50,
         trackJSErrors: true,
         trackPromiseRejections: true,
         trackReactNativeErrors: true,

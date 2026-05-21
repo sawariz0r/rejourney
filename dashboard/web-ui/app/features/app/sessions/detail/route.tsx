@@ -829,6 +829,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const [metadataCopied, setMetadataCopied] = useState(false);
     const [userIdCopied, setUserIdCopied] = useState(false);
     const [sessionIdCopied, setSessionIdCopied] = useState(false);
+    const [replayUrlCopied, setReplayUrlCopied] = useState(false);
     const [archiveNeighborSessions, setArchiveNeighborSessions] = useState<any[]>([]);
 
     // DOM Inspector state
@@ -2905,6 +2906,35 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         }
     };
 
+    const copyCurrentReplayUrl = async () => {
+        const replayUrl = currentReplayUrl.trim();
+        if (!replayUrl) return;
+        try {
+            await navigator.clipboard.writeText(replayUrl);
+            setReplayUrlCopied(true);
+            setTimeout(() => setReplayUrlCopied(false), 2000);
+        } catch {
+            setReplayUrlCopied(false);
+        }
+    };
+
+    const replayUrlCopyButton = (
+        <button
+            type="button"
+            onClick={copyCurrentReplayUrl}
+            disabled={!currentReplayUrl.trim()}
+            className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-[3px] text-slate-500 transition hover:bg-black/5 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+            title={currentReplayUrl.trim() ? 'Copy current URL' : 'No URL to copy'}
+            aria-label="Copy current replay URL"
+        >
+            {replayUrlCopied ? (
+                <Check className="h-3 w-3 text-emerald-600" strokeWidth={2.25} />
+            ) : (
+                <Copy className="h-3 w-3" strokeWidth={2.25} />
+            )}
+        </button>
+    );
+
     const downloadMetadata = () => {
         if (!metadataJson) return;
         const file = new Blob([metadataJson], { type: 'application/json' });
@@ -3136,7 +3166,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     <div className="flex min-w-0 flex-1 justify-center">
                                                         <div className="flex w-full max-w-sm items-center gap-1.5 rounded bg-white/80 px-2.5 py-0.5 text-[11px] text-slate-400 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]">
                                                             <Globe className="h-3 w-3 shrink-0 text-slate-400" />
-                                                            <span className="truncate" title={currentReplayUrl}>{currentReplayUrl}</span>
+                                                            <span className="min-w-0 flex-1 truncate" title={currentReplayUrl}>{currentReplayUrl}</span>
+                                                            {replayUrlCopyButton}
                                                         </div>
                                                     </div>
                                                     <div className="flex shrink-0 items-center gap-2 text-[9px] font-black uppercase text-slate-400">
@@ -3151,7 +3182,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 <div className="flex shrink-0 items-center border-b border-black/10 bg-[#f3f3f3]">
                                                     <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-[11px] text-slate-500">
                                                         <Globe className="h-3 w-3 shrink-0 text-slate-400" />
-                                                        <span className="truncate" title={currentReplayUrl}>{currentReplayUrl}</span>
+                                                        <span className="min-w-0 flex-1 truncate" title={currentReplayUrl}>{currentReplayUrl}</span>
+                                                        {replayUrlCopyButton}
                                                         {webReferral && <span className="shrink-0 text-slate-400" title={webReferral}>· ↩ {webReferral}</span>}
                                                         {secondaryDataLoading && <span className="shrink-0 text-[9px] font-black uppercase text-sky-500">Syncing</span>}
                                                     </div>
@@ -3169,7 +3201,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     <div className="flex min-w-0 flex-1 justify-center">
                                                         <div className="flex w-full max-w-sm items-center gap-1.5 rounded bg-white/80 px-2.5 py-0.5 text-[11px] text-slate-400 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]">
                                                             <Globe className="h-3 w-3 shrink-0 text-slate-400" />
-                                                            <span className="truncate" title={currentReplayUrl}>{currentReplayUrl}</span>
+                                                            <span className="min-w-0 flex-1 truncate" title={currentReplayUrl}>{currentReplayUrl}</span>
+                                                            {replayUrlCopyButton}
                                                         </div>
                                                     </div>
                                                     <div className="flex shrink-0 items-center gap-2 text-[9px] font-black uppercase text-slate-400">
@@ -3787,10 +3820,10 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                         ? 'border-cyan-500 bg-cyan-600 text-white'
                                                         : 'border-slate-600 bg-slate-900 text-slate-200 hover:border-slate-400'
                                                         }`}
-                                                    title={revealAllLogs ? 'Sync to playback' : 'Reveal all logs in session'}
+                                                    title={revealAllLogs ? 'Sync to playback' : 'Show all logs in session'}
                                                 >
                                                     {revealAllLogs ? <Zap className="h-3 w-3" /> : <ListFilter className="h-3 w-3" />}
-                                                    {revealAllLogs ? 'SYNC' : 'ALL LOGS'}
+                                                    {revealAllLogs ? 'SYNC' : 'SHOW ALL'}
                                                 </button>
                                                 <button
                                                     onClick={copyAllTerminalLogs}

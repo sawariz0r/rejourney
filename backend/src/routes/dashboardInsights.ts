@@ -148,7 +148,7 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const cacheKey = `insights:friction:${projectIds.sort().join(',')}:${isRealtime ? 'realtime' : (timeRange || '7d')}:${platform || 'all'}:v2`;
+        const cacheKey = `insights:friction:${projectIds.sort().join(',')}:${isRealtime ? 'realtime' : (timeRange || '7d')}:${platform || 'all'}:v3`;
 
         // For realtime, use shorter cache TTL
         if (!isRealtime) {
@@ -282,6 +282,10 @@ router.get(
                     totalRageTaps: screenTouchHeatmaps.totalRageTaps,
                     sampleSessionId: screenTouchHeatmaps.sampleSessionId,
                     screenFirstSeenMs: screenTouchHeatmaps.screenFirstSeenMs,
+                    pageWidth: screenTouchHeatmaps.pageWidth,
+                    pageHeight: screenTouchHeatmaps.pageHeight,
+                    viewportWidth: screenTouchHeatmaps.viewportWidth,
+                    viewportHeight: screenTouchHeatmaps.viewportHeight,
                 })
                 .from(screenTouchHeatmaps)
                 .where(and(
@@ -299,6 +303,10 @@ router.get(
             totalRageTaps: number;
             sampleSessionId: string | null;
             screenFirstSeenMs: number | null;
+            pageWidth: number | null;
+            pageHeight: number | null;
+            viewportWidth: number | null;
+            viewportHeight: number | null;
         }>();
 
         for (const row of heatmapData) {
@@ -315,6 +323,10 @@ router.get(
                 }
                 existing.totalTouches += row.totalTouches;
                 existing.totalRageTaps += row.totalRageTaps;
+                existing.pageWidth = Math.max(existing.pageWidth ?? 0, row.pageWidth ?? 0) || existing.pageWidth;
+                existing.pageHeight = Math.max(existing.pageHeight ?? 0, row.pageHeight ?? 0) || existing.pageHeight;
+                existing.viewportWidth = Math.max(existing.viewportWidth ?? 0, row.viewportWidth ?? 0) || existing.viewportWidth;
+                existing.viewportHeight = Math.max(existing.viewportHeight ?? 0, row.viewportHeight ?? 0) || existing.viewportHeight;
                 if (!existing.sampleSessionId && row.sampleSessionId) {
                     existing.sampleSessionId = row.sampleSessionId;
                     existing.screenFirstSeenMs = row.screenFirstSeenMs;
@@ -327,6 +339,10 @@ router.get(
                     totalRageTaps: row.totalRageTaps,
                     sampleSessionId: row.sampleSessionId,
                     screenFirstSeenMs: row.screenFirstSeenMs,
+                    pageWidth: row.pageWidth,
+                    pageHeight: row.pageHeight,
+                    viewportWidth: row.viewportWidth,
+                    viewportHeight: row.viewportHeight,
                 });
             }
         }
@@ -456,6 +472,10 @@ router.get(
                 screenshotUrl,
                 screenFirstSeenMs: heatmap?.screenFirstSeenMs ?? null,
                 touchHotspots,
+                pageWidth: heatmap?.pageWidth ?? null,
+                pageHeight: heatmap?.pageHeight ?? null,
+                viewportWidth: heatmap?.viewportWidth ?? null,
+                viewportHeight: heatmap?.viewportHeight ?? null,
             };
         });
 
@@ -498,7 +518,7 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const cacheKey = `insights:alltime-heatmap:${projectIds.sort().join(',')}:v2`;
+        const cacheKey = `insights:alltime-heatmap:${projectIds.sort().join(',')}:v3`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -515,6 +535,10 @@ router.get(
                 totalRageTaps: screenTouchHeatmaps.totalRageTaps,
                 sampleSessionId: screenTouchHeatmaps.sampleSessionId,
                 screenFirstSeenMs: screenTouchHeatmaps.screenFirstSeenMs,
+                pageWidth: screenTouchHeatmaps.pageWidth,
+                pageHeight: screenTouchHeatmaps.pageHeight,
+                viewportWidth: screenTouchHeatmaps.viewportWidth,
+                viewportHeight: screenTouchHeatmaps.viewportHeight,
             })
             .from(screenTouchHeatmaps)
             .where(inArray(screenTouchHeatmaps.projectId, projectIds));
@@ -527,6 +551,10 @@ router.get(
             totalRageTaps: number;
             sampleSessionId: string | null;
             screenFirstSeenMs: number | null;
+            pageWidth: number | null;
+            pageHeight: number | null;
+            viewportWidth: number | null;
+            viewportHeight: number | null;
         }>();
 
         for (const row of heatmapData) {
@@ -543,6 +571,10 @@ router.get(
                 }
                 existing.totalTouches += row.totalTouches;
                 existing.totalRageTaps += row.totalRageTaps;
+                existing.pageWidth = Math.max(existing.pageWidth ?? 0, row.pageWidth ?? 0) || existing.pageWidth;
+                existing.pageHeight = Math.max(existing.pageHeight ?? 0, row.pageHeight ?? 0) || existing.pageHeight;
+                existing.viewportWidth = Math.max(existing.viewportWidth ?? 0, row.viewportWidth ?? 0) || existing.viewportWidth;
+                existing.viewportHeight = Math.max(existing.viewportHeight ?? 0, row.viewportHeight ?? 0) || existing.viewportHeight;
                 // Keep most recent sample session and its timestamp
                 if (row.sampleSessionId) {
                     existing.sampleSessionId = row.sampleSessionId;
@@ -556,6 +588,10 @@ router.get(
                     totalRageTaps: row.totalRageTaps,
                     sampleSessionId: row.sampleSessionId,
                     screenFirstSeenMs: row.screenFirstSeenMs,
+                    pageWidth: row.pageWidth,
+                    pageHeight: row.pageHeight,
+                    viewportWidth: row.viewportWidth,
+                    viewportHeight: row.viewportHeight,
                 });
             }
         }
@@ -735,6 +771,10 @@ router.get(
                     sessionIds: data.sampleSessionId ? [data.sampleSessionId] : [],
                     screenFirstSeenMs: data.screenFirstSeenMs ?? null,
                     touchHotspots,
+                    pageWidth: data.pageWidth ?? null,
+                    pageHeight: data.pageHeight ?? null,
+                    viewportWidth: data.viewportWidth ?? null,
+                    viewportHeight: data.viewportHeight ?? null,
                 };
             })
             .sort((a, b) => b.visits - a.visits)

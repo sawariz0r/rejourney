@@ -51,6 +51,8 @@ describe('constants', () => {
       expect(DEFAULT_CONFIG.collectDeviceInfo).toBe(true);
       expect(DEFAULT_CONFIG.collectGeoLocation).toBe(true);
       expect(DEFAULT_CONFIG.captureNativeSheets).toBe(true);
+      expect(DEFAULT_CONFIG.rageTapTimeWindow).toBe(500);
+      expect(DEFAULT_CONFIG.rageTapRadius).toBe(50);
     });
   });
 

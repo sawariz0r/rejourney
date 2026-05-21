@@ -159,6 +159,25 @@ describe('sessionConfig', () => {
       expect(buildNativeStartOptions({}, 'u1')).toMatchObject({ captureNativeSheets: true });
       expect(buildNativeStartOptions({ captureNativeSheets: false }, 'u1')).toMatchObject({ captureNativeSheets: false });
     });
+
+    it('forwards rage tap settings to native startSessionWithOptions', () => {
+      expect(
+        buildNativeStartOptions(
+          {
+            detectRageTaps: false,
+            rageTapThreshold: 4.6,
+            rageTapTimeWindow: 750.2,
+            rageTapRadius: 72.5,
+          },
+          'u1'
+        )
+      ).toMatchObject({
+        detectRageTaps: false,
+        rageTapThreshold: 5,
+        rageTapTimeWindow: 750,
+        rageTapRadius: 72.5,
+      });
+    });
   });
 
   describe('shouldStartWithConfig edge cases', () => {

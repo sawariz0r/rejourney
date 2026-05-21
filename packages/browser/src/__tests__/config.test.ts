@@ -12,6 +12,7 @@ describe('web config', () => {
     expect(config.apiUrl).toBe('http://api.localtest.me');
     expect('ingestUrl' in config).toBe(false);
     expect(config.maskAllInputs).toBe(true);
+    expect(config.trackConsoleLogs).toBe(true);
     expect(config.maxSessionDuration).toBe(1_800_000);
     expect(config.idleTimeout).toBe(60_000);
     expect(config.rrweb?.recordCanvas).toBe(true);

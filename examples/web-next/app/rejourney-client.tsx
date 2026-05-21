@@ -31,7 +31,7 @@ export function RejourneyClient() {
         autoTrackNetwork: true,
         ignoreBots: false,
         recordAutomation: true,
-        trackConsoleLogs: false,
+        trackConsoleLogs: true,
       }}
     />
   );

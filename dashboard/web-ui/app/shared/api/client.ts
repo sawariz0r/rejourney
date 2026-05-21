@@ -2089,7 +2089,7 @@ export async function revokeApiKey(id: string): Promise<void> {
 
 export interface ANRRecord {
   id: string;
-  sessionId: string;
+  sessionId: string | null;
   projectId: string;
   timestamp: string;
   durationMs: number;
@@ -2104,11 +2104,13 @@ export interface ANRRecord {
   occurrenceCount: number;
   userCount: number;
   groupKey?: string;
+  canOpenReplay?: boolean;
+  logs?: string[];
 }
 
 export interface ANRDetailRecord {
   id: string;
-  sessionId: string;
+  sessionId: string | null;
   projectId: string;
   timestamp: string;
   durationMs: number;
@@ -2123,11 +2125,12 @@ export interface ANRDetailRecord {
     [key: string]: any;
   } | null;
   status: string;
+  canOpenReplay?: boolean;
 }
 
 export interface CrashMetadata {
   id: string;
-  sessionId: string;
+  sessionId: string | null;
   projectId: string;
   timestamp: string;
   exceptionName: string;
@@ -2139,7 +2142,7 @@ export interface CrashMetadata {
 
 export interface CrashReport {
   id: string;
-  sessionId: string;
+  sessionId: string | null;
   projectId: string;
   timestamp: string;
   exceptionName: string;
@@ -2154,6 +2157,7 @@ export interface CrashReport {
   status: 'new' | 'investigating' | 'resolved' | 'ignored';
   stackTrace?: string;
   occurrenceCount?: number;
+  canOpenReplay?: boolean;
 }
 
 /**
@@ -2183,10 +2187,14 @@ export async function getCrashes(projectId: string, page: number = 1, limit: num
  */
 export async function getCrash(projectId: string, crashId: string): Promise<CrashReport> {
   if (isDemoMode()) {
-    return (
+    const crash = (
       (demoApiData.demoCrashReports as CrashReport[]).find((crash) => crash.id === crashId)
       || (demoApiData.demoCrashReports[0] as CrashReport)
     );
+    return {
+      ...crash,
+      canOpenReplay: crash.canOpenReplay ?? Boolean(crash.sessionId),
+    };
   }
   return fetchJson<CrashReport>(`/api/projects/${projectId}/crashes/${crashId}`);
 }
@@ -2211,7 +2219,11 @@ export async function getANRs(projectId: string, options?: { limit?: number; off
  */
 export async function getANR(projectId: string, anrId: string): Promise<ANRDetailRecord> {
   if (isDemoMode()) {
-    return demoApiData.demoANRsResponse.anrs.find((a: any) => a.id === anrId) || demoApiData.demoANRsResponse.anrs[0];
+    const anr = demoApiData.demoANRsResponse.anrs.find((a: any) => a.id === anrId) || demoApiData.demoANRsResponse.anrs[0];
+    return {
+      ...anr,
+      canOpenReplay: anr.canOpenReplay ?? Boolean(anr.sessionId),
+    };
   }
   return fetchJson<ANRDetailRecord>(`/api/projects/${projectId}/anrs/${anrId}`);
 }
@@ -2313,6 +2325,10 @@ export interface HeatmapOverviewScreen {
   sessionIds?: string[];
   screenFirstSeenMs?: number | null;
   touchHotspots?: Array<{ x: number; y: number; intensity: number; isRageTap: boolean }>;
+  pageWidth?: number | null;
+  pageHeight?: number | null;
+  viewportWidth?: number | null;
+  viewportHeight?: number | null;
   rangeVisits: number;
   rangeRageTaps: number;
   rangeErrors: number;
@@ -2334,6 +2350,10 @@ export interface HeatmapIterationScreen {
   screenshotUrl: string | null;
   screenFirstSeenMs?: number | null;
   touchHotspots?: Array<{ x: number; y: number; intensity: number; isRageTap: boolean }>;
+  pageWidth?: number | null;
+  pageHeight?: number | null;
+  viewportWidth?: number | null;
+  viewportHeight?: number | null;
   visits: number;
   touches: number;
   rageTaps: number;
@@ -2387,6 +2407,8 @@ export interface ErrorOverviewGroup {
     appVersion: string | null;
     stack: string | null;
     screenName: string | null;
+    canOpenReplay?: boolean;
+    logs?: string[];
   };
 }
 
@@ -2405,12 +2427,14 @@ export interface CrashOverviewGroup {
   name: string;
   sampleCrashId: string;
   sampleSessionId: string;
+  canOpenReplay?: boolean;
   count: number;
   users: string[];
   firstSeen: string;
   lastOccurred: string;
   affectedDevices: Record<string, number>;
   affectedVersions: Record<string, number>;
+  logs?: string[];
 }
 
 export interface CrashesOverviewResponse {
@@ -2456,6 +2480,10 @@ export interface FrictionHeatmap {
       intensity: number; // 0-1 based on touch count
       isRageTap: boolean;
     }>;
+    pageWidth?: number | null;
+    pageHeight?: number | null;
+    viewportWidth?: number | null;
+    viewportHeight?: number | null;
   }>;
 }
 
@@ -2543,14 +2571,13 @@ export async function getInsightsTrends(projectId?: string, timeRange?: string, 
 export async function getDashboardOverview(projectId?: string, timeRange?: string, platform?: string): Promise<DashboardOverviewResponse> {
   const normalizedPlatform = platform && platform !== 'all' ? platform : undefined;
   if (isDemoMode()) {
-    const [trends, overviewObs, deepMetrics, engagementTrends, geoSummary, retention, issuesResponse] = await Promise.all([
+    const [trends, overviewObs, deepMetrics, engagementTrends, geoSummary, retention] = await Promise.all([
       getInsightsTrends(projectId, timeRange, normalizedPlatform),
       getGrowthObservability(projectId, timeRange === 'all' ? undefined : timeRange, 'summary', normalizedPlatform),
       getObservabilityDeepMetrics(projectId, timeRange === 'all' ? undefined : timeRange, 'summary', normalizedPlatform),
       getUserEngagementTrends(projectId, timeRange === 'all' ? undefined : timeRange, normalizedPlatform),
       getGeoSummary(projectId, timeRange === 'all' ? undefined : timeRange),
       getRetentionCohorts(projectId, timeRange),
-      getIssues(projectId || 'demo-project', timeRange || '30d'),
     ]);
 
     return {
@@ -2560,7 +2587,7 @@ export async function getDashboardOverview(projectId?: string, timeRange?: strin
       engagementTrends,
       geoSummary,
       retention,
-      issues: issuesResponse.issues || [],
+      issues: [],
       failedSections: [],
     };
   }
@@ -2820,7 +2847,7 @@ export async function getHeatmapsOverview(projectId: string, timeRange?: string,
   if (timeRange) params.set('timeRange', timeRange);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
   const endpoint = `/api/overview/heatmaps?${params.toString()}`;
-  const cacheKey = `overview:heatmaps:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v7`;
+  const cacheKey = `overview:heatmaps:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v8`;
   return fetchWithCache<HeatmapOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
@@ -2838,7 +2865,7 @@ export async function getHeatmapScreenOverview(projectId: string, screenName: st
   if (timeRange) params.set('timeRange', timeRange);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
   const endpoint = `/api/overview/heatmaps/screen?${params.toString()}`;
-  const cacheKey = `overview:heatmaps:screen:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v4`;
+  const cacheKey = `overview:heatmaps:screen:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v5`;
   return fetchWithCache<HeatmapScreenOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
@@ -2870,6 +2897,8 @@ export async function getErrorsOverview(projectId: string, timeRange?: string, p
           appVersion: group.sampleError?.appVersion ?? null,
           stack: group.sampleError?.stack ?? null,
           screenName: group.sampleError?.screenName ?? null,
+          logs: Array.isArray(group.sampleError?.logs) ? group.sampleError.logs : [],
+          canOpenReplay: group.sampleError?.canOpenReplay ?? Boolean(group.sampleError?.sessionId ?? group.sampleSessionId),
         },
       })),
       summary: {
@@ -2885,7 +2914,7 @@ export async function getErrorsOverview(projectId: string, timeRange?: string, p
   if (timeRange) params.set('timeRange', timeRange);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
   const endpoint = `/api/overview/errors?${params.toString()}`;
-  const cacheKey = `overview:errors:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}`;
+  const cacheKey = `overview:errors:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v2`;
   return fetchWithCache<ErrorsOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
@@ -2896,7 +2925,10 @@ export async function getCrashesOverview(projectId: string, timeRange?: string, 
       !normalizedPlatform || matchesPlatformFilter(group.platform, normalizedPlatform)
     ));
     return {
-      groups,
+      groups: groups.map((group: any) => ({
+        ...group,
+        canOpenReplay: group.canOpenReplay ?? Boolean(group.sampleSessionId),
+      })),
       summary: {
         issues: groups.length,
         events: groups.reduce((sum: number, group: CrashOverviewGroup) => sum + Number(group.count || 0), 0),
@@ -2910,7 +2942,7 @@ export async function getCrashesOverview(projectId: string, timeRange?: string, 
   if (timeRange) params.set('timeRange', timeRange);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
   const endpoint = `/api/overview/crashes?${params.toString()}`;
-  const cacheKey = `overview:crashes:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}`;
+  const cacheKey = `overview:crashes:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v2`;
   return fetchWithCache<CrashesOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
@@ -2920,7 +2952,10 @@ export async function getANRsOverview(projectId: string, timeRange?: string, pla
     const response = await getANRs(projectId, { timeRange });
     const filteredAnrs = (response.anrs || []).filter((anr: any) => (
       !normalizedPlatform || matchesPlatformFilter(anr.platform ?? anr.deviceMetadata?.platform ?? anr.deviceMetadata?.os, normalizedPlatform)
-    ));
+    )).map((anr: any) => ({
+      ...anr,
+      canOpenReplay: anr.canOpenReplay ?? Boolean(anr.sessionId),
+    }));
     return {
       anrs: filteredAnrs,
       summary: {
@@ -3066,6 +3101,10 @@ export interface AlltimeHeatmapScreen {
   sessionIds?: string[];
   screenFirstSeenMs?: number | null;
   touchHotspots: Array<{ x: number; y: number; intensity: number; isRageTap: boolean }>;
+  pageWidth?: number | null;
+  pageHeight?: number | null;
+  viewportWidth?: number | null;
+  viewportHeight?: number | null;
 }
 // Added sessionIds to fix lint errors in Realtime.tsx
 
@@ -4103,7 +4142,11 @@ export async function getErrors(
  */
 export async function getError(projectId: string, errorId: string): Promise<any> {
   if (isDemoMode()) {
-    return demoApiData.demoErrorsResponse.errors.find((e: any) => e.id === errorId) || demoApiData.demoErrorsResponse.errors[0];
+    const error = demoApiData.demoErrorsResponse.errors.find((e: any) => e.id === errorId) || demoApiData.demoErrorsResponse.errors[0];
+    return {
+      ...error,
+      canOpenReplay: error.canOpenReplay ?? Boolean(error.sessionId),
+    };
   }
   const data = await fetchJson<any>(`/api/projects/${projectId}/errors/${errorId}`);
   return data;

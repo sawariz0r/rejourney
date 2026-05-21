@@ -14,6 +14,7 @@ export const DEFAULT_WEB_CONFIG: Required<
     | 'idleTimeout'
     | 'collectGeoLocation'
     | 'captureAttribution'
+    | 'autoTrackLinks'
     | 'ignoreBots'
     | 'recordAutomation'
     | 'autoTrackRoutes'
@@ -49,6 +50,7 @@ export const DEFAULT_WEB_CONFIG: Required<
   idleTimeout: 60 * 1000,
   collectGeoLocation: true,
   captureAttribution: true,
+  autoTrackLinks: true,
   attribution: {
     allowedQueryParams: DEFAULT_ALLOWED_ATTRIBUTION_PARAMS,
     preserveClickIds: false,
@@ -60,7 +62,7 @@ export const DEFAULT_WEB_CONFIG: Required<
   autoTrackRoutes: true,
   autoTrackNetwork: true,
   networkCaptureSizes: false,
-  trackConsoleLogs: false,
+  trackConsoleLogs: true,
   trackLongTasks: false,
   trackResourceErrors: true,
   maskAllInputs: true,

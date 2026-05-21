@@ -525,7 +525,7 @@ class TelemetryPipeline private constructor(private val context: Context) {
         
         // Skip dead tap detection for interactive elements (buttons, touchables, etc.)
         // These are expected to respond, so we don't need to track "no response" as dead.
-        if (isInteractive) return
+        if (isInteractive || isKeyboardVisible()) return
         
         // Start dead tap timer — when it fires, check if any response event
         // occurred after this tap.  If not → dead tap.
@@ -536,7 +536,7 @@ class TelemetryPipeline private constructor(private val context: Context) {
         val runnable = Runnable {
             deadTapRunnable = null
             // Only fire dead tap if no response event occurred since this tap
-            if (lastResponseTs <= lastTapTs) {
+            if (!isKeyboardVisible() && lastResponseTs <= lastTapTs) {
                 recordDeadTapEvent(lastTapLabel, lastTapX, lastTapY)
                 ReplayOrchestrator.shared?.incrementDeadTapTally()
             }
@@ -546,6 +546,8 @@ class TelemetryPipeline private constructor(private val context: Context) {
     }
     
     fun recordRageTapEvent(label: String, x: Long, y: Long, count: Int) {
+        cancelDeadTapTimer()
+        if (isKeyboardVisible()) return
         enqueue(mapOf(
             "type" to "gesture",
             "gestureType" to "rage_tap",
@@ -560,6 +562,7 @@ class TelemetryPipeline private constructor(private val context: Context) {
     }
     
     fun recordDeadTapEvent(label: String, x: Long, y: Long) {
+        if (isKeyboardVisible()) return
         enqueue(mapOf(
             "type" to "gesture",
             "gestureType" to "dead_tap",
@@ -710,6 +713,10 @@ class TelemetryPipeline private constructor(private val context: Context) {
     private fun cancelDeadTapTimer() {
         deadTapRunnable?.let { mainHandler.removeCallbacks(it) }
         deadTapRunnable = null
+    }
+
+    private fun isKeyboardVisible(): Boolean {
+        return InteractionRecorder.shared?.isKeyboardVisible() ?: false
     }
     
     private fun enqueue(dict: Map<String, Any>) {

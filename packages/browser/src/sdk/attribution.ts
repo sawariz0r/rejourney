@@ -16,9 +16,50 @@ function getNavigationType(): WebAttributionContext['navigationType'] {
   return 'unknown';
 }
 
+function normalizeHost(host: string | null | undefined): string {
+  return (host || '').toLowerCase().replace(/^www\./, '');
+}
+
+function getQueryValue(params: URLSearchParams, key: string): string | null {
+  const exact = params.get(key);
+  if (exact) return exact;
+
+  const lowerKey = key.toLowerCase();
+  for (const [candidate, value] of params.entries()) {
+    if (candidate.toLowerCase() === lowerKey && value) return value;
+  }
+  return null;
+}
+
+function hasQueryParam(params: URLSearchParams, key: string): boolean {
+  if (params.has(key)) return true;
+  const lowerKey = key.toLowerCase();
+  for (const candidate of params.keys()) {
+    if (candidate.toLowerCase() === lowerKey) return true;
+  }
+  return false;
+}
+
+function collectQueryValues(params: URLSearchParams, keys: string[]): Record<string, string> {
+  const query: Record<string, string> = {};
+  const seen = new Set<string>();
+
+  for (const key of keys) {
+    const normalizedKey = key.toLowerCase();
+    if (seen.has(normalizedKey)) continue;
+    seen.add(normalizedKey);
+
+    const value = getQueryValue(params, key);
+    if (value) query[normalizedKey] = value.slice(0, 256);
+  }
+  return query;
+}
+
 function classifyChannel(params: URLSearchParams, referrerHost: string | null, currentHost: string): AcquisitionChannel {
-  const medium = params.get('utm_medium')?.toLowerCase() || '';
-  const source = params.get('utm_source')?.toLowerCase() || '';
+  const medium = getQueryValue(params, 'utm_medium')?.toLowerCase() || '';
+  const source = getQueryValue(params, 'utm_source')?.toLowerCase() || '';
+  const normalizedReferrerHost = normalizeHost(referrerHost);
+  const normalizedCurrentHost = normalizeHost(currentHost);
 
   if (medium) {
     if (/cpc|ppc|paidsearch|paid_search/.test(medium)) return 'paid_search';
@@ -29,12 +70,12 @@ function classifyChannel(params: URLSearchParams, referrerHost: string | null, c
     if (/display|banner|programmatic/.test(medium)) return 'display';
   }
 
-  if (params.has('gclid') || params.has('gbraid') || params.has('wbraid') || params.has('msclkid')) return 'paid_search';
-  if (params.has('fbclid') || params.has('ttclid') || params.has('twclid') || params.has('li_fat_id')) return 'paid_social';
-  if (source && /facebook|instagram|tiktok|twitter|x|linkedin|reddit|pinterest/.test(source)) return 'organic_social';
-  if (!referrerHost) return 'direct';
-  if (referrerHost === currentHost) return 'internal';
-  if (/google|bing|duckduckgo|yahoo|baidu|yandex/.test(referrerHost)) return 'organic_search';
+  if (hasQueryParam(params, 'gclid') || hasQueryParam(params, 'gbraid') || hasQueryParam(params, 'wbraid') || hasQueryParam(params, 'msclkid')) return 'paid_search';
+  if (hasQueryParam(params, 'fbclid') || hasQueryParam(params, 'ttclid') || hasQueryParam(params, 'twclid') || hasQueryParam(params, 'li_fat_id')) return 'paid_social';
+  if (source && /facebook|instagram|tiktok|twitter|linkedin|reddit|pinterest|threads|youtube|(^|[._-])x($|[._-])/.test(source)) return 'organic_social';
+  if (!normalizedReferrerHost) return 'direct';
+  if (normalizedReferrerHost === normalizedCurrentHost) return 'internal';
+  if (/google|bing|duckduckgo|yahoo|baidu|yandex|ecosia|brave/.test(normalizedReferrerHost)) return 'organic_search';
   return 'referral';
 }
 
@@ -46,19 +87,17 @@ export function captureAttribution(config: RejourneyWebConfig, routeName?: strin
   if (!location || !doc) return null;
 
   const allowedQueryParams = config.attribution?.allowedQueryParams || DEFAULT_ALLOWED_ATTRIBUTION_PARAMS;
-  const allowlisted = new Set(allowedQueryParams.map((key) => key.toLowerCase()));
+  const attributionQueryParams = config.attribution?.preserveClickIds === true
+    ? [...allowedQueryParams, ...CLICK_ID_PARAMS]
+    : allowedQueryParams;
+  const allowlisted = new Set(attributionQueryParams.map((key) => key.toLowerCase()));
   const url = new URL(location.href);
-  const entryQuery: Record<string, string> = {};
-
-  for (const key of allowedQueryParams) {
-    const value = url.searchParams.get(key);
-    if (value) entryQuery[key] = value.slice(0, 256);
-  }
+  const entryQuery = collectQueryValues(url.searchParams, attributionQueryParams);
 
   const clickIds: Record<string, string> = {};
   if (config.attribution?.preserveClickIds === true) {
     for (const key of CLICK_ID_PARAMS) {
-      const value = url.searchParams.get(key);
+      const value = getQueryValue(url.searchParams, key);
       if (value) clickIds[key] = value.slice(0, 256);
     }
   }
@@ -78,6 +117,7 @@ export function captureAttribution(config: RejourneyWebConfig, routeName?: strin
     : config.attribution?.captureEntryUrl === 'path-only'
       ? entryPath
       : scrubUrl(location.href, { allowedQueryParams: [...allowlisted] });
+  const utm = collectQueryValues(url.searchParams, DEFAULT_ALLOWED_ATTRIBUTION_PARAMS);
 
   const context: WebAttributionContext = {
     entryUrl,
@@ -85,11 +125,16 @@ export function captureAttribution(config: RejourneyWebConfig, routeName?: strin
     entryQuery,
     referrer,
     referrerDomain: domain,
-    source: url.searchParams.get('utm_source'),
-    medium: url.searchParams.get('utm_medium'),
-    campaign: url.searchParams.get('utm_campaign'),
-    term: url.searchParams.get('utm_term'),
-    content: url.searchParams.get('utm_content'),
+    source: getQueryValue(url.searchParams, 'utm_source'),
+    medium: getQueryValue(url.searchParams, 'utm_medium'),
+    campaign: getQueryValue(url.searchParams, 'utm_campaign'),
+    term: getQueryValue(url.searchParams, 'utm_term'),
+    content: getQueryValue(url.searchParams, 'utm_content'),
+    campaignId: getQueryValue(url.searchParams, 'utm_id'),
+    sourcePlatform: getQueryValue(url.searchParams, 'utm_source_platform'),
+    creativeFormat: getQueryValue(url.searchParams, 'utm_creative_format'),
+    marketingTactic: getQueryValue(url.searchParams, 'utm_marketing_tactic'),
+    utm,
     clickIds,
     landingRoute: routeName || location.pathname,
     navigationType: getNavigationType(),

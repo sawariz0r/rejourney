@@ -74,7 +74,20 @@ function normalizeLegacyGeneralPath(path: string): string {
     return path;
 }
 
+function normalizeLegacyStabilityPath(path: string): string {
+    const match = path.match(/^((?:\/dashboard|\/demo)?\/stability)\/(?:crashes|anrs|errors)(?:\/.*)?$/);
+    if (!match) return path;
+
+    // 2026-05-21: Crashes, ANRs, and Errors now live inside one Stability
+    // workspace tab. Persisted old paths are normalized here so restored tabs
+    // share the same tab context as the canonical /stability route.
+    return match[1];
+}
+
 function normalizeLegacyTabId(tabId: string): string {
+    if (tabId === 'stability-crashes' || tabId === 'stability-anrs' || tabId === 'stability-errors') {
+        return 'stability';
+    }
     return tabId === 'issues' ? 'general' : tabId;
 }
 
@@ -265,7 +278,7 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Normalize old paths to new SSR paths
     const normalizePath = useCallback((path: string, prefix: string): string => {
-        const legacyNormalizedPath = normalizeLegacyGeneralPath(path);
+        const legacyNormalizedPath = normalizeLegacyStabilityPath(normalizeLegacyGeneralPath(path));
 
         // If path already has the correct prefix, return as-is
         if (legacyNormalizedPath.startsWith(prefix)) {

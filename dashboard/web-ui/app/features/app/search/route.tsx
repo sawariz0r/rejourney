@@ -12,11 +12,8 @@ import {
     Database, 
     Smartphone, 
     Activity, 
-    Clock, 
-    Terminal, 
     Mail, 
     Globe,
-    AlertOctagon,
     Flame
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -49,10 +46,7 @@ export const Search: React.FC = () => {
         { id: 'heatmaps', title: 'Heatmaps', path: '/analytics/heatmaps', icon: Flame, description: 'Touch heatmaps and interaction friction by screen', section: 'Analytics', keywords: ['heatmap', 'touch', 'tap', 'rage', 'friction', 'interaction', 'hotspot'] },
         { id: 'devices', title: 'Devices', path: '/analytics/devices', icon: Smartphone, description: 'Device models and OS version breakdown', section: 'Analytics', keywords: ['device', 'os', 'model', 'android', 'ios', 'version'] },
         { id: 'geo', title: 'Geographic', path: '/analytics/geo', icon: Globe, description: 'Regional value, engagement segments, and issue hotspots', section: 'Analytics', keywords: ['location', 'country', 'region', 'map', 'world'] },
-        // Stability
-        { id: 'crashes', title: 'Crashes', path: '/stability/crashes', icon: AlertOctagon, description: 'Monitor and debug app crashes', section: 'Stability', keywords: ['crash', 'fatal', 'exception', 'native'] },
-        { id: 'anrs', title: 'ANRs', path: '/stability/anrs', icon: Clock, description: 'Application Not Responding issues', section: 'Stability', keywords: ['freeze', 'hang', 'unresponsive', 'blocked'] },
-        { id: 'errors', title: 'Errors', path: '/stability/errors', icon: Terminal, description: 'JavaScript and runtime errors', section: 'Stability', keywords: ['javascript', 'runtime', 'exception', 'bug'] },
+        { id: 'stability', title: 'Stability', path: '/stability', icon: AlertTriangle, description: 'Crash, ANR, and runtime error triage', section: 'Monitor', keywords: ['crash', 'fatal', 'exception', 'native', 'freeze', 'hang', 'unresponsive', 'blocked', 'javascript', 'runtime', 'bug'] },
         // Workspace
         ...(selectedProject ? [{
             id: 'project',
@@ -87,7 +81,7 @@ export const Search: React.FC = () => {
     // Group items by section for display
     const groupedItems = useMemo(() => {
         const groups: Record<string, typeof filteredItems> = {};
-        const sectionOrder = ['Monitor', 'Analytics', 'Stability', 'Workspace', 'You'];
+        const sectionOrder = ['Monitor', 'Analytics', 'Workspace', 'You'];
         
         filteredItems.forEach(item => {
             if (!groups[item.section]) {

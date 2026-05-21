@@ -358,6 +358,10 @@ public final class RejourneyImpl: NSObject {
         if let val = options["observeOnly"] as? Bool { config["observeOnly"] = val }
         if let val = options["textInputMasking"] as? String { config["textInputMasking"] = val }
         if let val = options["captureNativeSheets"] as? Bool { config["captureNativeSheets"] = val }
+        if let val = options["detectRageTaps"] as? Bool { config["detectRageTaps"] = val }
+        if let val = options["rageTapThreshold"] as? NSNumber { config["rageTapThreshold"] = max(1, val.intValue) }
+        if let val = options["rageTapTimeWindow"] as? NSNumber { config["rageTapTimeWindow"] = max(1, val.intValue) }
+        if let val = options["rageTapRadius"] as? NSNumber { config["rageTapRadius"] = max(1.0, val.doubleValue) }
 
         if let fps = options["fps"] as? Int {
             config["captureRate"] = 1.0 / Double(max(1, min(fps, 30)))
@@ -623,13 +627,16 @@ public final class RejourneyImpl: NSObject {
             return
         }
 
-        // Handle dead_tap events from JS-side detection
-        // Native view hierarchy inspection is unreliable in React Native,
-        // so dead tap detection runs in JS and reports back via logEvent.
+        // Handle legacy/direct dead_tap events while native-side detection owns
+        // the automatic dead tap pipeline.
         if eventType == "dead_tap" {
             let x = (details["x"] as? NSNumber)?.uint64Value ?? 0
             let y = (details["y"] as? NSNumber)?.uint64Value ?? 0
             let label = details["label"] as? String ?? "unknown"
+            guard !TelemetryPipeline.shared.isKeyboardVisible else {
+                resolve(["success": true])
+                return
+            }
             TelemetryPipeline.shared.recordDeadTapEvent(label: label, x: x, y: y)
             ReplayOrchestrator.shared.incrementDeadTapTally()
             resolve(["success": true])
