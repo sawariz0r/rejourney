@@ -1,6 +1,6 @@
 # Rejourney CI + Deploy Path (Visual)
 
-Last updated: 2026-04-22
+Last updated: 2026-05-22
 
 This doc owns the CI, image-build, deploy, `db-setup`, and local parity flow.
 
@@ -123,13 +123,14 @@ Primary workflow file:
 │ 8. Delete old db-setup job                                                  │
 │ 9. Apply db-setup by itself and wait for migration/bootstrap success        │
 │ 10. If DEPLOY_CLICKHOUSE=true, run clickhouse-setup by itself               │
-│ 11. Print migration status again                                            │
-│ 12. Server-side apply grafana-dashboards ConfigMap                          │
-│ 13. kubectl apply rendered manifests with prune                             │
-│ 14. Reconcile the Helm-managed redis Service label/restore guard            │
-│ 15. Wait for Deployments, then colocate api-ingest with the CNPG primary    │
-│ 16. Wait for cadvisor/node-exporter                                         │
-│ 17. Cleanup imported dashboards / restart seed jobs / clean finished pods   │
+│ 11. If RUN_CLICKHOUSE_ROLLUP_BACKFILL=true, rebuild API rollups             │
+│ 12. Print migration status again                                            │
+│ 13. Server-side apply grafana-dashboards ConfigMap                          │
+│ 14. kubectl apply rendered manifests with prune                             │
+│ 15. Reconcile the Helm-managed redis Service label/restore guard            │
+│ 16. Wait for Deployments, then colocate api-ingest with the CNPG primary    │
+│ 17. Wait for cadvisor/node-exporter                                         │
+│ 18. Cleanup imported dashboards / restart seed jobs / clean finished pods   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -145,6 +146,7 @@ DEPLOY_CLICKHOUSE=false by default
   -> when true, the operator config is patched to watch the rejourney namespace before CR readiness is expected
   -> when true, clickhouse.yaml and clickhouse-setup.yaml are applied explicitly and removed from the bulk prune path
   -> clickhouse-backfill-api-rollups runs only when RUN_CLICKHOUSE_ROLLUP_BACKFILL=true
+  -> after the cutover, production expects ClickHouse to exist and app flags to be true; this deploy gate is for fresh clusters/rebuilds and normal non-ClickHouse releases
 ```
 
 Production deploy entrypoint:
@@ -248,6 +250,7 @@ Local parity nuance:
 - The one-time reset path for that old local state is `./scripts/local-k8s/deploy.sh down`.
 - Local ClickHouse is enabled by default in `.env.k8s.local` so `npm run ci:local` exercises the API endpoint ClickHouse path.
 - The local rollup rebuild check is manual: `cd backend && node --import tsx scripts/backfillClickHouseApiEndpointRollups.ts --replace`.
+- For a production ClickHouse schema or rollup repair deploy, use `DEPLOY_CLICKHOUSE=true RUN_CLICKHOUSE_ROLLUP_BACKFILL=true`; normal deploys leave existing ClickHouse infrastructure alone.
 
 Relevant files:
 
@@ -271,7 +274,7 @@ Relevant files:
 │ local legacy push-era DBs are blocked by the compatibility guard            │
 │ hot-table replay cleanup migration avoids wedging production traffic         │
 │ ClickHouse deploy is gated by DEPLOY_CLICKHOUSE and app flags default false │
-│ clickhouse-backfill-api-rollups is manual, never part of normal deploy      │
+│ clickhouse-backfill-api-rollups is gated, never part of normal deploy       │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 

@@ -32,6 +32,18 @@ Local verification on 2026-05-22:
 
 Production deploy note: for the cutover release, use `DEPLOY_CLICKHOUSE=true RUN_CLICKHOUSE_ROLLUP_BACKFILL=true` so `clickhouse-setup` applies migration `004`, `clickhouse-backfill-api-rollups` rebuilds the rollup, and only then do the new app deployments roll.
 
+Production cutover verification on 2026-05-22:
+
+- Deploy image `760a4e6b519e2ad9eed469181cd432f57055c2e8` rolled out successfully for `api-dashboard`, `api-ingest`, `ingest-worker`, `replay-worker`, and `web`.
+- `db-setup` succeeded and applied the final Postgres compatibility-shell migration.
+- Runtime flags were active: `CLICKHOUSE_ENABLED=true`, `CLICKHOUSE_DUAL_WRITE_ENABLED=true`, and `CLICKHOUSE_READS_ENABLED=true`.
+- `api_endpoint_daily_rollups` was live and fresh: about 622k rollup rows, about 243.5M calls, newest rollup date `2026-05-22`, and `updated_at` within seconds of the check.
+- `api_endpoint_request_events` was receiving new raw facts: about 2.19M rows with newest `inserted_at` on `2026-05-22 04:13:36 UTC`.
+- Replicated ClickHouse API tables reported `is_readonly=0`, `absolute_delay=0`, and empty replication queues on the checked replica.
+- The Postgres `public.api_endpoint_daily_stats` object existed only as the compatibility shell and had 0 rows.
+- `https://rejourney.co/` returned `200` after deploy.
+- `/health/queue` still returned `503`, but the sampled newest failed BullMQ jobs predated this deploy; that was old DLQ debt, not a ClickHouse cutover failure.
+
 ## Decision
 
 Move the API endpoint analytics workload first.
@@ -61,19 +73,19 @@ Production read-only inspection on 2026-05-21 showed this table as one of the wo
 - Its upsert query had about 5.3 million calls in `pg_stat_statements`.
 - It was one of the top WAL producers, about 15 GiB in the observed stats window.
 
-The current schema is in `backend/src/db/schema.ts`:
+The former heavy Postgres schema was in `backend/src/db/schema.ts`:
 
 - `apiEndpointDailyStats` starts at `backend/src/db/schema.ts:843`.
 - Unique key: `(project_id, date, endpoint, region)`.
 - Fields: `total_calls`, `total_errors`, `sum_latency_ms`, `status_code_breakdown`, and nullable p50/p90/p99 columns.
 
-The current writer is in `backend/src/services/ingestEventArtifactProcessor.ts`:
+The former writer was in `backend/src/services/ingestEventArtifactProcessor.ts`:
 
 - events are scanned for `api_call` and `network_request`.
 - per-endpoint aggregates are built in memory.
 - each endpoint is written with `INSERT ... ON CONFLICT DO UPDATE` at `backend/src/services/ingestEventArtifactProcessor.ts:746`.
 
-Current readers:
+Former Postgres readers, all moved off this table for the cutover:
 
 - `backend/src/routes/analytics.ts`
 - `backend/src/routes/dashboardInsights.ts`
@@ -82,7 +94,7 @@ Current readers:
 
 ## Expected Resource Impact
 
-This migration is primarily about removing analytical write/read pressure from the transactional Postgres primary and standby. The biggest expected wins after Phase 5, when Postgres writes for this workload are actually removed:
+This migration is primarily about removing analytical write/read pressure from the transactional Postgres primary and standby. Now that the cutover has removed Postgres writes for this workload, the expected wins are:
 
 - lower Postgres CPU from eliminating high-frequency `INSERT ... ON CONFLICT DO UPDATE` aggregate churn
 - lower WAL generation and replication pressure from fewer aggregate row rewrites
@@ -97,7 +109,7 @@ What this does not solve:
 
 - it does not make `sessions` or `recording_artifacts` smaller; those need separate archive/projection work
 - it does not remove the need for `api-ingest` to be colocated with the Postgres primary
-- it does not reduce Postgres SyncRep waits until the old Postgres aggregate writes are removed
+- it does not eliminate SyncRep as a write-path concern for the remaining Postgres tables
 - it does not make ClickHouse part of session capture availability; ClickHouse outage must be an analytics degradation, not an ingest outage
 
 ## What Not To Move First
@@ -982,7 +994,7 @@ CLICKHOUSE_DUAL_WRITE_ENABLED=false
 CLICKHOUSE_READS_ENABLED=false
 ```
 
-Checks:
+Historical dual-read checks from the earlier phase:
 
 - ClickHouse pods ready
 - ClickHouse setup job succeeded
@@ -1089,11 +1101,13 @@ Checks:
 - post-cutover facts appear from `api_endpoint_request_events`
 - same-day mid-cutover facts after `CLICKHOUSE_RAW_READS_AFTER` appear from `api_endpoint_request_events.inserted_at`
 
-### Phase 5: Stop Postgres Writes For This Workload
+### Phase 5: Stop Postgres Writes For This Workload (superseded)
 
-Goal: remove Postgres write pressure from `api_endpoint_daily_stats`.
+Historical goal: remove Postgres write pressure from `api_endpoint_daily_stats`.
 
-Only after at least one clean week of ClickHouse reads:
+This phased soak plan was superseded by the final cutover release. The current production state has already removed runtime Postgres reads/writes for this workload and left only an empty compatibility shell. Do not follow the old "keep the table for rollback/history" instructions unless you are deliberately designing a new rollback release.
+
+Old plan:
 
 - stop the Postgres upsert in `ingestEventArtifactProcessor.ts`
 - keep the table for rollback/history
@@ -1102,33 +1116,31 @@ Only after at least one clean week of ClickHouse reads:
 
 Do not drop the Postgres table in the same release that stops writes.
 
-### Phase 6: Archive Or Drop Old Postgres Table
+### Phase 6: Archive Or Drop Old Postgres Table (superseded)
 
-Only after a longer soak period:
+Historical plan only:
 
 - export/backup `api_endpoint_daily_stats`
 - document retention decision
 - drop or truncate old partitions/rows if storage pressure warrants it
 
-This should be a separate migration and a separate deploy.
+Production has already dropped the heavy table via `20260522010000_drop_api_endpoint_daily_stats` and recreated an empty no-op shell for rolling deploy safety.
 
 ## Rollback
 
-Fast rollback:
+The pre-cutover fast rollback was:
 
 ```env
 CLICKHOUSE_READS_ENABLED=false
 ```
 
-As long as Postgres dual-write remains active, rollback is config-only.
+That config-only rollback is no longer valid for API endpoint analytics because the Postgres runtime reader/writer has been removed and the old table is an empty compatibility shell.
 
-If dual-write to Postgres has already been removed:
+Current rollback means one of:
 
-1. disable ClickHouse reads only if Postgres has been caught up
-2. run a reverse backfill from ClickHouse aggregate query into Postgres if needed
-3. re-enable the old Postgres upsert code
-
-Do not drop the Postgres table until this rollback path is no longer required.
+1. repair ClickHouse in place, rerun `clickhouse-setup`, and rerun `backfillClickHouseApiEndpointRollups.ts --replace`
+2. revert application code to a release that still reads/writes Postgres, restore historical `api_endpoint_daily_stats` data from backup, and then deploy that rollback release
+3. for a short analytics outage, keep ingest running and leave API endpoint analytics unavailable until ClickHouse is repaired
 
 ## Testing Checklist
 
@@ -1192,19 +1204,24 @@ Production live verification on 2026-05-21:
 - Historical Postgres data contained 4 rows with negative `sum_latency_ms`, so `api_endpoint_daily_stats_imported.sum_latency_ms` is `Int64`.
 - Backfill for dates `< 2026-05-21` completed in production: 9,325,058 imported rows.
 - Parity for dates `< 2026-05-21` matched exactly using `api_endpoint_daily_stats_imported FINAL`: total diff 0, by-date diff 0, and by-project diff 0. Totals: 180,151,363 calls, 8,322,568 errors, 503,552,981,006 summed latency ms.
-- Reads were not enabled. Same-day Postgres totals for `2026-05-21` were much larger than ClickHouse raw facts because the current image wrote raw facts by client event date while Postgres aggregates use processing date.
-- The temporary raw ClickHouse rows from that test were truncated and dual-write was disabled again. Current live flags after the safe stop: `CLICKHOUSE_ENABLED=true`, `CLICKHOUSE_DUAL_WRITE_ENABLED=false`, `CLICKHOUSE_READS_ENABLED=false`, `CLICKHOUSE_CUTOVER_DATE=2026-05-21`.
+- Initial reads were not enabled. Same-day Postgres totals for `2026-05-21` were much larger than ClickHouse raw facts because the first image wrote raw facts by client event date while Postgres aggregates used processing date.
+- The temporary raw ClickHouse rows from that test were truncated and dual-write was disabled again before read cutover.
 - After commit `44f1e9e1f3415105c9eb8f96503a6bd5012ecf29`, production image semantics were verified: raw facts now write `event_date` from artifact processing day. Dual-write was re-enabled with reads still off and new raw ClickHouse rows landed under `2026-05-21` without worker insert warnings.
 - The bounded same-day import for `2026-05-21 <= date < 2026-05-22` copied 519,390 Postgres daily-stat rows into `api_endpoint_daily_stats_imported`.
-- Same-day totals keep moving while Postgres writes remain on. For an immediate read cutover on the same UTC day, ship `CLICKHOUSE_RAW_READS_AFTER`, run one final same-day backfill, then enable reads with `CLICKHOUSE_CUTOVER_DATE=2026-05-22` and `CLICKHOUSE_RAW_READS_AFTER=<final backfill completion UTC timestamp>`.
+- The rollup release then moved runtime reads to `api_endpoint_daily_rollups`, removed the old Postgres runtime reads/writes, dropped the heavy Postgres table, and left the empty compatibility shell.
+- A production repair job `clickhouse-rollup-repair` applied missing `004_api_endpoint_daily_rollups.sql` state on the live cluster and ran `backfillClickHouseApiEndpointRollups.ts --replace`.
+- A ClickHouse alias collision in the daily trend query was hot-fixed by setting profile `prefer_column_name_to_alias=1`, then codified in `k8s/clickhouse.yaml`. The application query also wraps `date AS rollupDate` in a subquery so the result alias cannot shadow the table column.
+- Final cutover verification on image `760a4e6b519e2ad9eed469181cd432f57055c2e8`: all app deployments rolled out, `CLICKHOUSE_ENABLED=true`, `CLICKHOUSE_DUAL_WRITE_ENABLED=true`, `CLICKHOUSE_READS_ENABLED=true`, fresh raw facts landed in `api_endpoint_request_events`, fresh rollups landed in `api_endpoint_daily_rollups`, and the Postgres compatibility shell had 0 rows.
 
-Production pre-cutover checks:
+Production post-cutover checks:
 
 - ClickHouse storage growth under expected rate
 - parts count not exploding
 - no Keeper quorum issues
-- Postgres SyncRep waits decrease only after Postgres writes are actually removed
-- no increase in ingest artifact failures
+- API endpoint dashboard returns nonzero ClickHouse-backed data
+- `public.api_endpoint_daily_stats` remains empty
+- no new ingest artifact failures after deploy
+- `/health/queue` may stay red from historical BullMQ DLQ entries; sample newest failed jobs before attributing the alert to the current deploy
 
 ## Missed-Judgment Traps To Avoid
 
@@ -1226,9 +1243,9 @@ Production pre-cutover checks:
 
 9. Do not move `sessions` or `recording_artifacts` source-of-truth behavior as part of this first migration.
 
-10. Do not drop Postgres fallback until ClickHouse reads, backfill, and rollback have been exercised in production.
+10. Do not reintroduce Postgres fallback for API endpoint analytics. The heavy Postgres table is gone and only an empty compatibility shell remains.
 
-11. Do not overstate the resource win before Phase 5. Dual-write plus ClickHouse reads improves dashboard read scalability, but Postgres CPU/WAL/autovacuum relief only arrives when the old Postgres aggregate upsert is stopped.
+11. Do not overstate the resource win as a guaranteed RSS drop. The cutover removes Postgres CPU/WAL/index/autovacuum/cache pressure from the old aggregate workload, but Postgres may keep memory as useful cache for other OLTP tables.
 
 12. Do not let raw ClickHouse facts use client event date if the read path is replacing `api_endpoint_daily_stats`. The existing Postgres aggregate uses artifact processing day. Date semantics must match before dual-write can be considered reliable.
 
@@ -1246,16 +1263,19 @@ Backend:
 - `backend/src/services/apiEndpointStatsClickHouse.ts`
 - `backend/src/services/ingestEventArtifactProcessor.ts`
 - `backend/scripts/setupClickHouse.ts`
-- `backend/scripts/backfillClickHouseApiEndpointStats.ts`
+- `backend/scripts/backfillClickHouseApiEndpointRollups.ts`
 - `backend/clickhouse/001_api_endpoint_request_events.sql`
 - `backend/clickhouse/002_api_endpoint_daily_stats_imported.sql`
+- `backend/clickhouse/003_api_endpoint_daily_stats_imported_sum_latency_uint64.sql`
+- `backend/clickhouse/004_api_endpoint_daily_rollups.sql`
+- `backend/drizzle/20260522010000_drop_api_endpoint_daily_stats/migration.sql`
 - relevant backend tests under `backend/src/__tests__/`
 
 Production k8s:
 
 - `k8s/clickhouse.yaml`
 - `k8s/clickhouse-setup.yaml`
-- `k8s/clickhouse-backfill-api-stats.yaml`
+- `k8s/clickhouse-backfill-api-rollups.yaml`
 - `k8s/api.yaml`
 - `k8s/workers.yaml`
 - `scripts/k8s/k8s-sync-secrets.sh`
@@ -1265,7 +1285,7 @@ Production k8s:
 Local k8s:
 
 - `local-k8s/clickhouse.yaml`
-- `local-k8s/clickhouse-backfill-api-stats.yaml`
+- `local-k8s/clickhouse-backfill-api-rollups.yaml`
 - `local-k8s/api.yaml`
 - `local-k8s/workers.yaml`
 - `local-k8s/env.example`

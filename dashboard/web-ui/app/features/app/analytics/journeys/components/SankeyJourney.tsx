@@ -384,8 +384,12 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
             </div>
 
             <div
-                className="relative overflow-auto overscroll-contain bg-white focus:outline-none focus:ring-2 focus:ring-black focus:ring-inset"
-                style={{ maxHeight: height }}
+                className="relative overflow-x-auto overflow-y-visible bg-white focus:outline-none focus:ring-2 focus:ring-black focus:ring-inset"
+                style={{
+                    minHeight: calculatedHeight,
+                    overscrollBehaviorX: 'contain',
+                    overscrollBehaviorY: 'auto',
+                }}
                 tabIndex={0}
                 role="region"
                 aria-label="Scrollable journey lanes map"

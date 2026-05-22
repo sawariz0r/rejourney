@@ -935,8 +935,10 @@ Player responsibilities:
 - Fetch the cheap core payload first, then request `/api/session/:id/replay-manifest`.
 - For rrweb, load the first playable segment before trying to initialize playback, then prefetch nearby and next segments in the background.
 - Use adaptive segment concurrency: about 6 desktop, 4 mobile, and 3 on slower mobile/network conditions.
+- Publish only a contiguous prefix of rrweb segments as they finish loading. Later segments can arrive out of order because of parallel fetches; do not reorder events that have already been handed to the mounted player.
 - Try each signed direct segment URL with `credentials: omit`; fall back to `proxyUrl` with dashboard credentials only if the direct object-storage read fails.
 - Instantiate rrweb `Replayer` inside a sandboxed container.
+- Keep the `Replayer` instance stable after the first playable segment and append later events with `replayer.addEvent(...)`. Destroy/recreate only on a real session/replay-key change. Rebuilding on every progressive event batch causes the replay iframe to flash after the loading bar completes, even while paused.
 - Use `skipInactive` and `inactivePeriodThreshold` to match current playback expectations.
 - Map Rejourney custom/network/error events to timeline markers.
 - Expose `seekTo`, `play`, `pause`, `getCurrentTime` like `ScreenshotReplayPlayer`.

@@ -1,6 +1,6 @@
 # All Things Cloud
 
-Last updated: 2026-05-21
+Last updated: 2026-05-22
 
 Operator-facing map of production: traffic path, pod placement, storage, HA failover, and the reasoning behind every architectural decision.
 
@@ -215,7 +215,7 @@ A backward-compat `api` Service still exists and aliases `api-ingest` so anythin
 #### `api-dashboard` — operator UI + everything else
 - Routed by ingress for everything else on `api.rejourney.co` (`/`, dashboard, analytics, auth, webhooks, etc.).
 - **Preferred HEL1, weight 100** — colocated with the Postgres read replica so heavy analytics aggregations are local-DC.
-- **`podAntiAffinity` (preferred) on hostname** — spreads the two replicas across different HEL1 nodes so a single-node loss doesn't take both pods.
+- **`podAntiAffinity` (preferred) on hostname** — spreads the two replicas across different HEL1 nodes so a single-node loss doesn't take both pods. This is an intentional scheduling preference, not a sign that one HEL1 node ran out of room; Kubernetes may still put both pods on one node if capacity forces it.
 - **No required affinity to the primary** — most queries on this deployment use `dbRead` (read replica). The occasional write (login, settings, Stripe webhook) goes through `pgbouncer` (rw) → primary, which crosses 25ms cross-DC, acceptable at that frequency.
 - **HPA `api-dashboard`: min 2, max 5, target 60% CPU.**
 - Sets the `DATABASE_URL_READ` env var (interpolated from `POSTGRES_*` secrets — those keys must be declared before `DATABASE_URL_READ` in the env list because Kubernetes `$(VAR)` interpolation only resolves vars listed earlier in the same container).
@@ -234,6 +234,7 @@ A backward-compat `api` Service still exists and aliases `api-ingest` so anythin
 - BullMQ deduplication uses `jobId = artifact-{artifactId}`. Stalled jobs (worker died mid-process) are automatically re-queued after `stalledInterval = 30s`, up to `maxStalledCount = 3`.
 - Retry policy: 5 attempts, exponential backoff starting at 1s. Failed jobs are kept in the failed set for 7 days (DLQ window). Completed jobs retained 1h for observability.
 - Queue depth monitoring: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, and `LLEN bull:rj-replay-artifacts:wait` in Redis. All should be near zero in steady state.
+- `/health/queue` returns `503` whenever BullMQ has failed/DLQ jobs, including historical failed jobs retained during the 7-day DLQ window. Before treating it as a fresh outage, sample the newest failed job per queue and compare `failedOn` to the current deploy window.
 
 ### `ingest-upload`
 
@@ -277,11 +278,11 @@ A backward-compat `api` Service still exists and aliases `api-ingest` so anythin
 - WAL archived to Cloudflare R2 (gzip). See `postgres-backup-and-restore.md`.
 - Storage: `rejourney-db-local-retain` (local-path, Retain). Data is on the node's local disk — not Hetzner cloud volumes. PVCs survive pod/cluster deletion. Standby + R2 WAL archive are the recovery paths.
 
-### ClickHouse analytics projection (deploy-gated)
+### ClickHouse analytics projection (production cutover complete)
 
-ClickHouse is the analytics scale-out path for API endpoint telemetry. The old Postgres `api_endpoint_daily_stats` table is no longer the runtime source once the drop migration ships; ClickHouse owns the API endpoint facts, imported history, and daily rollups. It is **not** a replacement for Postgres as the source of truth for sessions, recording artifacts, auth, billing, storage configuration, or ingest lifecycle state.
+ClickHouse is the analytics scale-out path for API endpoint telemetry. The old Postgres `api_endpoint_daily_stats` data table is no longer the runtime source; ClickHouse owns the API endpoint facts, imported history, and daily rollups. It is **not** a replacement for Postgres as the source of truth for sessions, recording artifacts, auth, billing, storage configuration, or ingest lifecycle state.
 
-Production deployment is gated:
+Production deployment remains gated for fresh clusters or disaster rebuilds:
 
 - `DEPLOY_CLICKHOUSE=false` by default in `scripts/k8s/deploy-release.sh`, so normal CI deploys do not create ClickHouse or require `clickhouse-secret`.
 - App flags default off: `CLICKHOUSE_ENABLED=false`, `CLICKHOUSE_DUAL_WRITE_ENABLED=false`, `CLICKHOUSE_READS_ENABLED=false`.
@@ -299,6 +300,8 @@ Topology when enabled:
 
 Why HEL1 for the data replicas: the first writer is `ingest-worker`, which already lives in HEL1 and processes artifacts asynchronously; the first reader is `api-dashboard`, which also lives in HEL1. Keeping ClickHouse data on HEL1 avoids loading the FSN1 Postgres primary node with analytical storage and merge work. This topology only makes sense because ClickHouse is outside the synchronous `/api/ingest/*` return path. The earlier FSN1 primary colocation incident showed what happens when ingest makes serial cross-DC calls: ingest latency can jump into seconds. Do not move any synchronous ingest write to a HEL1-only ClickHouse endpoint.
 
+ClickHouse config note: the cluster profile sets `prefer_column_name_to_alias=1`. Keep it. It prevents ClickHouse from resolving a `SELECT ... AS date` alias inside a `WHERE date ...` predicate and was required after a production alias/type conflict on the daily trend query.
+
 Resource impact expected after the full cutover:
 
 - largest direct win: lower Postgres CPU, WAL, index churn, autovacuum work, and disk I/O from removing hot aggregate upserts on `api_endpoint_daily_stats`
@@ -307,9 +310,9 @@ Resource impact expected after the full cutover:
 - not a magic fix for `sessions` or `recording_artifacts` bloat; those remain Postgres source-of-truth tables until a separate lifecycle/archive design exists
 - not a fix for synchronous ingest latency by itself; `api-ingest` must still colocate with the writable Postgres primary
 
-Current rollout model:
+Current rebuild/deploy model:
 
-1. Keep `api-ingest` and artifact processing writing raw API facts to `api_endpoint_request_events`.
+1. Keep raw API fact writes in asynchronous artifact processing; `api-ingest` must not synchronously wait on ClickHouse.
 2. Run `clickhouse-setup` so the rollup table and materialized view exist.
 3. Run `clickhouse-backfill-api-rollups --replace` once to rebuild `api_endpoint_daily_rollups` from ClickHouse imported history and raw facts. In production deploys, use `DEPLOY_CLICKHOUSE=true RUN_CLICKHOUSE_ROLLUP_BACKFILL=true` so setup and rollup rebuild finish before the new app pods roll.
 4. Keep `CLICKHOUSE_ENABLED=true`, `CLICKHOUSE_DUAL_WRITE_ENABLED=true`, and `CLICKHOUSE_READS_ENABLED=true`.
@@ -319,14 +322,17 @@ Local verification completed on 2026-05-21: the backfill imported 832 local `api
 
 Rollup migration update on 2026-05-22: runtime reads now target `api_endpoint_daily_rollups`; issue generation, dashboard insights, and API degradation emails no longer read `api_endpoint_daily_stats`; artifact processing no longer writes that Postgres table. The one-time rollup backfill job is `clickhouse-backfill-api-rollups`. The remaining Postgres object with that name is only an empty no-op compatibility shell during deployment.
 
-Production infrastructure verification on 2026-05-21:
+Production infrastructure verification on 2026-05-22:
 
 - ClickHouse Keeper is running as 3 voters, one per node.
 - ClickHouse data is running as 1 shard / 2 replicas, one on each HEL1 node.
 - Historical backfill for dates `< 2026-05-21` completed: 9,325,058 rows, 180,151,363 calls, 8,322,568 errors, and 503,552,981,006 summed latency ms.
 - Postgres and ClickHouse `FINAL` totals matched exactly by global total, by date, and by project for dates `< 2026-05-21`.
-- Reads remain disabled: `CLICKHOUSE_READS_ENABLED=false`.
-- Dual-write is currently disabled until the next image with corrected raw fact date semantics is deployed. The brief test raw rows were truncated because they used client event date while Postgres aggregates use processing date.
+- Current production flags on `api-dashboard`: `CLICKHOUSE_ENABLED=true`, `CLICKHOUSE_DUAL_WRITE_ENABLED=true`, `CLICKHOUSE_READS_ENABLED=true`.
+- The cutover deploy image `760a4e6b519e2ad9eed469181cd432f57055c2e8` rolled out successfully.
+- `api_endpoint_daily_rollups` was live and fresh after deploy: about 622k rollup rows, about 243.5M calls, newest rollup date `2026-05-22`, and `updated_at` within seconds of the health check.
+- `api_endpoint_request_events` was receiving fresh raw facts after deploy: about 2.19M raw rows with newest `inserted_at` on `2026-05-22 04:13:36 UTC`.
+- The Postgres compatibility shell `public.api_endpoint_daily_stats` existed and had 0 rows. Empty is expected; the trigger discards legacy writes with `INSERT 0 0`.
 
 ### Redis
 
@@ -375,7 +381,7 @@ Production infrastructure verification on 2026-05-21:
 | In-flight writes at crash | Postgres writes: no data loss — `remote_write` means every committed write was already buffered on standby. BullMQ jobs that were active at crash time are detected as stalled after `stalledInterval = 30s` and automatically re-queued. Relay uploads already ACKed to the SDK depend on the Redis `artifact:buf:{artifactId}` key surviving until flush; buffered flush jobs are recoverable while that 30-minute key exists. Artifact processing is idempotent — safe to reprocess. |
 | Redis master | Sentinel elects new master within seconds. |
 | ClickHouse Keeper voter | Any single node loss leaves 2/3 Keeper quorum. ClickHouse data remains available if at least one HEL1 data replica is healthy. |
-| ClickHouse data replica | One HEL1 node loss leaves the other data replica serving analytics. Full HEL1 loss takes ClickHouse reads down; while Postgres fallback still exists, set `CLICKHOUSE_READS_ENABLED=false` or rely on the route fallback. After Postgres writes are removed, treat full HEL1 ClickHouse loss as an analytics outage, not an ingest outage. |
+| ClickHouse data replica | One HEL1 node loss leaves the other data replica serving analytics. Full HEL1 loss takes ClickHouse reads down. There is no Postgres fallback for API endpoint analytics after the cutover; treat this as an analytics outage, not an ingest outage. |
 | Traefik | Reschedules to `worker-1` (~90s). LB detects `worker-1` nodeport healthy and resumes routing. |
 | CoreDNS | Second replica on HEL1 keeps DNS alive. |
 | Monitoring | victoria-metrics, Grafana, Gatus go offline. Accepted gap. |
@@ -508,4 +514,4 @@ Add the new FSN1 node as a Hetzner LB backend.
 - HEL1 nodes: unchanged — HA standby, bulk worker capacity, and `api-dashboard` home.
 - `api-dashboard`: 2 replicas on HEL1 is plenty for current operator load; scale via its own HPA (2–5) if dashboard traffic grows.
 
-ClickHouse changes the Postgres scaling pressure but not the next compute step: with `api_endpoint_daily_stats` writes removed and the old table scheduled for drop, Postgres should see less CPU, WAL, autovacuum, bloat, and cache pressure. The next FSN1 node is still the right compute expansion for synchronous ingest headroom because `api-ingest` must stay colocated with the writable Postgres primary.
+ClickHouse changes the Postgres scaling pressure but not the next compute step: with `api_endpoint_daily_stats` writes removed and the heavy Postgres table already dropped to an empty compatibility shell, Postgres should see less CPU, WAL, autovacuum, bloat, and cache pressure. The next FSN1 node is still the right compute expansion for synchronous ingest headroom because `api-ingest` must stay colocated with the writable Postgres primary.

@@ -41,3 +41,22 @@ MP4 upload is not currently wired up end-to-end — only screenshot mode is supp
 5. Run `npm run db:generate` and deploy
 
 Do not remove `backend/src/worker/workerDefinitions.ts` or `backend/src/worker/startArtifactWorker.ts`; those files are still the active BullMQ worker definitions and starter.
+
+---
+
+## 4. `api_endpoint_daily_stats` compatibility shell
+
+**Background:** API endpoint analytics moved to ClickHouse raw facts plus `api_endpoint_daily_rollups` in May 2026. The heavy Postgres `api_endpoint_daily_stats` data table was dropped by migration `20260522010000_drop_api_endpoint_daily_stats`, then recreated as an empty no-op compatibility shell so old rolling pods or old tools do not crash on `INSERT ... ON CONFLICT`.
+
+**Current state:**
+- Runtime API endpoint reads use ClickHouse, not Postgres.
+- Runtime artifact processing no longer writes this Postgres table.
+- The table should stay empty; a trigger returns `NULL` for legacy inserts/updates.
+
+**To drop later:** after enough deploys that no old pod/image/tooling expects the relation name, remove any remaining schema references and write a migration:
+
+```sql
+DROP TRIGGER IF EXISTS skip_api_endpoint_daily_stats_writes ON public.api_endpoint_daily_stats;
+DROP FUNCTION IF EXISTS public.skip_api_endpoint_daily_stats_writes();
+DROP TABLE IF EXISTS public.api_endpoint_daily_stats;
+```

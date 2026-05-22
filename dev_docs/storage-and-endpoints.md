@@ -187,7 +187,7 @@ flowchart TD
 ```
 
 Compatibility behavior:
-- rrweb manifests return ordered gzip JSON segments. The player loads the first playable segment quickly, then prefetches nearby and next segments.
+- rrweb manifests return ordered gzip JSON segments. The player loads the first playable segment quickly, then prefetches nearby and next segments. As segments finish, the loader should publish only a contiguous prefix and the player should append new events to the existing rrweb `Replayer` instead of remounting it.
 - Screenshot manifests return frame URLs. Warm paths use individually materialized JPEG frame objects under `sessions/{sessionId}/frames/{timestamp}.jpg`.
 - Every manifest item includes a signed direct object URL when possible and a same-origin proxy URL as fallback.
 - The proxy fallback routes are `/api/session/rrweb-segment/:sessionId/:artifactId` and `/api/session/frame/:sessionId/:timestamp`.
@@ -866,6 +866,7 @@ Result: A global shadow endpoint with priority 10 will receive copies of all rec
 4. For rrweb: return ordered segment metadata plus signed direct URL and proxyUrl.
 5. For screenshots: return frame metadata plus signed direct JPEG URL and proxyUrl.
 6. Browser tries the direct object URL first, with same-origin proxy fallback on failure.
+7. The rrweb loader publishes contiguous segment prefixes; the player appends later events with `replayer.addEvent(...)` and only remounts on a real session/replay change.
 ```
 
 Operational notes:
