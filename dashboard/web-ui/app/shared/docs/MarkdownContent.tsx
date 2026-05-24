@@ -346,9 +346,9 @@ export function MarkdownContent({
                     h1: ({ children }) => {
                         const id = generateId(String(children));
                         return (
-                            <h1 id={id} className="text-4xl font-black text-black mb-6 mt-10 first:mt-0 scroll-mt-32">
+                            <h2 id={id} className="text-4xl font-black text-black mb-6 mt-10 first:mt-0 scroll-mt-32">
                                 {children}
-                            </h1>
+                            </h2>
                         );
                     },
                     h2: ({ children }) => {

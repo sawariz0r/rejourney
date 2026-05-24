@@ -10,6 +10,7 @@ import { ARTICLES, getArticlePath } from "~/shared/data/engineering";
 import { Link, redirect, useLocation } from "react-router";
 import { getContentLocaleCopy, getLocalizedArticleSeo } from "~/shared/lib/contentLocalization";
 import {
+    MARKETING_ENGINEERING_LOCALE_ORDER,
     getLocalizedAlternateLinksForPath,
     getLocalizedPublicPath,
     getLocalizedPublicUrl,
@@ -57,13 +58,14 @@ export const meta: MetaFunction = ({ location }) => {
     const locale = getMarketingLocaleFromPathname(location.pathname);
     const copy = getContentLocaleCopy(locale);
     const canonicalUrl = getLocalizedPublicUrl(locale, "/engineering");
-    const alternateLinks = getLocalizedAlternateLinksForPath("/engineering").map((alternate) => ({
+    const shouldIndex = locale.code === "en";
+    const alternateLinks = getLocalizedAlternateLinksForPath("/engineering", MARKETING_ENGINEERING_LOCALE_ORDER).map((alternate) => ({
         tagName: "link",
         rel: "alternate",
         hrefLang: alternate.hrefLang,
         href: alternate.href,
     }));
-    const alternateOgLocales = getLocalizedAlternateLinksForPath("/engineering")
+    const alternateOgLocales = getLocalizedAlternateLinksForPath("/engineering", MARKETING_ENGINEERING_LOCALE_ORDER)
         .filter((alternate) => alternate.hrefLang !== "x-default" && alternate.hrefLang !== locale.languageTag)
         .map((alternate) => ({
             property: "og:locale:alternate",
@@ -80,7 +82,7 @@ export const meta: MetaFunction = ({ location }) => {
             name: "keywords",
             content: Array.from(new Set([...ENGINEERING_KEYWORDS.split(", "), ...copy.docKeywords])).join(", "),
         },
-        { name: "robots", content: "index, follow" },
+        { name: "robots", content: shouldIndex ? "index, follow" : "noindex, follow" },
         { httpEquiv: "Content-Language", content: locale.languageTag },
         { property: "og:locale", content: locale.ogLocale },
         ...alternateOgLocales,
@@ -128,7 +130,6 @@ export default function EngineeringIndexPage() {
                                 "@type": "ItemList",
                                 "@id": `${getLocalizedPublicUrl(locale, "/engineering")}#posts`,
                                 name: copy.engineeringCollectionName,
-                                inLanguage: locale.languageTag,
                                 numberOfItems: ARTICLES.length,
                                 itemListElement: ARTICLES.map((article, index) => {
                                     const localizedArticle = getLocalizedArticleSeo(article, locale);

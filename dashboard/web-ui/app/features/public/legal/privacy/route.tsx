@@ -114,9 +114,7 @@ export default function PrivacyPolicy() {
                                             <td className="px-4 py-2 border-b border-input">OVHcloud US</td>
                                             <td className="px-4 py-2 border-b border-input">Object Storage</td>
                                             <td className="px-4 py-2 border-b border-input">United States</td>
-                                            <td className="px-4 py-2 border-b border-input">
-                                                <a href="https://us.ovhcloud.com/legal/data-processing-agreement/" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">DPA</a>
-                                            </td>
+                                            <td className="px-4 py-2 border-b border-input">DPA</td>
                                         </tr>
                                         <tr>
                                             <td className="px-4 py-2 border-b border-input">ZeptoMail (Zoho)</td>

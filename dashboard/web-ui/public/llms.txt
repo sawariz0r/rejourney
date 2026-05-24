@@ -5,7 +5,18 @@
 ## Best Starting Points
 
 - [Home](https://rejourney.co/): Product overview for open-source mobile analytics, session replay, heatmaps, crash reporting, journeys, and self-hosting.
+- [About](https://rejourney.co/about): Company page for Rejourney's UT Austin origin, Austin location, and founders Mohammad Rashid and Fowwaz Moeen.
 - [Pricing](https://rejourney.co/pricing): Fixed-price mobile analytics and session replay plans.
+- [Session Replay Tools](https://rejourney.co/session-replay-tools): Buying-guide page for comparing replay tools, pricing limits, mobile support, and debugging context.
+- [Mobile Session Replay](https://rejourney.co/mobile-session-replay): Mobile replay for iOS, Expo, and React Native teams.
+- [Web Session Replay](https://rejourney.co/web-session-replay): Browser replay for web apps, checkout, onboarding, account flows, and product dashboards.
+- [Replay-First Mentality](https://rejourney.co/replay-first-mentality): Product thinking guide for grounding analytics, support, and bug triage in real sessions.
+- [Importance of Open Source](https://rejourney.co/importance-of-open-source): Why source visibility, self-hosting, and auditability matter for replay data.
+- [What Is Session Replay](https://rejourney.co/what-is-session-replay): Plain-English guide to session replay and how it supports product and engineering teams.
+- [How to See What Your Users Do](https://rejourney.co/how-to-see-what-your-users-do): Practical guide for observing real behavior with replays, heatmaps, journeys, and events.
+- [Be Your Users](https://rejourney.co/be-your-users): Team habit guide for watching real sessions before roadmap, design, and release decisions.
+- [PostHog Session Replay Alternative](https://rejourney.co/alternatives/posthog-session-replay): Comparison page for teams evaluating Rejourney vs PostHog session replay.
+- [Sentry Session Replay Alternative](https://rejourney.co/alternatives/sentry-session-replay): Comparison page for teams evaluating replay beyond error monitoring.
 - [Engineering Log](https://rejourney.co/engineering): Technical articles on SDK architecture, pricing, scaling, SwiftPM, and map performance.
 - [React Native SDK](https://rejourney.co/docs/reactnative/overview): Install and configure the React Native SDK.
 - [Swift iOS SDK](https://rejourney.co/docs/swift/overview): Install and configure the native Swift iOS SDK.
@@ -19,6 +30,7 @@
 - Mobile journeys and product analytics for understanding funnels and user flows.
 - Self-hosted observability deployment for teams that need data ownership.
 - Open-source mobile observability alternative to usage-priced analytics platforms.
+- Unlimited events, unlimited analytics data retention, unlimited team members, and unlimited projects for product analytics workflows.
 
 ## Engineering Articles By Search Intent
 

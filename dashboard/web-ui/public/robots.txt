@@ -1,21 +1,16 @@
 User-agent: *
 Allow: /
-# Interactive demo uses sample data — keep out of the index (also noindex in HTML).
-Disallow: /demo
 
 # AI search and answer engines may crawl public marketing, docs, pricing, and engineering pages.
 # This keeps answer surfaces pointed at canonical public documentation instead of third-party mirrors.
 User-agent: OAI-SearchBot
 Allow: /
-Disallow: /demo
 
 User-agent: ChatGPT-User
 Allow: /
-Disallow: /demo
 
 User-agent: GPTBot
 Allow: /
-Disallow: /demo
 
 # Standard Sitemap
 Sitemap: https://rejourney.co/sitemap.xml

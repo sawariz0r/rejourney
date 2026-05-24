@@ -55,18 +55,19 @@
     "@graph": [
       {
         "@type": "Organization",
+        "@id": "https://rejourney.co/#organization",
         "name": "Rejourney",
-        "inLanguage": "en-US",
         "url": "https://rejourney.co/",
         "logo": "https://rejourney.co/rejourneyIcon-removebg-preview.png"
       },
       {
-        "@type": "Product",
+        "@type": "Service",
+        "@id": "https://rejourney.co/#service",
         "name": "Rejourney",
-        "inLanguage": "en-US",
         "description": "Mobile-first analytics and observability with pixel-perfect session replay, crash & performance monitoring, and instant email alerts.",
         "url": "https://rejourney.co/",
-        "brand": { "@type": "Brand", "name": "Rejourney" }
+        "provider": { "@id": "https://rejourney.co/#organization" },
+        "serviceType": "Web and mobile analytics"
       }
     ]
   }

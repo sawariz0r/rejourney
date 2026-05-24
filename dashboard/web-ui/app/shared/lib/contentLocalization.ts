@@ -143,7 +143,7 @@ const englishContentCopy: ContentLocaleCopy = {
   viewGitHub: "View GitHub",
   readTime: (minutes) => `${minutes} min read`,
   pricing: {
-    metaTitle: "Rejourney Pricing: Fixed-Price Mobile Analytics & Session Replay",
+    metaTitle: "Rejourney Pricing: Session Replay Plans",
     metaDescription:
       "Rejourney pricing for mobile analytics, session replay, crash reporting, heatmaps, and self-hosted deployments.",
     metaKeywords: [
@@ -603,7 +603,7 @@ const contentLocaleOverrides: Partial<Record<MarketingLocaleCode, ContentLocaleO
 
 const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<ContentLocaleCopy["pricing"]>>> = {
   ar: {
-    metaTitle: "أسعار Rejourney: Session Replay وإعادة تشغيل الجلسات بسعر ثابت",
+    metaTitle: "أسعار Rejourney: خطط Session Replay",
     metaDescription: "أسعار Rejourney لتحليلات الجوال، session replay، إعادة تشغيل الجلسات، تقارير الأعطال، الخرائط الحرارية، والاستضافة الذاتية.",
     metaKeywords: [
       "session replay عربي",
@@ -666,7 +666,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "عرض المصدر",
   },
   es: {
-    metaTitle: "Precios de Rejourney: session replay y reproducción de sesiones",
+    metaTitle: "Precios de Rejourney: session replay",
     metaDescription: "Precios de Rejourney para analítica móvil, session replay, reproducción de sesiones, crashes, heatmaps y despliegues self-hosted.",
     metaKeywords: [
       "session replay español",
@@ -730,7 +730,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Ver código fuente",
   },
   tr: {
-    metaTitle: "Rejourney Fiyatları: Mobil session replay ve oturum tekrarı",
+    metaTitle: "Rejourney Fiyatları: session replay",
     metaDescription: "Mobil analitik, session replay, oturum tekrarı, crash raporlama, heatmap ve self-hosted dağıtımlar için Rejourney fiyatları.",
     metaKeywords: [
       "session replay türkçe",
@@ -794,7 +794,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Kaynağı görüntüle",
   },
   fr: {
-    metaTitle: "Tarifs Rejourney: analytics mobile et session replay à prix fixe",
+    metaTitle: "Tarifs Rejourney: session replay",
     metaDescription: "Tarifs Rejourney pour analytics mobile, session replay, crashs, heatmaps et déploiements self-hosted.",
     ogTitle: "Tarifs Rejourney: analytics mobile et session replay à prix fixe",
     ogDescription: "Tarifs fixes pour session replay mobile, heatmaps, crashs, parcours et analytics self-hosted.",
@@ -822,7 +822,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Voir le code source",
   },
   de: {
-    metaTitle: "Rejourney Preise: Mobile Analytics und Session Replay zum Festpreis",
+    metaTitle: "Rejourney Preise: Session Replay",
     metaDescription: "Rejourney Preise für Mobile Analytics, Session Replay, Crash Reporting, Heatmaps und Self-Hosted Deployments.",
     ogTitle: "Rejourney Preise: Mobile Analytics und Session Replay zum Festpreis",
     ogDescription: "Einfache Festpreise für Mobile Session Replay, Heatmaps, Crash Reporting, Journeys und Self-Hosted Analytics.",
@@ -850,7 +850,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Quellcode ansehen",
   },
   "pt-br": {
-    metaTitle: "Preços Rejourney: analytics mobile e session replay com preço fixo",
+    metaTitle: "Preços Rejourney: session replay",
     metaDescription: "Preços Rejourney para analytics mobile, session replay, crash reporting, mapas de calor e self-hosted.",
     ogTitle: "Preços Rejourney: analytics mobile e session replay com preço fixo",
     ogDescription: "Preços fixos para session replay mobile, mapas de calor, crashes, jornadas e analytics self-hosted.",
@@ -878,7 +878,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Ver código-fonte",
   },
   pt: {
-    metaTitle: "Preços Rejourney: analytics mobile e session replay com preço fixo",
+    metaTitle: "Preços Rejourney: session replay",
     metaDescription: "Preços Rejourney para analytics mobile, session replay, crash reporting, mapas de calor e self-hosted.",
     ogTitle: "Preços Rejourney: analytics mobile e session replay com preço fixo",
     ogDescription: "Preços fixos para session replay mobile, mapas de calor, crashes, jornadas e analytics self-hosted.",
@@ -906,7 +906,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Ver código-fonte",
   },
   it: {
-    metaTitle: "Prezzi Rejourney: analytics mobile e session replay a prezzo fisso",
+    metaTitle: "Prezzi Rejourney: session replay",
     metaDescription: "Prezzi Rejourney per analytics mobile, session replay, crash reporting, heatmap e self-hosted.",
     ogTitle: "Prezzi Rejourney: analytics mobile e session replay a prezzo fisso",
     ogDescription: "Prezzi fissi per session replay mobile, heatmap, crash, journey e analytics self-hosted.",
@@ -928,7 +928,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Vedi sorgente",
   },
   nl: {
-    metaTitle: "Rejourney prijzen: mobiele analytics en sessiereplay voor vaste prijs",
+    metaTitle: "Rejourney prijzen: sessiereplay",
     metaDescription: "Rejourney prijzen voor mobiele analytics, sessiereplay, crashrapportage, heatmaps en self-hosted deployments.",
     ogTitle: "Rejourney prijzen: mobiele analytics en sessiereplay voor vaste prijs",
     ogDescription: "Vaste prijzen voor mobiele sessiereplay, heatmaps, crashes, journeys en self-hosted analytics.",
@@ -950,7 +950,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Bron bekijken",
   },
   pl: {
-    metaTitle: "Cennik Rejourney: mobilna analityka i session replay w stałej cenie",
+    metaTitle: "Cennik Rejourney: session replay",
     metaDescription: "Cennik Rejourney dla mobilnej analityki, session replay, crash reporting, heatmap i self-hosted.",
     ogTitle: "Cennik Rejourney: mobilna analityka i session replay w stałej cenie",
     ogDescription: "Stałe ceny dla mobile session replay, heatmap, crashy, journey i self-hosted analytics.",
@@ -972,7 +972,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Zobacz źródło",
   },
   ru: {
-    metaTitle: "Цены Rejourney: mobile analytics и session replay по фиксированной цене",
+    metaTitle: "Цены Rejourney: session replay",
     metaDescription: "Цены Rejourney для mobile analytics, session replay, crash reporting, heatmap и self-hosted deployments.",
     ogTitle: "Цены Rejourney: mobile analytics и session replay по фиксированной цене",
     ogDescription: "Простые фиксированные цены для mobile session replay, heatmap, crash reporting, journeys и self-hosted analytics.",
@@ -1026,7 +1026,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Смотреть исходный код",
   },
   vi: {
-    metaTitle: "Giá Rejourney: mobile analytics và session replay giá cố định",
+    metaTitle: "Giá Rejourney: session replay",
     metaDescription: "Giá Rejourney cho mobile analytics, session replay, crash reporting, heatmap và self-hosted deployments.",
     ogTitle: "Giá Rejourney: mobile analytics và session replay giá cố định",
     ogDescription: "Giá cố định cho mobile session replay, heatmap, crash reporting, journeys và self-hosted analytics.",
@@ -1048,7 +1048,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     viewSource: "Xem mã nguồn",
   },
   hi: {
-    metaTitle: "Rejourney Pricing: fixed-price mobile analytics और session replay",
+    metaTitle: "Rejourney Pricing: session replay",
     pageName: "Rejourney Pricing",
     ariaLabel: "Pricing",
     heading: "Pricing",
@@ -1064,7 +1064,7 @@ const pricingLocaleOverrides: Partial<Record<MarketingLocaleCode, Partial<Conten
     selfHostedHeading: "Rejourney को अपनी infrastructure पर चलाएं.",
   },
   id: {
-    metaTitle: "Harga Rejourney: mobile analytics dan session replay harga tetap",
+    metaTitle: "Harga Rejourney: session replay",
     pageName: "Harga Rejourney",
     ariaLabel: "Harga",
     heading: "Harga",

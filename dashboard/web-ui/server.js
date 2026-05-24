@@ -44,6 +44,11 @@ const EDGE_CACHEABLE_HTML_PATTERNS = [
   /^\/dpa$/,
   /^\/changelog$/,
 ];
+const LEGACY_PUBLIC_HTML_REDIRECTS = new Map([
+  ['/index.html', '/'],
+  ['/docs/index.html', '/docs/web/getting-started'],
+  ['/pricing/index.html', '/pricing'],
+]);
 
 function isEdgeCacheableHtmlPath(pathname) {
   return EDGE_CACHEABLE_HTML_PATTERNS.some((pattern) => pattern.test(pathname));
@@ -165,6 +170,21 @@ app.use('/api', createProxyMiddleware({
     res.status(502).json({ error: 'Backend unavailable' });
   }
 }));
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    next();
+    return;
+  }
+
+  const redirectTarget = LEGACY_PUBLIC_HTML_REDIRECTS.get(req.path);
+  if (!redirectTarget) {
+    next();
+    return;
+  }
+
+  res.redirect(301, `${redirectTarget}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`);
+});
 
 // Serve static assets from the client build directory
 // These need to be served BEFORE the catch-all SSR handler

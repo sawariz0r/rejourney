@@ -1,9 +1,13 @@
 import React from 'react';
 import { ArrowRight, Terminal } from 'lucide-react';
-import { Link } from 'react-router';
-import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
+import { Link, useLocation } from 'react-router';
+import { getLocalizedPublicPath, getMarketingLocaleFromPathname, type MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
 export const EngineeringCTA: React.FC<{ copy: MarketingHomeCopy['engineeringCta'] }> = ({ copy }) => {
+    const location = useLocation();
+    const locale = getMarketingLocaleFromPathname(location.pathname);
+    const engineeringPath = getLocalizedPublicPath(locale, "/engineering");
+
     return (
         <section className="w-full border-t-2 border-black bg-[#f8fafc] text-black">
             <div className="relative w-full overflow-hidden px-4 py-16 sm:px-6 sm:py-32 lg:px-8">
@@ -40,7 +44,7 @@ export const EngineeringCTA: React.FC<{ copy: MarketingHomeCopy['engineeringCta'
 
 
                     <div className="flex flex-col justify-center gap-4 sm:flex-row">
-                        <Link to="/engineering" className="w-full sm:w-auto">
+                        <Link to={engineeringPath} className="w-full sm:w-auto">
                             <button
                                 className="flex w-full items-center justify-center gap-3 border-2 border-black bg-black px-4 py-4 text-xs font-black uppercase tracking-widest text-white shadow-[5px_5px_0px_0px_rgba(93,173,236,1)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5dadec] hover:text-black hover:shadow-neo-lg active:translate-y-0 sm:w-auto sm:px-8 sm:text-base"
                             >

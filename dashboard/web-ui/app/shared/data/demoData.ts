@@ -22,6 +22,35 @@ const demoRecordedReplayFixtures = [frankfurtDemoReplayFixture, existingDemoRepl
 
 export const DEMO_REPLAY_SESSION_IDS: string[] = demoRecordedReplayFixtures.map((fixture) => fixture.sessionId);
 
+const demoReplayFixtureById = new Map<string, DemoReplayFixture>(
+    demoRecordedReplayFixtures.map((fixture) => [fixture.sessionId, fixture]),
+);
+
+function getDemoReplayFrameUrl(fixture: DemoReplayFixture | undefined): string | null {
+    const coverFrame = fixture?.screenshotFrames?.find((frame: { file?: string }) => Boolean(frame.file));
+    if (!fixture || !coverFrame?.file) return null;
+    return `/demo/${fixture.sessionId}/frames/${coverFrame.file}`;
+}
+
+function hashDemoCoverSeed(seed: string): number {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+        hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+}
+
+export function getDemoReplayCoverPhotoUrl(sessionId?: string | null, fallbackSeed?: string | null): string | null {
+    const exactFixture = sessionId ? demoReplayFixtureById.get(sessionId) : undefined;
+    const exactCover = getDemoReplayFrameUrl(exactFixture);
+    if (exactCover) return exactCover;
+
+    if (!fallbackSeed) return null;
+
+    const fallbackFixture = demoRecordedReplayFixtures[hashDemoCoverSeed(fallbackSeed) % demoRecordedReplayFixtures.length];
+    return getDemoReplayFrameUrl(fallbackFixture);
+}
+
 // Featured session ID - this will use the newest real recording from the demo archive.
 export const DEMO_FEATURED_SESSION_ID = frankfurtDemoReplayFixture.sessionId;
 

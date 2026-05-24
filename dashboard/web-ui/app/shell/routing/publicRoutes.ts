@@ -1,4 +1,5 @@
 import { index, route } from "@react-router/dev/routes";
+import { SEO_PAGE_PATHS } from "../../features/public/seo/seoPages";
 import { MARKETING_LOCALE_SLUGS } from "../../shared/lib/internationalMarketing";
 
 export const publicRoutes = [
@@ -21,6 +22,10 @@ export const publicRoutes = [
   route("pricing", "features/public/pricing/route.tsx", { id: "public-pricing" }),
   ...MARKETING_LOCALE_SLUGS.map((locale) =>
     route(`${locale}/pricing`, "features/public/pricing/route.tsx", { id: `public-pricing-${locale}` })
+  ),
+  route("about", "features/public/about/route.tsx", { id: "public-about" }),
+  ...SEO_PAGE_PATHS.map((path) =>
+    route(path.replace(/^\//, ""), "features/public/seo/route.tsx", { id: `public-seo-${path.replace(/^\//, "").replace(/\//g, "-")}` })
   ),
   route("ai/responsibleusage", "features/public/ai/responsibleusage/route.tsx", { id: "public-ai-responsible-usage" }),
   route("terms-of-service", "features/public/legal/terms/route.tsx", { id: "public-terms" }),

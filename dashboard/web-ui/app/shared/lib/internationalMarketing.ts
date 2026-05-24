@@ -71,7 +71,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "en-US",
     ogLocale: "en_US",
     dir: "ltr",
-    metaTitle: "Rejourney: Open Source Web & Mobile Analytics, Session Replay & Observability",
+    metaTitle: "Rejourney: Open Source Session Replay & Analytics",
     metaDescription:
       "Open-source analytics for web, iOS, Android, Expo, and React Native apps with replay, crashes, heatmaps, journeys, and a light SDK.",
     keywords: [
@@ -89,8 +89,8 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Open Source Web and Mobile Analytics",
     hero: {
-      headlinePrimary: "Replay Analytics",
-      headlineSecondary: "Light SDK",
+      headlinePrimary: "Replay-First Analytics",
+      headlineSecondary: "Lightweight SDK",
       primaryCta: "Get started free",
       secondaryCta: "Self-host instead",
     },
@@ -107,7 +107,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "ar",
     ogLocale: "ar_AR",
     dir: "rtl",
-    metaTitle: "Rejourney: Session Replay وتحليلات للويب وتطبيقات الجوال",
+    metaTitle: "Rejourney: Session Replay للويب والجوال",
     metaDescription:
       "Session replay وتحليلات مفتوحة المصدر للويب وتطبيقات iOS وAndroid وExpo وReact Native مع إعادة تشغيل الجلسات، الأعطال، الخرائط الحرارية، ورحلات المستخدم.",
     keywords: [
@@ -126,8 +126,8 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - تحليلات الويب وتطبيقات الجوال مفتوحة المصدر",
     hero: {
-      headlinePrimary: "تحليلات إعادة التشغيل",
-      headlineSecondary: "SDK خفيف",
+      headlinePrimary: "تحليلات تبدأ بالإعادة",
+      headlineSecondary: "SDK خفيف الوزن",
       primaryCta: "ابدأ مجانًا",
       secondaryCta: "استضافة ذاتية",
     },
@@ -153,7 +153,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "es",
     ogLocale: "es_ES",
     dir: "ltr",
-    metaTitle: "Rejourney: Session replay y analítica para web y apps móviles",
+    metaTitle: "Rejourney: session replay web y movil",
     metaDescription:
       "Session replay y analítica open source para web, iOS, Android, Expo y React Native con reproducción de sesiones, crashes, mapas de calor y un SDK ligero.",
     keywords: [
@@ -172,7 +172,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Analítica web y móvil open source",
     hero: {
-      headlinePrimary: "Analítica de replay",
+      headlinePrimary: "Analítica replay-first",
       headlineSecondary: "SDK ligero",
       primaryCta: "Empieza gratis",
       secondaryCta: "Autohospedar",
@@ -218,7 +218,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Açık kaynak web ve mobil uygulama analitiği",
     hero: {
-      headlinePrimary: "Replay analitiği",
+      headlinePrimary: "Replay-oncelikli analitik",
       headlineSecondary: "Hafif SDK",
       primaryCta: "Ücretsiz başla",
       secondaryCta: "Kendin barındır",
@@ -245,7 +245,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "pt-BR",
     ogLocale: "pt_BR",
     dir: "ltr",
-    metaTitle: "Rejourney: Analytics web e mobile open source, replay de sessão e observabilidade",
+    metaTitle: "Rejourney: session replay web e mobile",
     metaDescription:
       "Analytics open source para web, iOS, Android, Expo e React Native com replay de sessão, crashes, mapas de calor, jornadas e SDK leve.",
     keywords: [
@@ -262,7 +262,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Analytics web e mobile open source",
     hero: {
-      headlinePrimary: "Analytics de replay",
+      headlinePrimary: "Analytics replay-first",
       headlineSecondary: "SDK leve",
       primaryCta: "Comece grátis",
       secondaryCta: "Hospede você mesmo",
@@ -289,7 +289,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "de",
     ogLocale: "de_DE",
     dir: "ltr",
-    metaTitle: "Rejourney: Open-Source-Web- und Mobile-Analytics, Session Replay und Observability",
+    metaTitle: "Rejourney: Web- und Mobile-Session-Replay",
     metaDescription:
       "Open-Source-Analytics für Web, iOS, Android, Expo und React Native mit Session Replay, Crash-Reporting, Heatmaps, Journeys und leichtem SDK.",
     keywords: [
@@ -305,7 +305,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Open-Source-Web- und Mobile-App-Analytics",
     hero: {
-      headlinePrimary: "Replay-Analytics",
+      headlinePrimary: "Replay-First Analytics",
       headlineSecondary: "Leichtes SDK",
       primaryCta: "Kostenlos starten",
       secondaryCta: "Selbst hosten",
@@ -332,7 +332,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "fr",
     ogLocale: "fr_FR",
     dir: "ltr",
-    metaTitle: "Rejourney: Analytics web et mobile open source, replay de session et observabilité",
+    metaTitle: "Rejourney: session replay web et mobile",
     metaDescription:
       "Analytics open source pour le web, iOS, Android, Expo et React Native avec replay de session, crashs, heatmaps, parcours utilisateur et SDK léger.",
     keywords: [
@@ -349,7 +349,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Analytics web et mobile open source",
     hero: {
-      headlinePrimary: "Analytics replay",
+      headlinePrimary: "Analytics replay-first",
       headlineSecondary: "SDK léger",
       primaryCta: "Démarrer gratuitement",
       secondaryCta: "Auto-héberger",
@@ -376,7 +376,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "hi",
     ogLocale: "hi_IN",
     dir: "ltr",
-    metaTitle: "Rejourney: ओपन-सोर्स वेब और मोबाइल एनालिटिक्स, सेशन रीप्ले और ऑब्जर्वेबिलिटी",
+    metaTitle: "Rejourney: web और mobile session replay",
     metaDescription:
       "वेब, iOS, Android, Expo और React Native ऐप्स के लिए ओपन-सोर्स एनालिटिक्स: सेशन रीप्ले, क्रैश, हीटमैप, यूजर जर्नी और हल्का SDK.",
     keywords: [
@@ -392,7 +392,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - ओपन-सोर्स वेब और मोबाइल ऐप एनालिटिक्स",
     hero: {
-      headlinePrimary: "रीप्ले एनालिटिक्स",
+      headlinePrimary: "रीप्ले-फर्स्ट एनालिटिक्स",
       headlineSecondary: "हल्का SDK",
       primaryCta: "मुफ्त शुरू करें",
       secondaryCta: "स्वयं होस्ट करें",
@@ -419,7 +419,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "id",
     ogLocale: "id_ID",
     dir: "ltr",
-    metaTitle: "Rejourney: Analitik web dan mobile open source, session replay, dan observability",
+    metaTitle: "Rejourney: session replay web dan mobile",
     metaDescription:
       "Analitik open source untuk web, iOS, Android, Expo, dan React Native dengan session replay, crash, heatmap, journey, dan SDK ringan.",
     keywords: [
@@ -436,7 +436,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Analitik aplikasi web dan mobile open source",
     hero: {
-      headlinePrimary: "Analitik replay",
+      headlinePrimary: "Analitik replay-first",
       headlineSecondary: "SDK ringan",
       primaryCta: "Mulai gratis",
       secondaryCta: "Self-host",
@@ -463,7 +463,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "ja",
     ogLocale: "ja_JP",
     dir: "ltr",
-    metaTitle: "Rejourney: オープンソースのWeb・モバイル分析、セッションリプレイ、Observability",
+    metaTitle: "Rejourney: Web・モバイル session replay",
     metaDescription:
       "Web、iOS、Android、Expo、React Native向けの軽量SDKで、セッションリプレイ、クラッシュ、ヒートマップ、ジャーニーを扱うオープンソース分析基盤。",
     keywords: [
@@ -479,7 +479,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - オープンソースのWeb・モバイルアプリ分析",
     hero: {
-      headlinePrimary: "リプレイ分析",
+      headlinePrimary: "リプレイ優先分析",
       headlineSecondary: "軽量SDK",
       primaryCta: "無料で始める",
       secondaryCta: "セルフホスト",
@@ -506,7 +506,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "ko",
     ogLocale: "ko_KR",
     dir: "ltr",
-    metaTitle: "Rejourney: 오픈소스 웹 및 모바일 분석, 세션 리플레이, 옵저버빌리티",
+    metaTitle: "Rejourney: 웹 및 모바일 session replay",
     metaDescription:
       "웹, iOS, Android, Expo, React Native 앱을 위한 오픈소스 분석. 세션 리플레이, 크래시, 히트맵, 사용자 여정, 가벼운 SDK를 제공합니다.",
     keywords: [
@@ -522,7 +522,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - 오픈소스 웹 및 모바일 앱 분석",
     hero: {
-      headlinePrimary: "리플레이 분석",
+      headlinePrimary: "리플레이 우선 분석",
       headlineSecondary: "경량 SDK",
       primaryCta: "무료로 시작",
       secondaryCta: "셀프 호스팅",
@@ -565,7 +565,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - 开源 Web 与移动应用分析",
     hero: {
-      headlinePrimary: "回放分析",
+      headlinePrimary: "回放优先分析",
       headlineSecondary: "轻量 SDK",
       primaryCta: "免费开始",
       secondaryCta: "自托管",
@@ -592,7 +592,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "it",
     ogLocale: "it_IT",
     dir: "ltr",
-    metaTitle: "Rejourney: analytics web e mobile open source, replay di sessione e osservabilita",
+    metaTitle: "Rejourney: session replay web e mobile",
     metaDescription:
       "Analytics open source per app web, iOS, Android, Expo e React Native con replay di sessione, crash, heatmap, journey e SDK leggero.",
     keywords: [
@@ -609,7 +609,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Analytics web e mobile open source",
     hero: {
-      headlinePrimary: "Analytics replay",
+      headlinePrimary: "Analytics replay-first",
       headlineSecondary: "SDK leggero",
       primaryCta: "Inizia gratis",
       secondaryCta: "Self-host",
@@ -636,7 +636,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "nl",
     ogLocale: "nl_NL",
     dir: "ltr",
-    metaTitle: "Rejourney: open-source web- en mobiele analytics, sessiereplay en observability",
+    metaTitle: "Rejourney: web en mobiele sessiereplay",
     metaDescription:
       "Open-source analytics voor web, iOS, Android, Expo en React Native met sessiereplay, crashes, heatmaps, journeys en een lichte SDK.",
     keywords: [
@@ -652,7 +652,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Open-source web- en mobiele app analytics",
     hero: {
-      headlinePrimary: "Replay-analytics",
+      headlinePrimary: "Replay-first analytics",
       headlineSecondary: "Lichte SDK",
       primaryCta: "Start gratis",
       secondaryCta: "Self-hosten",
@@ -679,7 +679,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "pl",
     ogLocale: "pl_PL",
     dir: "ltr",
-    metaTitle: "Rejourney: open-source analytics webowy i mobilny, replay sesji i obserwowalnosc",
+    metaTitle: "Rejourney: web i mobilny session replay",
     metaDescription:
       "Open-source analytics dla web, iOS, Android, Expo i React Native z replayem sesji, crashami, heatmapami, journey i lekkim SDK.",
     keywords: [
@@ -696,7 +696,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Open-source analytics aplikacji webowych i mobilnych",
     hero: {
-      headlinePrimary: "Analityka replay",
+      headlinePrimary: "Analityka replay-first",
       headlineSecondary: "Lekkie SDK",
       primaryCta: "Zacznij za darmo",
       secondaryCta: "Self-hosting",
@@ -723,7 +723,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "pt",
     ogLocale: "pt_PT",
     dir: "ltr",
-    metaTitle: "Rejourney: analytics web e mobile open source, replay de sessao e observabilidade",
+    metaTitle: "Rejourney: session replay web e mobile",
     metaDescription:
       "Analytics open source para apps web, iOS, Android, Expo e React Native com replay de sessao, crashes, mapas de calor, jornadas e SDK leve.",
     keywords: [
@@ -740,7 +740,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Analytics web e mobile open source",
     hero: {
-      headlinePrimary: "Analytics de replay",
+      headlinePrimary: "Analytics replay-first",
       headlineSecondary: "SDK leve",
       primaryCta: "Comece gratis",
       secondaryCta: "Self-host",
@@ -767,7 +767,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "ru",
     ogLocale: "ru_RU",
     dir: "ltr",
-    metaTitle: "Rejourney: open-source web и мобильная аналитика, replay сессий и observability",
+    metaTitle: "Rejourney: web и mobile session replay",
     metaDescription:
       "Open-source аналитика для web, iOS, Android, Expo и React Native: replay сессий, краши, heatmap, пользовательские пути и легкий SDK.",
     keywords: [
@@ -783,7 +783,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Open-source аналитика web и мобильных приложений",
     hero: {
-      headlinePrimary: "Аналитика повторов",
+      headlinePrimary: "Replay-first аналитика",
       headlineSecondary: "Легкий SDK",
       primaryCta: "Начать бесплатно",
       secondaryCta: "Self-host",
@@ -810,7 +810,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     languageTag: "vi",
     ogLocale: "vi_VN",
     dir: "ltr",
-    metaTitle: "Rejourney: phân tích web và mobile open source, session replay và observability",
+    metaTitle: "Rejourney: session replay web và mobile",
     metaDescription:
       "Phân tích open source cho web, iOS, Android, Expo và React Native với session replay, crash, heatmap, journey và SDK nhẹ.",
     keywords: [
@@ -827,7 +827,7 @@ export const MARKETING_LOCALES: Record<MarketingLocaleCode, MarketingLocale> = {
     ],
     mainAriaLabel: "Rejourney - Phan tich ung dung web va mobile open source",
     hero: {
-      headlinePrimary: "Phân tích replay",
+      headlinePrimary: "Phân tích replay-first",
       headlineSecondary: "SDK nhẹ",
       primaryCta: "Bắt đầu miễn phí",
       secondaryCta: "Self-host",
@@ -867,6 +867,15 @@ export const MARKETING_LOCALE_ORDER: MarketingLocaleCode[] = [
   "ru",
   "vi",
 ];
+
+export const MARKETING_INDEXABLE_LOCALE_ORDER: MarketingLocaleCode[] = [
+  "en",
+  "ar",
+  "es",
+  "tr",
+];
+
+export const MARKETING_ENGINEERING_LOCALE_ORDER: MarketingLocaleCode[] = ["en"];
 
 export const MARKETING_LOCALE_SLUGS = MARKETING_LOCALE_ORDER
   .map((code) => MARKETING_LOCALES[code].slug)
@@ -940,11 +949,22 @@ export function getLocalizedPublicUrl(localeOrCode: MarketingLocale | MarketingL
   return `${SITE_URL}${getLocalizedPublicPath(localeOrCode, pathname)}`;
 }
 
-export function getLocalizedAlternateLinksForPath(pathname: string) {
+export function isIndexableMarketingLocaleCode(code: MarketingLocaleCode): boolean {
+  return MARKETING_INDEXABLE_LOCALE_ORDER.includes(code);
+}
+
+export function isIndexableMarketingLocale(locale: MarketingLocale): boolean {
+  return isIndexableMarketingLocaleCode(locale.code);
+}
+
+export function getLocalizedAlternateLinksForPath(
+  pathname: string,
+  localeCodes: MarketingLocaleCode[] = MARKETING_INDEXABLE_LOCALE_ORDER,
+) {
   const basePathname = stripMarketingLocaleFromPathname(pathname).pathname;
 
   return [
-    ...MARKETING_LOCALE_ORDER.map((code) => {
+    ...localeCodes.map((code) => {
       const locale = MARKETING_LOCALES[code];
       return {
         hrefLang: locale.languageTag,
@@ -962,9 +982,11 @@ export function getMarketingLocaleUrl(locale: MarketingLocale): string {
   return `${SITE_URL}${locale.path}`;
 }
 
-export function getMarketingAlternateLinks() {
+export function getMarketingAlternateLinks(
+  localeCodes: MarketingLocaleCode[] = MARKETING_INDEXABLE_LOCALE_ORDER,
+) {
   return [
-    ...MARKETING_LOCALE_ORDER.map((code) => {
+    ...localeCodes.map((code) => {
       const locale = MARKETING_LOCALES[code];
       return {
         hrefLang: locale.languageTag,
@@ -1085,7 +1107,7 @@ export function getMarketingLocaleFromCountryCode(countryCode: string | null | u
   const normalized = normalizeCountryCode(countryCode);
   if (!normalized) return null;
   const localeCode = COUNTRY_LOCALE_MAP[normalized];
-  return localeCode ? MARKETING_LOCALES[localeCode] : null;
+  return localeCode && isIndexableMarketingLocaleCode(localeCode) ? MARKETING_LOCALES[localeCode] : null;
 }
 
 export function getMarketingLocaleFromAcceptLanguage(acceptLanguage: string | null | undefined): MarketingLocale | null {
@@ -1106,7 +1128,7 @@ export function getMarketingLocaleFromAcceptLanguage(acceptLanguage: string | nu
     .sort((a, b) => b.q - a.q);
 
   for (const { tag } of requested) {
-    const exactLocale = MARKETING_LOCALE_ORDER.find((code) => {
+    const exactLocale = MARKETING_INDEXABLE_LOCALE_ORDER.find((code) => {
       const locale = MARKETING_LOCALES[code];
       return locale.languageTag.toLowerCase() === tag || locale.slug === tag || code === tag;
     });
@@ -1114,7 +1136,7 @@ export function getMarketingLocaleFromAcceptLanguage(acceptLanguage: string | nu
 
     const baseLanguage = tag.split("-")[0];
     const mappedLocale = LANGUAGE_LOCALE_MAP[baseLanguage];
-    if (mappedLocale) return MARKETING_LOCALES[mappedLocale];
+    if (mappedLocale && isIndexableMarketingLocaleCode(mappedLocale)) return MARKETING_LOCALES[mappedLocale];
   }
 
   return null;
@@ -1346,7 +1368,7 @@ const englishHomeCopy: MarketingHomeCopy = {
   hero: {
     ariaLabel: "Hero section",
     description:
-      "See what users actually did inside your web or mobile app, why they got stuck, and which fixes will move retention, stability, and conversion.",
+      "See your users. Be your users.",
   },
   trust: {
     ariaLabel: "Trust and supported platforms",
@@ -1410,7 +1432,7 @@ const englishHomeCopy: MarketingHomeCopy = {
         alt: "Rejourney ANR and crash detection preview",
       },
       {
-        eyebrow: "Growth loops",
+        eyebrow: "Industry Metrics",
         title: "Connect product quality to retention.",
         copy: "Measure whether releases are creating better sessions, calmer funnels, and more users who come back.",
         bullets: ["Retention and loyalty segments", "Release impact signals", "Funnel recovery opportunities"],
@@ -1495,10 +1517,10 @@ const englishHomeCopy: MarketingHomeCopy = {
     stats: {
       cheaper: "17x cheaper",
       cheaperCopy: "Than some of the cheapest session replay and product analytics tools in the industry.",
-      freeSessions: "Free 5k sessions",
+      freeSessions: "Free 5k replays",
       everyMonth: "Every month",
-      allFeatures: "All features",
-      allFeaturesCopy: "Replay, heatmaps, crashes, journeys",
+      allFeatures: "Lightweight",
+      allFeaturesCopy: "Tiny SDK & Light Dashboard.",
     },
   },
   performance: {
@@ -1619,7 +1641,7 @@ const arabicHomeCopy: MarketingHomeCopy = {
   hero: {
     ariaLabel: "القسم الرئيسي",
     description:
-      "شاهد ما فعله المستخدمون داخل تطبيقك على الويب أو الجوال فعليا، ولماذا تعثروا، وأي إصلاحات ستحسن الاحتفاظ والاستقرار والتحويل.",
+      "شاهد مستخدميك. عش تجربتهم.",
   },
   trust: {
     ariaLabel: "الثقة والمنصات المدعومة",
@@ -1895,7 +1917,7 @@ const spanishHomeCopy: MarketingHomeCopy = {
   hero: {
     ariaLabel: "Seccion principal",
     description:
-      "Ve que hicieron realmente los usuarios dentro de tu app web o movil, por que se quedaron atascados y que arreglos moveran retencion, estabilidad y conversion.",
+      "Ve a tus usuarios. Ponte en su lugar.",
   },
   trust: {
     ...englishHomeCopy.trust,
@@ -2167,7 +2189,7 @@ const turkishHomeCopy: MarketingHomeCopy = {
   hero: {
     ariaLabel: "Hero bolumu",
     description:
-      "Kullanicilarin web veya mobil uygulamanin icinde gercekte ne yaptigini, nerede takildigini ve hangi duzeltmelerin tutma, stabilite ve donusumu artiracagini gor.",
+      "Kullanicilarini gor. Onlarin yerine gec.",
   },
   trust: {
     ...englishHomeCopy.trust,

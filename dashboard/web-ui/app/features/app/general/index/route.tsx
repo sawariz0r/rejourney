@@ -19,6 +19,7 @@ import {
     CartesianGrid,
     Line,
     LineChart,
+    ReferenceLine,
     ResponsiveContainer,
     Tooltip,
     XAxis,
@@ -50,6 +51,8 @@ import { MiniSessionCard } from '~/shared/ui/core/MiniSessionCard';
 import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
 import { RecordingSession } from '~/shared/types';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
+import { useDemoMode } from '~/shared/providers/DemoModeContext';
+import { getDemoReplayCoverPhotoUrl } from '~/shared/data/demoData';
 
 const toUtcDateKey = (value: string): string | null => {
     const date = new Date(value);
@@ -253,6 +256,19 @@ function getSessionLocationLabel(session: RecordingSession): string {
 
 function hasSuccessfulRecording(session: RecordingSession): boolean {
     return Boolean(session.hasSuccessfulRecording);
+}
+
+function getMiniSessionCoverPhotoUrl(session: RecordingSession, isDemoMode: boolean): string | null {
+    if (!hasSuccessfulRecording(session)) return null;
+
+    if (isDemoMode) {
+        return getDemoReplayCoverPhotoUrl(
+            session.id,
+            session.platform === 'web' ? null : session.id,
+        );
+    }
+
+    return `/api/sessions/cover/${session.id}`;
 }
 
 function getTopUserIdentity(session: RecordingSession): { key: string; displayName: string; copyValue: string } {
@@ -692,6 +708,35 @@ type EngagementMixChartRow = {
     engagedShare: number;
 };
 
+type VersionReleaseMarker = {
+    dateKey: string;
+    version: string;
+    count: number;
+};
+
+type VersionChartRow = {
+    dateKey: string;
+} & Record<string, string | number>;
+
+type VersionAwareTooltipPayloadItem = {
+    color?: string;
+    name?: string | number;
+    value?: unknown;
+};
+
+type VersionAwareTooltipFormatter = (
+    value: number | undefined,
+    name: string | undefined,
+) => [React.ReactNode, React.ReactNode] | React.ReactNode;
+
+type VersionAwareChartTooltipProps = {
+    active?: boolean;
+    label?: string | number;
+    payload?: VersionAwareTooltipPayloadItem[];
+    releaseMarkers?: VersionReleaseMarker[];
+    formatter?: VersionAwareTooltipFormatter;
+};
+
 type CustomEventTrendRow = {
     dateKey: string;
 } & Record<string, string | number>;
@@ -716,6 +761,17 @@ type MomentumCard = {
 const RETRO_CARD_ACCENTS = ['#67e8f9', '#86efac', '#f9a8d4', '#c4b5fd'];
 const DIRECT_REFERRAL_LABEL = 'Direct / none';
 const NO_UTM_LABEL = 'No UTM tag';
+const MAX_VERSION_RELEASE_MARKERS = 6;
+const VERSION_RELEASE_TOOLTIP_WINDOW_MS = 36 * 60 * 60 * 1000;
+const VERSION_TOOLTIP_WRAPPER_STYLE: React.CSSProperties = { zIndex: 40 };
+const VERSION_TOOLTIP_ALLOW_ESCAPE = { x: true, y: true };
+const VERSION_TOOLTIP_POSITION = { x: 12, y: -8 };
+
+type ReleaseLabelViewBox = {
+    x?: number;
+    y?: number;
+    width?: number;
+};
 
 type ReferralSourceRow = {
     key: string;
@@ -841,8 +897,185 @@ function getUtmRowParts(utm: UtmAttribution): { key: string; source: string; det
     };
 }
 
+function formatVersionMarkerLabel(version: string): string {
+    return version.length > 6 ? `${version.slice(0, 6)}...` : version;
+}
+
+function dateKeyTime(dateKey: string): number | null {
+    const time = new Date(`${dateKey}T00:00:00Z`).getTime();
+    return Number.isFinite(time) ? time : null;
+}
+
+function buildVersionReleaseMarkersForDateKeys(
+    versionChartData: VersionChartRow[],
+    versionKeys: string[],
+    chartDateKeys: string[],
+): VersionReleaseMarker[] {
+    if (!versionChartData.length || !versionKeys.length || !chartDateKeys.length) return [];
+
+    const chartDateKeySet = new Set(chartDateKeys);
+    const visibleVersionRows = versionChartData
+        .filter((row) => chartDateKeySet.has(String(row.dateKey || '')))
+        .sort((a, b) => String(a.dateKey || '').localeCompare(String(b.dateKey || '')));
+    if (visibleVersionRows.length < 2) return [];
+
+    const markers: VersionReleaseMarker[] = [];
+
+    for (const version of versionKeys) {
+        const firstVisibleIndex = visibleVersionRows.findIndex((row) => {
+            const count = Number(row[version] || 0);
+            return Number.isFinite(count) && count > 0;
+        });
+
+        if (firstVisibleIndex <= 0) continue;
+
+        const firstVisibleRow = visibleVersionRows[firstVisibleIndex];
+        markers.push({
+            dateKey: String(firstVisibleRow.dateKey),
+            version,
+            count: Number(firstVisibleRow[version] || 0),
+        });
+    }
+
+    return markers
+        .sort((a, b) => b.dateKey.localeCompare(a.dateKey) || (b.count - a.count) || a.version.localeCompare(b.version))
+        .slice(0, MAX_VERSION_RELEASE_MARKERS)
+        .sort((a, b) => a.dateKey.localeCompare(b.dateKey) || (b.count - a.count) || a.version.localeCompare(b.version));
+}
+
+function buildVersionReleaseLineLabel(version: string, index: number) {
+    return ({ viewBox }: { viewBox?: ReleaseLabelViewBox }) => {
+        const x = typeof viewBox?.x === 'number' ? viewBox.x : NaN;
+        const y = typeof viewBox?.y === 'number' ? viewBox.y : NaN;
+        const width = typeof viewBox?.width === 'number' ? viewBox.width : NaN;
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
+        const text = `v${formatVersionMarkerLabel(version)}`;
+        const rowOffset = (index % 3) * 12;
+        const textWidth = text.length * 5.8;
+        const placeLabelOnRight = Number.isFinite(width) ? x + textWidth + 12 <= width : true;
+        const textY = y + 10 + rowOffset;
+        const rectX = placeLabelOnRight ? x + 2 : x - textWidth - 8;
+        const textX = placeLabelOnRight ? x + 5 : x - textWidth - 5;
+
+        return (
+            <g pointerEvents="none" aria-hidden="true">
+                <rect
+                    x={rectX}
+                    y={textY - 8.5}
+                    width={textWidth + 6}
+                    height={11}
+                    rx={2}
+                    fill="#ffffff"
+                    fillOpacity={0.92}
+                    stroke="#334155"
+                    strokeWidth={0.85}
+                />
+                <text x={textX} y={textY} fill="#334155" fontSize={9.5} fontWeight={700}>
+                    {text}
+                </text>
+            </g>
+        );
+    };
+}
+
+function coerceTooltipNumber(value: unknown): number | undefined {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : undefined;
+}
+
+function formatTooltipEntry(
+    item: VersionAwareTooltipPayloadItem,
+    formatter?: VersionAwareTooltipFormatter,
+): { name: React.ReactNode; value: React.ReactNode } {
+    const name = item.name === undefined ? undefined : String(item.name);
+    const value = coerceTooltipNumber(item.value);
+    const formatted = formatter ? formatter(value, name) : undefined;
+
+    if (Array.isArray(formatted)) {
+        return {
+            value: formatted[0],
+            name: formatted[1],
+        };
+    }
+
+    return {
+        value: formatted ?? (value === undefined ? String(item.value ?? '0') : formatCompact(value)),
+        name: name ?? 'Value',
+    };
+}
+
+function VersionAwareChartTooltip({
+    active,
+    label,
+    payload,
+    releaseMarkers = [],
+    formatter,
+}: VersionAwareChartTooltipProps) {
+    if (!active || label === undefined || label === null) return null;
+
+    const labelKey = String(label);
+    const exactReleases = releaseMarkers.filter((marker) => marker.dateKey === labelKey);
+    const labelTime = dateKeyTime(labelKey);
+    const releases = exactReleases.length > 0 || labelTime === null
+        ? exactReleases
+        : releaseMarkers.filter((marker) => {
+            const markerTime = dateKeyTime(marker.dateKey);
+            return markerTime !== null && Math.abs(markerTime - labelTime) <= VERSION_RELEASE_TOOLTIP_WINDOW_MS;
+        });
+    const entries = (payload || [])
+        .filter((item) => item.value !== undefined && item.value !== null)
+        .map((item) => ({
+            color: item.color,
+            ...formatTooltipEntry(item, formatter),
+        }));
+
+    if (entries.length === 0 && releases.length === 0) return null;
+
+    return (
+        <div className="pointer-events-none max-w-[260px] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+            <div className="mb-1 font-semibold text-slate-800">{formatDateLabel(labelKey)}</div>
+
+            {releases.length > 0 && (
+                <div className={entries.length > 0 ? 'mb-2 border-b border-slate-100 pb-2' : ''}>
+                    <div className="mb-1 text-[10px] font-semibold uppercase text-slate-400">
+                        Version introduced
+                    </div>
+                    <div className="space-y-1">
+                        {releases.map((marker) => (
+                            <div key={`${marker.version}-${marker.dateKey}`} className="flex items-center gap-1.5">
+                                <span className="h-3 border-l border-dashed border-slate-600" />
+                                <span className="break-all font-mono font-semibold text-slate-800">v{marker.version}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {entries.length > 0 && (
+                <div className="space-y-1">
+                    {entries.map((entry, index) => (
+                        <div key={`${String(entry.name)}-${index}`} className="flex items-center justify-between gap-4">
+                            <span className="flex min-w-0 items-center gap-1.5 text-slate-500">
+                                <span
+                                    className="h-2 w-2 shrink-0 rounded-full"
+                                    style={{ backgroundColor: entry.color || '#64748b' }}
+                                />
+                                <span className="truncate">{entry.name}</span>
+                            </span>
+                            <span className="font-semibold text-slate-900">{entry.value}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export const GeneralOverview: React.FC = () => {
     const { selectedProject } = useSessionData();
+    const { isDemoMode } = useDemoMode();
     const pathPrefix = usePathPrefix();
     const navigate = useNavigate();
     const { timeRange, setTimeRange } = useSharedRejourneyTimeRange(selectedProject?.id);
@@ -1062,7 +1295,7 @@ export const GeneralOverview: React.FC = () => {
         }));
     }, [trendChartData]);
 
-    const versionChartData = useMemo(() => {
+    const versionChartData = useMemo<VersionChartRow[]>(() => {
         if (!trends?.daily?.length) return [];
 
         const versionSet = new Set<string>();
@@ -1080,14 +1313,14 @@ export const GeneralOverview: React.FC = () => {
                 const dateKey = toUtcDateKey(entry.date);
                 if (!dateKey) return null;
 
-                const row: Record<string, string | number> = { dateKey };
+                const row: VersionChartRow = { dateKey };
                 const breakdown = entry.appVersionDauBreakdown || entry.appVersionBreakdown || {};
                 for (const version of versions) {
                     row[version] = Number(breakdown[version] || 0);
                 }
                 return row;
             })
-            .filter((row): row is NonNullable<typeof row> => Boolean(row));
+            .filter((row): row is VersionChartRow => Boolean(row));
     }, [trends]);
 
     const versionKeys = useMemo(() => {
@@ -1096,6 +1329,15 @@ export const GeneralOverview: React.FC = () => {
     }, [versionChartData]);
 
     const versionColors = ['#1a73e8', '#5dadec', '#f9a8d4', '#1e8e3e', '#9334e6', '#0f766e'];
+
+    const trendVersionMarkers = useMemo(
+        () => buildVersionReleaseMarkersForDateKeys(
+            versionChartData,
+            versionKeys,
+            trendChartData.map((row) => row.dateKey),
+        ),
+        [trendChartData, versionChartData, versionKeys],
+    );
 
     const topCountries = useMemo(() => {
         if (!geoSummary?.countries?.length) return [];
@@ -1186,6 +1428,14 @@ export const GeneralOverview: React.FC = () => {
         if (!engagementMixChartData.length) return null;
         return engagementMixChartData[engagementMixChartData.length - 1];
     }, [engagementMixChartData]);
+
+    const engagementVersionMarkers = useMemo<VersionReleaseMarker[]>(() => {
+        return buildVersionReleaseMarkersForDateKeys(
+            versionChartData,
+            versionKeys,
+            engagementMixChartData.map((row) => row.dateKey),
+        );
+    }, [engagementMixChartData, versionChartData, versionKeys]);
 
     const crashFreeRate = deepMetrics?.reliability?.crashFreeSessionRate ?? null;
     const anrFreeRate = deepMetrics?.reliability?.anrFreeSessionRate ?? null;
@@ -1443,6 +1693,15 @@ export const GeneralOverview: React.FC = () => {
             .filter((row): row is CustomEventTrendRow => Boolean(row))
             .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
     }, [overviewObs, selectedCustomEvents]);
+
+    const customEventVersionMarkers = useMemo(
+        () => buildVersionReleaseMarkersForDateKeys(
+            versionChartData,
+            versionKeys,
+            customEventTrendData.map((row) => row.dateKey),
+        ),
+        [customEventTrendData, versionChartData, versionKeys],
+    );
 
     const handleToggleCustomEvent = useCallback((eventName: string) => {
         setCustomEventSelectionTouched(true);
@@ -1709,13 +1968,29 @@ export const GeneralOverview: React.FC = () => {
                                 </div>
                                 <div className="h-[130px]">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={trendChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                        <LineChart data={trendChartData} margin={{ top: 28, right: 8, left: -20, bottom: 0 }}>
                                             <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                             <YAxis tick={{ fontSize: 10 }} />
-                                            <Tooltip labelFormatter={(value) => formatDateLabel(String(value))} />
+                                            <Tooltip
+                                                allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
+                                                position={VERSION_TOOLTIP_POSITION}
+                                                wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
+                                                content={<VersionAwareChartTooltip releaseMarkers={trendVersionMarkers} />}
+                                            />
                                             <Line type="monotone" dataKey="sessions" stroke="#f9a8d4" strokeWidth={1.75} dot={false} name="Sessions" isAnimationActive={false} />
                                             <Line type="monotone" dataKey="dau" stroke="#1a73e8" strokeWidth={2} dot={false} name="DAU" isAnimationActive={false} />
                                             <Line type="monotone" dataKey="mau" stroke="#34a853" strokeWidth={1.5} dot={false} name="MAU" isAnimationActive={false} />
+                                            {trendVersionMarkers.map((marker, index) => (
+                                                <ReferenceLine
+                                                    key={`activity-version-${marker.version}-${marker.dateKey}`}
+                                                    x={marker.dateKey}
+                                                    stroke="#334155"
+                                                    strokeDasharray="4 4"
+                                                    strokeWidth={1.4}
+                                                    ifOverflow="extendDomain"
+                                                    label={buildVersionReleaseLineLabel(marker.version, index)}
+                                                />
+                                            ))}
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -1912,13 +2187,20 @@ export const GeneralOverview: React.FC = () => {
                                     <>
                                         <div className="h-[180px]">
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={engagementMixChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                                <AreaChart data={engagementMixChartData} margin={{ top: 28, right: 8, left: -20, bottom: 0 }}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                                     <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                                     <YAxis tick={{ fontSize: 10 }} />
                                                     <Tooltip
-                                                        labelFormatter={(value) => formatDateLabel(String(value))}
-                                                        formatter={(value: number | undefined, name: string | undefined) => [formatCompact(value ?? 0), name ?? 'Users']}
+                                                        allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
+                                                        position={VERSION_TOOLTIP_POSITION}
+                                                        wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
+                                                        content={(
+                                                            <VersionAwareChartTooltip
+                                                                releaseMarkers={engagementVersionMarkers}
+                                                                formatter={(value, name) => [formatCompact(value ?? 0), name ?? 'Users']}
+                                                            />
+                                                        )}
                                                     />
                                                     {ENGAGEMENT_SEGMENTS.map((segment) => (
                                                         <Area
@@ -1933,6 +2215,17 @@ export const GeneralOverview: React.FC = () => {
                                                             dot={false}
                                                             name={segment.label}
                                                             isAnimationActive={false}
+                                                        />
+                                                    ))}
+                                                    {engagementVersionMarkers.map((marker, index) => (
+                                                        <ReferenceLine
+                                                            key={`engagement-version-${marker.version}-${marker.dateKey}`}
+                                                            x={marker.dateKey}
+                                                            stroke="#334155"
+                                                            strokeDasharray="4 4"
+                                                            strokeWidth={1.4}
+                                                            ifOverflow="extendDomain"
+                                                            label={buildVersionReleaseLineLabel(marker.version, index)}
                                                         />
                                                     ))}
                                                 </AreaChart>
@@ -2018,14 +2311,32 @@ export const GeneralOverview: React.FC = () => {
                                 </div>
                                 <div className="h-[130px]">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={engagementChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                        <LineChart data={engagementChartData} margin={{ top: 28, right: 8, left: -20, bottom: 0 }}>
                                             <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                             <YAxis tick={{ fontSize: 10 }} />
                                             <Tooltip
-                                                labelFormatter={(value) => formatDateLabel(String(value))}
-                                                formatter={(value: number | undefined) => [formatDuration(value ?? 0), 'Avg engagement']}
+                                                allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
+                                                position={VERSION_TOOLTIP_POSITION}
+                                                wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
+                                                content={(
+                                                    <VersionAwareChartTooltip
+                                                        releaseMarkers={trendVersionMarkers}
+                                                        formatter={(value) => [formatDuration(value ?? 0), 'Avg engagement']}
+                                                    />
+                                                )}
                                             />
                                             <Line type="monotone" dataKey="engagementTime" stroke="#1a73e8" strokeWidth={2} dot={false} isAnimationActive={false} />
+                                            {trendVersionMarkers.map((marker, index) => (
+                                                <ReferenceLine
+                                                    key={`avg-engagement-version-${marker.version}-${marker.dateKey}`}
+                                                    x={marker.dateKey}
+                                                    stroke="#334155"
+                                                    strokeDasharray="4 4"
+                                                    strokeWidth={1.4}
+                                                    ifOverflow="extendDomain"
+                                                    label={buildVersionReleaseLineLabel(marker.version, index)}
+                                                />
+                                            ))}
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -2034,15 +2345,33 @@ export const GeneralOverview: React.FC = () => {
                             <GA4Card title="User retention" className="xl:col-span-4" accentClassName="bg-[#86efac]">
                                 <div className="h-[180px]">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={retentionChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                        <BarChart data={retentionChartData} margin={{ top: 28, right: 8, left: -20, bottom: 0 }}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                             <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                             <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" />
                                             <Tooltip
-                                                labelFormatter={(value) => formatDateLabel(String(value))}
-                                                formatter={(value: number | undefined) => [`${value ?? 0}%`, 'DAU/MAU stickiness']}
+                                                allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
+                                                position={VERSION_TOOLTIP_POSITION}
+                                                wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
+                                                content={(
+                                                    <VersionAwareChartTooltip
+                                                        releaseMarkers={trendVersionMarkers}
+                                                        formatter={(value) => [`${value ?? 0}%`, 'DAU/MAU stickiness']}
+                                                    />
+                                                )}
                                             />
                                             <Bar dataKey="retention" fill="#1a73e8" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                                            {trendVersionMarkers.map((marker, index) => (
+                                                <ReferenceLine
+                                                    key={`retention-version-${marker.version}-${marker.dateKey}`}
+                                                    x={marker.dateKey}
+                                                    stroke="#334155"
+                                                    strokeDasharray="4 4"
+                                                    strokeWidth={1.4}
+                                                    ifOverflow="extendDomain"
+                                                    label={buildVersionReleaseLineLabel(marker.version, index)}
+                                                />
+                                            ))}
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -2176,13 +2505,20 @@ export const GeneralOverview: React.FC = () => {
                                         {customEventTrendData.length > 0 && selectedCustomEvents.length > 0 ? (
                                         <div className="h-[220px]">
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <LineChart data={customEventTrendData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                                <LineChart data={customEventTrendData} margin={{ top: 28, right: 8, left: -20, bottom: 0 }}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                                                     <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                                                     <Tooltip
-                                                        labelFormatter={(value) => formatDateLabel(String(value))}
-                                                        formatter={(value: number | undefined, name: string | undefined) => [formatCompact(value ?? 0), name ?? 'Events']}
+                                                        allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
+                                                        position={VERSION_TOOLTIP_POSITION}
+                                                        wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
+                                                        content={(
+                                                            <VersionAwareChartTooltip
+                                                                releaseMarkers={customEventVersionMarkers}
+                                                                formatter={(value, name) => [formatCompact(value ?? 0), name ?? 'Events']}
+                                                            />
+                                                        )}
                                                     />
                                                     {selectedCustomEvents.map((eventName, index) => (
                                                         <Line
@@ -2194,6 +2530,17 @@ export const GeneralOverview: React.FC = () => {
                                                             dot={false}
                                                             name={eventName}
                                                             isAnimationActive={false}
+                                                        />
+                                                    ))}
+                                                    {customEventVersionMarkers.map((marker, index) => (
+                                                        <ReferenceLine
+                                                            key={`custom-event-version-${marker.version}-${marker.dateKey}`}
+                                                            x={marker.dateKey}
+                                                            stroke="#334155"
+                                                            strokeDasharray="4 4"
+                                                            strokeWidth={1.4}
+                                                            ifOverflow="extendDomain"
+                                                            label={buildVersionReleaseLineLabel(marker.version, index)}
                                                         />
                                                     ))}
                                                 </LineChart>
@@ -2362,9 +2709,7 @@ export const GeneralOverview: React.FC = () => {
                                                                 metadata: session.metadata,
                                                                 networkType: session.networkType,
                                                                 coverPhotoUrl:
-                                                                    hasSuccessfulRecording(session)
-                                                                        ? `/api/sessions/cover/${session.id}`
-                                                                        : null,
+                                                                    getMiniSessionCoverPhotoUrl(session, isDemoMode),
                                                             }}
                                                             onClick={() => navigate(`${pathPrefix}/sessions/${session.id}`)}
                                                             size="xs"
@@ -2515,9 +2860,7 @@ export const GeneralOverview: React.FC = () => {
                                                                     metadata: rec.session.metadata,
                                                                     networkType: rec.session.networkType,
                                                                     coverPhotoUrl:
-                                                                        hasSuccessfulRecording(rec.session)
-                                                                            ? `/api/sessions/cover/${rec.session.id}`
-                                                                            : null,
+                                                                        getMiniSessionCoverPhotoUrl(rec.session, isDemoMode),
                                                                 }}
                                                                 onClick={() =>
                                                                     navigate(`${pathPrefix}/sessions/${rec.session.id}`)

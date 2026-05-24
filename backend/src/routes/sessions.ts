@@ -208,6 +208,9 @@ function buildSessionArchiveBaseConditions(
         screenOutcome?: string;
         /** Pipe-separated ordered screen path, e.g. "HomeScreen|CheckoutScreen|ConfirmationScreen" */
         screenPath?: string;
+        /** Exact geo filters used by map drilldowns. */
+        geoCountry?: string;
+        geoCity?: string;
         /** When 'OR', filter conditions are combined with OR instead of AND */
         conditionLogic?: string;
         /** Case-insensitive substring match across id, user display, device, model, anonymous fields */
@@ -236,6 +239,8 @@ function buildSessionArchiveBaseConditions(
         screenName,
         screenOutcome,
         screenPath,
+        geoCountry,
+        geoCity,
         conditionLogic,
         q,
     } = filters;
@@ -266,6 +271,15 @@ function buildSessionArchiveBaseConditions(
     const recordingFilter = hasRecording;
     if (recordingFilter === 'true') {
         baseConditions.push(eq(sessions.replayAvailable, true));
+    }
+
+    const normalizedGeoCountry = typeof geoCountry === 'string' ? geoCountry.trim() : '';
+    const normalizedGeoCity = typeof geoCity === 'string' ? geoCity.trim() : '';
+    if (normalizedGeoCountry) {
+        baseConditions.push(eq(sessions.geoCountry, normalizedGeoCountry));
+    }
+    if (normalizedGeoCity) {
+        baseConditions.push(eq(sessions.geoCity, normalizedGeoCity));
     }
 
     if (metaKey) {
@@ -2027,6 +2041,8 @@ router.get(
                 screenName,
                 screenOutcome,
                 screenPath,
+                geoCountry: typeof req.query.geoCountry === 'string' ? req.query.geoCountry : undefined,
+                geoCity: typeof req.query.geoCity === 'string' ? req.query.geoCity : undefined,
                 conditionLogic,
                 q: typeof q === 'string' ? q : undefined,
             },
@@ -2138,6 +2154,8 @@ router.get(
             screenPath,
             conditionLogic,
             q,
+            geoCountry,
+            geoCity,
             sort: sortRaw,
             sortDir: sortDirRaw,
             includeTotal: includeTotalRaw,
@@ -2196,6 +2214,8 @@ router.get(
                 screenName,
                 screenOutcome,
                 screenPath,
+                geoCountry: typeof geoCountry === 'string' ? geoCountry : undefined,
+                geoCity: typeof geoCity === 'string' ? geoCity : undefined,
                 conditionLogic,
                 q: typeof q === 'string' ? q : undefined,
             },

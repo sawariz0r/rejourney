@@ -9,10 +9,12 @@ import { PricingTable } from "~/features/public/home/components/PricingTable";
 import { redirect, useLocation } from "react-router";
 import { getContentLocaleCopy } from "~/shared/lib/contentLocalization";
 import {
+    MARKETING_INDEXABLE_LOCALE_ORDER,
     getLocalizedAlternateLinksForPath,
     getLocalizedPublicUrl,
     getMarketingLocaleFromPathname,
     getMarketingLocaleRedirectPath,
+    isIndexableMarketingLocale,
     MARKETING_LOCALE_VARY_HEADER,
 } from "~/shared/lib/internationalMarketing";
 
@@ -34,18 +36,21 @@ export const meta: Route.MetaFunction = ({ location }) => {
     const locale = getMarketingLocaleFromPathname(location.pathname);
     const copy = getContentLocaleCopy(locale).pricing;
     const canonicalUrl = getLocalizedPublicUrl(locale, "/pricing");
-    const alternateLinks = getLocalizedAlternateLinksForPath("/pricing").map((alternate) => ({
+    const alternateLinks = getLocalizedAlternateLinksForPath("/pricing", MARKETING_INDEXABLE_LOCALE_ORDER).map((alternate) => ({
         tagName: "link",
         rel: "alternate",
         hrefLang: alternate.hrefLang,
         href: alternate.href,
     }));
-    const alternateOgLocales = getLocalizedAlternateLinksForPath("/pricing")
+    const alternateOgLocales = getLocalizedAlternateLinksForPath("/pricing", MARKETING_INDEXABLE_LOCALE_ORDER)
         .filter((alternate) => alternate.hrefLang !== "x-default" && alternate.hrefLang !== locale.languageTag)
         .map((alternate) => ({
             property: "og:locale:alternate",
             content: getMarketingLocaleFromPathname(new URL(alternate.href).pathname).ogLocale,
         }));
+    const robots = isIndexableMarketingLocale(locale)
+        ? "index, follow, max-image-preview:large, max-snippet:-1"
+        : "noindex, follow, max-image-preview:large";
 
     return [
         { title: copy.metaTitle },
@@ -57,7 +62,7 @@ export const meta: Route.MetaFunction = ({ location }) => {
             name: "keywords",
             content: copy.metaKeywords.join(", "),
         },
-        { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1" },
+        { name: "robots", content: robots },
         { httpEquiv: "Content-Language", content: locale.languageTag },
         { property: "og:locale", content: locale.ogLocale },
         ...alternateOgLocales,
@@ -116,7 +121,6 @@ export default function Pricing() {
                             {
                                 "@type": "OfferCatalog",
                                 name: copy.pageName,
-                                inLanguage: locale.languageTag,
                                 itemListElement: [
                                     {
                                         "@type": "Offer",
@@ -125,9 +129,9 @@ export default function Pricing() {
                                         priceCurrency: "USD",
                                         url: canonicalUrl,
                                         itemOffered: {
-                                            "@type": "SoftwareApplication",
+                                            "@type": "Service",
                                             name: "Rejourney Starter",
-                                            applicationCategory: "DeveloperApplication",
+                                            serviceType: "Web and mobile analytics",
                                         },
                                     },
                                     {
@@ -137,9 +141,9 @@ export default function Pricing() {
                                         priceCurrency: "USD",
                                         url: canonicalUrl,
                                         itemOffered: {
-                                            "@type": "SoftwareApplication",
+                                            "@type": "Service",
                                             name: "Rejourney Growth",
-                                            applicationCategory: "DeveloperApplication",
+                                            serviceType: "Web and mobile analytics",
                                         },
                                     },
                                     {
@@ -149,9 +153,9 @@ export default function Pricing() {
                                         priceCurrency: "USD",
                                         url: canonicalUrl,
                                         itemOffered: {
-                                            "@type": "SoftwareApplication",
+                                            "@type": "Service",
                                             name: "Rejourney Pro",
-                                            applicationCategory: "DeveloperApplication",
+                                            serviceType: "Web and mobile analytics",
                                         },
                                     },
                                 ],

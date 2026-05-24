@@ -297,7 +297,7 @@ export const rejourney13MillionSessionReplaysArticle: Article = {
         "session replay scaling, edge security, Cloudflare DDoS, durable ingestion pipeline, high availability Postgres Redis, multi-bucket storage, Rejourney architecture",
     seo: {
         primaryKeyword: "session replay scaling",
-        metaTitle: "Scaling Session Replay to 1.3M Replays: Edge and Ingest Lessons",
+        metaTitle: "Scaling Session Replay to 1.3M Replays",
         metaDescription:
             "How Rejourney handled 1.3M session replays with Cloudflare edge security, Redis-buffered ingest, HA Postgres, and multi-bucket storage.",
         targetKeywords: [

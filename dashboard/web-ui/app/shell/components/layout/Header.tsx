@@ -9,6 +9,7 @@ import {
   getMarketingHomeCopy,
   getMarketingLocaleFromAcceptLanguage,
   getMarketingLocaleFromPathname,
+  isIndexableMarketingLocaleCode,
   isLocalizableMarketingPath,
   stripMarketingLocaleFromPathname,
   type MarketingLocale,
@@ -31,7 +32,7 @@ const getLocalePath = (locale: MarketingLocale, pathname: string, search: string
   `${getLocalizedPublicPath(locale, pathname)}${search}${hash}`;
 
 const isStoredMarketingLocaleCode = (value: string | null): value is MarketingLocaleCode =>
-  !!value && Object.prototype.hasOwnProperty.call(MARKETING_LOCALES, value);
+  !!value && Object.prototype.hasOwnProperty.call(MARKETING_LOCALES, value) && isIndexableMarketingLocaleCode(value as MarketingLocaleCode);
 
 const getStoredMarketingLocale = (): MarketingLocale | null => {
   if (typeof window === "undefined") return null;

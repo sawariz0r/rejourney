@@ -5,7 +5,10 @@
 
 import { DOCS_MAP } from "~/shared/lib/docsConfig";
 import { ARTICLES, getAbsoluteArticleImage, getArticlePath } from "~/shared/data/engineering";
+import { SEO_PAGES } from "~/features/public/seo/seoPages";
 import {
+    MARKETING_ENGINEERING_LOCALE_ORDER,
+    MARKETING_INDEXABLE_LOCALE_ORDER,
     MARKETING_LOCALE_ORDER,
     MARKETING_LOCALES,
     getMarketingAlternateLinks,
@@ -36,23 +39,43 @@ export async function loader() {
     const baseUrl = "https://rejourney.co";
     const lastModified = new Date().toISOString().slice(0, 10);
 
-    const marketingRoutes: SitemapRoute[] = MARKETING_LOCALE_ORDER.map((code) => ({
+    const marketingRoutes: SitemapRoute[] = MARKETING_INDEXABLE_LOCALE_ORDER.map((code) => ({
         path: MARKETING_LOCALES[code].path,
         priority: code === "en" ? "1.0" : "0.8",
         changefreq: "daily",
-        alternates: getMarketingAlternateLinks(),
+        alternates: getMarketingAlternateLinks(MARKETING_INDEXABLE_LOCALE_ORDER),
     }));
 
-    const staticRoutes: SitemapRoute[] = [
-        { path: "/dashboard", priority: "0.9", changefreq: "daily" },
-        { path: "/roadmap", priority: "0.7", changefreq: "daily" },
-    ];
+    const roadmapRoutes: SitemapRoute[] = MARKETING_INDEXABLE_LOCALE_ORDER.map((code) => ({
+        path: getLocalizedPublicPath(MARKETING_LOCALES[code], "/roadmap"),
+        priority: code === "en" ? "0.7" : "0.6",
+        changefreq: "weekly",
+        alternates: getLocalizedAlternateLinksForPath("/roadmap", MARKETING_INDEXABLE_LOCALE_ORDER),
+    }));
 
-    const pricingRoutes: SitemapRoute[] = MARKETING_LOCALE_ORDER.map((code) => ({
+    const pricingRoutes: SitemapRoute[] = MARKETING_INDEXABLE_LOCALE_ORDER.map((code) => ({
         path: getLocalizedPublicPath(MARKETING_LOCALES[code], "/pricing"),
         priority: code === "en" ? "0.8" : "0.7",
         changefreq: "weekly",
-        alternates: getLocalizedAlternateLinksForPath("/pricing"),
+        alternates: getLocalizedAlternateLinksForPath("/pricing", MARKETING_INDEXABLE_LOCALE_ORDER),
+    }));
+
+    const companyRoutes: SitemapRoute[] = [
+        {
+            path: "/about",
+            priority: "0.7",
+            changefreq: "monthly",
+            image: `${baseUrl}/images/founders/mohammad-rashid.jpg`,
+            imageTitle: "Mohammad Rashid, CEO of Rejourney",
+        },
+    ];
+
+    const seoRoutes: SitemapRoute[] = SEO_PAGES.map((page) => ({
+        path: page.path,
+        priority: page.kind === "alternative" ? "0.8" : "0.9",
+        changefreq: "weekly",
+        image: `${baseUrl}${page.image}`,
+        imageTitle: page.imageAlt,
     }));
 
     const docRoutes: SitemapRoute[] = MARKETING_LOCALE_ORDER.flatMap((code) =>
@@ -60,18 +83,18 @@ export async function loader() {
             path: getLocalizedPublicPath(MARKETING_LOCALES[code], `/docs/${slug}`),
             priority: slug === "reactnative/overview" ? (code === "en" ? "0.9" : "0.7") : "0.6",
             changefreq: "weekly",
-            alternates: getLocalizedAlternateLinksForPath(`/docs/${slug}`),
+            alternates: getLocalizedAlternateLinksForPath(`/docs/${slug}`, MARKETING_LOCALE_ORDER),
         }))
     );
 
-    const engineeringIndexRoutes: SitemapRoute[] = MARKETING_LOCALE_ORDER.map((code) => ({
+    const engineeringIndexRoutes: SitemapRoute[] = MARKETING_ENGINEERING_LOCALE_ORDER.map((code) => ({
         path: getLocalizedPublicPath(MARKETING_LOCALES[code], "/engineering"),
         priority: code === "en" ? "0.9" : "0.7",
         changefreq: "weekly",
-        alternates: getLocalizedAlternateLinksForPath("/engineering"),
+        alternates: getLocalizedAlternateLinksForPath("/engineering", MARKETING_ENGINEERING_LOCALE_ORDER),
     }));
 
-    const engineeringRoutes: SitemapRoute[] = MARKETING_LOCALE_ORDER.flatMap((code) =>
+    const engineeringRoutes: SitemapRoute[] = MARKETING_ENGINEERING_LOCALE_ORDER.flatMap((code) =>
         ARTICLES.map(article => ({
             path: getLocalizedPublicPath(MARKETING_LOCALES[code], getArticlePath(article)),
             priority: code === "en" ? "0.8" : "0.6",
@@ -79,7 +102,7 @@ export async function loader() {
             lastmod: article.dateModified ?? article.urlDate,
             image: getAbsoluteArticleImage(article),
             imageTitle: article.imageAlt ?? article.title,
-            alternates: getLocalizedAlternateLinksForPath(getArticlePath(article)),
+            alternates: getLocalizedAlternateLinksForPath(getArticlePath(article), MARKETING_ENGINEERING_LOCALE_ORDER),
         }))
     );
 
@@ -88,7 +111,7 @@ export async function loader() {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
-${[...marketingRoutes, ...staticRoutes, ...pricingRoutes, ...docRoutes, ...engineeringIndexRoutes, ...engineeringRoutes].map(route => `
+${[...marketingRoutes, ...roadmapRoutes, ...pricingRoutes, ...companyRoutes, ...seoRoutes, ...docRoutes, ...engineeringIndexRoutes, ...engineeringRoutes].map(route => `
   <url>
     <loc>${escapeXml(`${baseUrl}${route.path}`)}</loc>
     <lastmod>${"lastmod" in route && route.lastmod ? route.lastmod : lastModified}</lastmod>

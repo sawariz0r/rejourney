@@ -20,6 +20,7 @@ import { useRrwebReplayEvents } from '~/shared/lib/rrwebReplayLoader';
 
 const TOUCH_HEATMAP_DEBUG_PREFIX = '[TouchHeatmapDebug]';
 const HEATMAP_DETAIL_FETCH_CONCURRENCY = 4;
+const MAX_WEB_DOCUMENT_RATIO = 1.3;
 
 function heatmapDebug(message: string, details?: unknown): void {
     let enabled = false;
@@ -589,6 +590,19 @@ const formatCompactCount = (value: number): string => {
     return Math.round(value).toLocaleString();
 };
 
+function getHeatmapRouteMinimumVisits(screens: Array<Pick<EnrichedHeatmapScreen, 'rangeVisits'>>): number {
+    const maxVisits = Math.max(0, ...screens.map((screen) => screen.rangeVisits || 0));
+    if (maxVisits >= 500) return 5;
+    if (maxVisits >= 100) return 3;
+    return 1;
+}
+
+function isMeaningfulHeatmapScreen(screen: EnrichedHeatmapScreen, minVisits: number): boolean {
+    const hotspotCount = screen.touchHotspots?.length ?? 0;
+    const hasInteractionSignal = hotspotCount > 0 || screen.rangeRageTaps > 0 || screen.rangeErrors > 0;
+    return screen.rangeVisits >= minVisits && (hasInteractionSignal || screen.rangeExitRate > 0);
+}
+
 const getPositiveMetric = (value: number | null | undefined): number | null => (
     typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 );
@@ -603,13 +617,16 @@ function getHeatmapFrameDimensions(screen: PreviewHeatmapScreen, isWebViewer: bo
             viewportWidth,
             viewportHeight,
             pageRatio: viewportHeight / viewportWidth,
+            rawPageRatio: viewportHeight / viewportWidth,
             viewportPercent: 100,
+            dataViewportFraction: 1,
             hasFullPageMeta: false,
         };
     }
 
     const viewportWidth = getPositiveMetric(screen.viewportWidth) ?? 1440;
     const viewportHeight = getPositiveMetric(screen.viewportHeight) ?? 900;
+    const viewportRatio = viewportHeight / Math.max(viewportWidth, 1);
     const observedPageWidth = getPositiveMetric(screen.pageWidth);
     const observedPageHeight = getPositiveMetric(screen.pageHeight);
     const hasFullPageMeta = Boolean(
@@ -623,11 +640,14 @@ function getHeatmapFrameDimensions(screen: PreviewHeatmapScreen, isWebViewer: bo
         : (observedPageHeight ?? viewportHeight);
     const rawPageRatio = rawPageHeight / Math.max(pageWidth, 1);
     const pageRatio = hasFullPageMeta
-        ? Math.max(viewportHeight / viewportWidth, Math.min(5.5, rawPageRatio))
+        ? Math.max(viewportRatio, Math.min(MAX_WEB_DOCUMENT_RATIO, rawPageRatio))
         : rawPageRatio;
     const pageHeight = Math.round(pageWidth * pageRatio);
+    const dataViewportFraction = hasFullPageMeta
+        ? Math.max(0.001, Math.min(1, viewportHeight / Math.max(rawPageHeight, 1)))
+        : 1;
     const viewportPercent = hasFullPageMeta
-        ? Math.max(8, Math.min(100, (viewportHeight / Math.max(pageHeight, 1)) * 100))
+        ? Math.max(12, Math.min(100, (viewportRatio / Math.max(pageRatio, 0.001)) * 100))
         : 100;
 
     return {
@@ -636,7 +656,9 @@ function getHeatmapFrameDimensions(screen: PreviewHeatmapScreen, isWebViewer: bo
         viewportWidth,
         viewportHeight,
         pageRatio,
+        rawPageRatio,
         viewportPercent,
+        dataViewportFraction,
         hasFullPageMeta,
     };
 }
@@ -857,7 +879,7 @@ const HeatmapPreview: React.FC<{
 
             if (!response.ok) {
                 const responseText = await response.text().catch(() => '');
-                console.error(`${TOUCH_HEATMAP_DEBUG_PREFIX} Screenshot fetch failed`, {
+                heatmapDebug('Screenshot fetch failed', {
                     screenName: screen.name,
                     fetchUrl,
                     status: response.status,
@@ -949,7 +971,7 @@ const HeatmapPreview: React.FC<{
                 });
 
                 if (blob.size === 0) {
-                    console.error(`${TOUCH_HEATMAP_DEBUG_PREFIX} Empty image blob received`, {
+                    heatmapDebug('Empty image blob received', {
                         screenName: screen.name,
                         fetchUrl,
                         contentType,
@@ -975,7 +997,7 @@ const HeatmapPreview: React.FC<{
                             convertedType: displayBlob.type,
                         });
                     } catch {
-                        console.error(`${TOUCH_HEATMAP_DEBUG_PREFIX} HEIC conversion failed`, {
+                        heatmapDebug('HEIC conversion failed', {
                             screenName: screen.name,
                             fetchUrl,
                             contentType,
@@ -999,7 +1021,7 @@ const HeatmapPreview: React.FC<{
             })
             .catch((error: unknown) => {
                 if (cancelled) return;
-                console.error(`${TOUCH_HEATMAP_DEBUG_PREFIX} Screenshot preview pipeline failed`, {
+                heatmapDebug('Screenshot preview pipeline failed', {
                     screenName: screen.name,
                     coverUrlCandidates,
                     error,
@@ -1030,14 +1052,14 @@ const HeatmapPreview: React.FC<{
     const documentAspectStyle = { aspectRatio: `${frameDimensions.pageWidth} / ${frameDimensions.pageHeight}` };
     const tileAspectStyle = { aspectRatio: `${frameDimensions.pageWidth} / ${frameDimensions.pageHeight}` };
     const imageRatio = imageNaturalSize ? imageNaturalSize.height / Math.max(imageNaturalSize.width, 1) : null;
-    const useImageAsFullDocument = !isWebViewer || !imageRatio || Math.abs(imageRatio - frameDimensions.pageRatio) < 0.5 || !frameDimensions.hasFullPageMeta;
+    const useImageAsFullDocument = !isWebViewer || !imageRatio || Math.abs(imageRatio - frameDimensions.rawPageRatio) < 0.5 || !frameDimensions.hasFullPageMeta;
     const firstViewportImageStyle = isWebViewer && !useImageAsFullDocument
         ? { height: `${frameDimensions.viewportPercent}%` }
         : undefined;
     const useViewportOnlyHeatmap = isWebViewer
         && frameDimensions.hasFullPageMeta
         && (!useImageAsFullDocument || shouldRenderRrwebPreview);
-    const viewportHeatmapFraction = frameDimensions.viewportPercent / 100;
+    const viewportHeatmapFraction = frameDimensions.dataViewportFraction;
     const visibleHotspots = useMemo(() => {
         const hotspots = screen.touchHotspots || [];
         if (!useViewportOnlyHeatmap) return hotspots;
@@ -1065,7 +1087,7 @@ const HeatmapPreview: React.FC<{
 
         window.addEventListener('resize', draw);
         return () => window.removeEventListener('resize', draw);
-    }, [visibleHotspots, imageLoaded, blobUrl, useViewportOnlyHeatmap, frameDimensions.viewportPercent]);
+    }, [visibleHotspots, imageLoaded, blobUrl, useViewportOnlyHeatmap, frameDimensions.viewportPercent, frameDimensions.dataViewportFraction]);
 
     const topDots = useMemo(
         () => [...visibleHotspots].sort((a, b) => b.intensity - a.intensity).slice(0, 10),
@@ -1132,7 +1154,7 @@ const HeatmapPreview: React.FC<{
                         });
                     }}
                     onError={(event) => {
-                        console.error(`${TOUCH_HEATMAP_DEBUG_PREFIX} Screenshot image element failed to render`, {
+                        heatmapDebug('Screenshot image element failed to render', {
                             screenName: screen.name,
                             blobUrl,
                             currentSrc: event.currentTarget.currentSrc,
@@ -1289,14 +1311,9 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
                     failedSections: overview.failedSections,
                 });
 
-                let mergedScreens = (overview.screens || [])
-                    .filter((screen) => (
-                        screen.rangeVisits > 0
-                        || screen.rangeRageTaps > 0
-                        || screen.rangeErrors > 0
-                        || screen.rangeExitRate > 0
-                        || (screen.touchHotspots?.length ?? 0) > 0
-                    )) as EnrichedHeatmapScreen[];
+                const overviewScreens = (overview.screens || []) as EnrichedHeatmapScreen[];
+                const minVisits = getHeatmapRouteMinimumVisits(overviewScreens);
+                let mergedScreens = overviewScreens.filter((screen) => isMeaningfulHeatmapScreen(screen, minVisits));
 
                 const screensNeedingHotspots = mergedScreens.filter((screen) => (screen.touchHotspots?.length ?? 0) === 0);
                 if (screensNeedingHotspots.length > 0) {

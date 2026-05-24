@@ -24,7 +24,6 @@ import type { Route } from "./+types/root";
 import "./styles/index.css";
 import { getPublicRuntimeEnvSnapshot } from "./shared/config/runtimeEnv";
 import {
-    MARKETING_AVAILABLE_LANGUAGES,
     getLocalizedPublicUrl,
     getMarketingHomeCopy,
     getMarketingLocaleFromPathname,
@@ -36,7 +35,7 @@ export const links: Route.LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
     {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap",
     },
     // DNS prefetch for external domains
     { rel: "dns-prefetch", href: "https://api.rejourney.co" },
@@ -55,41 +54,7 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export const meta: Route.MetaFunction = () => [
-    // charset and viewport are set explicitly in Layout head
     { name: "theme-color", content: "#ffffff" },
-    { title: "Rejourney: Open Source Web & Mobile Analytics & Observability" },
-    {
-        name: "description",
-        content: "Open-source analytics with session replay, crash reports, heatmaps, journeys, and a lightweight SDK for web and mobile apps.",
-    },
-    {
-        name: "keywords",
-        content: "web analytics, mobile app analytics, web session replay, mobile session replay, open source session replay, crash reporting, heatmaps, product analytics, lightweight SDK, self-hosted",
-    },
-    { name: "robots", content: "index, follow" },
-    { property: "og:locale", content: "en_US" },
-    { property: "og:type", content: "website" },
-    { property: "og:url", content: "https://rejourney.co/" },
-    { property: "og:title", content: "Rejourney: Lightweight Web & Mobile Analytics & Observability" },
-    {
-        property: "og:description",
-        content: "Everything analytics for web and mobile apps: session replay, crashes, journeys, heatmaps, and product signals in a light SDK.",
-    },
-    { property: "og:image", content: "https://rejourney.co/images/heatmaps.png" },
-    { property: "og:image:width", content: "998" },
-    { property: "og:image:height", content: "794" },
-    { property: "og:image:alt", content: "Rejourney heatmaps preview" },
-    { property: "og:image:type", content: "image/png" },
-    { name: "twitter:card", content: "summary_large_image" },
-    { name: "twitter:url", content: "https://rejourney.co/" },
-    { name: "twitter:title", content: "Rejourney: Lightweight Web & Mobile Analytics & Observability" },
-    {
-        name: "twitter:description",
-        content: "Everything analytics for web and mobile apps: session replay, crashes, journeys, heatmaps, and product signals in a light SDK.",
-    },
-    { name: "twitter:image", content: "https://rejourney.co/images/heatmaps.png" },
-    { name: "twitter:image:alt", content: "Rejourney heatmaps preview" },
-    { name: "twitter:site", content: "@rejourneyco" },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -124,9 +89,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             "@graph": [
                                 {
                                     "@type": "Organization",
+                                    "@id": "https://rejourney.co/#organization",
                                     "name": "Rejourney",
-                                    "inLanguage": locale.languageTag,
-                                    "availableLanguage": MARKETING_AVAILABLE_LANGUAGES,
                                     "url": "https://rejourney.co/",
                                     "logo": "https://rejourney.co/rejourneyIcon-removebg-preview.png",
                                     "sameAs": [
@@ -141,31 +105,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                     }
                                 },
                                 {
-                                    "@type": "SoftwareApplication",
+                                    "@type": "Service",
+                                    "@id": "https://rejourney.co/#service",
                                     "name": "Rejourney",
-                                    "inLanguage": locale.languageTag,
-                                    "availableLanguage": MARKETING_AVAILABLE_LANGUAGES,
-                                    "applicationCategory": "DeveloperApplication",
-                                    "operatingSystem": "Web, iOS, Android, Expo, React Native",
+                                    "serviceType": "Open-source web and mobile analytics",
+                                    "provider": { "@id": "https://rejourney.co/#organization" },
+                                    "url": "https://rejourney.co/",
+                                    "description": locale.metaDescription,
+                                    "areaServed": "Worldwide",
                                     "offers": {
                                         "@type": "Offer",
                                         "price": "0",
-                                        "priceCurrency": "USD"
-                                    },
-                                    "url": "https://rejourney.co/",
-                                    "description": locale.metaDescription
+                                        "priceCurrency": "USD",
+                                        "url": "https://rejourney.co/pricing"
+                                    }
                                 },
                                 {
                                     "@type": "WebSite",
+                                    "@id": "https://rejourney.co/#website",
                                     "name": "Rejourney",
                                     "inLanguage": locale.languageTag,
-                                    "availableLanguage": MARKETING_AVAILABLE_LANGUAGES,
-                                    "url": "https://rejourney.co/"
+                                    "url": "https://rejourney.co/",
+                                    "publisher": { "@id": "https://rejourney.co/#organization" }
                                 },
                                 {
                                     "@type": "ItemList",
                                     "name": "Sitelinks",
-                                    "inLanguage": locale.languageTag,
                                     "itemListElement": [
                                         { "@type": "SiteNavigationElement", "position": 1, "name": copy.header.docs, "url": getLocalizedPublicUrl(locale, "/docs") },
                                         { "@type": "SiteNavigationElement", "position": 2, "name": copy.header.engineering, "url": getLocalizedPublicUrl(locale, "/engineering") },

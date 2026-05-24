@@ -15,13 +15,14 @@ import { EngineeringCTA } from "~/features/public/home/components/EngineeringCTA
 import { LandingNarrative } from "~/features/public/home/components/LandingNarrative";
 import { PerformanceMetrics } from "~/features/public/home/components/PerformanceMetrics";
 import {
-    MARKETING_AVAILABLE_LANGUAGES,
+    MARKETING_INDEXABLE_LOCALE_ORDER,
     MARKETING_LOCALE_VARY_HEADER,
     getMarketingAlternateLinks,
     getMarketingHomeCopy,
     getMarketingLocaleFromPathname,
     getMarketingLocaleRedirectPath,
     getMarketingLocaleUrl,
+    isIndexableMarketingLocale,
 } from "~/shared/lib/internationalMarketing";
 
 export function loader({ request }: Route.LoaderArgs) {
@@ -41,18 +42,21 @@ export function loader({ request }: Route.LoaderArgs) {
 export const meta: Route.MetaFunction = ({ location }) => {
     const locale = getMarketingLocaleFromPathname(location.pathname);
     const canonicalUrl = getMarketingLocaleUrl(locale);
-    const alternateLinks = getMarketingAlternateLinks().map((alternate) => ({
+    const alternateLinks = getMarketingAlternateLinks(MARKETING_INDEXABLE_LOCALE_ORDER).map((alternate) => ({
         tagName: "link",
         rel: "alternate",
         hrefLang: alternate.hrefLang,
         href: alternate.href,
     }));
-    const alternateOgLocales = getMarketingAlternateLinks()
+    const alternateOgLocales = getMarketingAlternateLinks(MARKETING_INDEXABLE_LOCALE_ORDER)
         .filter((alternate) => alternate.hrefLang !== "x-default" && alternate.hrefLang !== locale.languageTag)
         .map((alternate) => ({
             property: "og:locale:alternate",
             content: getMarketingLocaleFromPathname(new URL(alternate.href).pathname).ogLocale,
         }));
+    const robots = isIndexableMarketingLocale(locale)
+        ? "index, follow, max-image-preview:large, max-snippet:-1"
+        : "noindex, follow, max-image-preview:large";
 
     return [
         { title: locale.metaTitle },
@@ -87,7 +91,7 @@ export const meta: Route.MetaFunction = ({ location }) => {
         },
         { name: "twitter:image", content: "https://rejourney.co/images/heatmaps.png" },
         { name: "twitter:image:alt", content: "Rejourney heatmaps preview" },
-        { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1" },
+        { name: "robots", content: robots },
         { tagName: "link", rel: "canonical", href: canonicalUrl },
         ...alternateLinks,
     ];
@@ -114,7 +118,6 @@ export default function LandingPage() {
                                 name: locale.metaTitle,
                                 description: locale.metaDescription,
                                 inLanguage: locale.languageTag,
-                                availableLanguage: MARKETING_AVAILABLE_LANGUAGES,
                                 primaryImageOfPage: {
                                     "@type": "ImageObject",
                                     url: "https://rejourney.co/images/heatmaps.png",
@@ -123,29 +126,13 @@ export default function LandingPage() {
                                 },
                                 isPartOf: {
                                     "@type": "WebSite",
+                                    "@id": "https://rejourney.co/#website",
                                     name: "Rejourney",
                                     url: "https://rejourney.co/",
-                                    availableLanguage: MARKETING_AVAILABLE_LANGUAGES,
                                 },
                                 about: [
                                     ...locale.keywords,
                                 ],
-                            },
-                            {
-                                "@type": "SoftwareApplication",
-                                name: "Rejourney",
-                                inLanguage: locale.languageTag,
-                                availableLanguage: MARKETING_AVAILABLE_LANGUAGES,
-                                applicationCategory: "DeveloperApplication",
-                                operatingSystem: "Web, iOS, Android, React Native, Expo",
-                                softwareHelp: "https://rejourney.co/docs",
-                                codeRepository: "https://github.com/rejourneyco/rejourney",
-                                offers: {
-                                    "@type": "Offer",
-                                    price: "0",
-                                    priceCurrency: "USD",
-                                },
-                                featureList: locale.features.map((feature) => `${feature.title} ${feature.highlight}`),
                             },
                         ],
                     }),

@@ -13,6 +13,7 @@ import {
     TrendingUp,
     Plus,
     Minus,
+    TreePalm,
 } from 'lucide-react';
 import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
@@ -67,13 +68,13 @@ const productStories = [
     },
     {
         copyIndex: 3,
-        eyebrow: 'Growth loops',
+        eyebrow: 'Industry Metrics',
         title: 'Connect product quality to retention.',
         copy: 'Measure whether releases are creating better sessions, calmer funnels, and more users who come back.',
         bullets: ['Retention and loyalty segments', 'Release impact signals', 'Funnel recovery opportunities'],
         image: '/images/growth-engines.png',
         alt: 'Rejourney growth analytics preview',
-        icon: TrendingUp,
+        icon: TreePalm,
         accent: 'bg-[#dcfce7]',
     },
     {
@@ -207,7 +208,7 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
                             </h2>
                         </div>
                         <Link
-                            to="/demo"
+                            to="/demo/general"
                             className="inline-flex w-full items-center justify-center gap-2 border-2 border-black bg-[#fef08a] px-5 py-3 text-sm font-black uppercase text-black shadow-neo transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#67e8f9] hover:shadow-neo-lg active:translate-x-0 active:translate-y-0 active:shadow-none sm:w-auto sm:px-6 sm:py-4"
                         >
                             {copy.demoCta}

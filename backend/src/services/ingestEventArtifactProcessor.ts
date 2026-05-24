@@ -5,6 +5,7 @@ import { db, sessions, sessionMetrics, anrs, errors, screenTouchHeatmaps, record
 import { trackANRAsIssue, trackErrorAsIssue } from './issueTracker.js';
 import { normalizeIngestSdkVersion } from './ingestSessionLifecycle.js';
 import { getUniqueScreenCount, mergeScreenPaths, normalizeScreenPath } from '../utils/screenPaths.js';
+import { normalizeHeatmapScreenName } from '../utils/heatmapScreens.js';
 import { shouldExcludeNetworkEventFromProductAnalytics } from '../utils/internalToolEndpointFilter.js';
 import { normalizeApiEndpointPath } from '../utils/apiEndpointNormalization.js';
 import { mergeAnrDeviceMetadata, resolveAnrStackTrace } from './anrStack.js';
@@ -340,8 +341,7 @@ export async function processEventsArtifact(job: any, session: any, metrics: any
             event?.payload?.name ||
             event?.payload?.route;
         if (!rawScreenName) return null;
-        const trimmed = String(rawScreenName).trim();
-        return trimmed.length > 0 ? trimmed : null;
+        return normalizeHeatmapScreenName(String(rawScreenName));
     };
 
     const ensureHeatmapStats = (screenName: string, firstSeenMs: number | null) => {

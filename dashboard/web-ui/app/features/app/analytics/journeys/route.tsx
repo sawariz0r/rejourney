@@ -356,6 +356,7 @@ export const Journeys: React.FC = () => {
     const [partialError, setPartialError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedTransitionIds, setSelectedTransitionIds] = useState<string[]>([]);
+    const [selectedAppVersion, setSelectedAppVersion] = useState<string | null>(null);
     const [hydratedSelectedTransitionsKey, setHydratedSelectedTransitionsKey] = useState<string | null>(null);
     const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
     const selectedTransitionsStorageKey = selectedProject?.id
@@ -386,6 +387,10 @@ export const Journeys: React.FC = () => {
     }, [hydratedSelectedTransitionsKey, selectedTransitionIds, selectedTransitionsStorageKey]);
 
     useEffect(() => {
+        setSelectedAppVersion(null);
+    }, [selectedProject?.id, timeRange, platform]);
+
+    useEffect(() => {
         if (!selectedProject?.id) {
             setData(null);
             setTrends(null);
@@ -398,7 +403,7 @@ export const Journeys: React.FC = () => {
         setIsLoading(true);
         setPartialError(null);
 
-        void getJourneysOverview(selectedProject.id, timeRange, 'full', platform)
+        void getJourneysOverview(selectedProject.id, timeRange, 'full', platform, selectedAppVersion)
             .then((overview) => {
                 if (isCancelled) return;
                 setData(overview.journey);
@@ -420,12 +425,24 @@ export const Journeys: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform]);
+    }, [selectedProject?.id, timeRange, platform, selectedAppVersion]);
 
     const totalSessions = useMemo(() => {
         if (!data) return 0;
         return data.healthSummary.healthy + data.healthSummary.degraded + data.healthSummary.problematic;
     }, [data]);
+
+    const appVersionOptions = useMemo(
+        () => data?.appVersions || [],
+        [data?.appVersions],
+    );
+
+    useEffect(() => {
+        if (!selectedAppVersion || appVersionOptions.length === 0) return;
+        if (!appVersionOptions.some((option) => option.version === selectedAppVersion)) {
+            setSelectedAppVersion(null);
+        }
+    }, [appVersionOptions, selectedAppVersion]);
 
     const canonicalHappyPath = useMemo(() => {
         const configured = data?.configuredHappyPath?.path;
@@ -874,6 +891,9 @@ export const Journeys: React.FC = () => {
                             happyPath={canonicalHappyPath}
                             selectedTransitionIds={selectedTransitionIds}
                             onFlowToggle={toggleSelectedTransition}
+                            appVersions={appVersionOptions}
+                            selectedAppVersion={selectedAppVersion}
+                            onAppVersionChange={setSelectedAppVersion}
                         />
 
                         <section className="dashboard-surface overflow-hidden">

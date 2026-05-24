@@ -61,11 +61,11 @@ const renderHeadlineWithProtectedPunctuation = (text: string) => {
 
 const renderHeroHeadline = (copy: HeroCopy, isRtl: boolean) => {
     const headlinePrimaryClass = isRtl
-        ? 'block max-w-full break-words text-[2.35rem] font-black leading-[1.2] tracking-normal text-black min-[380px]:text-[2.75rem] sm:text-[3.35rem] md:text-[4.15rem] lg:text-[4.55rem] xl:text-[4.95rem] 2xl:text-[5.35rem]'
-        : 'block max-w-full break-words text-[2.8rem] font-black leading-[0.9] tracking-normal text-black min-[380px]:text-[3.35rem] sm:text-[4.4rem] md:text-[5.2rem] lg:text-[5.7rem] xl:text-[6.2rem]';
+        ? 'block max-w-full break-words font-display text-[2.15rem] font-extrabold leading-[1.14] tracking-normal text-black min-[380px]:text-[2.55rem] sm:text-[3.2rem] md:text-[3.95rem] lg:text-[4.3rem] xl:text-[4.8rem]'
+        : 'block max-w-full break-words text-balance font-display text-[2.35rem] font-extrabold leading-[1] tracking-normal text-black min-[380px]:text-[2.75rem] sm:text-[4rem] md:text-[4.75rem] lg:whitespace-nowrap lg:text-[5.1rem] xl:text-[5.5rem]';
     const headlineSecondaryClass = isRtl
-        ? 'mt-2 block max-w-full break-words text-[2rem] font-black leading-[1.18] tracking-normal text-[#5dadec] min-[380px]:text-[2.3rem] sm:mt-3 sm:text-[3rem] md:text-[3.7rem] lg:mt-4 lg:text-[4.1rem] xl:text-[4.55rem] 2xl:text-[5rem]'
-        : 'mt-2 block max-w-full break-words text-[2.8rem] font-black leading-[0.92] tracking-normal text-[#5dadec] min-[380px]:text-[3.35rem] sm:mt-3 sm:text-[4.4rem] md:text-[5.2rem] lg:text-[5.7rem] xl:text-[6.2rem]';
+        ? 'mt-3 block max-w-full break-words font-display text-[1.95rem] font-extrabold leading-[1.16] tracking-normal text-[#5dadec] min-[380px]:text-[2.25rem] sm:mt-4 sm:text-[2.95rem] md:text-[3.55rem] lg:mt-5 lg:text-[3.95rem] xl:text-[4.45rem]'
+        : 'mt-4 block max-w-full break-words text-balance font-display text-[2.05rem] font-extrabold leading-[1.02] tracking-normal text-[#5dadec] min-[380px]:text-[2.25rem] sm:mt-4 sm:text-[3.85rem] md:text-[4.55rem] lg:mt-5 lg:whitespace-nowrap lg:text-[5rem] xl:text-[5.4rem]';
 
     return (
         <>
@@ -89,12 +89,12 @@ export const Hero: React.FC<{ copy: HeroCopy; homeCopy: MarketingHomeCopy['hero'
         >
             <RetroHeroBlocks />
             <div className="relative z-10 mx-auto max-w-7xl">
-                <div className="mx-auto max-w-5xl space-y-7 text-center" dir={dir}>
-                    <h1 className="mx-auto max-w-5xl text-black">
+                <div className="mx-auto max-w-6xl space-y-8 text-center sm:space-y-9" dir={dir}>
+                    <h1 className="mx-auto max-w-6xl text-black">
                         {renderHeroHeadline(copy, isRtl)}
                     </h1>
 
-                    <p className="mx-auto max-w-4xl text-balance text-lg font-extrabold leading-relaxed text-slate-700 sm:text-2xl">
+                    <p className="mx-auto max-w-4xl text-balance text-base font-bold leading-relaxed text-slate-700 sm:text-xl md:text-2xl">
                         {homeCopy.description}
                     </p>
 
@@ -107,7 +107,7 @@ export const Hero: React.FC<{ copy: HeroCopy; homeCopy: MarketingHomeCopy['hero'
                             <ArrowRight size={19} strokeWidth={3} />
                         </Link>
                         <Link
-                            to="/demo"
+                            to={LIVE_DEMO_PATH}
                             className="inline-flex w-full items-center justify-center gap-3 border-2 border-black bg-slate-950 px-7 py-4 text-center text-base font-black text-white shadow-[5px_5px_0px_0px_rgba(93,173,236,1)] transition-all hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-[7px_7px_0px_0px_rgba(93,173,236,1)] sm:w-auto sm:px-10"
                         >
                             Live demo

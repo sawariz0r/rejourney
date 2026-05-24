@@ -16,6 +16,7 @@ import { boundedTimeRangeToDays } from '../utils/analyticsTimeRange.js';
 import { buildRetentionCohortRows } from '../services/retentionCohorts.js';
 import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
 import { queryDailyApiCallsFromClickHouse } from '../services/apiEndpointStatsClickHouse.js';
+import { normalizeHeatmapScreenName, normalizeHeatmapScreenPath } from '../utils/heatmapScreens.js';
 
 const router = Router();
 const redis = getRedis();
@@ -79,6 +80,13 @@ function buildSessionPlatformCondition(platform?: string): SQL | undefined {
     if (!platform || platform === 'all') return undefined;
     if (platform === 'mobile') return inArray(sessions.platform, ['ios', 'android']);
     return eq(sessions.platform, platform);
+}
+
+function getHeatmapMinVisits(sessionCount: number, isRealtime = false): number {
+    if (isRealtime) return 2;
+    if (sessionCount >= 500) return 5;
+    if (sessionCount >= 100) return 3;
+    return 1;
 }
 
 // Helper to verify project access
@@ -149,7 +157,7 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const cacheKey = `insights:friction:${projectIds.sort().join(',')}:${isRealtime ? 'realtime' : (timeRange || '7d')}:${platform || 'all'}:v4`;
+        const cacheKey = `insights:friction:${projectIds.sort().join(',')}:${isRealtime ? 'realtime' : (timeRange || '7d')}:${platform || 'all'}:v5`;
 
         // For realtime, use shorter cache TTL
         if (!isRealtime) {
@@ -194,7 +202,7 @@ router.get(
         }> = {};
 
         for (const s of sessionData) {
-            const screensVisited = s.metrics?.screensVisited || [];
+            const screensVisited = normalizeHeatmapScreenPath(s.metrics?.screensVisited || []);
             const lastScreen = screensVisited[screensVisited.length - 1];
 
             for (const screen of screensVisited) {
@@ -223,7 +231,9 @@ router.get(
         }
 
         // Keep the candidate set bounded before joining with heatmap rows.
+        const minVisits = getHeatmapMinVisits(sessionData.length, isRealtime);
         const candidateScreens = Object.entries(screenStats)
+            .filter(([, stats]) => stats.visits >= minVisits)
             .sort((a, b) => b[1].visits - a[1].visits)
             .slice(0, 60);
 
@@ -271,9 +281,10 @@ router.get(
             }
         }
 
-        // Query touch heatmap data for candidate screens.
-        const screenNames = candidateScreens.map(([name]) => name);
-        const heatmapData = screenNames.length > 0
+        // Query touch heatmap data and fold high-cardinality web route variants
+        // into the same normalized candidate names used by session paths.
+        const candidateScreenNames = new Set(candidateScreens.map(([name]) => name));
+        const heatmapData = candidateScreenNames.size > 0
             ? await db
                 .select({
                     screenName: screenTouchHeatmaps.screenName,
@@ -291,9 +302,9 @@ router.get(
                 .from(screenTouchHeatmaps)
                 .where(and(
                     inArray(screenTouchHeatmaps.projectId, projectIds),
-                    inArray(screenTouchHeatmaps.screenName, screenNames),
                     startedAfter ? gte(screenTouchHeatmaps.date, startedAfter.toISOString().split('T')[0] as any) : undefined
                 ))
+                .limit(5000)
             : [];
 
         // Aggregate heatmap data by screen (combine multiple days)
@@ -311,7 +322,9 @@ router.get(
         }>();
 
         for (const row of heatmapData) {
-            const existing = screenHeatmapMap.get(row.screenName);
+            const normalizedScreenName = normalizeHeatmapScreenName(row.screenName);
+            if (!normalizedScreenName || !candidateScreenNames.has(normalizedScreenName)) continue;
+            const existing = screenHeatmapMap.get(normalizedScreenName);
             if (existing) {
                 // Merge buckets
                 const touchB = row.touchBuckets as Record<string, number> || {};
@@ -333,7 +346,7 @@ router.get(
                     existing.screenFirstSeenMs = row.screenFirstSeenMs;
                 }
             } else {
-                screenHeatmapMap.set(row.screenName, {
+                screenHeatmapMap.set(normalizedScreenName, {
                     touchBuckets: { ...(row.touchBuckets as Record<string, number> || {}) },
                     rageTapBuckets: { ...(row.rageTapBuckets as Record<string, number> || {}) },
                     totalTouches: row.totalTouches,
@@ -382,6 +395,10 @@ router.get(
             .map(([name, stats]) => {
                 const heatmap = screenHeatmapMap.get(name);
                 const rageTaps = Math.max(stats.approxRageTaps, heatmap?.totalRageTaps || 0);
+                const touchCount = heatmap?.totalTouches || 0;
+                if (touchCount <= 0 && rageTaps <= 0 && stats.errors <= 0) {
+                    return null;
+                }
                 const visits = stats.visits;
                 const exitRate = visits > 0 ? (stats.exits / visits) * 100 : 0;
                 const rageTapRatePer100 = visits > 0 ? (rageTaps / visits) * 100 : 0;
@@ -427,6 +444,7 @@ router.get(
                     sessionIds: stats.sessionIds.slice(0, 10),
                 };
             })
+            .filter((screen): screen is NonNullable<typeof screen> => screen !== null)
             .sort((a, b) => b.impactScore - a.impactScore)
             .slice(0, 15);
 
@@ -548,7 +566,7 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const cacheKey = `insights:alltime-heatmap:${projectIds.sort().join(',')}:v4`;
+        const cacheKey = `insights:alltime-heatmap:${projectIds.sort().join(',')}:v5`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -588,7 +606,9 @@ router.get(
         }>();
 
         for (const row of heatmapData) {
-            const existing = screenHeatmapMap.get(row.screenName);
+            const normalizedScreenName = normalizeHeatmapScreenName(row.screenName);
+            if (!normalizedScreenName) continue;
+            const existing = screenHeatmapMap.get(normalizedScreenName);
             if (existing) {
                 // Merge buckets
                 const touchB = row.touchBuckets as Record<string, number> || {};
@@ -611,7 +631,7 @@ router.get(
                     existing.screenFirstSeenMs = row.screenFirstSeenMs;
                 }
             } else {
-                screenHeatmapMap.set(row.screenName, {
+                screenHeatmapMap.set(normalizedScreenName, {
                     touchBuckets: { ...(row.touchBuckets as Record<string, number> || {}) },
                     rageTapBuckets: { ...(row.rageTapBuckets as Record<string, number> || {}) },
                     totalTouches: row.totalTouches,
@@ -704,7 +724,7 @@ router.get(
 
             // Map each screen to sessions that visited it (with valid screenshots)
             for (const row of recentSessionsWithScreenshots) {
-                const visited = row.screensVisited || [];
+                const visited = normalizeHeatmapScreenPath(row.screensVisited || []);
                 for (const screen of visited) {
                     if (screenNames.includes(screen)) {
                         if (!screenSessionMap.has(screen)) {
@@ -749,6 +769,7 @@ router.get(
 
         // Build response
         const screens = Array.from(screenHeatmapMap.entries())
+            .filter(([, data]) => data.totalTouches > 0)
             .map(([screenName, data]) => {
                 let screenshotUrl: string | null = null;
                 let screenshotSource = 'none';

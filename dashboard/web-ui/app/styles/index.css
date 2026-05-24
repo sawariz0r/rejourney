@@ -45,6 +45,7 @@
 
     --radius: 0.75rem;
     --font-sans: 'Inter', 'Avenir Next', Avenir, 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-display: 'Sora', 'Inter', 'Avenir Next', Avenir, 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', 'Courier New', monospace;
 
     /* Dashboard surface tokens */

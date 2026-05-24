@@ -232,7 +232,7 @@ export const mapsPerformanceArticle: Article = {
         "mobile session replay, Mapbox, Apple Maps, Google Maps, 120Hz ProMotion, map capture, iOS Android, delegate swizzling, mobile observability",
     seo: {
         primaryKeyword: "mobile map session replay",
-        metaTitle: "120Hz Map Session Replay for Apple Maps, Google Maps, and Mapbox",
+        metaTitle: "120Hz Map Session Replay",
         metaDescription:
             "How Rejourney captures Apple Maps, Google Maps, and Mapbox in mobile session replay without 120Hz ProMotion stutter.",
         targetKeywords: [

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 export interface SankeyFlow {
     from: string;
@@ -22,6 +23,11 @@ export interface SankeyEvidenceSession {
     source: string;
     signal: string;
     priority?: 'high' | 'medium' | 'low';
+}
+
+export interface SankeyVersionOption {
+    version: string;
+    count: number;
 }
 
 interface SankeyNode {
@@ -55,6 +61,9 @@ interface SankeyJourneyProps {
     happyPath?: string[] | null;
     selectedTransitionIds?: string[];
     onFlowToggle?: (flow: SankeyFlow) => void;
+    appVersions?: SankeyVersionOption[];
+    selectedAppVersion?: string | null;
+    onAppVersionChange?: (version: string | null) => void;
 }
 
 const interpolateChannel = (from: number, to: number, amount: number): number => Math.round(from + (to - from) * amount);
@@ -66,6 +75,8 @@ const volumeColorStops = [
     { at: 0.58, rgb: [134, 239, 172] },
     { at: 1, rgb: [34, 197, 94] },
 ] as const;
+
+const ALL_APP_VERSIONS_VALUE = '__all_app_versions__';
 
 const getVolumeColor = (ratio: number, alpha: number): string => {
     const normalized = Math.max(0, Math.min(1, ratio));
@@ -87,6 +98,9 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
     happyPath,
     selectedTransitionIds = [],
     onFlowToggle,
+    appVersions = [],
+    selectedAppVersion = null,
+    onAppVersionChange,
 }) => {
     const [hoveredLinkId, setHoveredLinkId] = useState<string | null>(null);
     const [hoveredNode, setHoveredNode] = useState<string | null>(null);
@@ -324,10 +338,56 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
         return { nodes: sankeyNodes, links: sankeyLinks, nodeLookup, calculatedWidth, calculatedHeight };
     }, [flows, propWidth, height]);
 
+    const formatCompact = (value: number): string => {
+        if (!Number.isFinite(value)) return '0';
+        if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+        if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+        return value.toLocaleString();
+    };
+
+    const selectedVersionValue = selectedAppVersion || ALL_APP_VERSIONS_VALUE;
+    const versionSelectId = 'journey-version-filter';
+    const versionFilter = (
+        <div className="relative self-start md:self-auto">
+            <label htmlFor={versionSelectId} className="sr-only">Journey app version</label>
+            <select
+                id={versionSelectId}
+                value={selectedVersionValue}
+                onChange={(event) => onAppVersionChange?.(event.target.value === ALL_APP_VERSIONS_VALUE ? null : event.target.value)}
+                className="h-10 min-w-[190px] appearance-none border-2 border-black bg-white px-3 pr-9 text-[10px] font-black uppercase text-black shadow-neo-sm outline-none transition hover:-translate-y-0.5 hover:shadow-neo focus:ring-2 focus:ring-black"
+            >
+                <option value={ALL_APP_VERSIONS_VALUE}>All versions</option>
+                {appVersions.map((option) => (
+                    <option key={option.version} value={option.version}>
+                        {option.version === 'UNKNOWN' ? 'Unknown version' : `v${option.version}`} ({formatCompact(option.count)})
+                    </option>
+                ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black" />
+        </div>
+    );
+
+    const header = (
+        <div className="flex flex-col gap-2 border-b-2 border-black bg-[#f8fafc] px-5 py-3 md:flex-row md:items-center md:justify-between">
+            <div>
+                <div className="text-[11px] font-black uppercase text-black">
+                    Journey lanes
+                </div>
+                <div className="mt-0.5 text-xs font-semibold text-slate-500">
+                    Transition volume by screen path
+                </div>
+            </div>
+            {versionFilter}
+        </div>
+    );
+
     if (nodes.length === 0) {
         return (
-            <div className="journey-sankey-empty w-full h-80 flex items-center justify-center border-2 border-black bg-white">
-                <p className="text-slate-500 text-sm font-medium">No flow data available for this filter.</p>
+            <div className="journey-sankey-card relative overflow-hidden border-2 border-black bg-white shadow-neo">
+                {header}
+                <div className="journey-sankey-empty flex h-80 w-full items-center justify-center bg-white">
+                    <p className="text-sm font-medium text-slate-500">No flow data available for this version.</p>
+                </div>
             </div>
         );
     }
@@ -340,13 +400,6 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
     const maxLevel = Math.max(...nodes.map((node) => node.level), 1);
     const levelSpacing = maxLevel > 0 ? (calculatedWidth - padding * 2 - cardWidth - barWidth - cardGap) / maxLevel : 0;
     const maxLinkValue = Math.max(...links.map((link) => link.value), 1);
-
-    const formatCompact = (value: number): string => {
-        if (!Number.isFinite(value)) return '0';
-        if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-        if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
-        return value.toLocaleString();
-    };
 
     const getLinkColor = (link: SankeyLink, isHovered: boolean, isSelected: boolean) => {
         const ratio = link.value / maxLinkValue;
@@ -367,21 +420,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
 
     return (
         <div className="journey-sankey-card relative overflow-hidden border-2 border-black bg-white shadow-neo">
-            <div className="flex flex-col gap-2 border-b-2 border-black bg-[#f8fafc] px-5 py-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <div className="text-[11px] font-black uppercase text-black">
-                        Journey lanes
-                    </div>
-                    <div className="mt-0.5 text-xs font-semibold text-slate-500">
-                        Transition volume by screen path
-                    </div>
-                </div>
-                <div className="inline-flex items-center self-start border-2 border-black bg-white px-3 py-1.5 text-[10px] font-black uppercase text-black shadow-neo-sm md:self-auto">
-                    {hasSelectedPaths
-                        ? `${selectedTransitionSet.size} query path${selectedTransitionSet.size === 1 ? '' : 's'}`
-                        : 'No query paths'}
-                </div>
-            </div>
+            {header}
 
             <div
                 className="relative overflow-x-auto overflow-y-visible bg-white focus:outline-none focus:ring-2 focus:ring-black focus:ring-inset"

@@ -435,7 +435,7 @@ export const architectureDeepDiveArticle: Article = {
         "mobile session replay architecture, pixel-perfect replay, GPU capture, observability, Sentry alternative, async pipeline, mobile crash monitoring",
     seo: {
         primaryKeyword: "mobile session replay architecture",
-        metaTitle: "Mobile Session Replay Architecture: Pixel-Perfect GPU Capture",
+        metaTitle: "Mobile Session Replay Architecture",
         metaDescription:
             "Rejourney's mobile session replay architecture: GPU capture, async pipelines, privacy redaction, and low main-thread impact.",
         targetKeywords: [

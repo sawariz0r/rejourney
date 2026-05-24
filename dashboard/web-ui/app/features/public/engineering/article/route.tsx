@@ -11,6 +11,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link, redirect, useLocation, useParams } from "react-router";
 import { getContentLocaleCopy, getLocalizedArticleSeo } from "~/shared/lib/contentLocalization";
 import {
+    MARKETING_ENGINEERING_LOCALE_ORDER,
     getLocalizedAlternateLinksForPath,
     getLocalizedPublicPath,
     getLocalizedPublicUrl,
@@ -20,9 +21,15 @@ import {
 } from "~/shared/lib/internationalMarketing";
 
 const SITE_URL = "https://rejourney.co";
+const MAX_TITLE_LENGTH = 60;
 
 function getArticleUrl(article: (typeof ARTICLES)[number], locale = getMarketingLocaleFromPathname("/")): string {
     return getLocalizedPublicUrl(locale, getArticlePath(article));
+}
+
+function withArticleTitleSuffix(title: string, suffix: string): string {
+    const withSuffix = `${title} | ${suffix}`;
+    return withSuffix.length <= MAX_TITLE_LENGTH ? withSuffix : title;
 }
 
 // Loader to validate slug
@@ -66,23 +73,25 @@ export const meta: MetaFunction = ({ params, location }) => {
     const imageAlt = article.imageAlt ?? localizedArticle.title;
     const metaTitle = localizedArticle.metaTitle;
     const metaDescription = localizedArticle.metaDescription;
+    const pageTitle = withArticleTitleSuffix(metaTitle, copy.articleMetaTitleSuffix);
+    const shouldIndex = locale.code === "en";
     const publishedTime = `${article.urlDate}T12:00:00.000Z`;
     const modifiedTime = `${article.dateModified ?? article.urlDate}T12:00:00.000Z`;
-    const alternateLinks = getLocalizedAlternateLinksForPath(canonicalPath).map((alternate) => ({
+    const alternateLinks = getLocalizedAlternateLinksForPath(canonicalPath, MARKETING_ENGINEERING_LOCALE_ORDER).map((alternate) => ({
         tagName: "link",
         rel: "alternate",
         hrefLang: alternate.hrefLang,
         href: alternate.href,
     }));
-    const alternateOgLocales = getLocalizedAlternateLinksForPath(canonicalPath)
+    const alternateOgLocales = getLocalizedAlternateLinksForPath(canonicalPath, MARKETING_ENGINEERING_LOCALE_ORDER)
         .filter((alternate) => alternate.hrefLang !== "x-default" && alternate.hrefLang !== locale.languageTag)
         .map((alternate) => ({
             property: "og:locale:alternate",
             content: getMarketingLocaleFromPathname(new URL(alternate.href).pathname).ogLocale,
         }));
     const metaTags = [
-        { title: `${metaTitle} | ${copy.articleMetaTitleSuffix}` },
-        { name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" },
+        { title: pageTitle },
+        { name: "robots", content: shouldIndex ? "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" : "noindex, follow, max-image-preview:large" },
         { name: "description", content: metaDescription },
         { name: "keywords", content: localizedArticle.targetKeywords.join(", ") },
         { name: "news_keywords", content: article.seo.topicTags.join(", ") },

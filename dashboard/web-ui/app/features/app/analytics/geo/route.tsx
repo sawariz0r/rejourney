@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Globe, ShieldAlert } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { Check, Copy, Globe, Play, ShieldAlert, X } from 'lucide-react';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
@@ -7,10 +8,12 @@ import { useSharedRejourneyTimeRange } from '~/shared/hooks/useSharedRejourneyTi
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
 import {
     getGeoOverview,
+    getSessionsPaginated,
     type ApiLatencyByLocationResponse,
     type GeoIssuesSummary,
 } from '~/shared/api/client';
 import { useSharedPlatformLens, platformLensToSessionPlatform } from '~/shared/hooks/useSharedPlatformLens';
+import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { disableMapboxTelemetry, isMapboxConfigured } from '~/shared/integrations/mapbox';
 import { getMapboxToken } from '~/shared/config/runtimeEnv';
@@ -247,9 +250,103 @@ function renderLatencyFace(face: MarkerStyle['face']) {
     );
 }
 
+type GeoSessionRow = {
+    id: string;
+    durationSeconds?: number;
+    isFirstSession?: boolean;
+    visitorSessionNumber?: number | null;
+    canOpenReplay?: boolean;
+    hasSuccessfulRecording?: boolean;
+    crashCount?: number;
+    anrCount?: number;
+    errorCount?: number;
+    rageTapCount?: number;
+    deadTapCount?: number;
+    apiErrorCount?: number;
+    apiAvgResponseMs?: number;
+    appStartupTimeMs?: number;
+};
+
+function getShortSessionId(id: string): string {
+    const compact = id.replace(/-/g, '').trim();
+    return (compact || id).slice(0, 4);
+}
+
+function formatSessionDuration(seconds?: number): string {
+    const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+    const minutes = Math.floor(safeSeconds / 60);
+    const remainingSeconds = safeSeconds % 60;
+    return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
+function getVisitorLabel(session: GeoSessionRow): string {
+    const sessionNumber = session.visitorSessionNumber ?? null;
+    if (sessionNumber && sessionNumber > 1) return `Return ${sessionNumber}`;
+    return 'New';
+}
+
+function getGeoSessionFace(session: GeoSessionRow): MarkerStyle['face'] {
+    const severeIssues = (session.crashCount || 0) + (session.anrCount || 0) + (session.rageTapCount || 0);
+    if (severeIssues > 0) return 'angry';
+    const hasFriction =
+        (session.errorCount || 0) > 0 ||
+        (session.deadTapCount || 0) > 0 ||
+        (session.apiErrorCount || 0) > 0 ||
+        (session.apiAvgResponseMs || 0) > 1000 ||
+        (session.appStartupTimeMs || 0) > 3000;
+    return hasFriction ? 'neutral' : 'happy';
+}
+
+function MiniGeoFace({ face }: { face: MarkerStyle['face'] }) {
+    const style =
+        face === 'happy'
+            ? LATENCY_STYLE.excellent
+            : face === 'angry'
+                ? LATENCY_STYLE.critical
+                : LATENCY_STYLE.good;
+
+    return (
+        <span
+            className="relative inline-flex h-6 w-6 shrink-0 rounded-full border border-slate-950/60"
+            style={{
+                background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.86) 0, ${style.fill} 36%, ${style.solid} 100%)`,
+                boxShadow: `0 0 0 2px rgba(255,255,255,0.74), 0 0 0 3px ${style.ring}`,
+            }}
+            aria-hidden="true"
+        >
+            {renderLatencyFace(face)}
+        </span>
+    );
+}
+
+async function copyTextToClipboard(value: string): Promise<boolean> {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+    }
+    if (typeof document === 'undefined') return false;
+
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+        return document.execCommand('copy');
+    } finally {
+        document.body.removeChild(textarea);
+    }
+}
+
 export const Geo: React.FC = () => {
     const { selectedProject } = useSessionData();
     const { isDemoMode } = useDemoMode();
+    const navigate = useNavigate();
+    const pathPrefix = usePathPrefix();
     const { platformLens } = useSharedPlatformLens(selectedProject?.id, selectedProject?.platforms);
     const platform = platformLensToSessionPlatform(platformLens);
     const mapRef = React.useRef<any>(null);
@@ -263,6 +360,10 @@ export const Geo: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
+    const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+    const [markerSessions, setMarkerSessions] = useState<GeoSessionRow[]>([]);
+    const [markerSessionsState, setMarkerSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
+    const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
     const [mapZoom, setMapZoom] = useState(1.34);
 
     useEffect(() => {
@@ -359,6 +460,11 @@ export const Geo: React.FC = () => {
         [hoveredMarkerId, markers],
     );
 
+    const selectedMarker = useMemo(
+        () => (selectedMarkerId ? markers.find((marker) => marker.id === selectedMarkerId) || null : null),
+        [selectedMarkerId, markers],
+    );
+
     const initialViewState = useMemo(() => {
         const center = getWeightedMapCenter(markers);
         return {
@@ -412,6 +518,63 @@ export const Geo: React.FC = () => {
 
     const setHoverPaused = (isPaused: boolean) => {
         isHoverPausedRef.current = isPaused;
+    };
+
+    useEffect(() => {
+        if (selectedMarkerId && !selectedMarker) {
+            setSelectedMarkerId(null);
+        }
+    }, [selectedMarker, selectedMarkerId]);
+
+    useEffect(() => {
+        if (!selectedProject?.id || !selectedMarker) {
+            setMarkerSessions([]);
+            setMarkerSessionsState('idle');
+            return;
+        }
+
+        let isCancelled = false;
+        setMarkerSessions([]);
+        setMarkerSessionsState('loading');
+
+        void getSessionsPaginated({
+            projectId: selectedProject.id,
+            timeRange,
+            platform,
+            hasRecording: true,
+            includeTotal: false,
+            limit: 8,
+            sort: 'date',
+            sortDir: 'desc',
+            geoCountry: selectedMarker.country,
+            geoCity: selectedMarker.city === 'Unknown' ? undefined : selectedMarker.city,
+        })
+            .then((result) => {
+                if (isCancelled) return;
+                setMarkerSessions((result.sessions || []).filter((session) => session.canOpenReplay ?? session.hasSuccessfulRecording ?? true));
+                setMarkerSessionsState('idle');
+            })
+            .catch((err) => {
+                console.error('Failed to load geo marker sessions:', err);
+                if (isCancelled) return;
+                setMarkerSessions([]);
+                setMarkerSessionsState('error');
+            });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [platform, selectedMarker, selectedProject?.id, timeRange]);
+
+    const copySessionId = (event: React.MouseEvent, sessionId: string) => {
+        event.stopPropagation();
+        void copyTextToClipboard(sessionId).then((didCopy) => {
+            if (!didCopy) return;
+            setCopiedSessionId(sessionId);
+            window.setTimeout(() => {
+                setCopiedSessionId((current) => (current === sessionId ? null : current));
+            }, 1200);
+        });
     };
 
     if (isLoading && selectedProject?.id) {
@@ -485,6 +648,7 @@ export const Geo: React.FC = () => {
 
                             {markers.map((marker) => {
                                 const isHovered = marker.id === hoveredMarkerId;
+                                const isSelected = marker.id === selectedMarkerId;
                                 const markerSize = getZoomMarkerSize(marker.markerSize, mapZoom);
                                 return (
                                     <Marker
@@ -492,6 +656,13 @@ export const Geo: React.FC = () => {
                                         longitude={marker.lng}
                                         latitude={marker.lat}
                                         anchor="center"
+                                        style={{ pointerEvents: 'none' }}
+                                        onClick={(event: any) => {
+                                            event.originalEvent?.stopPropagation?.();
+                                            setSelectedMarkerId(marker.id);
+                                            setHoverPaused(true);
+                                            pauseRotationBriefly();
+                                        }}
                                     >
                                         <button
                                             type="button"
@@ -499,15 +670,30 @@ export const Geo: React.FC = () => {
                                             style={{
                                                 width: `${markerSize}px`,
                                                 height: `${markerSize}px`,
-                                                transform: isHovered ? 'scale(1.18)' : 'scale(1)',
+                                                pointerEvents: 'auto',
+                                                transform: isHovered || isSelected ? 'scale(1.18)' : 'scale(1)',
                                                 background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.82) 0, ${marker.style.fill} 27%, ${marker.style.solid} 100%)`,
                                                 border: '1.5px solid rgba(8, 13, 23, 0.62)',
-                                                opacity: isHovered ? 1 : 0.9,
-                                                boxShadow: isHovered
+                                                opacity: isHovered || isSelected ? 1 : 0.9,
+                                                boxShadow: isHovered || isSelected
                                                     ? `0 0 0 3px rgba(255,255,255,0.86), 0 0 0 6px ${marker.style.ring}, 0 0 20px ${marker.style.ring}, 0 5px 14px rgba(2,6,23,0.32)`
                                                     : `0 0 0 2px rgba(255,255,255,0.78), 0 0 0 4px ${marker.style.ring}, 0 3px 10px rgba(2,6,23,0.22)`,
                                             }}
                                             aria-label={`${marker.city}, ${marker.country}: ${marker.uniqueUsers.toLocaleString()} unique users, ${marker.sessions.toLocaleString()} sessions, ${formatLatency(marker.avgLatencyMs)} avg latency`}
+                                            aria-pressed={isSelected}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                            onPointerUp={(event) => {
+                                                event.stopPropagation();
+                                                setSelectedMarkerId(marker.id);
+                                                setHoverPaused(true);
+                                                pauseRotationBriefly();
+                                            }}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                setSelectedMarkerId(marker.id);
+                                                setHoverPaused(true);
+                                                pauseRotationBriefly();
+                                            }}
                                             onMouseEnter={() => setHoveredMarkerId(marker.id)}
                                             onMouseLeave={() => setHoveredMarkerId((prev) => (prev === marker.id ? null : prev))}
                                         >
@@ -545,6 +731,94 @@ export const Geo: React.FC = () => {
                         {loadError && (
                             <div className="absolute left-4 top-4 z-20 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-900 shadow-sm">
                                 {loadError}
+                            </div>
+                        )}
+                        {selectedMarker && (
+                            <div className="absolute right-4 top-4 z-30 w-[min(360px,calc(100%-2rem))] overflow-hidden border-2 border-black bg-white text-slate-900 shadow-neo">
+                                <div className="flex items-start justify-between gap-3 border-b-2 border-black bg-[#cffafe] px-3 py-2">
+                                    <div className="min-w-0">
+                                        <div className="truncate text-xs font-black uppercase tracking-wide text-black">
+                                            {selectedMarker.city}, {selectedMarker.country}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
+                                        onClick={() => setSelectedMarkerId(null)}
+                                        aria-label="Close replay sessions"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-[26px_minmax(0,1fr)_68px_86px] items-center gap-2 border-b border-black/15 bg-slate-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-wide text-slate-500">
+                                    <span />
+                                    <span>UUID</span>
+                                    <span className="text-right">Duration</span>
+                                    <span className="text-right">Return</span>
+                                </div>
+
+                                <div className="max-h-[244px] overflow-y-auto">
+                                    {markerSessionsState === 'loading' && (
+                                        <div className="px-3 py-5 text-center text-xs font-semibold text-slate-500">
+                                            Loading replay rows...
+                                        </div>
+                                    )}
+                                    {markerSessionsState === 'error' && (
+                                        <div className="px-3 py-5 text-center text-xs font-semibold text-rose-700">
+                                            Could not load replay sessions.
+                                        </div>
+                                    )}
+                                    {markerSessionsState === 'idle' && markerSessions.length === 0 && (
+                                        <div className="px-3 py-5 text-center text-xs font-semibold text-slate-500">
+                                            No replay-ready sessions for this location.
+                                        </div>
+                                    )}
+                                    {markerSessionsState === 'idle' && markerSessions.map((session) => {
+                                        const face = getGeoSessionFace(session);
+                                        const canOpenReplay = session.canOpenReplay ?? session.hasSuccessfulRecording ?? true;
+                                        const visitorLabel = getVisitorLabel(session);
+                                        return (
+                                            <div
+                                                key={session.id}
+                                                className={`grid grid-cols-[26px_minmax(0,1fr)_68px_86px] items-center gap-2 border-b border-black/10 px-3 py-2 text-left transition-colors last:border-b-0 ${canOpenReplay ? 'cursor-pointer hover:bg-[#ecfeff]' : 'cursor-not-allowed opacity-50'}`}
+                                                onClick={() => {
+                                                    if (canOpenReplay) navigate(`${pathPrefix}/sessions/${session.id}`);
+                                                }}
+                                                title={canOpenReplay ? `Open replay ${session.id}` : 'Replay unavailable'}
+                                            >
+                                                <MiniGeoFace face={face} />
+                                                <button
+                                                    type="button"
+                                                    className="inline-flex min-w-0 items-center gap-1 justify-self-start font-mono text-xs font-black text-slate-900 transition-colors hover:text-[#2563eb]"
+                                                    onClick={(event) => copySessionId(event, session.id)}
+                                                    title={`Copy ${session.id}`}
+                                                >
+                                                    <span className="truncate">{getShortSessionId(session.id)}</span>
+                                                    {copiedSessionId === session.id ? (
+                                                        <Check className="h-3 w-3 shrink-0 text-emerald-600" />
+                                                    ) : (
+                                                        <Copy className="h-3 w-3 shrink-0 text-slate-400" />
+                                                    )}
+                                                </button>
+                                                <span className="justify-self-end border border-black bg-[#ecfeff] px-1.5 py-0.5 font-mono text-[11px] font-black text-black">
+                                                    {formatSessionDuration(session.durationSeconds)}
+                                                </span>
+                                                <span className={`justify-self-end border px-1.5 py-0.5 text-[10px] font-black uppercase ${visitorLabel === 'New' ? 'border-emerald-700 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-slate-50 text-slate-700'}`}>
+                                                    {visitorLabel}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="flex items-center justify-between border-t border-black/15 bg-white px-3 py-2 text-[10px] font-semibold text-slate-500">
+                                    <span>{markerSessions.length} watchable</span>
+                                    <span className="inline-flex items-center gap-1 text-slate-700">
+                                        <Play className="h-3 w-3" />
+                                        Click a row to watch
+                                    </span>
+                                </div>
                             </div>
                         )}
                     </div>

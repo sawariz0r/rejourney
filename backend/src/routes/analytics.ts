@@ -71,6 +71,11 @@ function toPercent(numerator: number, denominator: number, decimals: number = 1)
     return Number(((numerator / denominator) * 100).toFixed(decimals));
 }
 
+function normalizeAppVersionLabel(value: unknown): string {
+    const version = typeof value === 'string' ? value.trim() : '';
+    return version || 'UNKNOWN';
+}
+
 function normalizeErrorCodeBreakdown(value: unknown): ErrorCodeBreakdown {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
 
@@ -2923,7 +2928,7 @@ router.get(
                 .where(eq(teamMembers.userId, req.user!.id));
             const teamIds = membership.map(m => m.teamId);
             if (teamIds.length === 0) {
-                res.json({ healthSummary: { healthy: 0, degraded: 0, problematic: 0 }, flows: [], problematicJourneys: [], happyPathJourney: null, configuredHappyPath: null, exitAfterError: [], timeToFailure: {}, screenHealth: [], topScreens: [], entryPoints: [], exitPoints: [] });
+                res.json({ healthSummary: { healthy: 0, degraded: 0, problematic: 0 }, flows: [], problematicJourneys: [], happyPathJourney: null, configuredHappyPath: null, exitAfterError: [], timeToFailure: {}, screenHealth: [], topScreens: [], entryPoints: [], exitPoints: [], appVersions: [] });
                 return;
             }
             const userProjects = await db
@@ -2934,13 +2939,15 @@ router.get(
         }
 
         if (projectIds.length === 0) {
-            res.json({ healthSummary: { healthy: 0, degraded: 0, problematic: 0 }, flows: [], problematicJourneys: [], happyPathJourney: null, configuredHappyPath: null, exitAfterError: [], timeToFailure: {}, screenHealth: [], topScreens: [], entryPoints: [], exitPoints: [] });
+            res.json({ healthSummary: { healthy: 0, degraded: 0, problematic: 0 }, flows: [], problematicJourneys: [], happyPathJourney: null, configuredHappyPath: null, exitAfterError: [], timeToFailure: {}, screenHealth: [], topScreens: [], entryPoints: [], exitPoints: [], appVersions: [] });
             return;
         }
 
         const responseMode = req.query.mode === 'summary' ? 'summary' : 'full';
         const journeyPlatform = typeof req.query.platform === 'string' && req.query.platform !== 'all' ? req.query.platform : undefined;
-        const cacheKey = `analytics:journey-observability:v4:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${journeyPlatform || 'all'}`;
+        const requestedAppVersion = typeof req.query.appVersion === 'string' ? req.query.appVersion.trim() : '';
+        const journeyAppVersion = requestedAppVersion && requestedAppVersion !== 'all' ? requestedAppVersion : undefined;
+        const cacheKey = `analytics:journey-observability:v5:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${journeyPlatform || 'all'}:${journeyAppVersion || 'all'}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -2997,6 +3004,7 @@ router.get(
                     screenTransitionBreakdown: appDailyStats.screenTransitionBreakdown,
                     entryScreenBreakdown: appDailyStats.entryScreenBreakdown,
                     exitScreenBreakdown: appDailyStats.exitScreenBreakdown,
+                    appVersionBreakdown: appDailyStats.appVersionBreakdown,
                 })
                 .from(appDailyStats)
                 .where(and(...conditions));
@@ -3005,6 +3013,7 @@ router.get(
             const transitionTotals: Record<string, number> = {};
             const entryTotals: Record<string, number> = {};
             const exitTotals: Record<string, number> = {};
+            const appVersionTotals: Record<string, number> = {};
             let totalSessions = 0;
 
             for (const row of dailyRows) {
@@ -3021,6 +3030,10 @@ router.get(
                 for (const [screen, count] of Object.entries(row.exitScreenBreakdown || {})) {
                     exitTotals[screen] = (exitTotals[screen] || 0) + count;
                 }
+                for (const [version, count] of Object.entries(row.appVersionBreakdown || {})) {
+                    const label = normalizeAppVersionLabel(version);
+                    appVersionTotals[label] = (appVersionTotals[label] || 0) + Number(count || 0);
+                }
             }
 
             const topScreens = Object.entries(screenTotals)
@@ -3035,6 +3048,14 @@ router.get(
                 .map(([screen, count]) => ({ screen, count }))
                 .sort((a, b) => b.count - a.count)
                 .slice(0, 10);
+            const appVersions = Object.entries(appVersionTotals)
+                .map(([version, count]) => ({ version, count }))
+                .filter((item) => item.count > 0)
+                .sort((a, b) => (
+                    (b.count - a.count)
+                    || b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
+                ))
+                .slice(0, 100);
             const flows = Object.entries(transitionTotals)
                 .map(([transition, count]) => {
                     const [from, to] = transition.split('→');
@@ -3085,6 +3106,7 @@ router.get(
                 topScreens,
                 entryPoints,
                 exitPoints,
+                appVersions,
             };
 
             await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
@@ -3094,12 +3116,41 @@ router.get(
 
         // Get sessions with their metrics for observability analysis
 
-        const conditions = [inArray(sessions.projectId, projectIds)];
-        if (startedAfter) conditions.push(gte(sessions.startedAt, startedAfter));
+        const normalizedSessionAppVersion = sql<string>`COALESCE(NULLIF(TRIM(${sessions.appVersion}), ''), 'UNKNOWN')`;
+        const baseSessionConditions = [inArray(sessions.projectId, projectIds)];
+        if (startedAfter) baseSessionConditions.push(gte(sessions.startedAt, startedAfter));
         if (journeyPlatform === 'mobile') {
-            conditions.push(inArray(sessions.platform, ['ios', 'android']));
+            baseSessionConditions.push(inArray(sessions.platform, ['ios', 'android']));
         } else if (journeyPlatform) {
-            conditions.push(eq(sessions.platform, journeyPlatform));
+            baseSessionConditions.push(eq(sessions.platform, journeyPlatform));
+        }
+
+        const appVersionCountExpr = sql<number>`count(*)`;
+        const appVersionRows = await db
+            .select({
+                version: normalizedSessionAppVersion,
+                count: appVersionCountExpr,
+            })
+            .from(sessions)
+            .where(and(...baseSessionConditions))
+            .groupBy(normalizedSessionAppVersion)
+            .orderBy(desc(appVersionCountExpr))
+            .limit(100);
+
+        const appVersions = appVersionRows
+            .map((row) => ({
+                version: normalizeAppVersionLabel(row.version),
+                count: Number(row.count || 0),
+            }))
+            .filter((item) => item.count > 0)
+            .sort((a, b) => (
+                (b.count - a.count)
+                || b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
+            ));
+
+        const conditions = [...baseSessionConditions];
+        if (journeyAppVersion) {
+            conditions.push(sql`${normalizedSessionAppVersion} = ${journeyAppVersion}`);
         }
 
         const sessionsWithMetrics = await db
@@ -3491,6 +3542,7 @@ router.get(
             topScreens,
             entryPoints,
             exitPoints,
+            appVersions,
         };
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);

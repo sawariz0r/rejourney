@@ -269,6 +269,10 @@ export const demoInsightsTrends: InsightsTrends = {
         const productViews = Math.round(62 + progress * 136 + demoRandom() * 16);
         const mobileDau = Math.round(dau * 0.64);
         const webDau = dau - mobileDau;
+        const nativeReleaseAge = i - 9;
+        const webReleaseAge = i - 16;
+        const native250Share = nativeReleaseAge >= 0 ? Math.min(0.64, 0.12 + nativeReleaseAge * 0.035) : 0;
+        const web2026051Share = webReleaseAge >= 0 ? Math.min(0.72, 0.18 + webReleaseAge * 0.045) : 0;
 
         return {
             date: date.toISOString().split('T')[0],
@@ -282,18 +286,18 @@ export const demoInsightsTrends: InsightsTrends = {
             avgDurationSeconds,
             errorCount: Math.round(2 + (1 - progress) * 5 + demoRandom() * 4),
             appVersionBreakdown: {
-                '2.5.0': Math.round(12 + i * 4.1 + demoRandom() * 5),
+                '2.5.0': nativeReleaseAge >= 0 ? Math.round(8 + nativeReleaseAge * 5.2 + demoRandom() * 5) : 0,
                 '2.4.1': Math.max(18, Math.round(82 - i * 1.7 + demoRandom() * 5)),
                 '2.4.0': Math.max(8, Math.round(42 - i * 0.9 + demoRandom() * 3)),
-                'web-2026.05.1': Math.round(14 + i * 1.8 + demoRandom() * 4),
+                'web-2026.05.1': webReleaseAge >= 0 ? Math.round(10 + webReleaseAge * 3.4 + demoRandom() * 4) : 0,
                 'web-2026.05.0': Math.max(6, Math.round(28 - i * 0.4 + demoRandom() * 2)),
             },
             appVersionDauBreakdown: {
-                '2.5.0': Math.round(mobileDau * (0.16 + progress * 0.48)),
+                '2.5.0': Math.round(mobileDau * native250Share),
                 '2.4.1': Math.round(mobileDau * Math.max(0.22, 0.62 - progress * 0.28)),
                 '2.4.0': Math.round(mobileDau * Math.max(0.05, 0.22 - progress * 0.12)),
-                'web-2026.05.1': Math.round(webDau * (0.48 + progress * 0.26)),
-                'web-2026.05.0': Math.round(webDau * Math.max(0.12, 0.52 - progress * 0.26)),
+                'web-2026.05.1': Math.round(webDau * web2026051Share),
+                'web-2026.05.0': Math.round(webDau * Math.max(0.12, 0.52 - Math.max(0, webReleaseAge) * 0.025)),
             },
             countryDauBreakdown: {
                 'United States': Math.round(dau * 0.48),
@@ -850,6 +854,12 @@ export const demoJourneyObservability: ObservabilityJourneySummary = {
         degraded: 5310,
         problematic: 2460,
     },
+    appVersions: [
+        { version: '2.6.0', count: 10420 },
+        { version: '2.5.1', count: 8210 },
+        { version: '2.5.0', count: 5360 },
+        { version: '2.4.8', count: 2200 },
+    ],
     flows: [
         { from: 'Launch', to: 'Home', count: 21560, apiErrors: 9, apiErrorRate: 0.04, avgApiLatencyMs: 92, rageTapCount: 12, crashCount: 0, anrCount: 0, health: 'healthy', replayCount: 72, sampleSessionIds: demoJourneySessionIds('launch-home', 6) },
         { from: 'Home', to: 'New Arrivals', count: 8280, apiErrors: 18, apiErrorRate: 0.2, avgApiLatencyMs: 138, rageTapCount: 24, crashCount: 0, anrCount: 0, health: 'healthy', replayCount: 58, sampleSessionIds: demoJourneySessionIds('home-arrivals', 6) },

@@ -6,12 +6,14 @@ import { Header } from "~/shell/components/layout/Header";
 import { Footer } from "~/shell/components/layout/Footer";
 import { useAuth } from "~/shared/providers/AuthContext";
 import {
+    MARKETING_INDEXABLE_LOCALE_ORDER,
     MARKETING_LOCALE_VARY_HEADER,
     getLocalizedAlternateLinksForPath,
     getLocalizedPublicUrl,
     getMarketingHomeCopy,
     getMarketingLocaleFromPathname,
     getMarketingLocaleRedirectPath,
+    isIndexableMarketingLocale,
 } from "~/shared/lib/internationalMarketing";
 import {
     createRoadmapPost,
@@ -42,18 +44,19 @@ export const meta: Route.MetaFunction = ({ location }) => {
     const locale = getMarketingLocaleFromPathname(location.pathname);
     const copy = getMarketingHomeCopy(locale).roadmap;
     const canonicalUrl = getLocalizedPublicUrl(locale, "/roadmap");
-    const alternateLinks = getLocalizedAlternateLinksForPath(location.pathname).map((alternate) => ({
+    const alternateLinks = getLocalizedAlternateLinksForPath(location.pathname, MARKETING_INDEXABLE_LOCALE_ORDER).map((alternate) => ({
         tagName: "link",
         rel: "alternate",
         hrefLang: alternate.hrefLang,
         href: alternate.href,
     }));
-    const alternateOgLocales = getLocalizedAlternateLinksForPath(location.pathname)
+    const alternateOgLocales = getLocalizedAlternateLinksForPath(location.pathname, MARKETING_INDEXABLE_LOCALE_ORDER)
         .filter((alternate) => alternate.hrefLang !== "x-default" && alternate.hrefLang !== locale.languageTag)
         .map((alternate) => ({
             property: "og:locale:alternate",
             content: getMarketingLocaleFromPathname(new URL(alternate.href).pathname).ogLocale,
         }));
+    const robots = isIndexableMarketingLocale(locale) ? "index, follow" : "noindex, follow";
 
     return [
         { title: copy.metaTitle },
@@ -64,7 +67,7 @@ export const meta: Route.MetaFunction = ({ location }) => {
         { httpEquiv: "Content-Language", content: locale.languageTag },
         { property: "og:locale", content: locale.ogLocale },
         ...alternateOgLocales,
-        { name: "robots", content: "index, follow" },
+        { name: "robots", content: robots },
         { property: "og:title", content: copy.metaTitle },
         { property: "og:description", content: copy.ogDescription },
         { property: "og:type", content: "website" },

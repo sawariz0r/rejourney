@@ -15,6 +15,7 @@ import { buildProjectAIIntegrationPrompt, buildSelfHostedAIDeploymentPrompt } fr
 import { getDocMetadata } from "~/shared/lib/docsConfig";
 import { getContentLocaleCopy, getLocalizedDocMetadata } from "~/shared/lib/contentLocalization";
 import {
+    MARKETING_LOCALE_ORDER,
     getLocalizedAlternateLinksForPath,
     getLocalizedPublicPath,
     getLocalizedPublicUrl,
@@ -68,13 +69,13 @@ export const meta: Route.MetaFunction = ({ params, location }) => {
     const canonicalPath = `/docs/${slug}`;
     const canonicalUrl = getLocalizedPublicUrl(locale, canonicalPath);
     const copy = getContentLocaleCopy(locale);
-    const alternateLinks = getLocalizedAlternateLinksForPath(canonicalPath).map((alternate) => ({
+    const alternateLinks = getLocalizedAlternateLinksForPath(canonicalPath, MARKETING_LOCALE_ORDER).map((alternate) => ({
         tagName: "link",
         rel: "alternate",
         hrefLang: alternate.hrefLang,
         href: alternate.href,
     }));
-    const alternateOgLocales = getLocalizedAlternateLinksForPath(canonicalPath)
+    const alternateOgLocales = getLocalizedAlternateLinksForPath(canonicalPath, MARKETING_LOCALE_ORDER)
         .filter((alternate) => alternate.hrefLang !== "x-default" && alternate.hrefLang !== locale.languageTag)
         .map((alternate) => ({
             property: "og:locale:alternate",
@@ -222,13 +223,11 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
                                 "publisher": {
                                     "@type": "Organization",
                                     "name": "Rejourney",
-                                    "inLanguage": locale.languageTag,
                                     "logo": "https://rejourney.co/rejourneyIcon-removebg-preview.png"
                                 }
                             },
                             {
                                 "@type": "BreadcrumbList",
-                                "inLanguage": locale.languageTag,
                                 "itemListElement": [
                                     {
                                         "@type": "ListItem",

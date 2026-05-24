@@ -21,6 +21,7 @@ import { boundedTimeRangeToDays } from '../utils/analyticsTimeRange.js';
 import { buildRetentionCohortRows } from '../services/retentionCohorts.js';
 import { generateAnonymousName } from '../utils/anonymousName.js';
 import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
+import { normalizeHeatmapScreenPath } from '../utils/heatmapScreens.js';
 
 const router = Router();
 const redis = getRedis();
@@ -1073,7 +1074,7 @@ async function loadHeatmapIterationSummary(
     }>();
 
     for (const row of rows) {
-        const visitedScreens = Array.from(new Set((row.screensVisited || []).filter(Boolean)));
+        const visitedScreens = Array.from(new Set(normalizeHeatmapScreenPath(row.screensVisited || [])));
         if (visitedScreens.length === 0) continue;
 
         const appVersion = row.appVersion?.trim() || 'Unknown';
@@ -1136,8 +1137,11 @@ async function loadHeatmapIterationSummary(
         return b.visits - a.visits;
     });
 
+    const overall = sortScreens(Array.from(overallMap.values())).slice(0, 60);
+    const retainedScreenNames = new Set(overall.map((screen) => screen.name));
+
     return {
-        overall: sortScreens(Array.from(overallMap.values())),
+        overall,
         versions: Array.from(versionMap.values())
             .sort((a, b) => (b.lastSeenAt || '').localeCompare(a.lastSeenAt || ''))
             .map((version) => ({
@@ -1145,8 +1149,9 @@ async function loadHeatmapIterationSummary(
                 firstSeenAt: version.firstSeenAt,
                 lastSeenAt: version.lastSeenAt,
                 sessions: version.sessions,
-                screens: sortScreens(Array.from(version.screens.values())),
-            })),
+                screens: sortScreens(Array.from(version.screens.values()).filter((screen) => retainedScreenNames.has(screen.name))).slice(0, 40),
+            }))
+            .filter((version) => version.screens.length > 0),
     };
 }
 
@@ -1242,14 +1247,16 @@ async function loadHeatmapSummary(
     const alltimeMap = new Map<string, HeatmapScreenSource>((allTime.screens || []).map((screen) => [screen.name, screen]));
     const frictionMap = new Map<string, HeatmapScreenSource>((friction.screens || []).map((screen) => [screen.name, screen]));
     const screenIteration = applyHeatmapIterationScreenshots(rawScreenIteration, alltimeMap, frictionMap);
-    const screenNames = Array.from(new Set([
-        ...alltimeMap.keys(),
-        ...frictionMap.keys(),
-        ...screenIteration.overall.map((screen) => screen.name),
-    ]));
+    const includeAllTimeOnlyScreens = !timeRange || timeRange === 'all';
+    const screenNames = new Set<string>(frictionMap.keys());
+    if (includeAllTimeOnlyScreens) {
+        for (const name of alltimeMap.keys()) {
+            screenNames.add(name);
+        }
+    }
 
     return {
-        screens: screenNames.map((name) => mergeHeatmapScreen(name, alltimeMap.get(name), frictionMap.get(name), true)),
+        screens: Array.from(screenNames).map((name) => mergeHeatmapScreen(name, alltimeMap.get(name), frictionMap.get(name), true)),
         screenIteration,
         lastUpdated: allTime.lastUpdated ?? new Date().toISOString(),
         failedSections,
@@ -1990,7 +1997,7 @@ router.get(
     asyncHandler(async (req, res) => {
         const scope = await resolveOverviewScope(req, { requireProjectId: true });
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('heatmaps', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v8` : 'v8'),
+            cacheKey: buildOverviewCacheKey('heatmaps', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v9` : 'v9'),
             routeName: 'heatmaps',
             res,
             logContext: {
@@ -2013,7 +2020,7 @@ router.get(
         }
 
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey(`heatmaps:screen:${screenName}`, scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v5` : 'v5'),
+            cacheKey: buildOverviewCacheKey(`heatmaps:screen:${screenName}`, scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v6` : 'v6'),
             routeName: 'heatmaps-screen',
             res,
             logContext: {

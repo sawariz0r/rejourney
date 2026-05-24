@@ -1067,6 +1067,9 @@ export type SessionArchiveQuery = {
   screenOutcome?: 'bounced' | 'continued';
   /** Pipe-separated ordered screen path, e.g. "HomeScreen|CheckoutScreen|ConfirmationScreen" */
   screenPath?: string;
+  /** Exact geo filters used by map drilldowns. */
+  geoCountry?: string;
+  geoCity?: string;
   metaKey?: string;
   metaValue?: string;
   eventName?: string;
@@ -1100,6 +1103,8 @@ function buildSessionArchiveQueryString(params: SessionArchiveQuery & { countOnl
     screenName,
     screenOutcome,
     screenPath,
+    geoCountry,
+    geoCity,
     metaKey,
     metaValue,
     eventName,
@@ -1132,6 +1137,8 @@ function buildSessionArchiveQueryString(params: SessionArchiveQuery & { countOnl
   if (screenName) queryParams.set('screenName', screenName);
   if (screenName && screenOutcome) queryParams.set('screenOutcome', screenOutcome);
   if (screenPath) queryParams.set('screenPath', screenPath);
+  if (geoCountry) queryParams.set('geoCountry', geoCountry);
+  if (geoCity) queryParams.set('geoCity', geoCity);
   if (metaKey) queryParams.set('metaKey', metaKey);
   if (metaValue) queryParams.set('metaValue', metaValue);
   if (eventName) queryParams.set('eventName', eventName);
@@ -1159,6 +1166,8 @@ export async function getSessionsArchiveTotalCount(
     return demoSessions.filter((session) => {
       if (params.projectId && session.projectId !== params.projectId) return false;
       if (!matchesPlatformFilter(session.platform, params.platform)) return false;
+      if (params.geoCountry && session.geoLocation?.country !== params.geoCountry) return false;
+      if (params.geoCity && session.geoLocation?.city !== params.geoCity) return false;
       return true;
     }).length;
   }
@@ -1187,6 +1196,8 @@ export async function getSessionsPaginated(
     const filteredSessions = demoSessions.filter((session) => {
       if (params.projectId && session.projectId !== params.projectId) return false;
       if (!matchesPlatformFilter(session.platform, params.platform)) return false;
+      if (params.geoCountry && session.geoLocation?.country !== params.geoCountry) return false;
+      if (params.geoCity && session.geoLocation?.city !== params.geoCity) return false;
       return true;
     });
     const limit = params.limit && params.limit > 0 ? params.limit : filteredSessions.length;
@@ -2800,8 +2811,9 @@ export async function getGeoOverview(projectId: string, timeRange?: string, plat
   return fetchWithCache<GeoOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
-export async function getJourneysOverview(projectId: string, timeRange?: string, mode: 'summary' | 'full' = 'summary', platform?: string): Promise<JourneysOverviewResponse> {
+export async function getJourneysOverview(projectId: string, timeRange?: string, mode: 'summary' | 'full' = 'summary', platform?: string, appVersion?: string | null): Promise<JourneysOverviewResponse> {
   const normalizedPlatform = platform && platform !== 'all' ? platform : undefined;
+  const normalizedAppVersion = appVersion && appVersion !== 'all' ? appVersion : undefined;
   if (isDemoMode()) {
     const journeyRange = timeRange === 'all' ? undefined : timeRange;
     const trendsRange = timeRange === '24h'
@@ -2813,7 +2825,7 @@ export async function getJourneysOverview(projectId: string, timeRange?: string,
           : (timeRange || '30d');
 
     const [journey, userEngagement, trends] = await Promise.all([
-      getJourneyObservability(projectId, journeyRange, mode, normalizedPlatform),
+      getJourneyObservability(projectId, journeyRange, mode, normalizedPlatform, normalizedAppVersion),
       getUserEngagementTrends(projectId, journeyRange, normalizedPlatform),
       getInsightsTrends(projectId, trendsRange, normalizedPlatform),
     ]);
@@ -2836,7 +2848,7 @@ export async function getJourneysOverview(projectId: string, timeRange?: string,
           ? '90d'
           : (timeRange || '30d');
     const [journey, userEngagement, trends] = await Promise.all([
-      getJourneyObservability(projectId, journeyRange, 'full', normalizedPlatform),
+      getJourneyObservability(projectId, journeyRange, 'full', normalizedPlatform, normalizedAppVersion),
       getUserEngagementTrends(projectId, journeyRange, normalizedPlatform),
       getInsightsTrends(projectId, trendsRange, normalizedPlatform),
     ]);
@@ -2846,8 +2858,9 @@ export async function getJourneysOverview(projectId: string, timeRange?: string,
   const params = new URLSearchParams({ projectId });
   if (timeRange) params.set('timeRange', timeRange);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
+  if (normalizedAppVersion) params.set('appVersion', normalizedAppVersion);
   const endpoint = `/api/overview/journeys?${params.toString()}`;
-  const cacheKey = `overview:journeys:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}`;
+  const cacheKey = `overview:journeys:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:${normalizedAppVersion || 'all'}:v2`;
   return fetchWithCache<JourneysOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
@@ -2927,7 +2940,7 @@ export async function getHeatmapsOverview(projectId: string, timeRange?: string,
   if (timeRange) params.set('timeRange', timeRange);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
   const endpoint = `/api/overview/heatmaps?${params.toString()}`;
-  const cacheKey = `overview:heatmaps:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v9`;
+  const cacheKey = `overview:heatmaps:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v10`;
   return fetchWithCache<HeatmapOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
@@ -2945,7 +2958,7 @@ export async function getHeatmapScreenOverview(projectId: string, screenName: st
   if (timeRange) params.set('timeRange', timeRange);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
   const endpoint = `/api/overview/heatmaps/screen?${params.toString()}`;
-  const cacheKey = `overview:heatmaps:screen:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v6`;
+  const cacheKey = `overview:heatmaps:screen:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v7`;
   return fetchWithCache<HeatmapScreenOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
@@ -3820,6 +3833,7 @@ export interface ObservabilityJourneySummary {
     degraded: number;
     problematic: number;
   };
+  appVersions: Array<{ version: string; count: number }>;
   flows: Array<{
     from: string;
     to: string;
@@ -3894,6 +3908,7 @@ export async function getJourneyObservability(
   timeRange?: string,
   mode: 'full' | 'summary' = 'full',
   platform?: string,
+  appVersion?: string | null,
 ): Promise<ObservabilityJourneySummary> {
   // Demo mode: return mock data
   if (isDemoMode()) {
@@ -3901,13 +3916,15 @@ export async function getJourneyObservability(
   }
 
   const normalizedPlatform = platform && platform !== 'all' ? platform : undefined;
+  const normalizedAppVersion = appVersion && appVersion !== 'all' ? appVersion : undefined;
   const params = new URLSearchParams();
   if (projectId) params.set('projectId', projectId);
   if (timeRange) params.set('timeRange', timeRange);
   if (mode !== 'full') params.set('mode', mode);
   if (normalizedPlatform) params.set('platform', normalizedPlatform);
+  if (normalizedAppVersion) params.set('appVersion', normalizedAppVersion);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  const cacheKey = `analytics:journey-observability:${projectId || 'all'}:${timeRange || 'all'}:${mode}:${normalizedPlatform || 'all'}`;
+  const cacheKey = `analytics:journey-observability:${projectId || 'all'}:${timeRange || 'all'}:${mode}:${normalizedPlatform || 'all'}:${normalizedAppVersion || 'all'}:v2`;
   return fetchWithCache<ObservabilityJourneySummary>(`/api/analytics/journey-observability${qs}`, {}, cacheKey);
 }
 
