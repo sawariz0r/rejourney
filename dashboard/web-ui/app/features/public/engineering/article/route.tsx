@@ -7,7 +7,7 @@ import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { Header } from "~/shell/components/layout/Header";
 import { Footer } from "~/shell/components/layout/Footer";
 import { ARTICLES, getAbsoluteArticleImage, getArticlePath } from "~/shared/data/engineering";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { Link, redirect, useLocation, useParams } from "react-router";
 import { getContentLocaleCopy, getLocalizedArticleSeo } from "~/shared/lib/contentLocalization";
 import {
@@ -30,6 +30,22 @@ function getArticleUrl(article: (typeof ARTICLES)[number], locale = getMarketing
 function withArticleTitleSuffix(title: string, suffix: string): string {
     const withSuffix = `${title} | ${suffix}`;
     return withSuffix.length <= MAX_TITLE_LENGTH ? withSuffix : title;
+}
+
+function getRelatedArticles(article: (typeof ARTICLES)[number]): (typeof ARTICLES)[number][] {
+    const articleIndex = ARTICLES.findIndex((candidate) => candidate.id === article.id);
+    const adjacentArticles = [
+        articleIndex > 0 ? ARTICLES[articleIndex - 1] : null,
+        articleIndex >= 0 ? ARTICLES[articleIndex + 1] : null,
+    ];
+    const uniqueArticles = new Map<string, (typeof ARTICLES)[number]>();
+
+    for (const candidate of [...adjacentArticles, ...ARTICLES]) {
+        if (!candidate || candidate.id === article.id) continue;
+        uniqueArticles.set(candidate.id, candidate);
+    }
+
+    return Array.from(uniqueArticles.values()).slice(0, 3);
 }
 
 // Loader to validate slug
@@ -191,6 +207,7 @@ export default function EngineeringArticlePage() {
             },
         },
     };
+    const relatedArticles = getRelatedArticles(article);
 
     return (
         <div className="public-readable-scope min-h-screen w-full bg-white text-slate-900 font-sans selection:bg-yellow-200 flex flex-col" lang={locale.languageTag} dir={locale.dir}>
@@ -276,6 +293,41 @@ export default function EngineeringArticlePage() {
                     </div>
 
                     <article className="mx-auto max-w-4xl">
+                        {relatedArticles.length > 0 && (
+                            <section className="mt-20 border-t-2 border-gray-100 pt-12" aria-labelledby="related-engineering-articles">
+                                <div className="mb-8">
+                                    <h2 id="related-engineering-articles" className="text-2xl font-black uppercase tracking-tighter">
+                                        {copy.relatedArticlesHeading}
+                                    </h2>
+                                    <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-gray-500">
+                                        {copy.relatedArticlesIntro}
+                                    </p>
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-3">
+                                    {relatedArticles.map((relatedArticle) => {
+                                        const relatedSeo = getLocalizedArticleSeo(relatedArticle, locale);
+                                        return (
+                                            <Link
+                                                key={relatedArticle.id}
+                                                to={getLocalizedPublicPath(locale, getArticlePath(relatedArticle))}
+                                                aria-label={copy.readArticleLabel(relatedSeo.title)}
+                                                className="group flex min-h-48 flex-col justify-between border-2 border-black bg-white p-5 shadow-[5px_5px_0_0_rgba(0,0,0,1)] transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#fef08a] hover:shadow-[7px_7px_0_0_rgba(0,0,0,1)]"
+                                            >
+                                                <span className="text-xs font-black uppercase tracking-widest text-blue-600">{relatedArticle.date}</span>
+                                                <span className="mt-4 block text-lg font-black uppercase leading-tight text-slate-950">
+                                                    {relatedSeo.title}
+                                                </span>
+                                                <span className="mt-5 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-black">
+                                                    {relatedSeo.readTime}
+                                                    <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={3} />
+                                                </span>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
+
                         <div className="mt-20 pt-12 border-t-2 border-gray-100">
                             <h3 className="text-2xl font-black uppercase tracking-tighter mb-8">{copy.authorHeading}</h3>
                             <div className="flex items-start gap-4">

@@ -111,7 +111,8 @@ export default function RoadmapPage() {
     const [details, setDetails] = useState("");
     const [roadmapView, setRoadmapView] = useState<RoadmapView>('open');
     const inFlightVotePostIdsRef = useRef<Set<string>>(new Set());
-    const loginReturnTo = `/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
+    const loginPath = "/login";
+    const roadmapReturnTo = `${location.pathname}${location.search}`;
 
     const sortedPosts = useMemo(() => sortPosts(posts), [posts]);
     const openPosts = useMemo(() => sortedPosts.filter((post) => !isCompletePost(post)), [sortedPosts]);
@@ -178,8 +179,14 @@ export default function RoadmapPage() {
         });
     };
 
+    const storeRoadmapReturn = useCallback(() => {
+        if (typeof window === 'undefined') return;
+        localStorage.setItem('returnUrl', roadmapReturnTo);
+    }, [roadmapReturnTo]);
+
     const requireLogin = () => {
-        navigate(loginReturnTo);
+        storeRoadmapReturn();
+        navigate(loginPath);
     };
 
     const handleVote = async (postId: string) => {
@@ -405,7 +412,8 @@ export default function RoadmapPage() {
                             </p>
                             {!isAuthenticated && !authLoading && (
                                 <Link
-                                    to={loginReturnTo}
+                                    to={loginPath}
+                                    onClick={storeRoadmapReturn}
                                     className="mt-8 inline-flex w-full items-center justify-center gap-3 border-2 border-black bg-slate-950 px-7 py-4 text-base font-black uppercase text-white shadow-[5px_5px_0px_0px_rgba(93,173,236,1)] transition-all hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-[7px_7px_0px_0px_rgba(93,173,236,1)] sm:w-auto"
                                 >
                                     {copy.signInToPost}
@@ -440,7 +448,8 @@ export default function RoadmapPage() {
                                 </div>
                                 {!isAuthenticated && (
                                     <Link
-                                        to={loginReturnTo}
+                                        to={loginPath}
+                                        onClick={storeRoadmapReturn}
                                         className="inline-flex w-full items-center justify-center border-2 border-black bg-black px-5 py-3 text-sm font-black uppercase text-white shadow-neo-sm transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#5dadec] hover:text-black hover:shadow-neo sm:w-auto"
                                     >
                                         {copy.signInToAddIdea}

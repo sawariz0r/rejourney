@@ -58,6 +58,12 @@ function checkStructuredData() {
       if (source.includes(token)) fail(`${file} contains JSON-LD token Semrush flags: ${token}`);
     }
   }
+
+  assertNotIncludes(
+    "app/features/public/docs/slug/route.tsx",
+    '"category": localizedMetadata.category',
+    "Docs Article JSON-LD must use articleSection instead of the unsupported category field."
+  );
 }
 
 function checkRobotsAndSitemap() {

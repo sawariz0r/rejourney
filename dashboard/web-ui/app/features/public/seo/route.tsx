@@ -37,11 +37,11 @@ const alternativeTldrByPath: Record<string, string> = {
   "/alternatives/amplitude-session-replay":
     "Choose Rejourney when replay, stability, API context, and mobile evidence need to sit beside analytics without an enterprise analytics rollout.",
   "/alternatives/mixpanel-session-replay":
-    "Choose RejourneyfFor a more indie-friendly yet full experince instead of deep enterprise software .",
+    "Choose Rejourney for a more indie-friendly yet full experience instead of deep enterprise software.",
   "/alternatives/pendo-session-replay":
     "Choose Rejourney when you need session evidence and technical context more than guides, surveys, and product adoption messaging.",
   "/alternatives/fullstory":
-    "Choose Rejourney when you want a leaner replay-first workflow with source visibility, self-hosting, and mobile stability context.",
+    "Choose Rejourney when you want one of the leaner Fullstory alternatives with source visibility, self-hosting, and mobile stability context.",
 };
 
 type FeatureDisplay = {
@@ -69,20 +69,20 @@ const defaultFeatureTabs = ["Watch sessions", "Find drop-offs", "Review launches
 
 const featureDisplayByPath: Record<string, FeatureDisplay> = {
   "/session-replay-tools": {
-    title: "Session replay tools",
-    subtitle: "Find user friction with replay, heatmaps, journeys, crashes, and network context.",
+    title: "Session replay software and tools",
+    subtitle: "Find user friction with replay, website session recording, heatmaps, journeys, crashes, and network context.",
     guideTitle: "From question to fix",
     fitTitle: "Best fit",
     tradeoffTitle: "Not the best fit",
     heroBullets: [
       "Replay real user sessions",
+      "Compare session replay software",
       "Jump from behavior to metrics",
-      "Debug product and technical friction",
     ],
     available: ["Web apps", "Mobile apps", "Self-hosting"],
     showcaseTabs: defaultFeatureTabs,
     showcaseTitle: "See the full user story",
-    showcaseCopy: "Start with the recording, then inspect the surrounding journey, heatmap, crash, ANR, and network context.",
+    showcaseCopy: "Start with the website or mobile session recording, then inspect the surrounding journey, heatmap, crash, ANR, and network context.",
     showcaseBullets: ["Identify user pain points", "Validate design changes", "Give engineering the same evidence"],
     steps: ["Install the SDK", "Capture sessions automatically", "Review and share the evidence"],
   },
@@ -1091,6 +1091,7 @@ export default function SeoLandingPage() {
   if (!page) return null;
 
   const categoryDisplay = page.kind === "category" ? featureDisplay(page) : null;
+  const visibleBadge = page.badge.trim();
   const canonicalUrl = `${SITE_URL}${page.path}`;
   const jsonLd = {
     "@context": "https://schema.org",
@@ -1156,9 +1157,11 @@ export default function SeoLandingPage() {
                 <span className="border-2 border-black bg-[#fef08a] px-3 py-1 font-mono text-[10px] font-black uppercase text-black shadow-neo-sm">
                   {page.eyebrow}
                 </span>
-                <span className="border-2 border-black bg-white px-3 py-1 font-mono text-[10px] font-black uppercase text-slate-700 shadow-neo-sm">
-                  {page.badge}
-                </span>
+                {visibleBadge ? (
+                  <span className="border-2 border-black bg-white px-3 py-1 font-mono text-[10px] font-black uppercase text-slate-700 shadow-neo-sm">
+                    {visibleBadge}
+                  </span>
+                ) : null}
               </div>
               <h1 className={`mt-6 max-w-5xl break-words font-black uppercase leading-none text-slate-950 ${page.kind === "category" ? "text-4xl sm:text-5xl lg:text-6xl" : "text-4xl sm:text-6xl lg:text-7xl"}`}>
                 {categoryDisplay?.title ?? page.title}

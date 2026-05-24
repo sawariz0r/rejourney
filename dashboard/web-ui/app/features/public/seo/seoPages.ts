@@ -244,18 +244,18 @@ export const SEO_PAGES: SeoPage[] = [
     eyebrow: "Session replay tools",
     title: "Session replay tools that turn recordings into answers",
     subtitle:
-      "Use replay to find the right session, understand the pattern behind it, and give product, support, and engineering the same evidence.",
-    metaTitle: "Best Session Replay Tools | Rejourney",
+      "Compare session replay software, find the right recording, understand the pattern behind it, and give product, support, and engineering the same evidence.",
+    metaTitle: "Best Session Replay Software & Tools | Rejourney",
     metaDescription:
-      "Compare session replay tools for web and mobile apps, including replay quality, search, heatmaps, journeys, crash context, privacy, and pricing.",
-    keywords: ["session replay tools", "best session replay tools", "session replay tool", "session recording tools"],
+      "Compare session replay software and website session recording tools for web and mobile apps, including replay quality, heatmaps, journeys, privacy, and pricing.",
+    keywords: ["session replay software", "session replay tools", "best session replay tools", "website session recording", "user session replay software", "session recording tools"],
     image: "/images/session-replay-preview.png",
     imageAlt: "Rejourney session replay preview with event context",
     proofPoints: ["Replay search", "Heatmaps + journeys", "Crash context"],
     whyTitle: "A good replay tool should shorten the path from question to fix",
     whyParagraphs: [
       "Teams open replay tools when something confusing happened: a funnel dropped, a customer got stuck, a crash appeared, or support needs proof of what the user saw.",
-      "The strongest tools make that investigation fast. Search by behavior, jump into the replay, inspect the event timeline, and move from one strange session to the repeated pattern that deserves attention.",
+      "The strongest session replay software makes that investigation fast. Search by behavior, jump into the recording, inspect the event timeline, and move from one strange session to the repeated pattern that deserves attention.",
       "Rejourney keeps replay close to heatmaps, journeys, crashes, ANRs, and network context so a session does not become another isolated clip in a separate dashboard.",
     ],
     chooseOtherTitle: "Choose a heavier suite if...",
@@ -633,7 +633,7 @@ export const SEO_PAGES: SeoPage[] = [
   alternativePage({
     path: "/alternatives/posthog-session-replay",
     competitor: "PostHog Session Replay",
-    badge: "US volume 140 / KD 19",
+    badge: "",
     subtitle:
       "PostHog is a broad product analytics suite. Rejourney is the replay-first alternative for teams that want web and mobile session evidence, simple limits, and faster investigation workflows.",
     metaTitle: "Rejourney vs PostHog Session Replay",
@@ -718,7 +718,7 @@ export const SEO_PAGES: SeoPage[] = [
   alternativePage({
     path: "/alternatives/sentry-session-replay",
     competitor: "Sentry Session Replay",
-    badge: "US volume 140 / KD 26",
+    badge: "",
     subtitle:
       "Sentry is excellent for error monitoring. Rejourney is the session replay alternative when product behavior, journeys, heatmaps, and team-wide analytics matter as much as exceptions.",
     metaTitle: "Rejourney vs Sentry Session Replay",
@@ -804,7 +804,7 @@ export const SEO_PAGES: SeoPage[] = [
   alternativePage({
     path: "/alternatives/datadog-session-replay",
     competitor: "Datadog Session Replay",
-    badge: "US volume 170 / KD 17",
+    badge: "",
     subtitle:
       "Datadog is a broad observability platform. Rejourney is the focused alternative for product teams that need replay, heatmaps, journeys, and app behavior without enterprise-suite complexity.",
     metaTitle: "Rejourney vs Datadog Session Replay",
@@ -890,7 +890,7 @@ export const SEO_PAGES: SeoPage[] = [
   alternativePage({
     path: "/alternatives/amplitude-session-replay",
     competitor: "Amplitude Session Replay",
-    badge: "US volume 170 / KD 29",
+    badge: "",
     subtitle:
       "Amplitude is a mature product analytics platform. Rejourney is the replay-first alternative when the team needs session evidence, mobile context, and simple included limits.",
     metaTitle: "Rejourney vs Amplitude Session Replay",
@@ -976,7 +976,7 @@ export const SEO_PAGES: SeoPage[] = [
   alternativePage({
     path: "/alternatives/mixpanel-session-replay",
     competitor: "Mixpanel Session Replay",
-    badge: "US volume 170 / KD 19",
+    badge: "",
     subtitle:
       "Mixpanel is known for event analytics. Rejourney is the alternative for teams that want replay, journeys, heatmaps, crashes, and unlimited team access together.",
     metaTitle: "Rejourney vs Mixpanel Session Replay",
@@ -1061,7 +1061,7 @@ export const SEO_PAGES: SeoPage[] = [
   alternativePage({
     path: "/alternatives/pendo-session-replay",
     competitor: "Pendo Session Replay",
-    badge: "US volume 170 / KD 14",
+    badge: "",
     subtitle:
       "Pendo is built for product adoption and in-app guidance. Rejourney is the replay-first alternative for teams that want user evidence, mobile context, and observability in one place.",
     metaTitle: "Rejourney vs Pendo Session Replay",
@@ -1146,13 +1146,13 @@ export const SEO_PAGES: SeoPage[] = [
   alternativePage({
     path: "/alternatives/fullstory",
     competitor: "Fullstory",
-    badge: "US volume 210 / KD 12",
+    badge: "",
     subtitle:
       "Fullstory is a mature digital experience platform. Rejourney is the leaner replay-first alternative with simple limits, mobile context, and open-source/self-hosting paths.",
-    metaTitle: "Rejourney vs Fullstory",
+    metaTitle: "Fullstory Alternatives: Rejourney vs Fullstory",
     metaDescription:
-      "Compare Rejourney and Fullstory for session replay, mobile analytics, heatmaps, journeys, unlimited events, retention, projects, and teams.",
-    keywords: ["fullstory alternatives", "fullstory competitors", "fullstory session replay", "session replay alternatives"],
+      "Compare Rejourney with Fullstory alternatives for session replay, mobile analytics, heatmaps, journeys, unlimited events, retention, projects, and teams.",
+    keywords: ["fullstory alternatives", "fullstory alternative", "best fullstory alternatives", "fullstory competitors", "fullstory session replay", "session replay alternatives"],
     image: "/images/hero-replay-workbench.png",
     imageAlt: "Rejourney replay workbench as a Fullstory alternative",
     proofPoints: [],

@@ -173,8 +173,10 @@ export const meta: Route.MetaFunction = () => [
         name: "description",
         content: "Sign in to your Rejourney dashboard. Access session replays, crash reports, and analytics.",
     },
+    { name: "robots", content: "noindex, follow" },
     { property: "og:title", content: "Sign In - Rejourney" },
     { property: "og:url", content: "https://rejourney.co/login" },
+    { tagName: "link", rel: "canonical", href: "https://rejourney.co/login" },
 ];
 
 export default function LoginPage() {

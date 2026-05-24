@@ -24,7 +24,8 @@ export const Footer: React.FC = () => {
     { label: "vs Fullstory", href: "/alternatives/fullstory" },
   ];
   const featureLinks = [
-    { label: "Session Replay Tools", href: "/session-replay-tools" },
+    { label: "Session Replay Software", href: "/session-replay-tools" },
+    { label: "Website Session Recording", href: "/web-session-replay" },
     { label: "Mobile Session Replay", href: "/mobile-session-replay" },
     { label: "Web Session Replay", href: "/web-session-replay" },
     { label: "Replay-First Mentality", href: "/replay-first-mentality" },

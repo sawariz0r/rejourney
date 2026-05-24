@@ -214,7 +214,7 @@ export default function DocPage({ loaderData }: Route.ComponentProps) {
                                 "headline": localizedMetadata.title,
                                 "description": localizedMetadata.description ?? copy.docDefaultDescription(localizedMetadata.title),
                                 "inLanguage": locale.languageTag,
-                                "category": localizedMetadata.category,
+                                ...(localizedMetadata.category ? { "articleSection": localizedMetadata.category } : {}),
                                 "keywords": localizedMetadata.keywords,
                                 "mainEntityOfPage": {
                                     "@type": "WebPage",

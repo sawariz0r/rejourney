@@ -29,8 +29,21 @@ export default function TermsOfService() {
                     <div className="bg-muted/30 border border-input rounded-lg p-8 space-y-6">
                         <div className="text-sm leading-relaxed space-y-6">
                             <p>
-                                These Terms of Service ("Terms") govern your access to and use of the Rejourney service ("Service"), provided by Rejourney ("we," "us," or "our"). By using the Service, you agree to be bound by these Terms.
+                                These Terms of Service ("Terms") govern your access to and use of the Rejourney service ("Service"), provided by Rejourney ("we," "us," or "our").
                             </p>
+                            <p>
+                                By using the Service, you agree to these Terms.
+                            </p>
+
+                            <div className="bg-background/60 border border-input p-4 rounded-md">
+                                <h2 className="text-sm font-bold uppercase mb-2">Quick Summary</h2>
+                                <ul className="list-disc list-inside space-y-1 text-xs">
+                                    <li>Use Rejourney only for lawful mobile and web observability.</li>
+                                    <li>Protect end-user privacy and configure masking for sensitive data.</li>
+                                    <li>Keep your account secure and pay any fees for your selected plan.</li>
+                                    <li>The full Terms below control if this summary conflicts with them.</li>
+                                </ul>
+                            </div>
 
                             <div className="bg-background/50 border border-input p-4 rounded-md mb-8">
                                 <h2 className="text-sm font-bold uppercase mb-2">Table of Contents</h2>
@@ -50,7 +63,13 @@ export default function TermsOfService() {
 
                             <h3 id="acceptance" className="text-base font-semibold mt-6 mb-2">1. Acceptance of Terms</h3>
                             <p>
-                                By accessing or using our Service, you agree to be bound by these Terms and our Privacy Policy. If you are using the Service on behalf of an organization, you agree to these Terms for that organization and represent that you have the authority to bind that organization to these Terms. In that case, "you" and "your" will refer to that organization.
+                                By accessing or using our Service, you agree to these Terms and our Privacy Policy.
+                            </p>
+                            <p>
+                                If you use the Service for an organization, you agree to these Terms for that organization. You also represent that you have authority to bind that organization.
+                            </p>
+                            <p>
+                                In that case, "you" and "your" refer to that organization.
                             </p>
 
                             <h3 id="service" className="text-base font-semibold mt-6 mb-2">2. Use of Service & Restrictions</h3>
@@ -59,32 +78,41 @@ export default function TermsOfService() {
                             </p>
                             <p className="mt-4 font-semibold italic">Prohibited Uses</p>
                             <p>
-                                You may not use the Service, directly or indirectly, for any unlawful, harmful, or abusive purpose. Without limiting the foregoing, you agree not to use the Service to:
+                                You may not use the Service, directly or indirectly, for any unlawful, harmful, or abusive purpose.
+                            </p>
+                            <p>
+                                Without limiting that rule, you agree not to use the Service to:
                             </p>
                             <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
                                 <li>Develop, operate, or support applications, websites, or services that contain or promote pornographic, sexually explicit, or adult content.</li>
-                                <li>Facilitate or enable illegal activities, including but not limited to the distribution of unlawful content, exploitation, or abuse.</li>
+                                <li>Facilitate or enable illegal activities, including unlawful content, exploitation, or abuse.</li>
                                 <li>Collect, monitor, or replay user sessions in a manner that violates applicable privacy, data protection, or consent laws.</li>
                                 <li>Engage in conduct that is deceptive, exploitative, or reasonably likely to cause harm to end users.</li>
-                                <li>To transmit "Sensitive Data" (e.g., government-issued IDs, health information, credit card numbers, or passwords) without utilizing Rejourney's masking or redaction tools.</li>
-                                <li>In any way that violates any applicable local, state, national, or international law.</li>
-                                <li>To infringe upon or violate our intellectual property rights or the intellectual property rights of others.</li>
-                                <li>To upload or transmit viruses, worms, or any other type of malicious code.</li>
-                                <li>Infringe upon the specific open source license detailed in the public source code</li>
-                                <li>To use the Service for any unauthorized commercial purposes or for the benefit of any third party.</li>
+                                <li>Transmit "Sensitive Data" (for example, government-issued IDs, health information, credit card numbers, or passwords) without using Rejourney's masking or redaction tools.</li>
+                                <li>Violate any applicable local, state, national, or international law.</li>
+                                <li>Infringe our intellectual property rights or the intellectual property rights of others.</li>
+                                <li>Upload or transmit viruses, worms, or other malicious code.</li>
+                                <li>Violate the specific open source license detailed in the public source code.</li>
+                                <li>Use the Service for unauthorized commercial purposes or for the benefit of any third party.</li>
                             </ul>
                             <p className="mt-4">
-                                We reserve the right, in our sole discretion, to investigate, suspend, or terminate access to the Service if we determine that your use violates this section or is otherwise inconsistent with the intended purpose of the Service.
+                                We may investigate, suspend, or terminate access to the Service if we determine that your use violates this section or is otherwise inconsistent with the intended purpose of the Service.
                             </p>
 
                             <h3 id="accounts" className="text-base font-semibold mt-6 mb-2">3. Accounts & Security</h3>
                             <p>
-                                You must provide accurate and complete information when creating an account. You are solely responsible for all activity that occurs under your account and for maintaining the confidentiality of your account credentials. You must notify us immediately of any breach of security or unauthorized use of your account.
+                                You must provide accurate and complete information when creating an account.
+                            </p>
+                            <p>
+                                You are responsible for all activity under your account and for keeping your account credentials confidential. You must notify us immediately of any security breach or unauthorized account use.
                             </p>
 
                             <h3 id="billing" className="text-base font-semibold mt-6 mb-2">4. Billing & Payments</h3>
                             <p>
-                                Service fees are based on the plan you select and your actual usage. Fees are non-refundable except as required by law. We reserve the right to change our fees or billing methods upon 30 days' notice. Your continued use of the Service after the change becomes effective constitutes your agreement to pay the modified fees.
+                                Service fees are based on the plan you select and your actual usage. Fees are non-refundable except as required by law.
+                            </p>
+                            <p>
+                                We may change our fees or billing methods with 30 days' notice. If you continue to use the Service after the change takes effect, you agree to pay the modified fees.
                             </p>
 
                             <h3 id="data" className="text-base font-semibold mt-6 mb-2">5. Data, Privacy & Compliance</h3>
@@ -93,16 +121,25 @@ export default function TermsOfService() {
                             </p>
                             <p className="mt-2 text-red-600 font-bold uppercase text-xs">Developer Responsibility:</p>
                             <p className="text-sm border-l-4 border-red-500 pl-4 py-2 bg-red-50/50">
-                                Rejourney provides default automatic privacy measures (such as text masking and PII hashing). However, <strong>these are provided "as-is" as default security tools</strong>. You as the developer or customer are ultimately responsible for ensuring that all sensitive user data is properly masked, redacted, or handled in accordance with your own privacy policies and applicable data protection laws. Rejourney is not responsible for any accidental collection of sensitive data if the default measures are insufficient for your specific application.
+                                Rejourney provides default automatic privacy measures, such as text masking and PII hashing. <strong>These are provided "as-is" as default security tools.</strong>
+                            </p>
+                            <p className="text-sm border-l-4 border-red-500 pl-4 py-2 bg-red-50/50">
+                                You, as the developer or customer, are responsible for ensuring that sensitive user data is properly masked, redacted, or handled under your own privacy policies and applicable data protection laws. Rejourney is not responsible for accidental collection of sensitive data if the default measures are insufficient for your application.
                             </p>
                             <p className="mt-4">
                                 <strong>GDPR Compliance:</strong> Rejourney is committed to GDPR compliance. We process data within the European Union and act as a Data Processor for the session data you collect.
                             </p>
                             <p className="mt-4">
-                                <strong>Anonymized and Aggregated Studies:</strong> You authorize Rejourney to create and use anonymized, aggregated, or de-identified data derived from Customer Data for product analytics, benchmarking, research, public reports, blog posts, articles, and other publications about usage patterns, performance, reliability, product trends, and similar findings. We will not publish raw session recordings, personal data, customer confidential information, or statistics that reasonably identify a specific customer, application, or end user without permission. Pseudonymized data is treated as personal data unless and until it has been rendered anonymous.
+                                <strong>Anonymized and Aggregated Studies:</strong> You authorize Rejourney to create and use anonymized, aggregated, or de-identified data derived from Customer Data for product analytics, benchmarking, research, public reports, blog posts, articles, and other publications about usage patterns, performance, reliability, product trends, and similar findings.
+                            </p>
+                            <p className="mt-2">
+                                We will not publish raw session recordings, personal data, customer confidential information, or statistics that reasonably identify a specific customer, application, or end user without permission. Pseudonymized data is treated as personal data unless and until it has been rendered anonymous.
                             </p>
                             <p className="mt-2 text-muted-foreground italic">
-                            Note: Session recordings are retained for 7 days by default, after which they are automatically deleted unless you have a paid subscription. Personally identifiable session metadata is retained for the duration of your session retention period. After a session recording is deleted, anonymized aggregate event data (containing no personal identifiers) may be retained indefinitely for product analytics, research, benchmarking, and public trend reporting.
+                                Note: Session recordings are retained for 7 days by default, after which they are automatically deleted unless you have a paid subscription.
+                            </p>
+                            <p className="mt-2 text-muted-foreground italic">
+                                Personally identifiable session metadata is retained for the duration of your session retention period. After a session recording is deleted, anonymized aggregate event data that contains no personal identifiers may be retained indefinitely for product analytics, research, benchmarking, and public trend reporting.
                             </p>
 
                             <h3 id="ip" className="text-base font-semibold mt-6 mb-2">6. Intellectual Property</h3>
@@ -110,7 +147,10 @@ export default function TermsOfService() {
                                 <strong>Our IP:</strong> The Service, including its software, logos, and designs, is the exclusive property of Rejourney and its licensors.
                             </p>
                             <p className="mt-2">
-                                <strong>Your IP:</strong> You retain all rights and ownership of the data you upload or collect through the Service ("Customer Data"). You grant us a limited license to process Customer Data to provide, secure, maintain, analyze, and improve the Service, and to create and use anonymized or aggregated data as described in these Terms, the Privacy Policy, and the DPA.
+                                <strong>Your IP:</strong> You retain all rights and ownership of the data you upload or collect through the Service ("Customer Data").
+                            </p>
+                            <p className="mt-2">
+                                You grant us a limited license to process Customer Data to provide, secure, maintain, analyze, and improve the Service. You also grant us a limited license to create and use anonymized or aggregated data as described in these Terms, the Privacy Policy, and the DPA.
                             </p>
                             <p className="mt-2">
                                 <strong>Publicity:</strong> Unless you request otherwise in writing, you grant us permission to use your name and logo on our website and in marketing materials to identify you as a Rejourney customer.
@@ -118,22 +158,34 @@ export default function TermsOfService() {
 
                             <h3 id="indemnity" className="text-base font-semibold mt-6 mb-2">7. Indemnification</h3>
                             <p>
-                                You agree to indemnify and hold harmless Rejourney and its officers, directors, and employees from and against any claims, liabilities, damages, and expenses (including legal fees) arising out of or in any way connected with your access to or use of the Service or your violation of these Terms.
+                                You agree to indemnify and hold harmless Rejourney and its officers, directors, and employees from claims, liabilities, damages, and expenses, including legal fees.
+                            </p>
+                            <p>
+                                This applies to matters arising out of, or connected with, your access to or use of the Service or your violation of these Terms.
                             </p>
 
                             <h3 id="liability" className="text-base font-semibold mt-6 mb-2">8. Limitation of Liability</h3>
                             <p>
-                                TO THE MAXIMUM EXTENT PERMITTED BY LAW, REJOURNEY SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES.
+                                To the maximum extent permitted by law, Rejourney shall not be liable for indirect, incidental, special, consequential, or punitive damages.
+                            </p>
+                            <p>
+                                Rejourney shall also not be liable for loss of profits or revenues, whether incurred directly or indirectly, or for loss of data, use, goodwill, or other intangible losses.
                             </p>
 
                             <h3 id="termination" className="text-base font-semibold mt-6 mb-2">9. Termination</h3>
                             <p>
-                                You may terminate your account at any time. We may suspend or terminate your access to the Service for any reason, including a breach of these Terms, upon notice. Upon termination, your right to use the Service will immediately cease, and you will have 30 days to export your metadata before it is permanently deleted.
+                                You may terminate your account at any time. We may suspend or terminate your access to the Service for any reason, including a breach of these Terms, upon notice.
+                            </p>
+                            <p>
+                                Upon termination, your right to use the Service will immediately cease. You will have 30 days to export your metadata before it is permanently deleted.
                             </p>
 
                             <h3 id="general" className="text-base font-semibold mt-6 mb-2">10. General Provisions</h3>
                             <p>
-                                <strong>Governing Law:</strong> These Terms shall be governed by the laws of the State of Texas, United States, without regard to its conflict of law provisions. Notwithstanding the foregoing, nothing in these Terms limits the application of the EU General Data Protection Regulation (GDPR) to the extent it applies to the processing of personal data of individuals in the European Economic Area.
+                                <strong>Governing Law:</strong> These Terms shall be governed by the laws of the State of Texas, United States, without regard to its conflict of law provisions.
+                            </p>
+                            <p className="mt-2">
+                                Nothing in these Terms limits the application of the EU General Data Protection Regulation (GDPR) to the extent it applies to personal data of individuals in the European Economic Area.
                             </p>
                             <p className="mt-2">
                                 <strong>Entire Agreement:</strong> These Terms, along with our Privacy Policy and DPA, constitute the entire agreement between you and Rejourney regarding the Service.

@@ -41,6 +41,8 @@ type ContentLocaleCopy = {
   articleMetaTitleSuffix: string;
   articleDefaultDescription: (title: string, keyword: string) => string;
   articleOnThisPage: string;
+  relatedArticlesHeading: string;
+  relatedArticlesIntro: string;
   backToEngineering: string;
   authorHeading: string;
   engineeringTeamLabel: string;
@@ -136,6 +138,8 @@ const englishContentCopy: ContentLocaleCopy = {
   articleDefaultDescription: (title, keyword) =>
     `${title}: a Rejourney engineering article about ${keyword}.`,
   articleOnThisPage: "On this page",
+  relatedArticlesHeading: "Related reading",
+  relatedArticlesIntro: "Keep going with nearby Rejourney engineering notes.",
   backToEngineering: "Back to Engineering Log",
   authorHeading: "Author",
   engineeringTeamLabel: "Rejourney Engineering Team",

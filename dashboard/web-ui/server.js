@@ -48,6 +48,11 @@ const LEGACY_PUBLIC_HTML_REDIRECTS = new Map([
   ['/index.html', '/'],
   ['/docs/index.html', '/docs/web/getting-started'],
   ['/pricing/index.html', '/pricing'],
+  ['/session-replay-software', '/session-replay-tools'],
+  ['/fullstory-alternative', '/alternatives/fullstory'],
+  ['/fullstory-alternatives', '/alternatives/fullstory'],
+  ['/%5D(https:/rejourney.co/', '/'],
+  ['/](https:/rejourney.co/', '/'],
 ]);
 
 function isEdgeCacheableHtmlPath(pathname) {
