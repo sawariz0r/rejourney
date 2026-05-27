@@ -2509,7 +2509,7 @@ export interface ErrorOverviewGroup {
     screenName: string | null;
     canOpenReplay?: boolean;
     logs?: string[];
-  };
+  } | null;
 }
 
 export interface ErrorsOverviewResponse {

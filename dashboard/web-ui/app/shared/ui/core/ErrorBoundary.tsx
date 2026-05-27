@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
+  fallbackClassName?: string;
 }
 
 interface State {
@@ -26,8 +27,10 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       const isDev = import.meta.env.DEV;
+      const fallbackClassName = this.props.fallbackClassName || 'min-h-screen flex items-center justify-center bg-background p-8';
+
       return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-8">
+        <div className={fallbackClassName}>
           <div className="max-w-md w-full">
             <div className="border-2 border-red-500 bg-red-50 p-6 rounded-lg">
               <h1 className="text-xl font-bold text-red-800 mb-4">Something went wrong</h1>

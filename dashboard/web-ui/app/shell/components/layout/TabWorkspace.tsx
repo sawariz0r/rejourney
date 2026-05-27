@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { SplitSquareVertical } from 'lucide-react';
 import { TabRegistry } from '~/shell/tabs/TabRegistry';
 import { useTabs } from '~/shared/providers/TabContext';
+import { ErrorBoundary as ClientErrorBoundary } from '~/shared/ui/core/ErrorBoundary';
 import { TabBar } from './TabBar';
 
 interface TabWorkspaceProps {
@@ -10,6 +11,7 @@ interface TabWorkspaceProps {
 }
 
 const TAB_DRAG_MIME = 'application/x-rejourney-tab-id';
+const PANE_ERROR_FALLBACK_CLASS = 'flex h-full min-h-[360px] items-center justify-center bg-background p-8';
 
 function stripPathPrefix(pathname: string): string {
     return pathname.replace(/^\/(dashboard|demo)/, '') || '/general';
@@ -47,6 +49,12 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
         if (!secondaryTab) return null;
         return TabRegistry.resolve(stripPathPrefix(secondaryTab.path));
     }, [secondaryTab]);
+    const primaryPaneKey = `${location.pathname}${location.search}`;
+    const primaryPaneContent = (
+        <ClientErrorBoundary key={`primary:${primaryPaneKey}`} fallbackClassName={PANE_ERROR_FALLBACK_CLASS}>
+            {children}
+        </ClientErrorBoundary>
+    );
 
     useEffect(() => {
         if (!isResizing) return;
@@ -95,7 +103,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
     if (hideTabChrome) {
         return (
             <div className="flex h-full min-h-0 flex-col bg-transparent">
-                <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+                <div className="min-h-0 flex-1 overflow-hidden">{primaryPaneContent}</div>
             </div>
         );
     }
@@ -116,7 +124,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
                     onDragLeave={() => setIsSplitDropActive(false)}
                     onDrop={handleDropToSplit}
                 >
-                    {children}
+                    {primaryPaneContent}
                     {isSplitDropActive && canSplit && (
                         <div className="absolute inset-0 z-20 border-2 border-dashed border-sky-400 bg-sky-50/70 pointer-events-none">
                             <div className="absolute inset-0 flex items-center justify-center">
@@ -141,7 +149,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
             <section className="flex min-w-0 flex-col border-r border-slate-200 h-full" style={{ width: `${splitRatio * 100}%` }}>
                 <TabBar group="primary" pathPrefix={tabPathPrefix} />
                 <div ref={primaryScrollRef} className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-10 pt-0">
-                    {children}
+                    {primaryPaneContent}
                 </div>
             </section>
 
@@ -158,7 +166,9 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
                 <div ref={secondaryScrollRef} className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-transparent pb-10 pt-0">
                     {SecondaryComponent && secondaryTabDefinition ? (
                         <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-slate-500">Loading tab…</div>}>
-                            <SecondaryComponent key={secondaryTab.id} {...(secondaryTabDefinition.props || {})} />
+                            <ClientErrorBoundary key={`secondary:${secondaryTab.id}:${secondaryTab.path}`} fallbackClassName={PANE_ERROR_FALLBACK_CLASS}>
+                                <SecondaryComponent {...(secondaryTabDefinition.props || {})} />
+                            </ClientErrorBoundary>
                         </Suspense>
                     ) : (
                         <div className="flex h-full items-center justify-center text-xs text-slate-500">

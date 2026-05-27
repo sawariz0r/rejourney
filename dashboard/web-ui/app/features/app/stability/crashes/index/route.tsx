@@ -118,6 +118,10 @@ export const CrashesList: React.FC = () => {
 
     const group = crashGroups.find((item) => item.name === expandedGroup);
     if (!group) return;
+    if (!group.sampleCrashId) {
+      setCrashDetails((prev) => ({ ...prev, [expandedGroup]: null }));
+      return;
+    }
 
     const fetchCrashForGroup = async () => {
       try {

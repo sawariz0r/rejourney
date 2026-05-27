@@ -238,14 +238,15 @@ const buildCrashRow = (group: CrashOverviewGroup): StabilityIssueRow => {
 };
 
 const buildErrorRow = (group: ErrorOverviewGroup): StabilityIssueRow => {
-  const topDevice = group.sampleError.deviceModel || topRecordKey(group.affectedDevices) || 'Unknown';
-  const topVersion = group.sampleError.appVersion || topRecordKey(group.affectedVersions) || '?';
-  const screenName = group.sampleError.screenName || group.screens[0] || null;
+  const sampleError = group.sampleError;
+  const topDevice = sampleError?.deviceModel || topRecordKey(group.affectedDevices) || 'Unknown';
+  const topVersion = sampleError?.appVersion || topRecordKey(group.affectedVersions) || '?';
+  const screenName = sampleError?.screenName || group.screens[0] || null;
   const title = group.errorName || 'Runtime error';
   const subtitle = group.message || 'No error message captured.';
 
   return {
-    key: `error:${group.fingerprint || group.sampleError.id || title}`,
+    key: `error:${group.fingerprint || sampleError?.id || title}`,
     kind: 'errors',
     title,
     subtitle,
@@ -257,20 +258,20 @@ const buildErrorRow = (group: ErrorOverviewGroup): StabilityIssueRow => {
     deviceLabel: formatDeviceModel(topDevice, 'Unknown'),
     appVersion: topVersion,
     screenName,
-    replaySessionId: group.sampleError.sessionId || null,
-    canOpenReplay: Boolean(group.sampleError.sessionId && group.sampleError.canOpenReplay),
+    replaySessionId: sampleError?.sessionId || null,
+    canOpenReplay: Boolean(sampleError?.sessionId && sampleError.canOpenReplay),
     searchText: [
       title,
       subtitle,
       group.fingerprint,
-      group.sampleError.id,
-      group.sampleError.sessionId,
+      sampleError?.id,
+      sampleError?.sessionId,
       screenName,
       ...group.screens,
       ...Object.keys(group.affectedDevices).map(getDeviceModelSearchText),
       ...Object.keys(group.affectedVersions),
     ].join(' ').toLowerCase(),
-    focusKeys: compactStrings([group.fingerprint, group.errorName, group.sampleError.id, group.sampleError.sessionId]),
+    focusKeys: compactStrings([group.fingerprint, group.errorName, sampleError?.id, sampleError?.sessionId]),
     source: group,
   };
 };
@@ -432,6 +433,10 @@ export const Stability: React.FC = () => {
     const projectId = currentProject?.id || (isDemoMode ? 'demo' : '');
     if (!projectId) return;
     if (Object.prototype.hasOwnProperty.call(crashDetails, expandedRow.key)) return;
+    if (!expandedRow.source.sampleCrashId) {
+      setCrashDetails((prev) => ({ ...prev, [expandedRow.key]: null }));
+      return;
+    }
 
     api.getCrash(projectId, expandedRow.source.sampleCrashId)
       .then((crash) => {
@@ -617,7 +622,8 @@ export const Stability: React.FC = () => {
     }
 
     if (row.kind === 'errors') {
-      const stackTrace = row.source.sampleError.stack;
+      const sampleError = row.source.sampleError;
+      const stackTrace = sampleError?.stack || null;
 
       return (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
@@ -686,7 +692,7 @@ export const Stability: React.FC = () => {
               <dl className="space-y-3 text-xs">
                 <div>
                   <dt className="mb-0.5 text-slate-500">Last Event</dt>
-                  <dd className="font-medium text-slate-800">{new Date(row.source.sampleError.timestamp || row.lastOccurred).toLocaleString()}</dd>
+                  <dd className="font-medium text-slate-800">{new Date(sampleError?.timestamp || row.lastOccurred).toLocaleString()}</dd>
                 </div>
                 <div>
                   <dt className="mb-0.5 text-slate-500">App Version</dt>

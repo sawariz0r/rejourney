@@ -204,7 +204,9 @@ export const ErrorsList: React.FC = () => {
               const topDeviceLabel = formatDeviceModel(topDevice, 'Unknown');
               const versionList = Object.keys(group.affectedVersions);
               const topVersion = versionList[0] || '?';
-              const canOpenReplay = Boolean(group.sampleError?.sessionId && group.sampleError.canOpenReplay);
+              const sampleError = group.sampleError;
+              const stackTrace = sampleError?.stack || null;
+              const canOpenReplay = Boolean(sampleError?.sessionId && sampleError.canOpenReplay);
 
               return (
                 <div
@@ -282,12 +284,14 @@ export const ErrorsList: React.FC = () => {
                                   Stack Trace Analysis
                                 </h4>
                                 <div className="flex items-center gap-1.5">
-                                   <NeoButton
+                                  <NeoButton
                                     variant="ghost"
                                     size="sm"
-                                    leftIcon={copiedStack === group.sampleError.stack ? <Check size={13} /> : <Copy size={13} />}
-                                    onClick={(e) => group.sampleError.stack && handleCopyStack(group.sampleError.stack, e)}
-                                    disabled={!group.sampleError.stack}
+                                    leftIcon={copiedStack === stackTrace ? <Check size={13} /> : <Copy size={13} />}
+                                    onClick={(e) => {
+                                      if (stackTrace) handleCopyStack(stackTrace, e);
+                                    }}
+                                    disabled={!stackTrace}
                                     className="h-7 text-xs px-2"
                                   >
                                     Copy
@@ -296,8 +300,10 @@ export const ErrorsList: React.FC = () => {
                                     variant="ghost"
                                     size="sm"
                                     leftIcon={<Download size={13} />}
-                                    onClick={(e) => group.sampleError.stack && handleDownloadStack(group.sampleError.stack, group.fingerprint, e)}
-                                    disabled={!group.sampleError.stack}
+                                    onClick={(e) => {
+                                      if (stackTrace) handleDownloadStack(stackTrace, group.fingerprint, e);
+                                    }}
+                                    disabled={!stackTrace}
                                     className="h-7 text-xs px-2"
                                   >
                                     Save
@@ -305,9 +311,9 @@ export const ErrorsList: React.FC = () => {
                                 </div>
                               </div>
 
-                              {group.sampleError.stack ? (
+                              {stackTrace ? (
                                 <div className="max-h-[400px] overflow-auto bg-[#0d1117] p-4 font-mono text-[11px] leading-relaxed text-slate-300 selection:bg-rose-900 overflow-x-auto">
-                                  {group.sampleError.stack}
+                                  {stackTrace}
                                 </div>
                               ) : (
                                 <div className="px-6 py-10 text-center text-sm text-slate-500 bg-slate-50">No stack trace captured for this occurrence.</div>
@@ -317,12 +323,12 @@ export const ErrorsList: React.FC = () => {
                            <div className="flex flex-wrap gap-4 text-xs">
                              <div className="flex items-center gap-1.5 text-slate-600 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
                                <Monitor size={12} className="text-slate-400" />
-                               <span className="font-semibold text-slate-700">Screen:</span> {group.sampleError.screenName || 'Unknown'}
+                               <span className="font-semibold text-slate-700">Screen:</span> {sampleError?.screenName || group.screens[0] || 'Unknown'}
                              </div>
-                             {group.sampleError.appVersion && (
+                             {(sampleError?.appVersion || topVersion !== '?') && (
                                <div className="flex items-center gap-1.5 text-slate-600 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">
                                  <Smartphone size={12} className="text-slate-400" />
-                                 <span className="font-semibold text-slate-700">App Version:</span> {group.sampleError.appVersion}
+                                 <span className="font-semibold text-slate-700">App Version:</span> {sampleError?.appVersion || topVersion}
                                </div>
                              )}
                            </div>
@@ -343,7 +349,7 @@ export const ErrorsList: React.FC = () => {
                                   className="w-full justify-center bg-rose-500 hover:bg-rose-600 focus:ring-rose-500 text-white border-0 py-2 shadow-sm"
                                   onClick={(e) => {
                                       e.stopPropagation();
-                                      navigate(`${pathPrefix}/sessions/${group.sampleError.sessionId}`);
+                                      if (sampleError?.sessionId) navigate(`${pathPrefix}/sessions/${sampleError.sessionId}`);
                                   }}
                                 >
                                   Play Session
@@ -362,12 +368,12 @@ export const ErrorsList: React.FC = () => {
                              <dl className="space-y-3 text-xs">
                                <div>
                                   <dt className="text-slate-500 mb-0.5">Occurred At</dt>
-                                  <dd className="font-medium text-slate-800">{new Date(group.sampleError.timestamp || group.lastOccurred).toLocaleString()}</dd>
+                                  <dd className="font-medium text-slate-800">{new Date(sampleError?.timestamp || group.lastOccurred).toLocaleString()}</dd>
                                </div>
                                <div>
                                   <dt className="text-slate-500 mb-0.5">Device</dt>
-                                  <dd className="font-medium text-slate-800" title={group.sampleError.deviceModel || topDevice}>
-                                    {formatDeviceModel(group.sampleError.deviceModel || topDevice, 'Unknown')}
+                                  <dd className="font-medium text-slate-800" title={sampleError?.deviceModel || topDevice}>
+                                    {formatDeviceModel(sampleError?.deviceModel || topDevice, 'Unknown')}
                                   </dd>
                                </div>
                                <div>
