@@ -3,7 +3,7 @@ import {
   Plus, ChevronDown, Loader, AlertOctagon, Calendar, LayoutGrid, Zap,
   Tag, Users, Route, GitMerge, Trash2, MousePointerClick,
   Timer, UserPlus, CheckCircle, AlertCircle, Search,
-  MonitorSmartphone,
+  MonitorSmartphone, Globe2, Megaphone,
 } from 'lucide-react';
 import { buildSessionQueryFromPrompt } from '~/shared/api/client';
 import {
@@ -11,12 +11,13 @@ import {
   type IssueCondition, type DateCondition, type ScreenCondition,
   type EventCondition, type MetadataCondition, type LifecycleCondition,
   type ConversionCondition, type PlatformCondition, type JourneyCondition,
+  type ReferralCondition, type UtmCondition, type UtmField,
   generateConditionId, generateGroupId,
-  groupsBuildHumanSummary,
+  groupsBuildHumanSummary, UTM_FIELD_META_KEYS,
 } from './queryBuilderTypes';
 import {
   type AvailableFilters, IssueRow, DateRow, ScreenRow, EventRow,
-  MetadataRow, LifecycleRow, PlatformRow, JourneyRow, ConversionRow,
+  MetadataRow, ReferralRow, UtmRow, LifecycleRow, PlatformRow, JourneyRow, ConversionRow,
 } from './ConditionRows';
 
 export type { AvailableFilters };
@@ -30,6 +31,10 @@ interface QueryBuilderProps {
   projectId?: string;
 }
 
+type AddRuleInit = {
+  utmField?: UtmField;
+};
+
 // ── Add-rule menu ─────────────────────────────────────────────────────────────
 
 const ADD_MENU: { type: ConditionType; label: string; desc: string; icon: React.ReactNode }[] = [
@@ -39,19 +44,32 @@ const ADD_MENU: { type: ConditionType; label: string; desc: string; icon: React.
   { type: 'event',     label: 'Event fired',       desc: 'Custom event with optional count',    icon: <Zap className="w-4 h-4" /> },
   { type: 'lifecycle', label: 'Lifecycle',         desc: 'First-time or returning users',       icon: <Users className="w-4 h-4" /> },
   { type: 'date',      label: 'Date / Time',       desc: 'When the session occurred',           icon: <Calendar className="w-4 h-4" /> },
+  { type: 'referral',  label: 'Referral',          desc: 'Web sessions by referrer/source',     icon: <Globe2 className="w-4 h-4" /> },
+  { type: 'utm',       label: 'UTM',               desc: 'Web sessions by campaign tags',       icon: <Megaphone className="w-4 h-4" /> },
   { type: 'metadata',  label: 'Metadata',          desc: 'Session metadata key=value',          icon: <Tag className="w-4 h-4" /> },
   { type: 'platform',  label: 'Platform',          desc: 'iOS, Android, or Web',                 icon: <MonitorSmartphone className="w-4 h-4" /> },
 ];
+
+const UTM_ADD_FIELD_ORDER: UtmField[] = ['source', 'medium', 'campaign', 'term', 'content', 'campaignId', 'sourcePlatform'];
 
 const BG: Record<ConditionType, string> = {
   screen: 'bg-violet-50 text-violet-700', journey: 'bg-teal-50 text-teal-700',
   issue: 'bg-[#f4f4f5] text-black', event: 'bg-[#dbeafe] text-black',
   lifecycle: 'bg-pink-50 text-pink-700', date: 'bg-sky-50 text-sky-700',
+  referral: 'bg-cyan-50 text-cyan-700', utm: 'bg-amber-50 text-amber-700',
   metadata: 'bg-emerald-50 text-emerald-700', platform: 'bg-cyan-50 text-cyan-700',
   conversion: 'bg-pink-50 text-pink-700',
 };
 
-function AddRuleMenu({ onAdd, presentTypes }: { onAdd: (t: ConditionType) => void; presentTypes: Set<ConditionType> }) {
+function AddRuleMenu({
+  onAdd,
+  presentTypes,
+  presentUtmFields,
+}: {
+  onAdd: (type: ConditionType, init?: AddRuleInit) => void;
+  presentTypes: Set<ConditionType>;
+  presentUtmFields: Set<UtmField>;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -70,10 +88,18 @@ function AddRuleMenu({ onAdd, presentTypes }: { onAdd: (t: ConditionType) => voi
         <div className="absolute left-0 top-full mt-1.5 z-50 w-72 overflow-hidden border-2 border-black bg-white shadow-neo">
           <div className="p-1.5">
             {ADD_MENU.map((item) => {
-              const used = presentTypes.has(item.type) && item.type !== 'screen' && item.type !== 'event';
+              const firstAvailableUtmField = UTM_ADD_FIELD_ORDER.find((field) => !presentUtmFields.has(field)) ?? 'source';
+              const used = item.type === 'utm'
+                ? UTM_ADD_FIELD_ORDER.every((field) => presentUtmFields.has(field))
+                : presentTypes.has(item.type) && item.type !== 'screen' && item.type !== 'event';
               return (
                 <button key={item.type} disabled={used}
-                  onClick={() => { if (!used) { onAdd(item.type); setOpen(false); } }}
+                  onClick={() => {
+                    if (!used) {
+                      onAdd(item.type, item.type === 'utm' ? { utmField: firstAvailableUtmField } : undefined);
+                      setOpen(false);
+                    }
+                  }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${used ? 'opacity-30 cursor-not-allowed' : 'hover:bg-[#ecfeff] cursor-pointer'}`}>
                   <div className={`border border-black p-2 ${BG[item.type]}`}>{item.icon}</div>
                   <div>
@@ -92,7 +118,7 @@ function AddRuleMenu({ onAdd, presentTypes }: { onAdd: (t: ConditionType) => voi
 
 // ── Default conditions ────────────────────────────────────────────────────────
 
-function makeCondition(type: ConditionType, filters: AvailableFilters): QueryCondition {
+function makeCondition(type: ConditionType, filters: AvailableFilters, init: AddRuleInit = {}): QueryCondition {
   const id = generateConditionId();
   switch (type) {
     case 'issue':     return { id, type, issueFilter: 'crashes' };
@@ -100,6 +126,12 @@ function makeCondition(type: ConditionType, filters: AvailableFilters): QueryCon
     case 'screen':    return { id, type, screenName: filters.screens[0] ?? '' };
     case 'event':     return { id, type, eventName: filters.events[0] ?? '' };
     case 'metadata':  return { id, type, metaKey: Object.keys(filters.metadata)[0] ?? '' };
+    case 'referral':  return { id, type, referralValue: filters.metadata.webReferral?.[0] ?? filters.metadata.webReferrerDomain?.[0] ?? filters.metadata.webAttributionSource?.[0] ?? '' };
+    case 'utm': {
+      const field = init.utmField ?? (Object.keys(UTM_FIELD_META_KEYS) as UtmField[])
+        .find((candidate) => (filters.metadata[UTM_FIELD_META_KEYS[candidate]] ?? []).length > 0) ?? 'source';
+      return { id, type, field, value: filters.metadata[UTM_FIELD_META_KEYS[field]]?.[0] ?? '' };
+    }
     case 'lifecycle': return { id, type, preset: 'returning_user', sessionWindowSize: 5 };
     case 'conversion':return { id, type, preset: 'checkout_bounced' };
     case 'platform':  return { id, type, platform: 'ios' };
@@ -119,6 +151,8 @@ function ConditionRow({ cond, onChange, onRemove, filters, loading }: {
     case 'screen':     return <ScreenRow cond={cond} onChange={onChange as (c: ScreenCondition) => void} onRemove={onRemove} filters={filters} loading={loading} />;
     case 'event':      return <EventRow cond={cond} onChange={onChange as (c: EventCondition) => void} onRemove={onRemove} filters={filters} loading={loading} />;
     case 'metadata':   return <MetadataRow cond={cond} onChange={onChange as (c: MetadataCondition) => void} onRemove={onRemove} filters={filters} loading={loading} />;
+    case 'referral':   return <ReferralRow cond={cond} onChange={onChange as (c: ReferralCondition) => void} onRemove={onRemove} filters={filters} loading={loading} />;
+    case 'utm':        return <UtmRow cond={cond} onChange={onChange as (c: UtmCondition) => void} onRemove={onRemove} filters={filters} loading={loading} />;
     case 'lifecycle':  return <LifecycleRow cond={cond} onChange={onChange as (c: LifecycleCondition) => void} onRemove={onRemove} />;
     case 'conversion': return <ConversionRow cond={cond} onChange={onChange as (c: ConversionCondition) => void} onRemove={onRemove} />;
     case 'platform':   return <PlatformRow cond={cond} onChange={onChange as (c: PlatformCondition) => void} onRemove={onRemove} />;
@@ -134,9 +168,14 @@ function GroupCard({ group, groupIndex, totalGroups, onChange, onRemove, filters
   filters: AvailableFilters; loading: boolean;
 }) {
   const presentTypes = new Set(group.conditions.map((c) => c.type));
+  const presentUtmFields = new Set(
+    group.conditions
+      .filter((condition): condition is UtmCondition => condition.type === 'utm')
+      .map((condition) => condition.field),
+  );
 
-  function addCond(type: ConditionType) {
-    onChange({ ...group, conditions: [...group.conditions, makeCondition(type, filters)] });
+  function addCond(type: ConditionType, init?: AddRuleInit) {
+    onChange({ ...group, conditions: [...group.conditions, makeCondition(type, filters, init)] });
   }
   function updateCond(id: string, updated: QueryCondition) {
     onChange({ ...group, conditions: group.conditions.map((c) => (c.id === id ? updated : c)) });
@@ -192,7 +231,7 @@ function GroupCard({ group, groupIndex, totalGroups, onChange, onRemove, filters
           </React.Fragment>
         ))}
         <div className="pt-1">
-          <AddRuleMenu onAdd={addCond} presentTypes={presentTypes} />
+          <AddRuleMenu onAdd={addCond} presentTypes={presentTypes} presentUtmFields={presentUtmFields} />
         </div>
       </div>
     </div>

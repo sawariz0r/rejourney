@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     BookOpen,
+    ChevronDown,
     ChevronRight,
     Check,
     Copy,
@@ -9,7 +10,9 @@ import {
     Info,
     Mail,
     MessageSquareWarning,
+    Search,
     User,
+    X,
 } from 'lucide-react';
 import {
     Area,
@@ -761,11 +764,23 @@ type MomentumCard = {
 const RETRO_CARD_ACCENTS = ['#67e8f9', '#86efac', '#f9a8d4', '#c4b5fd'];
 const DIRECT_REFERRAL_LABEL = 'Direct / none';
 const NO_UTM_LABEL = 'No UTM tag';
+const CUSTOM_EVENT_SELECTION_STORAGE_PREFIX = 'rejourney.general.customEventSelection';
 const MAX_VERSION_RELEASE_MARKERS = 6;
 const VERSION_RELEASE_TOOLTIP_WINDOW_MS = 36 * 60 * 60 * 1000;
 const VERSION_TOOLTIP_WRAPPER_STYLE: React.CSSProperties = { zIndex: 40 };
 const VERSION_TOOLTIP_ALLOW_ESCAPE = { x: true, y: true };
 const VERSION_TOOLTIP_POSITION = { x: 12, y: -8 };
+
+function parseStoredCustomEventSelection(raw: string | null): string[] | null {
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return null;
+        return Array.from(new Set(parsed.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)));
+    } catch {
+        return null;
+    }
+}
 
 type ReleaseLabelViewBox = {
     x?: number;
@@ -782,6 +797,7 @@ type ReferralSourceRow = {
 };
 
 type ReferralSourceMode = 'referrer' | 'utm';
+type ReferralUtmDimension = keyof UtmAttribution;
 
 type UtmAttribution = {
     source: string | null;
@@ -792,6 +808,26 @@ type UtmAttribution = {
     content: string | null;
     sourcePlatform: string | null;
 };
+
+const REFERRAL_UTM_DIMENSIONS: Array<{
+    key: ReferralUtmDimension;
+    label: string;
+    emptyLabel: string;
+}> = [
+    { key: 'source', label: 'Source', emptyLabel: 'No UTM source' },
+    { key: 'medium', label: 'Medium', emptyLabel: 'No UTM medium' },
+    { key: 'campaign', label: 'Campaign', emptyLabel: 'No UTM campaign' },
+    { key: 'term', label: 'Term', emptyLabel: 'No UTM term' },
+    { key: 'content', label: 'Content', emptyLabel: 'No UTM content' },
+    { key: 'campaignId', label: 'Campaign ID', emptyLabel: 'No UTM campaign ID' },
+    { key: 'sourcePlatform', label: 'Source platform', emptyLabel: 'No UTM source platform' },
+];
+
+const REFERRAL_UTM_DIMENSION_META: Record<ReferralUtmDimension, { label: string; emptyLabel: string }> =
+    REFERRAL_UTM_DIMENSIONS.reduce((acc, dimension) => {
+        acc[dimension.key] = { label: dimension.label, emptyLabel: dimension.emptyLabel };
+        return acc;
+    }, {} as Record<ReferralUtmDimension, { label: string; emptyLabel: string }>);
 
 function readMetadataStringValue(metadata: Record<string, unknown> | undefined, keys: string[]): string | null {
     if (!metadata || typeof metadata !== 'object') return null;
@@ -867,33 +903,33 @@ function getSessionUtmAttribution(session: RecordingSession): UtmAttribution {
     };
 }
 
-function getUtmRowParts(utm: UtmAttribution): { key: string; source: string; detail: string } {
-    if (!utm.source && !utm.medium && !utm.campaign && !utm.campaignId && !utm.term && !utm.content && !utm.sourcePlatform) {
-        return { key: '__no_utm__', source: NO_UTM_LABEL, detail: 'No campaign parameters captured' };
+function getUtmRowParts(utm: UtmAttribution, dimension: ReferralUtmDimension): { key: string; source: string; detail: string } {
+    const dimensionMeta = REFERRAL_UTM_DIMENSION_META[dimension];
+    const selectedValue = utm[dimension];
+    const hasAnyUtm = Boolean(utm.source || utm.medium || utm.campaign || utm.campaignId || utm.term || utm.content || utm.sourcePlatform);
+
+    if (!selectedValue) {
+        return {
+            key: `__no_utm_${dimension}__`,
+            source: hasAnyUtm ? dimensionMeta.emptyLabel : NO_UTM_LABEL,
+            detail: hasAnyUtm ? `${dimensionMeta.label} was not captured` : 'No campaign parameters captured',
+        };
     }
 
-    const source = utm.campaign || utm.campaignId || utm.source || 'Unnamed campaign';
     const detailParts = [
-        utm.campaign && utm.campaignId ? `id ${utm.campaignId}` : null,
-        utm.source ? `source ${utm.source}` : null,
-        utm.medium ? `medium ${utm.medium}` : null,
-        !utm.medium && utm.sourcePlatform ? `platform ${utm.sourcePlatform}` : null,
-        !utm.campaign && !utm.campaignId && utm.content ? `content ${utm.content}` : null,
-        !utm.campaign && !utm.campaignId && !utm.content && utm.term ? `term ${utm.term}` : null,
+        dimension !== 'campaign' && utm.campaign ? `campaign ${utm.campaign}` : null,
+        dimension !== 'campaignId' && utm.campaignId ? `id ${utm.campaignId}` : null,
+        dimension !== 'source' && utm.source ? `source ${utm.source}` : null,
+        dimension !== 'medium' && utm.medium ? `medium ${utm.medium}` : null,
+        dimension !== 'sourcePlatform' && utm.sourcePlatform ? `platform ${utm.sourcePlatform}` : null,
+        dimension !== 'content' && utm.content ? `content ${utm.content}` : null,
+        dimension !== 'term' && utm.term ? `term ${utm.term}` : null,
     ].filter((part): part is string => Boolean(part));
 
     return {
-        key: [
-            utm.campaign || '',
-            utm.campaignId || '',
-            utm.source || '',
-            utm.medium || '',
-            utm.content || '',
-            utm.term || '',
-            utm.sourcePlatform || '',
-        ].join('::'),
-        source,
-        detail: detailParts.join(' / ') || 'Campaign parameters captured',
+        key: `${dimension}:${selectedValue}`,
+        source: selectedValue,
+        detail: detailParts.join(' / ') || `${dimensionMeta.label} captured`,
     };
 }
 
@@ -1081,6 +1117,10 @@ export const GeneralOverview: React.FC = () => {
     const { timeRange, setTimeRange } = useSharedRejourneyTimeRange(selectedProject?.id);
     const { platformLens } = useSharedPlatformLens(selectedProject?.id, selectedProject?.platforms);
     const platform = platformLensToSessionPlatform(platformLens);
+    const customEventSelectionStorageKey = useMemo(
+        () => selectedProject?.id ? `${CUSTOM_EVENT_SELECTION_STORAGE_PREFIX}:${selectedProject.id}:${platformLens}` : null,
+        [platformLens, selectedProject?.id],
+    );
 
     const [isLoading, setIsLoading] = useState(true);
     const [isHeavyLoading, setIsHeavyLoading] = useState(true);
@@ -1100,8 +1140,11 @@ export const GeneralOverview: React.FC = () => {
     const [copiedDocsPrompt, setCopiedDocsPrompt] = useState(false);
     const [copiedContactEmail, setCopiedContactEmail] = useState(false);
     const [referralSourceMode, setReferralSourceMode] = useState<ReferralSourceMode>('referrer');
+    const [referralUtmDimension, setReferralUtmDimension] = useState<ReferralUtmDimension>('source');
     const [selectedCustomEventNames, setSelectedCustomEventNames] = useState<string[]>([]);
     const [customEventSelectionTouched, setCustomEventSelectionTouched] = useState(false);
+    const [customEventSearchQuery, setCustomEventSearchQuery] = useState('');
+    const [hydratedCustomEventSelectionKey, setHydratedCustomEventSelectionKey] = useState<string | null>(null);
 
     useEffect(() => {
         if (!selectedProject?.id) {
@@ -1358,7 +1401,7 @@ export const GeneralOverview: React.FC = () => {
         for (const session of webSessions) {
             const referralSource = referralSourceMode === 'referrer' ? getSessionReferralSource(session) : null;
             const parts = referralSourceMode === 'utm'
-                ? getUtmRowParts(getSessionUtmAttribution(session))
+                ? getUtmRowParts(getSessionUtmAttribution(session), referralUtmDimension)
                 : {
                     key: referralSource || DIRECT_REFERRAL_LABEL,
                     source: referralSource || DIRECT_REFERRAL_LABEL,
@@ -1393,7 +1436,7 @@ export const GeneralOverview: React.FC = () => {
             total: webSessions.length,
             rows,
         };
-    }, [referralSourceMode, webReferralSessions]);
+    }, [referralSourceMode, referralUtmDimension, webReferralSessions]);
     const isMobileLens = platform === 'mobile';
 
     const engagementMixChartData = useMemo<EngagementMixChartRow[]>(() => {
@@ -1660,23 +1703,81 @@ export const GeneralOverview: React.FC = () => {
     );
 
     useEffect(() => {
-        setCustomEventSelectionTouched(false);
-    }, [selectedProject?.id, timeRange]);
+        setCustomEventSearchQuery('');
+
+        if (!customEventSelectionStorageKey || typeof window === 'undefined') {
+            setSelectedCustomEventNames([]);
+            setCustomEventSelectionTouched(false);
+            setHydratedCustomEventSelectionKey(customEventSelectionStorageKey);
+            return;
+        }
+
+        const storedSelection = parseStoredCustomEventSelection(window.localStorage.getItem(customEventSelectionStorageKey));
+        setSelectedCustomEventNames(storedSelection ?? []);
+        setCustomEventSelectionTouched(storedSelection !== null);
+        setHydratedCustomEventSelectionKey(customEventSelectionStorageKey);
+    }, [customEventSelectionStorageKey]);
 
     useEffect(() => {
+        if (hydratedCustomEventSelectionKey !== customEventSelectionStorageKey) return;
         setSelectedCustomEventNames((current) => {
-            const validCurrent = current.filter((eventName) => customEventNameSet.has(eventName));
-            if (!customEventSelectionTouched || validCurrent.length === 0) {
+            if (!customEventSelectionTouched) {
                 return defaultCustomEventNames;
             }
-            return validCurrent;
+            return current;
         });
-    }, [customEventNameSet, customEventSelectionTouched, defaultCustomEventNames]);
+    }, [customEventSelectionStorageKey, customEventSelectionTouched, defaultCustomEventNames, hydratedCustomEventSelectionKey]);
+
+    useEffect(() => {
+        if (
+            !customEventSelectionStorageKey
+            || hydratedCustomEventSelectionKey !== customEventSelectionStorageKey
+            || !customEventSelectionTouched
+            || typeof window === 'undefined'
+        ) {
+            return;
+        }
+
+        try {
+            const selection = Array.from(new Set(selectedCustomEventNames));
+            window.localStorage.setItem(customEventSelectionStorageKey, JSON.stringify(selection));
+        } catch {
+            // Local persistence is a convenience; keep in-memory selection working if storage is blocked.
+        }
+    }, [
+        customEventSelectionStorageKey,
+        customEventSelectionTouched,
+        hydratedCustomEventSelectionKey,
+        selectedCustomEventNames,
+    ]);
 
     const selectedCustomEvents = useMemo(
         () => selectedCustomEventNames.filter((eventName) => customEventNameSet.has(eventName)),
         [selectedCustomEventNames, customEventNameSet],
     );
+
+    const customEventPickerOptions = useMemo(() => {
+        const searchTerm = customEventSearchQuery.trim().toLowerCase();
+        const selectedIndexByName = new Map(selectedCustomEvents.map((eventName, index) => [eventName, index]));
+
+        return customEvents
+            .map((event, index) => ({
+                ...event,
+                sourceIndex: index,
+            }))
+            .filter((event) => !searchTerm || event.name.toLowerCase().includes(searchTerm))
+            .sort((a, b) => {
+                const aSelectedIndex = selectedIndexByName.get(a.name);
+                const bSelectedIndex = selectedIndexByName.get(b.name);
+                const aIsSelected = aSelectedIndex !== undefined;
+                const bIsSelected = bSelectedIndex !== undefined;
+
+                if (aIsSelected && bIsSelected) return aSelectedIndex - bSelectedIndex;
+                if (aIsSelected) return -1;
+                if (bIsSelected) return 1;
+                return a.sourceIndex - b.sourceIndex;
+            });
+    }, [customEventSearchQuery, customEvents, selectedCustomEvents]);
 
     const customEventTrendData = useMemo<CustomEventTrendRow[]>(() => {
         const dailyEvents = overviewObs?.dailyCustomEvents || [];
@@ -1710,6 +1811,11 @@ export const GeneralOverview: React.FC = () => {
                 ? current.filter((name) => name !== eventName)
                 : [...current, eventName]
         ));
+    }, []);
+
+    const handleClearCustomEventSelection = useCallback(() => {
+        setCustomEventSelectionTouched(true);
+        setSelectedCustomEventNames([]);
     }, []);
 
     const recommendedSessions = useMemo(
@@ -2044,21 +2150,38 @@ export const GeneralOverview: React.FC = () => {
                                     className="xl:col-span-4"
                                     accentClassName="bg-[#f9a8d4]"
                                     action={(
-                                        <div className="inline-flex overflow-hidden border border-black bg-white text-[10px] font-black uppercase">
-                                            {([
-                                                ['referrer', 'Referrers'],
-                                                ['utm', 'UTM'],
-                                            ] as const).map(([mode, label]) => (
-                                                <button
-                                                    key={mode}
-                                                    type="button"
-                                                    aria-pressed={referralSourceMode === mode}
-                                                    onClick={() => setReferralSourceMode(mode)}
-                                                    className={`min-h-7 px-2.5 transition ${referralSourceMode === mode ? 'bg-black text-white' : 'text-black hover:bg-[#f8fafc]'}`}
-                                                >
-                                                    {label}
-                                                </button>
-                                            ))}
+                                        <div className="flex flex-wrap items-center justify-end gap-2">
+                                            <div className="inline-flex overflow-hidden border border-black bg-white text-[10px] font-black uppercase">
+                                                {([
+                                                    ['referrer', 'Referrers'],
+                                                    ['utm', 'UTM'],
+                                                ] as const).map(([mode, label]) => (
+                                                    <button
+                                                        key={mode}
+                                                        type="button"
+                                                        aria-pressed={referralSourceMode === mode}
+                                                        onClick={() => setReferralSourceMode(mode)}
+                                                        className={`min-h-7 px-2.5 transition ${referralSourceMode === mode ? 'bg-black text-white' : 'text-black hover:bg-[#f8fafc]'}`}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {referralSourceMode === 'utm' ? (
+                                                <div className="relative inline-flex items-center">
+                                                    <select
+                                                        value={referralUtmDimension}
+                                                        onChange={(event) => setReferralUtmDimension(event.target.value as ReferralUtmDimension)}
+                                                        aria-label="UTM dimension"
+                                                        className="min-h-7 appearance-none border border-black bg-white pl-2.5 pr-7 text-[10px] font-black uppercase text-black outline-none transition hover:bg-[#f8fafc] focus:ring-2 focus:ring-black"
+                                                    >
+                                                        {REFERRAL_UTM_DIMENSIONS.map((dimension) => (
+                                                            <option key={dimension.key} value={dimension.key}>{dimension.label}</option>
+                                                        ))}
+                                                    </select>
+                                                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500" />
+                                                </div>
+                                            ) : null}
                                         </div>
                                     )}
                                 >
@@ -2081,7 +2204,7 @@ export const GeneralOverview: React.FC = () => {
                                             <div key={row.key} className="group min-w-0">
                                                 <div className="flex min-w-0 items-center gap-3">
                                                     <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center border border-black bg-[#eef4ff] text-xs font-black uppercase text-black">
-                                                        {row.source === DIRECT_REFERRAL_LABEL || row.source === NO_UTM_LABEL ? (
+                                                        {row.source === DIRECT_REFERRAL_LABEL || row.source.startsWith('No UTM') ? (
                                                             <Globe2 className="h-4 w-4" />
                                                         ) : (
                                                             row.source.slice(0, 1)
@@ -2107,7 +2230,9 @@ export const GeneralOverview: React.FC = () => {
                                     </div>
                                 ) : (
                                     <div className="flex flex-1 items-center justify-center py-8 text-center text-xs text-slate-400">
-                                        {referralSourceMode === 'utm' ? 'No web UTM attribution observed for this filter.' : 'No web referral sources observed for this filter.'}
+                                        {referralSourceMode === 'utm'
+                                            ? `No web UTM ${REFERRAL_UTM_DIMENSION_META[referralUtmDimension].label.toLowerCase()} observed for this filter.`
+                                            : 'No web referral sources observed for this filter.'}
                                     </div>
                                 )}
                                 </GA4Card>
@@ -2465,87 +2590,147 @@ export const GeneralOverview: React.FC = () => {
                                 className="xl:col-span-7"
                                 accentClassName="bg-[#c4b5fd]"
                                 action={customEvents.length > 0 ? (
-                                    <span className="border border-[#dadce0] bg-[#f8fafc] px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+                                    <span className={`border px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                                        selectedCustomEvents.length > 0
+                                            ? 'border-emerald-700 bg-emerald-50 text-emerald-700'
+                                            : 'border-[#dadce0] bg-[#f8fafc] text-slate-600'
+                                    }`}
+                                    >
                                         {selectedCustomEvents.length} selected
                                     </span>
                                 ) : null}
                             >
                                 {customEvents.length > 0 ? (
                                     <>
-                                        <div className="mb-3 max-h-[76px] overflow-y-auto pr-1">
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {customEvents.map((event, index) => {
-                                                    const isSelected = selectedCustomEvents.includes(event.name);
-                                                    return (
+                                        <div className="mb-3 space-y-2">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <label className="relative min-w-[220px] flex-1">
+                                                    <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                                    <input
+                                                        type="search"
+                                                        value={customEventSearchQuery}
+                                                        onChange={(event) => setCustomEventSearchQuery(event.target.value)}
+                                                        placeholder="Search events"
+                                                        aria-label="Search custom events"
+                                                        className="h-7 w-full border border-[#dadce0] bg-white pl-7 pr-8 text-[11px] font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 hover:border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                                                    />
+                                                    {customEventSearchQuery ? (
                                                         <button
-                                                            key={event.name}
                                                             type="button"
-                                                            onClick={() => handleToggleCustomEvent(event.name)}
-                                                            className={`inline-flex min-w-0 items-center gap-1.5 border px-2 py-1 text-[10px] font-semibold transition-colors ${
-                                                                isSelected
-                                                                    ? 'border-black bg-black text-white'
-                                                                    : 'border-[#dadce0] bg-white text-slate-600 hover:border-black hover:text-black'
-                                                            }`}
-                                                            title={event.name}
+                                                            onClick={() => setCustomEventSearchQuery('')}
+                                                            aria-label="Clear custom event search"
+                                                            className="absolute right-1 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center border border-transparent text-slate-400 transition hover:border-[#dadce0] hover:text-slate-700"
                                                         >
-                                                            <span
-                                                                className="h-2 w-2 shrink-0 border border-black"
-                                                                style={{ backgroundColor: CUSTOM_EVENT_TREND_COLORS[index % CUSTOM_EVENT_TREND_COLORS.length] }}
-                                                            />
-                                                            <span className="max-w-[11rem] truncate">{event.name}</span>
-                                                            <span className={isSelected ? 'text-white/70' : 'text-slate-400'}>
-                                                                {formatCompact(event.count)}
-                                                            </span>
+                                                            <X className="h-3.5 w-3.5" />
                                                         </button>
-                                                    );
-                                                })}
+                                                    ) : null}
+                                                </label>
+                                                <span className="inline-flex h-7 items-center border border-[#dadce0] bg-[#f8fafc] px-2 text-[10px] font-semibold uppercase text-slate-500">
+                                                    {customEventPickerOptions.length}/{customEvents.length} events
+                                                </span>
+                                                {selectedCustomEvents.length > 0 ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleClearCustomEventSelection}
+                                                        className="inline-flex h-7 items-center gap-1.5 border border-[#dadce0] bg-white px-2 text-[10px] font-semibold uppercase text-slate-600 transition hover:border-emerald-600 hover:text-emerald-700"
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                        Clear
+                                                    </button>
+                                                ) : null}
+                                            </div>
+                                            <div className="max-h-[82px] overflow-y-auto pr-1">
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {customEventPickerOptions.map((event) => {
+                                                        const selectedIndex = selectedCustomEvents.indexOf(event.name);
+                                                        const isSelected = selectedIndex >= 0;
+                                                        const colorIndex = isSelected ? selectedIndex : event.sourceIndex;
+                                                        const eventColor = CUSTOM_EVENT_TREND_COLORS[colorIndex % CUSTOM_EVENT_TREND_COLORS.length];
+                                                        return (
+                                                            <button
+                                                                key={event.name}
+                                                                type="button"
+                                                                aria-pressed={isSelected}
+                                                                onClick={() => handleToggleCustomEvent(event.name)}
+                                                                className={`inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 border px-2 text-left text-[10px] font-semibold transition-colors ${
+                                                                    isSelected
+                                                                        ? 'border-emerald-700 bg-emerald-600 text-white'
+                                                                        : 'border-[#dadce0] bg-white text-slate-600 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800'
+                                                                }`}
+                                                                title={event.name}
+                                                            >
+                                                                <span className="flex min-w-0 items-center gap-1.5">
+                                                                    <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center border ${
+                                                                        isSelected ? 'border-white/70 bg-emerald-500' : 'border-slate-300 bg-white'
+                                                                    }`}
+                                                                    >
+                                                                        {isSelected ? <Check className="h-2.5 w-2.5 text-white" /> : null}
+                                                                    </span>
+                                                                    <span
+                                                                        className={`h-2 w-2 shrink-0 border ${isSelected ? 'border-white/70' : 'border-black'}`}
+                                                                        style={{ backgroundColor: eventColor }}
+                                                                    />
+                                                                    <span className="max-w-[12rem] truncate sm:max-w-[14rem]">{event.name}</span>
+                                                                </span>
+                                                                <span className={isSelected ? 'shrink-0 text-emerald-100' : 'shrink-0 text-slate-400'}>
+                                                                    {formatCompact(event.count)}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                    {customEventPickerOptions.length === 0 ? (
+                                                        <div className="flex h-14 w-full items-center justify-center border border-dashed border-[#dadce0] bg-[#f8fafc] text-xs text-slate-400">
+                                                            No matching events.
+                                                        </div>
+                                                    ) : null}
+                                                </div>
                                             </div>
                                         </div>
 
                                         {customEventTrendData.length > 0 && selectedCustomEvents.length > 0 ? (
-                                        <div className="h-[220px]">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <LineChart data={customEventTrendData} margin={{ top: 28, right: 8, left: -20, bottom: 0 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                                    <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
-                                                    <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                                                    <Tooltip
-                                                        allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
-                                                        position={VERSION_TOOLTIP_POSITION}
-                                                        wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
-                                                        content={(
-                                                            <VersionAwareChartTooltip
-                                                                releaseMarkers={customEventVersionMarkers}
-                                                                formatter={(value, name) => [formatCompact(value ?? 0), name ?? 'Events']}
+                                            <div className="h-[220px]">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <LineChart data={customEventTrendData} margin={{ top: 28, right: 8, left: -20, bottom: 0 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                                        <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
+                                                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                                                        <Tooltip
+                                                            allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
+                                                            position={VERSION_TOOLTIP_POSITION}
+                                                            wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
+                                                            content={(
+                                                                <VersionAwareChartTooltip
+                                                                    releaseMarkers={customEventVersionMarkers}
+                                                                    formatter={(value, name) => [formatCompact(value ?? 0), name ?? 'Events']}
+                                                                />
+                                                            )}
+                                                        />
+                                                        {selectedCustomEvents.map((eventName, index) => (
+                                                            <Line
+                                                                key={eventName}
+                                                                type="monotone"
+                                                                dataKey={eventName}
+                                                                stroke={CUSTOM_EVENT_TREND_COLORS[index % CUSTOM_EVENT_TREND_COLORS.length]}
+                                                                strokeWidth={2}
+                                                                dot={false}
+                                                                name={eventName}
+                                                                isAnimationActive={false}
                                                             />
-                                                        )}
-                                                    />
-                                                    {selectedCustomEvents.map((eventName, index) => (
-                                                        <Line
-                                                            key={eventName}
-                                                            type="monotone"
-                                                            dataKey={eventName}
-                                                            stroke={CUSTOM_EVENT_TREND_COLORS[index % CUSTOM_EVENT_TREND_COLORS.length]}
-                                                            strokeWidth={2}
-                                                            dot={false}
-                                                            name={eventName}
-                                                            isAnimationActive={false}
-                                                        />
-                                                    ))}
-                                                    {customEventVersionMarkers.map((marker, index) => (
-                                                        <ReferenceLine
-                                                            key={`custom-event-version-${marker.version}-${marker.dateKey}`}
-                                                            x={marker.dateKey}
-                                                            stroke="#334155"
-                                                            strokeDasharray="4 4"
-                                                            strokeWidth={1.4}
-                                                            ifOverflow="extendDomain"
-                                                            label={buildVersionReleaseLineLabel(marker.version, index)}
-                                                        />
-                                                    ))}
-                                                </LineChart>
-                                            </ResponsiveContainer>
-                                        </div>
+                                                        ))}
+                                                        {customEventVersionMarkers.map((marker, index) => (
+                                                            <ReferenceLine
+                                                                key={`custom-event-version-${marker.version}-${marker.dateKey}`}
+                                                                x={marker.dateKey}
+                                                                stroke="#334155"
+                                                                strokeDasharray="4 4"
+                                                                strokeWidth={1.4}
+                                                                ifOverflow="extendDomain"
+                                                                label={buildVersionReleaseLineLabel(marker.version, index)}
+                                                            />
+                                                        ))}
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            </div>
                                         ) : (
                                             <div className="flex h-[220px] items-center justify-center text-center text-xs text-slate-400">
                                                 {selectedCustomEvents.length === 0 ? 'No custom events selected.' : 'No daily event trend data.'}

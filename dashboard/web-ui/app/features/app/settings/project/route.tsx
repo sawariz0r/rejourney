@@ -1077,13 +1077,16 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
   const platformCountLabel = platformLabels.length === 1 ? '1 platform' : `${platformLabels.length} platforms`;
   const privacyTone: ProjectSettingsTone = textInputMasking === 'all' ? 'emerald' : 'amber';
   const navItems = [
-    { href: '#project-profile', label: 'Project Profile', detail: platformCountLabel },
-    { href: '#sdk-intake', label: 'SDK Intake', detail: observabilityLabel },
-    { href: '#capture-budget', label: 'Replay Quality', detail: `${displayedSampleRate}% sample` },
-    { href: '#privacy', label: 'Privacy', detail: textInputMasking === 'all' ? 'Mask all inputs' : 'Secure only' },
-    { href: '#developer-setup', label: 'Developer Setup', detail: isSelfHosted ? `${apiKeys.length} API keys` : 'Client keys' },
-    ...(canEdit ? [{ href: '#danger-zone', label: 'Danger Zone', detail: 'Protected action' }] : []),
+    { href: '#project-profile', label: 'Project Profile' },
+    { href: '#sdk-intake', label: 'SDK Intake' },
+    { href: '#capture-budget', label: 'Replay Quality' },
+    { href: '#privacy', label: 'Privacy' },
+    { href: '#developer-setup', label: 'Developer Setup' },
+    ...(canEdit ? [{ href: '#danger-zone', label: 'Danger Zone' }] : []),
   ];
+  const activeSectionHref = navItems.some((item) => item.href === location.hash)
+    ? location.hash
+    : navItems[0]?.href;
 
   return (
     <SettingsLayout
@@ -1093,24 +1096,22 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
       iconColor="bg-[#f4f4f5]"
       headerAction={!canEdit ? <NeoBadge variant="warning">View Only</NeoBadge> : undefined}
     >
-      <div className="project-settings-console grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="project-settings-rail dashboard-surface p-4">
-          <div className="border-b border-slate-100 pb-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Project Map</p>
-            <h2 className="mt-2 truncate text-lg font-semibold text-slate-950">{project.name}</h2>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <StatusPill label={observabilityLabel} tone={observabilityTone} />
-              <StatusPill label={platformCountLabel} tone="slate" />
-            </div>
+      <div className="project-settings-console grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="project-settings-rail" aria-label="Project settings navigation">
+          <div className="project-settings-rail-header">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sections</p>
           </div>
 
-          <nav className="mt-3 space-y-1" aria-label="Project settings sections">
+          <nav className="project-settings-rail-nav" aria-label="Project settings sections">
             {navItems.map((item) => (
-              <a key={item.href} href={item.href} className="project-settings-rail-item">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-slate-900">{item.label}</span>
-                  <span className="block truncate text-xs font-medium text-slate-500">{item.detail}</span>
-                </span>
+              <a
+                key={item.href}
+                href={item.href}
+                aria-current={activeSectionHref === item.href ? 'true' : undefined}
+                className="project-settings-rail-item"
+              >
+                <span className="project-settings-rail-marker" />
+                <span className="truncate">{item.label}</span>
               </a>
             ))}
           </nav>
@@ -1320,7 +1321,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
 
             <SettingRow
               title="Session replay"
-              description="Controls whether captured sessions include replay media."
+              description="Turn off for OBSERVE ONLY mode."
             >
               <div className="project-settings-toggle-card dashboard-inner-surface flex items-center justify-between gap-4 bg-white p-4">
                 <div className="min-w-0">

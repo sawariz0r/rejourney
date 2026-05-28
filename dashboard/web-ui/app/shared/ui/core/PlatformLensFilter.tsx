@@ -9,9 +9,9 @@ const PLATFORM_LENS_OPTIONS: {
     title: string;
     icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }[] = [
-    { value: 'all', label: 'All data', shortLabel: 'All', title: 'Show web, iOS, and Android data', icon: MonitorSmartphone },
-    { value: 'mobile', label: 'Mobile', shortLabel: 'Mobile', title: 'Show iOS and Android data', icon: Smartphone },
-    { value: 'web', label: 'Web', shortLabel: 'Web', title: 'Show browser data', icon: Monitor },
+    { value: 'all', label: 'All sessions', shortLabel: 'All', title: 'Show web, iOS, and Android session data', icon: MonitorSmartphone },
+    { value: 'mobile', label: 'Mobile', shortLabel: 'Mobile', title: 'Show iOS and Android session data', icon: Smartphone },
+    { value: 'web', label: 'Web', shortLabel: 'Web', title: 'Show web session data', icon: Monitor },
 ];
 
 interface PlatformLensFilterProps {
@@ -33,11 +33,11 @@ export const PlatformLensFilter: React.FC<PlatformLensFilterProps> = ({
         <div className={`min-w-0 max-w-full sm:w-auto ${className}`.trim()}>
             <div className="flex min-w-0 max-w-full flex-col gap-1 sm:flex-row sm:items-center">
                 <span className="shrink-0 text-[10px] font-black uppercase leading-none text-slate-500">
-                    Data view
+                    Session platform
                 </span>
                 <div
                     role="group"
-                    aria-label="Data platform view"
+                    aria-label="Session platform"
                     className="grid min-w-0 grid-cols-3 overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm"
                 >
                     {PLATFORM_LENS_OPTIONS.map((option) => {

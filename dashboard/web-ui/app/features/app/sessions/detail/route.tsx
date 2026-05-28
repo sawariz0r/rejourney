@@ -48,6 +48,7 @@ import { useRrwebReplayEvents } from '~/shared/lib/rrwebReplayLoader';
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
 import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 import { getWebSessionEnvironment } from '~/shared/lib/webSessionEnvironment';
+import { buildCollectedWebMetadata, getWebReferral, getWebUtmAttribution } from '~/shared/lib/webAttributionMetadata';
 import {
     buildCompressedBackgroundGaps,
     compressReplayEvents,
@@ -257,12 +258,6 @@ function readSessionMetadataString(session: any, keys: string[]): string | null 
         if (normalized) return normalized;
     }
     return null;
-}
-
-function getWebReferral(session: any): string | null {
-    return session?.webReferral ||
-        readSessionMetadataString(session, ['webReferral', 'webReferrerDomain', 'webAttributionSource']) ||
-        null;
 }
 
 function normalizeReplayUrlLabel(value: unknown): string | null {
@@ -2689,6 +2684,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         ? `${webEnvironment.browserTitle} on ${webEnvironment.osTitle}${webEnvironment.sdkVersionLabel ? ` · ${webEnvironment.sdkVersionLabel}` : ''}`
         : rawDeviceModel;
     const webReferral = getWebReferral(fullSession || session);
+    const webUtm = isWebSession ? getWebUtmAttribution(fullSession || session) : null;
     const webOsChrome: 'macos' | 'windows' | 'other' | null = isWebSession
         ? (webEnvironment?.osLabel?.toLowerCase().startsWith('macos')
             ? 'macos'
@@ -3120,8 +3116,13 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         }
     };
 
-    const metadata = (fullSession as any)?.metadata as Record<string, unknown> | undefined;
-    const hasMetadata = metadata && typeof metadata === 'object' && Object.keys(metadata).length > 0;
+    const rawMetadata = (fullSession as any)?.metadata as Record<string, unknown> | undefined;
+    const metadata = isWebSession
+        ? buildCollectedWebMetadata(fullSession || session)
+        : rawMetadata && typeof rawMetadata === 'object'
+            ? rawMetadata
+            : undefined;
+    const hasMetadata = Boolean(metadata && typeof metadata === 'object' && Object.keys(metadata).length > 0);
     const metadataJson = hasMetadata ? JSON.stringify(metadata, null, 2) : '';
 
     const copyMetadata = async () => {
@@ -3433,6 +3434,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     <div className="flex shrink-0 items-center gap-2 text-[9px] font-black uppercase text-slate-400">
                                                         {secondaryDataLoading && <span className="text-sky-500">Syncing</span>}
                                                         {webReferral && <span className="max-w-[8rem] truncate" title={webReferral}>↩ {webReferral}</span>}
+                                                        {webUtm && <span className={`max-w-[8rem] truncate ${webUtm.hasUtm ? '' : 'text-slate-300'}`} title={webUtm.title}>UTM {webUtm.label}</span>}
                                                         <span title="Compressed S3 storage">{compressedStorageLabel}</span>
                                                     </div>
                                                 </div>
@@ -3445,6 +3447,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                         <span className="min-w-0 flex-1 truncate" title={currentReplayUrl}>{currentReplayUrl}</span>
                                                         {replayUrlCopyButton}
                                                         {webReferral && <span className="shrink-0 text-slate-400" title={webReferral}>· ↩ {webReferral}</span>}
+                                                        {webUtm && <span className={`max-w-[8rem] shrink truncate ${webUtm.hasUtm ? 'text-slate-400' : 'text-slate-300'}`} title={webUtm.title}>· UTM {webUtm.label}</span>}
                                                         {secondaryDataLoading && <span className="shrink-0 text-[9px] font-black uppercase text-sky-500">Syncing</span>}
                                                     </div>
                                                     <div className="shrink-0 px-3 text-[9px] font-black uppercase text-slate-400">{compressedStorageLabel}</div>
@@ -3468,6 +3471,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     <div className="flex shrink-0 items-center gap-2 text-[9px] font-black uppercase text-slate-400">
                                                         {secondaryDataLoading && <span className="text-sky-500">Syncing</span>}
                                                         {webReferral && <span className="max-w-[8rem] truncate" title={webReferral}>↩ {webReferral}</span>}
+                                                        {webUtm && <span className={`max-w-[8rem] truncate ${webUtm.hasUtm ? '' : 'text-slate-300'}`} title={webUtm.title}>UTM {webUtm.label}</span>}
                                                         <span>{compressedStorageLabel}</span>
                                                     </div>
                                                 </div>
@@ -4201,7 +4205,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                         <div className="replay-panel-header flex items-center justify-between gap-2">
                                             <div>
                                                 <p className="text-[10px] font-black uppercase text-slate-600">Session Metadata</p>
-                                                <h3 className="text-sm font-bold text-slate-900">Custom properties</h3>
+                                                <h3 className="text-sm font-bold text-slate-900">{isWebSession ? 'Collected properties' : 'Custom properties'}</h3>
                                             </div>
                                             <div className="replay-panel-actions flex items-center gap-2">
                                                 <button
@@ -4234,7 +4238,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                         </div>
                                     </div>
                                     <div className="p-4">
-                                        {!(fullSession as any)?.metadata || Object.keys((fullSession as any).metadata).length === 0 ? (
+                                        {!hasMetadata ? (
                                             <div className="flex flex-col items-center justify-center p-8 text-center text-slate-500">
                                                 <Database className="h-10 w-10 text-slate-300 mb-3" />
                                                 <p className="text-sm font-semibold text-slate-800">No metadata found</p>
@@ -4252,7 +4256,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-200">
-                                                        {Object.entries((fullSession as any).metadata).map(([key, value]) => (
+                                                        {Object.entries(metadata || {}).map(([key, value]) => (
                                                             <tr key={key} className="hover:bg-[#f8fafc] transition-colors">
                                                                 <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-900">
                                                                     {key}

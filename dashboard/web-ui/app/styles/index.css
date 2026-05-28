@@ -1076,22 +1076,60 @@
   align-self: start;
   position: sticky;
   top: 1rem;
+  border-right: 1px solid #dadce0;
+  padding: 0.25rem 0.75rem 0.25rem 0;
+}
+
+.rejourney-project-settings-page .project-settings-rail-header {
+  margin-bottom: 0.5rem;
+  padding: 0.1rem 0.75rem 0.65rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.rejourney-project-settings-page .project-settings-rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
 }
 
 .rejourney-project-settings-page .project-settings-rail-item {
+  position: relative;
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 0.75rem;
-  border-radius: 6px;
-  padding: 0.65rem;
-  color: inherit;
+  gap: 0.55rem;
+  min-height: 2.35rem;
+  border: 1px solid transparent;
+  padding: 0.55rem 0.75rem 0.55rem 0.9rem;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 650;
   text-decoration: none;
-  transition: background-color 0.16s ease, border-color 0.16s ease;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.rejourney-project-settings-page .project-settings-rail-marker {
+  position: absolute;
+  bottom: 0.35rem;
+  left: 0;
+  top: 0.35rem;
+  width: 3px;
+  background: transparent;
 }
 
 .rejourney-project-settings-page .project-settings-rail-item:hover {
-  background: #f1f5f9;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.rejourney-project-settings-page .project-settings-rail-item[aria-current="true"] {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.rejourney-project-settings-page .project-settings-rail-item[aria-current="true"] .project-settings-rail-marker {
+  background: #1a73e8;
 }
 
 .rejourney-project-settings-page .project-settings-rail-icon,
@@ -1372,6 +1410,37 @@
 @media (max-width: 1279px) {
   .rejourney-project-settings-page .project-settings-rail {
     position: static;
+    border-right: 0;
+    border-bottom: 1px solid #dadce0;
+    padding: 0 0 0.75rem;
+  }
+
+  .rejourney-project-settings-page .project-settings-rail-header {
+    margin-bottom: 0.5rem;
+    padding-inline: 0;
+  }
+
+  .rejourney-project-settings-page .project-settings-rail-nav {
+    flex-direction: row;
+    gap: 0.375rem;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
+
+  .rejourney-project-settings-page .project-settings-rail-item {
+    flex: 0 0 auto;
+    min-height: 2rem;
+    padding: 0.45rem 0.75rem;
+    white-space: nowrap;
+  }
+
+  .rejourney-project-settings-page .project-settings-rail-marker {
+    bottom: 0;
+    left: 0.5rem;
+    right: 0.5rem;
+    top: auto;
+    width: auto;
+    height: 3px;
   }
 }
 

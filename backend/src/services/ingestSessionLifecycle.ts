@@ -30,6 +30,7 @@ export type IngestSessionMetadata = {
 };
 
 const MAX_INGEST_SDK_VERSION_LEN = 50;
+const MAX_INGEST_APP_VERSION_LEN = 128;
 
 /**
  * Normalize optional SDK version from ingest payloads. Returns null if missing/invalid.
@@ -40,6 +41,21 @@ export function normalizeIngestSdkVersion(value: unknown): string | null {
     if (!trimmed) return null;
     const safe = trimmed.slice(0, MAX_INGEST_SDK_VERSION_LEN);
     if (!/^[\w.\-+]+$/.test(safe)) return null;
+    return safe;
+}
+
+function isWebIngestMetadata(metadata?: IngestSessionMetadata): boolean {
+    return String(metadata?.platform || metadata?.os || '').trim().toLowerCase() === 'web';
+}
+
+export function normalizeIngestAppVersion(metadata?: IngestSessionMetadata): string | null {
+    if (typeof metadata?.appVersion !== 'string') return null;
+    const safe = metadata.appVersion.trim().slice(0, MAX_INGEST_APP_VERSION_LEN);
+    if (!safe || ['unknown', 'undefined', 'null'].includes(safe.toLowerCase())) return null;
+
+    const sdkVersion = normalizeIngestSdkVersion(metadata.sdkVersion);
+    if (isWebIngestMetadata(metadata) && sdkVersion && safe === sdkVersion) return null;
+
     return safe;
 }
 
@@ -131,7 +147,7 @@ function buildSessionJsonMetadata(metadata?: IngestSessionMetadata): Record<stri
     assign('effectiveConnectionType', metadata?.effectiveConnectionType, 128);
     assign('connectionSaveData', metadata?.connectionSaveData);
     assign('sdkVersion', normalizeIngestSdkVersion(metadata?.sdkVersion), MAX_INGEST_SDK_VERSION_LEN);
-    assign('appVersion', metadata?.appVersion, 128);
+    assign('appVersion', normalizeIngestAppVersion(metadata), MAX_INGEST_APP_VERSION_LEN);
     assign('userAgent', metadata?.userAgent, 2048);
 
     return updates;
@@ -191,8 +207,9 @@ function buildMetadataUpdates(existing: any, metadata: IngestSessionMetadata | u
     if (!existing.osVersion && inferred.osVersion) {
         updates.osVersion = inferred.osVersion;
     }
-    if (!existing.appVersion && metadata?.appVersion) {
-        updates.appVersion = metadata.appVersion;
+    const appVersion = normalizeIngestAppVersion(metadata);
+    if (!existing.appVersion && appVersion) {
+        updates.appVersion = appVersion;
     }
     const sdkNorm = normalizeIngestSdkVersion(metadata?.sdkVersion);
     if (sdkNorm && !existing.sdkVersion) {
@@ -395,7 +412,7 @@ export async function ensureIngestSession(
             platform: inferred.platform,
             deviceModel: inferred.deviceModel,
             osVersion: inferred.osVersion,
-            appVersion: metadata?.appVersion,
+            appVersion: normalizeIngestAppVersion(metadata),
             ...(initialSdkVersion ? { sdkVersion: initialSdkVersion } : {}),
             userDisplayId: inferred.userDisplayId,
             anonymousDisplayId: inferred.anonymousDisplayId,

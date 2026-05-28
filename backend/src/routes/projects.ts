@@ -114,6 +114,7 @@ type CountOp = 'eq' | 'gt' | 'lt' | 'gte' | 'lte';
 type QueryBuilderIssueFilter = 'crashes' | 'anrs' | 'errors' | 'rage' | 'dead_taps' | 'slow_start' | 'slow_api';
 type QueryBuilderTimeRange = '24h' | '7d' | '30d' | '90d' | '1y';
 type QueryBuilderPlatform = 'ios' | 'android' | 'web';
+type QueryBuilderUtmField = 'source' | 'medium' | 'campaign' | 'campaignId' | 'term' | 'content' | 'sourcePlatform';
 
 type QueryBuilderCondition =
     | { id: string; type: 'issue'; issueFilter: QueryBuilderIssueFilter }
@@ -121,6 +122,8 @@ type QueryBuilderCondition =
     | { id: string; type: 'screen'; screenName: string; screenOutcome?: 'bounced' | 'continued'; screenVisitCountOp?: CountOp; screenVisitCountValue?: string }
     | { id: string; type: 'event'; eventName: string; eventCountOp?: CountOp; eventCountValue?: string; eventPropKey?: string; eventPropValue?: string }
     | { id: string; type: 'metadata'; metaKey: string; metaValue?: string }
+    | { id: string; type: 'referral'; referralValue?: string }
+    | { id: string; type: 'utm'; field: QueryBuilderUtmField; value?: string }
     | { id: string; type: 'lifecycle'; preset: 'early_user' | 'returning_user'; sessionWindowSize?: number; returnedCountOp?: CountOp; returnedCountValue?: string }
     | { id: string; type: 'conversion'; preset: 'checkout_bounced' | 'checkout_success' }
     | { id: string; type: 'platform'; platform: QueryBuilderPlatform }
@@ -134,6 +137,22 @@ type QueryBuilderGroup = {
 const VALID_ISSUE_FILTERS = new Set(['crashes', 'anrs', 'errors', 'rage', 'dead_taps', 'slow_start', 'slow_api']);
 const VALID_TIME_RANGES = new Set(['24h', '7d', '30d', '90d', '1y']);
 const VALID_COUNT_OPS = new Set(['eq', 'gt', 'lt', 'gte', 'lte']);
+const VALID_UTM_FIELDS = new Set(['source', 'medium', 'campaign', 'campaignId', 'term', 'content', 'sourcePlatform']);
+const REFERRAL_METADATA_KEYS = ['webReferral', 'webReferrerDomain', 'webAttributionSource'] as const;
+const UTM_FIELD_METADATA_KEYS: Record<QueryBuilderUtmField, string[]> = {
+    source: ['utm_source', 'webAttributionSource'],
+    medium: ['utm_medium', 'webAttributionMedium'],
+    campaign: ['utm_campaign', 'webAttributionCampaign'],
+    campaignId: ['utm_id', 'webAttributionCampaignId'],
+    term: ['utm_term', 'webAttributionTerm'],
+    content: ['utm_content', 'webAttributionContent'],
+    sourcePlatform: ['utm_source_platform', 'webAttributionSourcePlatform'],
+};
+const WEB_ATTRIBUTION_QUERY_METADATA_KEYS = new Set([
+    ...REFERRAL_METADATA_KEYS,
+    ...Object.values(UTM_FIELD_METADATA_KEYS).flat(),
+    'webAttributionChannel',
+]);
 
 function normalizeString(value: unknown): string {
     return typeof value === 'string' ? value.trim() : '';
@@ -232,6 +251,32 @@ function inferConversionFromPrompt(prompt: string): 'checkout_bounced' | 'checko
     return undefined;
 }
 
+function inferUtmFieldFromPrompt(prompt: string): QueryBuilderUtmField | undefined {
+    const normalized = prompt.toLowerCase();
+    if (/\butm[_\s-]?medium\b|\bmedium\b/.test(normalized)) return 'medium';
+    if (/\butm[_\s-]?(campaign|name)\b|\bcampaign\b/.test(normalized)) return 'campaign';
+    if (/\butm[_\s-]?(id|campaign id)\b|\bcampaign id\b/.test(normalized)) return 'campaignId';
+    if (/\butm[_\s-]?term\b|\bkeyword\b|\bterm\b/.test(normalized)) return 'term';
+    if (/\butm[_\s-]?content\b|\bcontent\b|\bcreative\b/.test(normalized)) return 'content';
+    if (/\butm[_\s-]?source[_\s-]?platform\b|\bsource platform\b/.test(normalized)) return 'sourcePlatform';
+    if (/\butm[_\s-]?source\b|\bsource\b/.test(normalized)) return 'source';
+    if (/\butm\b/.test(normalized)) return 'source';
+    return undefined;
+}
+
+function findMetadataValueForKeys(value: unknown, filters: AvailableProjectFilters, keys: readonly string[]): string | undefined {
+    const typedValue = normalizeString(value);
+    const allValues = keys.flatMap((key) => filters.metadata[key] ?? []);
+    return findAllowedValue(typedValue, allValues) ?? (typedValue || undefined);
+}
+
+function findMentionedMetadataValue(prompt: string, filters: AvailableProjectFilters, keys: readonly string[]): string | undefined {
+    const allValues = keys.flatMap((key) => filters.metadata[key] ?? []);
+    const mentioned = findMentionedAllowedValue(prompt, allValues);
+    if (mentioned) return mentioned;
+    return prompt.match(/\b([a-z0-9-]+(?:\.[a-z0-9-]+)+)\b/i)?.[1];
+}
+
 function sanitizeQueryBuilderCondition(raw: any, filters: AvailableProjectFilters, prompt: string): QueryBuilderCondition | null {
     if (!raw || typeof raw !== 'object') return null;
     const type = normalizeString(raw.type);
@@ -279,6 +324,18 @@ function sanitizeQueryBuilderCondition(raw: any, filters: AvailableProjectFilter
             const knownValue = findAllowedValue(raw.metaValue, filters.metadata[metaKey] ?? []);
             const typedValue = normalizeString(raw.metaValue);
             return { id: randomUUID(), type: 'metadata', metaKey, metaValue: knownValue ?? (typedValue || undefined) };
+        }
+        case 'referral': {
+            const referralValue = findMetadataValueForKeys(raw.referralValue ?? raw.metaValue ?? raw.value, filters, REFERRAL_METADATA_KEYS);
+            return { id: randomUUID(), type: 'referral', referralValue };
+        }
+        case 'utm': {
+            const rawField = normalizeString(raw.field);
+            const field = VALID_UTM_FIELDS.has(rawField)
+                ? rawField as QueryBuilderUtmField
+                : inferUtmFieldFromPrompt(prompt) ?? 'source';
+            const value = findMetadataValueForKeys(raw.value ?? raw.metaValue ?? raw.utmValue, filters, UTM_FIELD_METADATA_KEYS[field]);
+            return { id: randomUUID(), type: 'utm', field, value };
         }
         case 'lifecycle': {
             const preset = normalizeString(raw.preset);
@@ -362,6 +419,10 @@ function dedupeConditions(conditions: QueryBuilderCondition[]): QueryBuilderCond
                     return `event:${condition.eventName.toLowerCase()}:${condition.eventPropKey ?? ''}:${condition.eventPropValue ?? ''}`;
                 case 'metadata':
                     return `metadata:${condition.metaKey.toLowerCase()}:${condition.metaValue ?? ''}`;
+                case 'referral':
+                    return `referral:${condition.referralValue ?? ''}`;
+                case 'utm':
+                    return `utm:${condition.field}:${condition.value ?? ''}`;
                 case 'journey':
                     return `journey:${condition.steps.join('|').toLowerCase()}`;
                 default:
@@ -425,6 +486,14 @@ function describeQueryBuilderCondition(condition: QueryBuilderCondition): string
             return condition.metaValue
                 ? `metadata ${condition.metaKey} is ${condition.metaValue}`
                 : `metadata includes ${condition.metaKey}`;
+        case 'referral':
+            return condition.referralValue
+                ? `web referrals from ${condition.referralValue}`
+                : 'web sessions with referral data';
+        case 'utm':
+            return condition.value
+                ? `web UTM ${condition.field} is ${condition.value}`
+                : `web sessions with UTM ${condition.field}`;
         case 'lifecycle':
             return condition.preset === 'early_user' ? 'early users' : 'returning users';
         case 'conversion':
@@ -512,24 +581,39 @@ function enrichQueryBuilderGroups(groups: QueryBuilderGroup[], filters: Availabl
         }
     }
 
+    const normalizedPrompt = prompt.toLowerCase();
+    const mentionsReferral = /\b(referr?al|referrer|referer|traffic source|came from|from google|from facebook|from linkedin)\b/.test(normalizedPrompt);
+    if (!conditionExists(next, 'referral') && mentionsReferral) {
+        next = addToFirstGroup(next, {
+            id: randomUUID(),
+            type: 'referral',
+            referralValue: findMentionedMetadataValue(prompt, filters, REFERRAL_METADATA_KEYS),
+        });
+    }
+
+    const inferredUtmField = inferUtmFieldFromPrompt(prompt);
+    const mentionsUtm = /\b(utm|utm_|campaign|medium|keyword|creative|source platform)\b/.test(normalizedPrompt);
+    if (!conditionExists(next, 'utm') && mentionsUtm) {
+        const field = inferredUtmField ?? 'source';
+        next = addToFirstGroup(next, {
+            id: randomUUID(),
+            type: 'utm',
+            field,
+            value: findMentionedMetadataValue(prompt, filters, UTM_FIELD_METADATA_KEYS[field]),
+        });
+    }
+
     if (!conditionExists(next, 'metadata')) {
         const metadataKeys = Object.keys(filters.metadata);
-        const metaKey = findMentionedAllowedValue(prompt, metadataKeys);
+        const genericMetadataKeys = metadataKeys.filter((key) => {
+            if (conditionExists(next, 'referral') && REFERRAL_METADATA_KEYS.includes(key as typeof REFERRAL_METADATA_KEYS[number])) return false;
+            if (conditionExists(next, 'utm') && WEB_ATTRIBUTION_QUERY_METADATA_KEYS.has(key)) return false;
+            return true;
+        });
+        const metaKey = findMentionedAllowedValue(prompt, genericMetadataKeys);
         if (metaKey) {
             const metaValue = findMentionedAllowedValue(prompt, filters.metadata[metaKey] ?? []) ?? undefined;
             next = addToFirstGroup(next, { id: randomUUID(), type: 'metadata', metaKey, metaValue });
-        } else {
-            const normalizedPrompt = prompt.toLowerCase();
-            const mentionsReferral = /\b(referr?al|referrer|referer|source|utm|campaign)\b/.test(normalizedPrompt);
-            const referralKey = metadataKeys.find((key) => key === 'webReferral') ||
-                metadataKeys.find((key) => key === 'webReferrerDomain');
-            if (mentionsReferral && referralKey) {
-                const domainMatch = normalizedPrompt.match(/\b([a-z0-9-]+(?:\.[a-z0-9-]+)+)\b/i)?.[1];
-                const metaValue = domainMatch
-                    ? findAllowedValue(domainMatch, filters.metadata[referralKey] ?? []) ?? domainMatch
-                    : undefined;
-                next = addToFirstGroup(next, { id: randomUUID(), type: 'metadata', metaKey: referralKey, metaValue });
-            }
         }
     }
 
@@ -693,13 +777,15 @@ function buildQueryBuilderPrompt(input: {
             screen: 'screenName must come from screensOrPages',
             event: 'eventName must come from events',
             metadata: 'metaKey must come from metadataKeys',
+            referral: 'web-only referral/referrer/source condition; referralValue should match observed webReferral/webReferrerDomain/webAttributionSource when possible',
+            utm: 'web-only UTM condition with field one of source, medium, campaign, campaignId, term, content, sourcePlatform',
             journey: 'steps must come from screensOrPages in visit order',
         },
         outputRules: [
             'Return only query conditions that are supported by the allowed condition types.',
             'Use project setup only as context. Never add a platform condition unless the user explicitly says iOS, iPhone, iPad, Apple, Android, Pixel, Samsung, web, browser, website, or site.',
             'Every condition must be directly requested by the user. Do not add filters just because they are common, likely, or present in project setup.',
-            'Prefer the smallest accurate query. Do not duplicate the same screen, page, event, metadata, platform, issue, lifecycle, conversion, or journey condition.',
+            'Prefer the smallest accurate query. Do not duplicate the same screen, page, event, metadata, referral, UTM, platform, issue, lifecycle, conversion, or journey condition.',
             'Use available app-specific screens/pages, events, metadata keys, and event properties exactly as provided.',
             'If the user says page, route, view, or screen, match it to screensOrPages.',
             'Infer intent from synonyms and paraphrases, not only exact words.',
@@ -710,7 +796,8 @@ function buildQueryBuilderPrompt(input: {
             'When user asks for crashes, hangs/freezes, rage taps, dead taps, slow startup, slow API, errors/exceptions/failed API requests, map to the matching issue filter.',
             'When user asks for new/first-time/onboarding users, map to lifecycle early_user.',
             'When user asks for returning/reactivated/came-back users, map to lifecycle returning_user.',
-            'When user asks for referral/referrer/source/campaign on web sessions, use metadata keys like webReferral, webReferrerDomain, webAttributionSource, webAttributionCampaign, or webAttributionChannel if available.',
+            'When user asks for referral, referrer, referer, or traffic source on web sessions, use the referral condition. It is web-only, so do not also add platform=web for the same intent.',
+            'When user asks for UTM or campaign tags on web sessions, use the utm condition. It is web-only, so do not also add platform=web for the same intent.',
             'If the user asks for alternatives, represent them as multiple groups.',
             'If the request is too vague or impossible with the provided values, return an empty groups array and a concise explanation.',
         ],
@@ -772,8 +859,13 @@ function buildQueryBuilderPrompt(input: {
             {
                 input: 'web sessions referred by www.google.com',
                 output: [
-                    { type: 'platform', platform: 'web' },
-                    { type: 'metadata', metaKey: 'webReferral', metaValue: 'www.google.com' },
+                    { type: 'referral', referralValue: 'www.google.com' },
+                ],
+            },
+            {
+                input: 'utm campaign spring-launch',
+                output: [
+                    { type: 'utm', field: 'campaign', value: 'spring-launch' },
                 ],
             },
             {
@@ -1613,6 +1705,9 @@ router.post(
                                                         eventPropValue: { type: 'string' },
                                                         metaKey: { type: 'string' },
                                                         metaValue: { type: 'string' },
+                                                        referralValue: { type: 'string' },
+                                                        field: { type: 'string' },
+                                                        value: { type: 'string' },
                                                         preset: { type: 'string' },
                                                         sessionWindowSize: { type: 'integer' },
                                                         returnedCountOp: { type: 'string' },

@@ -3,6 +3,15 @@ import { getDocument, getLocation } from './browser.js';
 import { referrerDomain, scrubUrl } from './urlScrubber.js';
 import type { AcquisitionChannel, RejourneyWebConfig, WebAttributionContext } from './types.js';
 
+export interface WebAttributionSnapshot {
+  href: string;
+  referrer: string;
+  routeName?: string;
+  navigationType: WebAttributionContext['navigationType'];
+}
+
+let initialAttributionSnapshot: WebAttributionSnapshot | null = null;
+
 function getNavigationType(): WebAttributionContext['navigationType'] {
   if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') {
     return 'unknown';
@@ -55,6 +64,25 @@ function collectQueryValues(params: URLSearchParams, keys: string[]): Record<str
   return query;
 }
 
+function attributionSignalScore(snapshot: WebAttributionSnapshot | null, allowedQueryParams = DEFAULT_ALLOWED_ATTRIBUTION_PARAMS): number {
+  if (!snapshot) return 0;
+  try {
+    const url = new URL(snapshot.href);
+    const params = url.searchParams;
+    let score = 0;
+    for (const key of allowedQueryParams) {
+      if (getQueryValue(params, key)) score += 8;
+    }
+    for (const key of CLICK_ID_PARAMS) {
+      if (getQueryValue(params, key)) score += 6;
+    }
+    if (snapshot.referrer) score += 3;
+    return score;
+  } catch {
+    return snapshot.referrer ? 3 : 0;
+  }
+}
+
 function classifyChannel(params: URLSearchParams, referrerHost: string | null, currentHost: string): AcquisitionChannel {
   const medium = getQueryValue(params, 'utm_medium')?.toLowerCase() || '';
   const source = getQueryValue(params, 'utm_source')?.toLowerCase() || '';
@@ -79,19 +107,58 @@ function classifyChannel(params: URLSearchParams, referrerHost: string | null, c
   return 'referral';
 }
 
-export function captureAttribution(config: RejourneyWebConfig, routeName?: string): WebAttributionContext | null {
+export function captureAttributionSnapshot(config: RejourneyWebConfig, routeName?: string): WebAttributionSnapshot | null {
   if (config.captureAttribution === false) return null;
 
   const location = getLocation();
   const doc = getDocument();
   if (!location || !doc) return null;
 
+  return {
+    href: location.href,
+    referrer: doc.referrer || '',
+    routeName: routeName || location.pathname,
+    navigationType: getNavigationType(),
+  };
+}
+
+export function rememberInitialAttributionSnapshot(snapshot = captureAttributionSnapshot({ captureAttribution: true })): void {
+  if (!snapshot) return;
+  if (attributionSignalScore(snapshot) >= attributionSignalScore(initialAttributionSnapshot)) {
+    initialAttributionSnapshot = snapshot;
+  }
+}
+
+export function clearRememberedInitialAttributionSnapshot(): void {
+  initialAttributionSnapshot = null;
+}
+
+export function getAttributionSnapshotForInit(config: RejourneyWebConfig, routeName?: string): WebAttributionSnapshot | null {
+  if (config.captureAttribution === false) return null;
+  const currentSnapshot = captureAttributionSnapshot(config, routeName);
+  const allowedQueryParams = [
+    ...DEFAULT_ALLOWED_ATTRIBUTION_PARAMS,
+    ...(config.attribution?.allowedQueryParams || []),
+  ];
+
+  return attributionSignalScore(initialAttributionSnapshot, allowedQueryParams) > attributionSignalScore(currentSnapshot, allowedQueryParams)
+    ? initialAttributionSnapshot
+    : currentSnapshot;
+}
+
+export function buildAttributionFromSnapshot(
+  config: RejourneyWebConfig,
+  snapshot: WebAttributionSnapshot | null,
+  routeName?: string,
+): WebAttributionContext | null {
+  if (config.captureAttribution === false || !snapshot) return null;
+
   const allowedQueryParams = config.attribution?.allowedQueryParams || DEFAULT_ALLOWED_ATTRIBUTION_PARAMS;
   const attributionQueryParams = config.attribution?.preserveClickIds === true
     ? [...allowedQueryParams, ...CLICK_ID_PARAMS]
     : allowedQueryParams;
   const allowlisted = new Set(attributionQueryParams.map((key) => key.toLowerCase()));
-  const url = new URL(location.href);
+  const url = new URL(snapshot.href);
   const entryQuery = collectQueryValues(url.searchParams, attributionQueryParams);
 
   const clickIds: Record<string, string> = {};
@@ -103,7 +170,7 @@ export function captureAttribution(config: RejourneyWebConfig, routeName?: strin
   }
 
   const referrerCapture = config.attribution?.captureReferrer ?? 'domain-only';
-  const rawReferrer = doc.referrer || '';
+  const rawReferrer = snapshot.referrer || '';
   const domain = referrerDomain(rawReferrer);
   const referrer = referrerCapture === false
     ? null
@@ -111,12 +178,12 @@ export function captureAttribution(config: RejourneyWebConfig, routeName?: strin
       ? domain
       : scrubUrl(rawReferrer);
 
-  const entryPath = scrubUrl(location.href, { allowedQueryParams, pathOnly: true });
+  const entryPath = scrubUrl(snapshot.href, { allowedQueryParams, pathOnly: true });
   const entryUrl = config.attribution?.captureEntryUrl === false
     ? ''
     : config.attribution?.captureEntryUrl === 'path-only'
       ? entryPath
-      : scrubUrl(location.href, { allowedQueryParams: [...allowlisted] });
+      : scrubUrl(snapshot.href, { allowedQueryParams: [...allowlisted] });
   const utm = collectQueryValues(url.searchParams, DEFAULT_ALLOWED_ATTRIBUTION_PARAMS);
 
   const context: WebAttributionContext = {
@@ -136,10 +203,15 @@ export function captureAttribution(config: RejourneyWebConfig, routeName?: strin
     marketingTactic: getQueryValue(url.searchParams, 'utm_marketing_tactic'),
     utm,
     clickIds,
-    landingRoute: routeName || location.pathname,
-    navigationType: getNavigationType(),
-    channel: classifyChannel(url.searchParams, domain, location.hostname),
+    landingRoute: snapshot.routeName || routeName || url.pathname,
+    navigationType: snapshot.navigationType,
+    channel: classifyChannel(url.searchParams, domain, url.hostname),
   };
 
-  return config.attribution?.beforeSendAttribution?.(context) ?? context;
+  const nextContext = config.attribution?.beforeSendAttribution?.(context);
+  return nextContext === undefined ? context : nextContext;
+}
+
+export function captureAttribution(config: RejourneyWebConfig, routeName?: string): WebAttributionContext | null {
+  return buildAttributionFromSnapshot(config, captureAttributionSnapshot(config, routeName), routeName);
 }

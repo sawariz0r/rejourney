@@ -185,6 +185,73 @@ function getTimeRangeFilter(timeRange?: string): Date | undefined {
     return ms ? new Date(now - ms) : undefined;
 }
 
+type ArchiveMetadataFilter = {
+    key: string;
+    value?: string;
+};
+
+function parseArchiveMetadataFilters(value: unknown): ArchiveMetadataFilter[] {
+    if (!value) return [];
+    let rawFilters: unknown = value;
+    if (typeof value === 'string') {
+        try {
+            rawFilters = JSON.parse(value);
+        } catch {
+            return [];
+        }
+    }
+    if (!Array.isArray(rawFilters)) return [];
+
+    return rawFilters
+        .slice(0, 8)
+        .map((raw: any): ArchiveMetadataFilter | null => {
+            const key = typeof raw?.key === 'string' ? raw.key.trim().slice(0, 128) : '';
+            if (!key) return null;
+            const rawValue = raw?.value;
+            const normalizedValue = rawValue === undefined || rawValue === null
+                ? undefined
+                : String(rawValue).trim().slice(0, 512);
+            const filter: ArchiveMetadataFilter = { key };
+            if (normalizedValue) filter.value = normalizedValue;
+            return filter;
+        })
+        .filter((filter): filter is ArchiveMetadataFilter => filter !== null);
+}
+
+function buildArchiveMetadataCondition(metaKey: string, metaValue?: string): SQL | undefined {
+    if (!metaKey) return undefined;
+
+    if (metaValue !== undefined && metaValue !== '') {
+        let parsedValue: any = metaValue;
+        if (metaValue === 'true') parsedValue = true;
+        else if (metaValue === 'false') parsedValue = false;
+        else if (!isNaN(Number(metaValue))) parsedValue = Number(metaValue);
+        const metadataValueCondition = parsedValue === metaValue
+            ? sql`${sessions.metadata} @> ${JSON.stringify({ [metaKey]: parsedValue })}::jsonb`
+            : or(
+                sql`${sessions.metadata} @> ${JSON.stringify({ [metaKey]: parsedValue })}::jsonb`,
+                sql`${sessions.metadata} @> ${JSON.stringify({ [metaKey]: metaValue })}::jsonb`
+            );
+
+        if (metaKey === 'webReferral') {
+            const referralValue = String(metaValue).trim().slice(0, 255);
+            return or(
+                eq(sessions.webReferral, referralValue),
+                metadataValueCondition
+            );
+        }
+        return metadataValueCondition;
+    }
+
+    if (metaKey === 'webReferral') {
+        return or(
+            sql`${sessions.webReferral} IS NOT NULL AND ${sessions.webReferral} <> ''`,
+            sql`${sessions.metadata} ? ${metaKey}`
+        );
+    }
+    return sql`${sessions.metadata} ? ${metaKey}`;
+}
+
 function buildSessionArchiveBaseConditions(
     filters: {
         timeRange?: string;
@@ -194,6 +261,7 @@ function buildSessionArchiveBaseConditions(
         hasRecording?: string;
         metaKey?: string;
         metaValue?: string;
+        metaFilters?: string;
         eventName?: string;
         date?: string;
         eventCountOp?: string;
@@ -226,6 +294,7 @@ function buildSessionArchiveBaseConditions(
         hasRecording,
         metaKey,
         metaValue,
+        metaFilters,
         eventName,
         date,
         eventCountOp,
@@ -282,32 +351,10 @@ function buildSessionArchiveBaseConditions(
         baseConditions.push(eq(sessions.geoCity, normalizedGeoCity));
     }
 
-    if (metaKey) {
-        if (metaValue !== undefined && metaValue !== '') {
-            let parsedValue: any = metaValue;
-            if (metaValue === 'true') parsedValue = true;
-            else if (metaValue === 'false') parsedValue = false;
-            else if (!isNaN(Number(metaValue))) parsedValue = Number(metaValue);
-
-            if (metaKey === 'webReferral') {
-                const referralValue = String(metaValue).trim().slice(0, 255);
-                userFilterConditions.push(or(
-                    eq(sessions.webReferral, referralValue),
-                    sql`${sessions.metadata} @> ${JSON.stringify({ [metaKey]: parsedValue })}::jsonb`
-                ));
-            } else {
-                userFilterConditions.push(sql`${sessions.metadata} @> ${JSON.stringify({ [metaKey]: parsedValue })}::jsonb`);
-            }
-        } else {
-            if (metaKey === 'webReferral') {
-                userFilterConditions.push(or(
-                    sql`${sessions.webReferral} IS NOT NULL AND ${sessions.webReferral} <> ''`,
-                    sql`${sessions.metadata} ? ${metaKey}`
-                ));
-            } else {
-                userFilterConditions.push(sql`${sessions.metadata} ? ${metaKey}`);
-            }
-        }
+    const metadataFilters = parseArchiveMetadataFilters(metaFilters);
+    if (metaKey) metadataFilters.unshift({ key: metaKey, value: metaValue });
+    for (const metadataFilter of metadataFilters) {
+        userFilterConditions.push(buildArchiveMetadataCondition(metadataFilter.key, metadataFilter.value));
     }
 
     if (eventName) {
@@ -845,6 +892,7 @@ function buildMetricsPayload(metrics: any) {
             apiSuccessCount: metrics.apiSuccessCount,
             apiErrorCount: metrics.apiErrorCount,
             apiTotalCount: metrics.apiTotalCount,
+            apiAvgResponseMs: metrics.apiAvgResponseMs,
             screensVisited,
             uniqueScreensCount: new Set(screensVisited).size,
             interactionScore: metrics.interactionScore,
@@ -1967,6 +2015,7 @@ router.get(
             hasRecording,
             metaKey,
             metaValue,
+            metaFilters,
             eventName,
             date,
             eventCountOp,
@@ -2028,6 +2077,7 @@ router.get(
                 hasRecording,
                 metaKey,
                 metaValue,
+                metaFilters,
                 eventName,
                 date,
                 eventCountOp,
@@ -2139,6 +2189,7 @@ router.get(
             hasRecording,
             metaKey,
             metaValue,
+            metaFilters,
             eventName,
             date,
             eventCountOp,
@@ -2201,6 +2252,7 @@ router.get(
                 hasRecording,
                 metaKey,
                 metaValue,
+                metaFilters,
                 eventName,
                 date,
                 eventCountOp,

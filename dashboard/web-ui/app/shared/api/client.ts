@@ -441,6 +441,7 @@ export interface ApiSession {
     apiSuccessCount: number;
     apiErrorCount: number;
     apiTotalCount: number;
+    apiAvgResponseMs?: number;
     screensVisited: string[];
     uniqueScreensCount: number;
     interactionScore: number;
@@ -852,6 +853,27 @@ function readMetadataString(metadata: unknown, keys: string[]): string | null {
   return null;
 }
 
+function toNonNegativeNumber(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function maxNonNegativeNumber(...values: unknown[]): number {
+  const candidates = values
+    .map(toNonNegativeNumber)
+    .filter((value): value is number => value !== null);
+  return candidates.length > 0 ? Math.max(...candidates) : 0;
+}
+
+function firstPositiveNumber(...values: unknown[]): number {
+  for (const value of values) {
+    const parsed = toNonNegativeNumber(value);
+    if (parsed !== null && parsed > 0) return parsed;
+  }
+  return 0;
+}
+
 export function transformToRecordingSession(session: ApiSession | ApiSessionSummary): any {
   // Handle both old format (startTime as number) and new format (startedAt as ISO string)
   const startedAtValue = (session as any).startedAt || (session as any).startTime;
@@ -907,6 +929,7 @@ export function transformToRecordingSession(session: ApiSession | ApiSessionSumm
     apiSuccessCount: session.stats?.networkStats?.successful || 0,
     apiErrorCount: session.stats?.networkStats?.failed || 0,
     apiTotalCount: session.stats?.networkStats?.total || 0,
+    apiAvgResponseMs: session.stats?.networkStats?.avgDuration || 0,
     screensVisited: [],
     uniqueScreensCount: 0,
     interactionScore: 50,
@@ -924,9 +947,24 @@ export function transformToRecordingSession(session: ApiSession | ApiSessionSumm
   const errorCount = summary.errorCount ?? metrics.errorCount ?? 0;
   const crashCount = summary.crashCount ?? metrics.crashCount ?? 0;
   const anrCount = summary.anrCount ?? 0;
-  const apiSuccessCount = summary.apiSuccessCount ?? metrics.apiSuccessCount ?? session.stats?.networkStats?.successful ?? 0;
-  const apiErrorCount = summary.apiErrorCount ?? metrics.apiErrorCount ?? session.stats?.networkStats?.failed ?? 0;
-  const apiTotalCount = summary.apiTotalCount ?? metrics.apiTotalCount ?? session.stats?.networkStats?.total ?? (apiSuccessCount + apiErrorCount);
+  const apiSuccessCount = Math.round(maxNonNegativeNumber(
+    summary.apiSuccessCount,
+    metrics.apiSuccessCount,
+    session.stats?.networkStats?.successful,
+  ));
+  const apiErrorCount = Math.round(maxNonNegativeNumber(
+    summary.apiErrorCount,
+    metrics.apiErrorCount,
+    session.stats?.networkStats?.failed,
+  ));
+  const apiTotalCount = Math.round(Math.max(
+    maxNonNegativeNumber(
+      summary.apiTotalCount,
+      metrics.apiTotalCount,
+      session.stats?.networkStats?.total,
+    ),
+    apiSuccessCount + apiErrorCount,
+  ));
   const rageTapCount = summary.rageTapCount ?? metrics.rageTapCount ?? 0;
   const interactionScore = summary.interactionScore ?? metrics.interactionScore ?? 50;
   const explorationScore = summary.explorationScore ?? metrics.explorationScore ?? 50;
@@ -971,7 +1009,11 @@ export function transformToRecordingSession(session: ApiSession | ApiSessionSumm
     apiSuccessCount,
     apiErrorCount,
     apiTotalCount,
-    apiAvgResponseMs: summary.apiAvgResponseMs ?? 0,
+    apiAvgResponseMs: firstPositiveNumber(
+      summary.apiAvgResponseMs,
+      metrics.apiAvgResponseMs,
+      session.stats?.networkStats?.avgDuration,
+    ),
     appStartupTimeMs: summary.appStartupTimeMs ?? undefined,
     rageTapCount,
     deadTapCount: summary.deadTapCount ?? 0,
@@ -1072,6 +1114,7 @@ export type SessionArchiveQuery = {
   geoCity?: string;
   metaKey?: string;
   metaValue?: string;
+  metaFilters?: Array<{ key: string; value?: string }>;
   eventName?: string;
   date?: string;
   eventCountOp?: string;
@@ -1107,6 +1150,7 @@ function buildSessionArchiveQueryString(params: SessionArchiveQuery & { countOnl
     geoCity,
     metaKey,
     metaValue,
+    metaFilters,
     eventName,
     date,
     eventCountOp,
@@ -1141,6 +1185,7 @@ function buildSessionArchiveQueryString(params: SessionArchiveQuery & { countOnl
   if (geoCity) queryParams.set('geoCity', geoCity);
   if (metaKey) queryParams.set('metaKey', metaKey);
   if (metaValue) queryParams.set('metaValue', metaValue);
+  if (metaFilters?.length) queryParams.set('metaFilters', JSON.stringify(metaFilters));
   if (eventName) queryParams.set('eventName', eventName);
   if (date) queryParams.set('date', date);
   if (eventCountOp) queryParams.set('eventCountOp', eventCountOp);

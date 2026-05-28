@@ -1,4 +1,4 @@
-import { captureAttribution } from './attribution.js';
+import { buildAttributionFromSnapshot, captureAttribution, getAttributionSnapshotForInit, rememberInitialAttributionSnapshot, type WebAttributionSnapshot } from './attribution.js';
 import {
   getCurrentPath,
   getCurrentUrl,
@@ -56,6 +56,8 @@ interface AuthResponse {
   expiresIn: number;
 }
 
+rememberInitialAttributionSnapshot();
+
 export class RejourneyWebClient implements RejourneyAPI {
   private config: RejourneyWebConfig | null = null;
   private session: RejourneySessionState | null = null;
@@ -82,6 +84,7 @@ export class RejourneyWebClient implements RejourneyAPI {
   private readonly tabSessionOwnerId = createTabSessionOwnerId();
   private tabSessionLeaseTimer: ReturnType<typeof setInterval> | null = null;
   private identityStorageListener: ((event: StorageEvent) => void) | null = null;
+  private attributionSnapshot: WebAttributionSnapshot | null = null;
 
   async init(publicKey: string, options: RejourneyWebConfig = {}): Promise<boolean> {
     const previousConfig = this.config;
@@ -93,6 +96,7 @@ export class RejourneyWebClient implements RejourneyAPI {
       : null;
 
     this.config = nextConfig;
+    this.attributionSnapshot = null;
     configureLogger(this.config);
     this.userIdentity = carriedIdentity
       ? saveStoredUserIdentity(this.config, carriedIdentity)
@@ -105,6 +109,8 @@ export class RejourneyWebClient implements RejourneyAPI {
       logger.debug('Initialized in non-browser environment; start() will no-op until browser runtime.');
       return false;
     }
+
+    this.attributionSnapshot = getAttributionSnapshotForInit(this.config, getCurrentRouteName(this.config));
 
     if (this.config.disableInDev && isLocalDevelopmentHost(window.location.hostname)) {
       logger.info('Disabled on local development host.');
@@ -391,7 +397,9 @@ export class RejourneyWebClient implements RejourneyAPI {
     this.persistTabSession();
 
     if (!restoredSession) {
-      const attribution = captureAttribution(this.config, this.currentScreen || undefined);
+      const attribution = this.attributionSnapshot
+        ? buildAttributionFromSnapshot(this.config, this.attributionSnapshot, this.currentScreen || undefined)
+        : captureAttribution(this.config, this.currentScreen || undefined);
       this.queueEvent({
         type: 'session_start',
         timestamp: session.startedAt,
@@ -944,7 +952,7 @@ export class RejourneyWebClient implements RejourneyAPI {
           origin: window.location.origin,
           userAgent,
           sdkVersion: SDK_VERSION,
-          appVersion: SDK_VERSION,
+          appVersion: deviceInfo.appVersion,
         },
       }),
     });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SDK_VERSION } from '../sdk/constants.js';
 import { collectWebDeviceInfo, collectWebDeviceInfoWithHints, detectBrowserInfo, detectOsInfo } from '../sdk/deviceInfo.js';
 
@@ -6,6 +6,10 @@ const chromeMacUa =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_6_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.114 Safari/537.36';
 
 describe('web device info', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('extracts browser, OS, SDK version, and browser effective network hints', () => {
     const info = collectWebDeviceInfo('visitor_123', {
       userAgent: chromeMacUa,
@@ -18,10 +22,36 @@ describe('web device info', () => {
     expect(info.os).toBe('macOS');
     expect(info.osVersion).toBe('15.6.1');
     expect(info.model).toBe('Chrome on macOS');
-    expect(info.appVersion).toBe(SDK_VERSION);
+    expect(info.appVersion).toBe('unknown');
     expect(info.sdkVersion).toBe(SDK_VERSION);
     expect(info.networkType).toBe('effective-4g');
     expect(info.effectiveConnectionType).toBe('4g');
+  });
+
+  it('detects the host application version from page metadata instead of the SDK version', () => {
+    vi.stubGlobal('document', {
+      querySelectorAll: (selector: string) => selector === 'meta'
+        ? [{
+            getAttribute: (name: string) => {
+              if (name === 'name') return 'app-version';
+              if (name === 'content') return '2.4.6-web';
+              return null;
+            },
+          }]
+        : [],
+      scripts: [],
+      documentElement: null,
+      body: null,
+      currentScript: null,
+    });
+
+    const info = collectWebDeviceInfo('visitor_123', {
+      userAgent: chromeMacUa,
+      language: 'en-US',
+    } as unknown as Navigator);
+
+    expect(info.appVersion).toBe('2.4.6-web');
+    expect(info.sdkVersion).toBe(SDK_VERSION);
   });
 
   it('detects mobile Safari and iOS from the user agent', () => {

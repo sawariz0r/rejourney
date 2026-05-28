@@ -7,6 +7,8 @@ export type ConditionType =
   | 'screen'
   | 'event'
   | 'metadata'
+  | 'referral'
+  | 'utm'
   | 'lifecycle'
   | 'conversion'
   | 'platform'
@@ -53,6 +55,21 @@ export type MetadataCondition = {
   metaValue?: string;
 };
 
+export type ReferralCondition = {
+  id: string;
+  type: 'referral';
+  referralValue?: string;
+};
+
+export type UtmField = 'source' | 'medium' | 'campaign' | 'campaignId' | 'term' | 'content' | 'sourcePlatform';
+
+export type UtmCondition = {
+  id: string;
+  type: 'utm';
+  field: UtmField;
+  value?: string;
+};
+
 export type LifecycleCondition = {
   id: string;
   type: 'lifecycle';
@@ -87,6 +104,8 @@ export type QueryCondition =
   | ScreenCondition
   | EventCondition
   | MetadataCondition
+  | ReferralCondition
+  | UtmCondition
   | LifecycleCondition
   | ConversionCondition
   | PlatformCondition
@@ -130,6 +149,8 @@ export function conditionsToArchiveQuery(
   logic: 'AND' | 'OR' = 'AND'
 ): Partial<SessionArchiveQuery> {
   const result: Partial<SessionArchiveQuery> = {};
+  const metadataFilters: Array<{ key: string; value?: string }> = [];
+  let requiresWebPlatform = false;
   if (logic === 'OR') result.conditionLogic = 'OR';
 
   for (const cond of conditions) {
@@ -158,8 +179,15 @@ export function conditionsToArchiveQuery(
         if (cond.eventPropValue) result.eventPropValue = cond.eventPropValue;
         break;
       case 'metadata':
-        result.metaKey = cond.metaKey;
-        if (cond.metaValue) result.metaValue = cond.metaValue;
+        if (cond.metaKey) metadataFilters.push({ key: cond.metaKey, value: cond.metaValue });
+        break;
+      case 'referral':
+        requiresWebPlatform = true;
+        metadataFilters.push({ key: 'webReferral', value: cond.referralValue });
+        break;
+      case 'utm':
+        requiresWebPlatform = true;
+        metadataFilters.push({ key: UTM_FIELD_META_KEYS[cond.field], value: cond.value });
         break;
       case 'lifecycle':
         result.lifecyclePreset = cond.preset;
@@ -183,6 +211,14 @@ export function conditionsToArchiveQuery(
       }
     }
   }
+
+  if (metadataFilters.length === 1) {
+    result.metaKey = metadataFilters[0].key;
+    if (metadataFilters[0].value) result.metaValue = metadataFilters[0].value;
+  } else if (metadataFilters.length > 1) {
+    result.metaFilters = metadataFilters.filter((filter) => filter.key);
+  }
+  if (requiresWebPlatform) result.platform = 'web';
 
   return result;
 }
@@ -218,6 +254,36 @@ const PLATFORM_LABELS: Record<PlatformCondition['platform'], string> = {
   ios: 'iOS',
   android: 'Android',
   web: 'Web',
+};
+
+export const UTM_FIELD_META_KEYS: Record<UtmField, string> = {
+  source: 'utm_source',
+  medium: 'utm_medium',
+  campaign: 'utm_campaign',
+  campaignId: 'utm_id',
+  term: 'utm_term',
+  content: 'utm_content',
+  sourcePlatform: 'utm_source_platform',
+};
+
+export const UTM_FIELD_LABELS: Record<UtmField, string> = {
+  source: 'UTM source',
+  medium: 'UTM medium',
+  campaign: 'UTM campaign',
+  campaignId: 'UTM campaign ID',
+  term: 'UTM term',
+  content: 'UTM content',
+  sourcePlatform: 'UTM source platform',
+};
+
+export const UTM_FIELD_SHORT_LABELS: Record<UtmField, string> = {
+  source: 'Source',
+  medium: 'Medium',
+  campaign: 'Campaign',
+  campaignId: 'Campaign ID',
+  term: 'Term',
+  content: 'Content',
+  sourcePlatform: 'Source platform',
 };
 
 export function buildHumanSummary(conditions: QueryCondition[], logic: 'AND' | 'OR' = 'AND'): string {
@@ -257,6 +323,10 @@ export function buildHumanSummary(conditions: QueryCondition[], logic: 'AND' | '
         if (cond.metaValue) return `${cond.metaKey}=${cond.metaValue}`;
         return `has ${cond.metaKey}`;
       }
+      case 'referral':
+        return cond.referralValue ? `web referral=${cond.referralValue}` : 'has web referral';
+      case 'utm':
+        return cond.value ? `${UTM_FIELD_LABELS[cond.field]}=${cond.value}` : `has ${UTM_FIELD_LABELS[cond.field]}`;
       case 'lifecycle': {
         const base = cond.preset === 'early_user' ? 'first-time users' : 'returning users';
         if (cond.returnedCountOp && cond.returnedCountValue) {
@@ -299,6 +369,10 @@ export function getConditionShortLabel(cond: QueryCondition): string {
       return cond.eventName || 'Event';
     case 'metadata':
       return cond.metaKey || 'Metadata';
+    case 'referral':
+      return cond.referralValue || 'Referral';
+    case 'utm':
+      return cond.value || UTM_FIELD_LABELS[cond.field];
     case 'lifecycle':
       return cond.preset === 'early_user' ? 'Early user' : 'Returning user';
     case 'conversion':
@@ -319,6 +393,8 @@ export type PresetConditionTemplate =
   | { type: 'screen'; screenName: string; screenOutcome?: 'bounced' | 'continued' }
   | { type: 'event'; eventName: string; eventCountOp?: string; eventCountValue?: string; eventPropKey?: string; eventPropValue?: string }
   | { type: 'metadata'; metaKey: string; metaValue?: string }
+  | { type: 'referral'; referralValue?: string }
+  | { type: 'utm'; field: UtmField; value?: string }
   | { type: 'lifecycle'; preset: 'early_user' | 'returning_user' }
   | { type: 'conversion'; preset: 'checkout_bounced' | 'checkout_success' }
   | { type: 'platform'; platform: 'ios' | 'android' | 'web' };
@@ -446,6 +522,22 @@ export const CONDITION_TYPE_META: Record<ConditionType, ConditionTypeMeta> = {
     pillBorder: 'border-emerald-200',
     pillText: 'text-emerald-800',
     menuBg: 'bg-emerald-50',
+  },
+  referral: {
+    label: 'REFERRAL',
+    description: 'Web sessions by referral source',
+    pillBg: 'bg-cyan-50',
+    pillBorder: 'border-cyan-200',
+    pillText: 'text-cyan-800',
+    menuBg: 'bg-cyan-50',
+  },
+  utm: {
+    label: 'UTM',
+    description: 'Web sessions by campaign tags',
+    pillBg: 'bg-amber-50',
+    pillBorder: 'border-amber-200',
+    pillText: 'text-amber-800',
+    menuBg: 'bg-amber-50',
   },
   lifecycle: {
     label: 'LIFECYCLE',

@@ -1,5 +1,19 @@
 # @rejourneyco/browser Release Notes
 
+## 0.3.0 - 2026-05-29
+
+### Added
+
+- Dynamic UTM attribution capture for web sessions, including `utm_source`, `utm_medium`, `utm_campaign`, `utm_id`, `utm_term`, `utm_content`, `utm_source_platform`, `utm_creative_format`, and `utm_marketing_tactic`.
+- Stronger referral tracking for web sessions, with referrer domain capture, channel classification, and safer redaction of sensitive referrer/query values.
+- Automatic host app version detection from page globals, metadata, manifests, and same-origin version files, so `appVersion` reflects the developer's website/app when available instead of the SDK package version.
+
+### Fixed
+
+- Preserves first-touch UTM/referral data when cookie consent banners delay SDK startup and the site later cleans or replaces the URL before recording begins.
+- Handles delayed `init()` and delayed `start()` flows more reliably by keeping the strongest available attribution snapshot when the SDK bundle loads before consent acceptance.
+- Allows `beforeSendAttribution` to drop attribution by returning `null`.
+
 ## 0.2.0 - 2026-05-21
 
 ### Added

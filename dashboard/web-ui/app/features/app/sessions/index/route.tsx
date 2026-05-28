@@ -41,6 +41,7 @@ import { useSafeTeam } from '~/shared/providers/TeamContext';
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
 import { formatDeviceModel, getDeviceModelSearchText } from '~/shared/lib/deviceModelNames';
 import { getWebNetworkDisplay, getWebSessionEnvironment } from '~/shared/lib/webSessionEnvironment';
+import { formatWebReferralLabel, getWebReferral, getWebUtmAttribution } from '~/shared/lib/webAttributionMetadata';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { matchesSessionArchiveIssueFilter } from './sessionArchiveFilters';
 import { QueryBuilder } from './QueryBuilder';
@@ -91,18 +92,6 @@ const NetworkIcon: React.FC<{ type: string | undefined }> = ({ type }) => {
 const hasSuccessfulRecording = (session: any): boolean =>
   Boolean(session?.hasSuccessfulRecording ?? ((session?.stats?.screenshotSegmentCount ?? 0) > 0));
 
-function readSessionMetadataString(session: any, keys: string[]): string | null {
-  const metadata = session?.metadata;
-  if (!metadata || typeof metadata !== 'object') return null;
-  for (const key of keys) {
-    const value = metadata[key];
-    if (value === null || value === undefined) continue;
-    const normalized = String(value).trim();
-    if (normalized) return normalized;
-  }
-  return null;
-}
-
 function isWebSession(session: any): boolean {
   return String(session?.platform || '').toLowerCase() === 'web';
 }
@@ -113,39 +102,6 @@ function getPlatformLabel(session: any): string {
   if (platform === 'android') return 'Android';
   if (platform === 'ios') return 'iOS';
   return 'Mobile';
-}
-
-function getWebReferral(session: any): string | null {
-  return session?.webReferral ||
-    readSessionMetadataString(session, ['webReferral', 'webReferrerDomain', 'webAttributionSource']) ||
-    null;
-}
-
-function formatWebReferralLabel(referral: string | null): string {
-  const raw = String(referral || '').trim();
-  if (!raw) return 'Direct';
-
-  const normalized = raw.toLowerCase();
-  if (['direct', '(direct)', 'none', 'null', 'undefined'].includes(normalized)) {
-    return 'Direct';
-  }
-
-  const maybeUrl = raw.includes('://')
-    ? raw
-    : raw.includes('.') && !raw.includes(' ')
-      ? `https://${raw}`
-      : null;
-
-  if (maybeUrl) {
-    try {
-      const hostname = new URL(maybeUrl).hostname;
-      if (hostname) return hostname;
-    } catch {
-      // Fall through to raw referral below.
-    }
-  }
-
-  return raw;
 }
 
 const SessionPlatformIcon: React.FC<{ session: any; className?: string }> = ({ session, className }) =>
@@ -870,6 +826,7 @@ export const RecordingsList: React.FC = () => {
 	              const platformLabel = getPlatformLabel(session);
 	              const webReferral = getWebReferral(session);
 	              const webReferralLabel = formatWebReferralLabel(webReferral);
+	              const webUtm = webSession ? getWebUtmAttribution(session) : null;
 
 	              const hasIssues = (session.crashCount || 0) > 0 ||
                 ((session as any).anrCount || 0) > 0 ||
@@ -1120,14 +1077,25 @@ export const RecordingsList: React.FC = () => {
                                         {interactionScore}/100
                                       </span>
                                     </div>
-                                    {webSession && webReferral ? (
+                                    {webSession ? (
                                       <div className="flex justify-between items-start gap-2">
                                         <span className="text-[10px] text-slate-500 font-semibold uppercase">Referral</span>
                                         <span
                                           className="min-w-0 break-words text-right text-[10px] font-bold uppercase text-slate-600"
-                                          title={webReferral}
+                                          title={webReferral || 'Direct'}
                                         >
                                           {webReferralLabel}
+                                        </span>
+                                      </div>
+                                    ) : null}
+                                    {webSession && webUtm ? (
+                                      <div className="flex justify-between items-start gap-2">
+                                        <span className="text-[10px] text-slate-500 font-semibold uppercase">UTM</span>
+                                        <span
+                                          className={`min-w-0 break-words text-right text-[10px] font-bold uppercase ${webUtm.hasUtm ? 'text-slate-700' : 'text-slate-400'}`}
+                                          title={webUtm.title}
+                                        >
+                                          {webUtm.label}
                                         </span>
                                       </div>
                                     ) : null}
@@ -1197,6 +1165,10 @@ export const RecordingsList: React.FC = () => {
                             <div className="border-2 border-black bg-white p-3 shadow-neo-sm">
                               <div className="mb-2 text-[9px] font-black uppercase text-slate-600">API Calls</div>
                               <div className="space-y-1.5">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[10px] text-slate-500 font-semibold uppercase">Total</span>
+                                  <span className="border border-black bg-[#dbeafe] px-1.5 py-0.5 font-mono text-xs font-black text-black">{session.apiTotalCount || ((session.apiSuccessCount || 0) + (session.apiErrorCount || 0))}</span>
+                                </div>
                                 <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-slate-500 font-semibold uppercase">OK</span>
                                   <span className="border border-black bg-[#86efac] px-1.5 py-0.5 font-mono text-xs font-black text-black">{session.apiSuccessCount || 0}</span>

@@ -2,13 +2,14 @@ import React from 'react';
 import {
   X, AlertOctagon, Calendar, LayoutGrid, Zap, Tag, Users,
   Smartphone, ArrowRight, Plus, Info, Route, ChevronDown,
-  MonitorSmartphone,
+  MonitorSmartphone, Globe2, Megaphone,
 } from 'lucide-react';
 import {
   type IssueCondition, type DateCondition, type ScreenCondition,
   type EventCondition, type MetadataCondition, type LifecycleCondition,
   type ConversionCondition, type PlatformCondition, type JourneyCondition,
-  CONDITION_TYPE_META,
+  type ReferralCondition, type UtmCondition, type UtmField,
+  CONDITION_TYPE_META, UTM_FIELD_SHORT_LABELS, UTM_FIELD_META_KEYS,
 } from './queryBuilderTypes';
 
 export interface AvailableFilters {
@@ -77,11 +78,26 @@ const TYPE_COLORS: Record<string, { icon: React.ReactNode; bg: string; text: str
   screen:     { icon: <LayoutGrid className="w-4 h-4" />,   bg: 'bg-[#c4b5fd]',text: 'text-black', border: 'border-black' },
   event:      { icon: <Zap className="w-4 h-4" />,          bg: 'bg-[#dbeafe]',text: 'text-black', border: 'border-black' },
   metadata:   { icon: <Tag className="w-4 h-4" />,          bg: 'bg-[#86efac]',text: 'text-black', border: 'border-black' },
+  referral:   { icon: <Globe2 className="w-4 h-4" />,       bg: 'bg-[#67e8f9]',text: 'text-black', border: 'border-black' },
+  utm:        { icon: <Megaphone className="w-4 h-4" />,    bg: 'bg-[#fde68a]',text: 'text-black', border: 'border-black' },
   lifecycle:  { icon: <Users className="w-4 h-4" />,        bg: 'bg-[#f9a8d4]', text: 'text-black', border: 'border-black' },
   platform:   { icon: <Smartphone className="w-4 h-4" />,   bg: 'bg-[#67e8f9]',  text: 'text-black', border: 'border-black' },
   journey:    { icon: <Route className="w-4 h-4" />,        bg: 'bg-[#86efac]',  text: 'text-black', border: 'border-black' },
   conversion: { icon: <Tag className="w-4 h-4" />,          bg: 'bg-[#f9a8d4]',  text: 'text-black', border: 'border-black' },
 };
+
+function uniqueValues(values: Array<string | undefined>): string[] {
+  return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
+}
+
+function optionsWithCurrent(values: string[], current?: string): { value: string; label: string }[] {
+  const allValues = uniqueValues([...values, current]);
+  return [{ value: '', label: 'any value' }, ...allValues.map((value) => ({ value, label: value }))];
+}
+
+function metadataValues(filters: AvailableFilters, keys: string[]): string[] {
+  return uniqueValues(keys.flatMap((key) => filters.metadata[key] ?? []));
+}
 
 export function ConditionRowShell({
   type, children, onRemove,
@@ -245,6 +261,69 @@ export function MetadataRow({ cond, onChange, onRemove, filters, loading }: {
               placeholder="value" className="w-28 border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black outline-none" />
           )}
         </>
+      )}
+    </ConditionRowShell>
+  );
+}
+
+export function ReferralRow({ cond, onChange, onRemove, filters, loading }: {
+  cond: ReferralCondition; onChange: (c: ReferralCondition) => void; onRemove: () => void;
+  filters: AvailableFilters; loading: boolean;
+}) {
+  const referralValues = metadataValues(filters, ['webReferral', 'webReferrerDomain', 'webAttributionSource']);
+  const valOpts = optionsWithCurrent(referralValues, cond.referralValue);
+  return (
+    <ConditionRowShell type="referral" onRemove={onRemove}>
+      <span className="border-2 border-black bg-[#ecfeff] px-3 py-1.5 text-xs font-black uppercase text-black">Web only</span>
+      {loading ? <span className="text-xs text-slate-400">Loading…</span> : (
+        <>
+          <span className="text-xs text-slate-400">from</span>
+          {referralValues.length > 0 ? (
+            <Chip value={cond.referralValue ?? ''} onChange={(v) => onChange({ ...cond, referralValue: v || undefined })} options={valOpts} />
+          ) : (
+            <input type="text" value={cond.referralValue ?? ''} onChange={(e) => onChange({ ...cond, referralValue: e.target.value || undefined })}
+              placeholder="domain or source" className="w-36 border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black outline-none" />
+          )}
+        </>
+      )}
+    </ConditionRowShell>
+  );
+}
+
+const UTM_FIELD_OPTIONS = (Object.entries(UTM_FIELD_SHORT_LABELS) as Array<[UtmField, string]>)
+  .map(([value, label]) => ({ value, label }));
+
+const UTM_VALUE_KEYS: Record<UtmField, string[]> = {
+  source: ['utm_source', 'webAttributionSource'],
+  medium: ['utm_medium', 'webAttributionMedium'],
+  campaign: ['utm_campaign', 'webAttributionCampaign'],
+  campaignId: ['utm_id', 'webAttributionCampaignId'],
+  term: ['utm_term', 'webAttributionTerm'],
+  content: ['utm_content', 'webAttributionContent'],
+  sourcePlatform: ['utm_source_platform', 'webAttributionSourcePlatform'],
+};
+
+export function UtmRow({ cond, onChange, onRemove, filters, loading }: {
+  cond: UtmCondition; onChange: (c: UtmCondition) => void; onRemove: () => void;
+  filters: AvailableFilters; loading: boolean;
+}) {
+  const metaKey = UTM_FIELD_META_KEYS[cond.field];
+  const values = metadataValues(filters, UTM_VALUE_KEYS[cond.field] ?? [metaKey]);
+  const valOpts = optionsWithCurrent(values, cond.value);
+  return (
+    <ConditionRowShell type="utm" onRemove={onRemove}>
+      <span className="border-2 border-black bg-[#ecfeff] px-3 py-1.5 text-xs font-black uppercase text-black">Web only</span>
+      <Chip
+        value={cond.field}
+        onChange={(v) => onChange({ ...cond, field: v as UtmField, value: undefined })}
+        options={UTM_FIELD_OPTIONS}
+      />
+      <span className="text-xs text-slate-400">=</span>
+      {loading ? <span className="text-xs text-slate-400">Loading…</span> : values.length > 0 ? (
+        <Chip value={cond.value ?? ''} onChange={(v) => onChange({ ...cond, value: v || undefined })} options={valOpts} />
+      ) : (
+        <input type="text" value={cond.value ?? ''} onChange={(e) => onChange({ ...cond, value: e.target.value || undefined })}
+          placeholder="value" className="w-32 border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black outline-none" />
       )}
     </ConditionRowShell>
   );

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildWebAttributionMetadata } from '../services/ingestEventArtifactProcessor.js';
 import { buildClickHouseApiEndpointEventRow } from '../services/clickhouseApiStatsSink.js';
+import { normalizeIngestAppVersion } from '../services/ingestSessionLifecycle.js';
 
 describe('ingest event artifact processor attribution metadata', () => {
     it('maps web attribution and UTM query values into session metadata', () => {
@@ -127,5 +128,23 @@ describe('ClickHouse API endpoint event rows', () => {
             source: 'event_artifact',
             schema_version: 1,
         });
+    });
+});
+
+describe('ingest app version normalization', () => {
+    it('does not treat the web SDK version as the host app version', () => {
+        expect(normalizeIngestAppVersion({
+            platform: 'web',
+            appVersion: '0.2.0',
+            sdkVersion: '0.2.0',
+        })).toBeNull();
+    });
+
+    it('keeps real host web app versions when they differ from the SDK version', () => {
+        expect(normalizeIngestAppVersion({
+            platform: 'web',
+            appVersion: 'web-2026.05.1',
+            sdkVersion: '0.2.0',
+        })).toBe('web-2026.05.1');
     });
 });

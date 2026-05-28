@@ -1,4 +1,5 @@
 import { SDK_VERSION } from './constants.js';
+import { detectAppVersion, detectAppVersionSync } from './appVersion.js';
 import type { WebDeviceInfo } from './types.js';
 
 type NavigatorWithClientHints = Navigator & {
@@ -195,6 +196,7 @@ export function collectWebDeviceInfo(
   visitorId: string,
   nav: Navigator | null,
   highEntropy?: UserAgentHighEntropyValues | null,
+  appVersion = detectAppVersionSync() || 'unknown',
 ): WebDeviceInfo {
   const navigatorInfo = nav as NavigatorWithClientHints | null;
   const userAgent = navigatorInfo?.userAgent || '';
@@ -215,7 +217,7 @@ export function collectWebDeviceInfo(
     timezone: getTimezone(),
     deviceId: visitorId,
     sdkVersion: SDK_VERSION,
-    appVersion: SDK_VERSION,
+    appVersion,
     browser: browser.name,
     browserVersion: browser.version,
     networkType: effectiveConnectionType ? `effective-${effectiveConnectionType}` : navigatorInfo?.connection?.type,
@@ -226,7 +228,11 @@ export function collectWebDeviceInfo(
 
 export async function collectWebDeviceInfoWithHints(visitorId: string, nav: Navigator | null): Promise<WebDeviceInfo> {
   const navigatorInfo = nav as NavigatorWithClientHints | null;
-  return collectWebDeviceInfo(visitorId, nav, await getHighEntropyValues(navigatorInfo));
+  const [highEntropy, appVersion] = await Promise.all([
+    getHighEntropyValues(navigatorInfo),
+    detectAppVersion(),
+  ]);
+  return collectWebDeviceInfo(visitorId, nav, highEntropy, appVersion);
 }
 
 export function formatBrowserInfoLabel(info: BrowserInfo): string {

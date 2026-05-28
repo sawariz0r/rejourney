@@ -3,7 +3,7 @@ import { gunzipSync } from 'zlib';
 import { eq, sql } from 'drizzle-orm';
 import { db, sessions, sessionMetrics, anrs, errors, screenTouchHeatmaps, recordingArtifacts } from '../db/client.js';
 import { trackANRAsIssue, trackErrorAsIssue } from './issueTracker.js';
-import { normalizeIngestSdkVersion } from './ingestSessionLifecycle.js';
+import { normalizeIngestAppVersion, normalizeIngestSdkVersion } from './ingestSessionLifecycle.js';
 import { getUniqueScreenCount, mergeScreenPaths, normalizeScreenPath } from '../utils/screenPaths.js';
 import { normalizeHeatmapScreenName } from '../utils/heatmapScreens.js';
 import { shouldExcludeNetworkEventFromProductAnalytics } from '../utils/internalToolEndpointFilter.js';
@@ -176,7 +176,12 @@ function buildDeviceMetadataUpdates(deviceInfo: any): Record<string, string | bo
     assign('effectiveConnectionType', deviceInfo?.effectiveConnectionType, 128);
     assign('connectionSaveData', deviceInfo?.connectionSaveData);
     assign('sdkVersion', normalizeIngestSdkVersion(deviceInfo?.sdkVersion), 50);
-    assign('appVersion', deviceInfo?.appVersion || deviceInfo?.sdkVersion, 128);
+    assign('appVersion', normalizeIngestAppVersion({
+        platform: deviceInfo?.platform,
+        os: deviceInfo?.os,
+        appVersion: deviceInfo?.appVersion,
+        sdkVersion: deviceInfo?.sdkVersion,
+    }), 128);
     assign('userAgent', deviceInfo?.userAgent, 2048);
 
     return updates;
@@ -212,7 +217,12 @@ export async function processEventsArtifact(job: any, session: any, metrics: any
     // Update session metadata from device info
     if (deviceInfo) {
         const sessionUpdates: any = { updatedAt: new Date() };
-        const deviceAppVersion = deviceInfo.appVersion || deviceInfo.sdkVersion;
+        const deviceAppVersion = normalizeIngestAppVersion({
+            platform: deviceInfo?.platform,
+            os: deviceInfo?.os,
+            appVersion: deviceInfo?.appVersion,
+            sdkVersion: deviceInfo?.sdkVersion,
+        });
         if (deviceAppVersion) sessionUpdates.appVersion = deviceAppVersion;
         if (deviceInfo.model) sessionUpdates.deviceModel = deviceInfo.model;
         if (deviceInfo.platform) sessionUpdates.platform = deviceInfo.platform;
