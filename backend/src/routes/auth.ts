@@ -7,7 +7,7 @@
 import { Router, type Request } from 'express';
 import { createHash, randomBytes } from 'crypto';
 import { eq, gt, and, sql, desc } from 'drizzle-orm';
-import { db, users, teams, teamMembers, otpTokens, userSessions, sessions, sessionMetrics, projects } from '../db/client.js';
+import { auditLogs, db, users, teams, teamMembers, otpTokens, userSessions, sessions, sessionMetrics, projects } from '../db/client.js';
 import { logger } from '../logger.js';
 import { config } from '../config.js';
 import { validate, asyncHandler, ApiError, sessionAuth } from '../middleware/index.js';
@@ -67,6 +67,19 @@ async function auditAuthEvent(
         targetId: params.targetId,
         metadata: params.metadata,
     }, req);
+}
+
+async function hasPriorSuccessfulLogin(userId: string): Promise<boolean> {
+    const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(auditLogs)
+        .where(and(
+            eq(auditLogs.userId, userId),
+            eq(auditLogs.action, 'login_success')
+        ))
+        .limit(1);
+
+    return Number(row?.count ?? 0) > 0;
 }
 
 /**
@@ -383,6 +396,8 @@ router.post(
         // Delete used OTP token
         await db.delete(otpTokens).where(eq(otpTokens.id, otpToken.id));
 
+        const accountActivated = !(await hasPriorSuccessfulLogin(otpToken.user!.id));
+
         // Backfill fingerprint data for users who don't have it yet
         if (fingerprint && !otpToken.user!.registrationIp) {
             const userAgent = req.headers['user-agent'] || '';
@@ -436,6 +451,7 @@ router.post(
                 email: normalizedEmail,
                 sessionId: session.id,
                 sessionExpiresAt: session.expiresAt,
+                accountActivated,
             },
         });
 
@@ -447,6 +463,7 @@ router.post(
                 displayName: otpToken.user!.displayName,
             },
             token: sessionToken,
+            accountActivated,
         });
     })
 );
@@ -899,6 +916,8 @@ router.get(
                 });
             }
 
+            const accountActivated = !(await hasPriorSuccessfulLogin(existingUser.id));
+
             // Create session
             const sessionToken = randomBytes(32).toString('hex');
             const sessionExpiresAt = new Date(Date.now() + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
@@ -932,6 +951,7 @@ router.get(
                     sessionExpiresAt: session.expiresAt,
                     linkedGithubToExistingUser,
                     createdAccount: createdUserFromGithub,
+                    accountActivated,
                     defaultTeamId,
                 },
             });
@@ -939,7 +959,11 @@ router.get(
             // Return to the dashboard login route first so the frontend can
             // honor any saved returnUrl (for example, invite acceptance flows).
             const dashboardUrl = config.PUBLIC_DASHBOARD_URL || 'https://rejourney.co';
-            res.redirect(`${dashboardUrl}/login`);
+            const loginUrl = new URL(`${dashboardUrl.replace(/\/$/, '')}/login`);
+            if (accountActivated) {
+                loginUrl.searchParams.set('account_activated', 'github');
+            }
+            res.redirect(loginUrl.toString());
 
         } catch (error) {
             const dashboardUrl = config.PUBLIC_DASHBOARD_URL || 'https://rejourney.co';

@@ -230,6 +230,7 @@ export interface AuthActionResult {
   message?: string;
   transient?: boolean;
   status?: number;
+  accountActivated?: boolean;
 }
 
 class AuthRequestError extends Error {
@@ -432,7 +433,7 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
       const fingerprint = await getFingerprint();
 
       // Use relative URL to go through the proxy with timeout
-      const verifyData = await fetchAuthJson<{ user?: Record<string, any> }>('/api/auth/otp/verify', {
+      const verifyData = await fetchAuthJson<{ user?: Record<string, any>; accountActivated?: boolean }>('/api/auth/otp/verify', {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -450,7 +451,7 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
         // loader will hydrate the full shell, and this refresh backfills any
         // richer user fields without holding the user on the auth screen.
         void refreshUser();
-        return { ok: true };
+        return { ok: true, accountActivated: Boolean(verifyData.accountActivated) };
       }
 
       // Older auth responses may omit user data; keep the previous validation
@@ -458,7 +459,7 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
       const refreshedUser = await refreshUser();
       setAuthServiceUnavailable(false);
       return refreshedUser
-        ? { ok: true }
+        ? { ok: true, accountActivated: Boolean(verifyData?.accountActivated) }
         : {
             ok: false,
             message: 'We verified the code, but could not load your dashboard session. Please retry.',

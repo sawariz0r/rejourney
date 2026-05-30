@@ -12,11 +12,13 @@ import { AuthServiceUnavailable } from "~/shared/ui/core/AuthServiceUnavailable"
 
 import { API_BASE_URL } from "~/shared/config/appConfig";
 import { getTurnstileSiteKey } from "~/shared/config/runtimeEnv";
+import { trackAccountActivationSignal, type AccountActivationMethod } from "~/shared/lib/edgeSignals";
 
 const STATIC_TURNSTILE_SITE_KEY = getTurnstileSiteKey();
 const TURNSTILE_SCRIPT_ID = 'cloudflare-turnstile-api';
 const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 const TURNSTILE_SCRIPT_TIMEOUT_MS = 12000;
+const ACCOUNT_ACTIVATED_PARAM = 'account_activated';
 let turnstileScriptLoadPromise: Promise<void> | null = null;
 
 // Extend Window interface for Turnstile
@@ -45,6 +47,10 @@ const POST_LOGIN_TRANSITION_MIN_MS = 650;
 interface AuthPublicConfig {
     turnstileRequired: boolean;
     turnstileSiteKey?: string;
+}
+
+function readAccountActivationMethod(value: string | null): AccountActivationMethod | null {
+    return value === 'github' || value === 'otp' ? value : null;
 }
 
 function AuthTransitionScreen({ state }: { state: Exclude<AuthTransitionState, 'idle'> }) {
@@ -216,6 +222,7 @@ export default function LoginPage() {
     const postLoginNavigationTimer = useRef<number | null>(null);
     const isTurnstileEnabled = isTurnstileRequired && Boolean(turnstileSiteKey);
     const shouldShowTurnstileArea = isTurnstileConfigLoading || isTurnstileRequired || Boolean(turnstileConfigError);
+    const pendingAccountActivationMethod = readAccountActivationMethod(searchParams.get(ACCOUNT_ACTIVATED_PARAM));
 
     const startAuthTransition = useCallback((state: Exclude<AuthTransitionState, 'idle'>) => {
         if (authTransitionStartedAt.current === null) {
@@ -303,7 +310,7 @@ export default function LoginPage() {
         return '/dashboard/general';
     }, []);
 
-    const navigateToPostLoginDestination = useCallback(() => {
+    const navigateToPostLoginDestination = useCallback((options?: { accountActivationMethod?: AccountActivationMethod | null }) => {
         if (postLoginNavigationStarted.current) {
             return;
         }
@@ -323,7 +330,14 @@ export default function LoginPage() {
 
         postLoginNavigationTimer.current = window.setTimeout(() => {
             postLoginNavigationTimer.current = null;
-            navigate(destination, { replace: true });
+            const finishNavigation = async () => {
+                if (options?.accountActivationMethod) {
+                    await trackAccountActivationSignal(options.accountActivationMethod);
+                }
+                navigate(destination, { replace: true });
+            };
+
+            void finishNavigation();
         }, delay);
     }, [getPostLoginDestination, navigate, startAuthTransition]);
 
@@ -333,12 +347,12 @@ export default function LoginPage() {
         try {
             const freshUser = await refreshUser();
             if (freshUser) {
-                navigateToPostLoginDestination();
+                navigateToPostLoginDestination({ accountActivationMethod: pendingAccountActivationMethod });
             }
         } finally {
             setIsRetryingAuth(false);
         }
-    }, [navigateToPostLoginDestination, refreshUser]);
+    }, [navigateToPostLoginDestination, pendingAccountActivationMethod, refreshUser]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -347,6 +361,14 @@ export default function LoginPage() {
             localStorage.setItem('returnUrl', returnTo);
         }
     }, [searchParams]);
+
+    useEffect(() => {
+        if (!pendingAccountActivationMethod || typeof window === 'undefined') return;
+
+        const url = new URL(window.location.href);
+        url.searchParams.delete(ACCOUNT_ACTIVATED_PARAM);
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }, [pendingAccountActivationMethod]);
 
     useEffect(() => {
         return () => {
@@ -437,7 +459,7 @@ export default function LoginPage() {
         refreshUser()
             .then((freshUser) => {
                 if (cancelled || !freshUser) return;
-                navigateToPostLoginDestination();
+                navigateToPostLoginDestination({ accountActivationMethod: pendingAccountActivationMethod });
             })
             .finally(() => {
                 if (!cancelled) setIsValidatingExistingSession(false);
@@ -446,7 +468,7 @@ export default function LoginPage() {
         return () => {
             cancelled = true;
         };
-    }, [authLoading, isAuthenticated, navigateToPostLoginDestination, refreshUser]);
+    }, [authLoading, isAuthenticated, navigateToPostLoginDestination, pendingAccountActivationMethod, refreshUser]);
 
     // Fetch CSRF token on mount (silently fail if network error)
     useEffect(() => {
@@ -621,7 +643,7 @@ export default function LoginPage() {
         try {
             const result = await login(email, otp);
             if (result.ok) {
-                navigateToPostLoginDestination();
+                navigateToPostLoginDestination({ accountActivationMethod: result.accountActivated ? 'otp' : null });
                 return;
             } else {
                 resetAuthTransition();
