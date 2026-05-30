@@ -7,8 +7,9 @@
 
 import { Router } from 'express';
 import { and, desc, eq, gte, inArray, isNull, sql, type SQL } from 'drizzle-orm';
-import { db, dbRead, projects, recordingArtifacts, sessionMetrics, sessions, teamMembers, errors as jsErrors, crashes as appCrashes } from '../db/client.js';
+import { db, dbRead, projects, recordingArtifacts, sessionMetrics, sessions, teamMembers, errors as jsErrors, crashes as appCrashes, screenTouchHeatmaps } from '../db/client.js';
 import { getRedis } from '../db/redis.js';
+import { downloadFromS3ForArtifact } from '../db/s3.js';
 import { logger } from '../logger.js';
 import { sessionAuth, asyncHandler, ApiError } from '../middleware/index.js';
 import { config } from '../config.js';
@@ -21,7 +22,14 @@ import { boundedTimeRangeToDays } from '../utils/analyticsTimeRange.js';
 import { buildRetentionCohortRows } from '../services/retentionCohorts.js';
 import { generateAnonymousName } from '../utils/anonymousName.js';
 import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
-import { normalizeHeatmapScreenPath } from '../utils/heatmapScreens.js';
+import { normalizeHeatmapScreenName, normalizeHeatmapScreenPath } from '../utils/heatmapScreens.js';
+import {
+    buildWebAttentionHeatmap,
+    dimensionsFromRrwebEnvelope,
+    extractRrwebEventsFromArtifact,
+    type WebAttentionHeatmapDimensions,
+    type WebAttentionTouchPrior,
+} from '../utils/webAttentionHeatmap.js';
 
 const router = Router();
 const redis = getRedis();
@@ -31,6 +39,33 @@ const SESSION_PREVIEW_LIMIT = 120;
 const RETENTION_PREVIEW_ROWS = 4;
 const RETENTION_PREVIEW_WEEKS = 4;
 const OVERVIEW_RESPONSE_CACHE_CONTROL = 'private, max-age=30, stale-while-revalidate=60';
+const WEB_ATTENTION_CACHE_TTL_SECONDS = 600;
+const WEB_ATTENTION_SESSION_SCAN_LIMIT = 250;
+const WEB_ATTENTION_SAMPLE_SESSION_LIMIT = 12;
+const WEB_ATTENTION_MAX_ARTIFACTS = 30;
+const WEB_ATTENTION_MAX_ARTIFACTS_PER_SESSION = 3;
+const WEB_ATTENTION_DOWNLOAD_CONCURRENCY = 6;
+// Mild tilt toward recent sessions: 0 = uniform random, 1 = strongly favor newest.
+// Kept low so the sample still represents the whole window, just leaning slightly recent.
+const WEB_ATTENTION_RECENCY_BIAS = 0.4;
+
+// Weighted-reservoir sample (Efraimidis-Spirakis) with a gentle recency tilt.
+// `items` must be ordered most-recent-first; earlier (more recent) items get slightly
+// higher selection weight, but every item retains a real chance of being picked.
+function sampleRecencyWeightedSubset<T>(items: T[], limit: number): T[] {
+    if (items.length <= limit) return items.slice();
+    const n = items.length;
+    return items
+        .map((item, index) => {
+            const rankFraction = n > 1 ? index / (n - 1) : 0;
+            const weight = 1 - WEB_ATTENTION_RECENCY_BIAS * rankFraction;
+            const key = Math.pow(Math.random(), 1 / Math.max(weight, 1e-6));
+            return { item, key };
+        })
+        .sort((a, b) => b.key - a.key)
+        .slice(0, limit)
+        .map((entry) => entry.item);
+}
 
 async function getAccessibleProjectIds(userId: string): Promise<string[]> {
     const memberships = await db
@@ -1287,6 +1322,281 @@ async function loadHeatmapScreenDetail(
     };
 }
 
+async function mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let cursor = 0;
+    const workerCount = Math.max(1, Math.min(concurrency, items.length));
+
+    await Promise.all(Array.from({ length: workerCount }, async () => {
+        while (cursor < items.length) {
+            const index = cursor;
+            cursor += 1;
+            results[index] = await mapper(items[index], index);
+        }
+    }));
+
+    return results;
+}
+
+type WebAttentionPrior = Partial<WebAttentionHeatmapDimensions> & WebAttentionTouchPrior;
+
+function emptyWebAttentionHeatmap(
+    dimensions: Partial<WebAttentionHeatmapDimensions> = {},
+    reason: string | null = null,
+) {
+    return {
+        hotspots: [],
+        sampledSessions: 0,
+        avgSessionDurationMs: null,
+        dwellByDepth: [],
+        eventCount: 0,
+        generatedAt: new Date().toISOString(),
+        confidence: 'low' as const,
+        pageWidth: dimensions.pageWidth ?? dimensions.viewportWidth ?? null,
+        pageHeight: dimensions.pageHeight ?? dimensions.viewportHeight ?? null,
+        viewportWidth: dimensions.viewportWidth ?? null,
+        viewportHeight: dimensions.viewportHeight ?? null,
+        reason,
+    };
+}
+
+function mergeBucketMap(target: Record<string, number>, source: Record<string, number> | null | undefined): void {
+    if (!source || typeof source !== 'object') return;
+    for (const [bucket, rawValue] of Object.entries(source)) {
+        const value = Number(rawValue);
+        if (!Number.isFinite(value) || value <= 0) continue;
+        target[bucket] = (target[bucket] ?? 0) + value;
+    }
+}
+
+function hasTouchPriorSignal(prior: WebAttentionTouchPrior): boolean {
+    return Number(prior.totalTouches ?? 0) > 0 ||
+        Number(prior.totalRageTaps ?? 0) > 0 ||
+        Object.keys(prior.touchBuckets ?? {}).length > 0 ||
+        Object.keys(prior.rageTapBuckets ?? {}).length > 0;
+}
+
+function dimensionsFromAttentionPrior(prior: WebAttentionPrior): Partial<WebAttentionHeatmapDimensions> {
+    return {
+        pageWidth: prior.pageWidth,
+        pageHeight: prior.pageHeight,
+        viewportWidth: prior.viewportWidth,
+        viewportHeight: prior.viewportHeight,
+    };
+}
+
+function attentionFromPriorOrEmpty(
+    prior: WebAttentionPrior,
+    normalizedScreenName: string,
+    emptyReason: string,
+) {
+    const dimensions = dimensionsFromAttentionPrior(prior);
+    if (!hasTouchPriorSignal(prior)) {
+        return emptyWebAttentionHeatmap(dimensions, emptyReason);
+    }
+
+    const result = buildWebAttentionHeatmap([], dimensions, prior, normalizedScreenName);
+    return {
+        ...result,
+        reason: result.hotspots.length > 0 ? null : emptyReason,
+    };
+}
+
+async function loadWebAttentionPrior(
+    projectId: string,
+    normalizedScreenName: string,
+    timeRange?: string,
+): Promise<WebAttentionPrior> {
+    const startedAfter = buildStartedAfter(timeRange);
+    const rows = await db
+        .select({
+            screenName: screenTouchHeatmaps.screenName,
+            touchBuckets: screenTouchHeatmaps.touchBuckets,
+            rageTapBuckets: screenTouchHeatmaps.rageTapBuckets,
+            totalTouches: screenTouchHeatmaps.totalTouches,
+            totalRageTaps: screenTouchHeatmaps.totalRageTaps,
+            pageWidth: screenTouchHeatmaps.pageWidth,
+            pageHeight: screenTouchHeatmaps.pageHeight,
+            viewportWidth: screenTouchHeatmaps.viewportWidth,
+            viewportHeight: screenTouchHeatmaps.viewportHeight,
+        })
+        .from(screenTouchHeatmaps)
+        .where(and(
+            eq(screenTouchHeatmaps.projectId, projectId),
+            startedAfter ? gte(screenTouchHeatmaps.date, startedAfter.toISOString().split('T')[0] as any) : undefined,
+        ))
+        .limit(5000);
+
+    const matched = rows.filter((row) => normalizeHeatmapScreenName(row.screenName) === normalizedScreenName);
+    const prior: WebAttentionPrior = {
+        touchBuckets: {},
+        rageTapBuckets: {},
+        totalTouches: 0,
+        totalRageTaps: 0,
+    };
+
+    for (const row of matched) {
+        mergeBucketMap(prior.touchBuckets!, row.touchBuckets as Record<string, number> | null | undefined);
+        mergeBucketMap(prior.rageTapBuckets!, row.rageTapBuckets as Record<string, number> | null | undefined);
+        prior.totalTouches = Number(prior.totalTouches ?? 0) + Number(row.totalTouches ?? 0);
+        prior.totalRageTaps = Number(prior.totalRageTaps ?? 0) + Number(row.totalRageTaps ?? 0);
+        prior.pageWidth = Math.max(prior.pageWidth ?? 0, row.pageWidth ?? 0) || prior.pageWidth;
+        prior.pageHeight = Math.max(prior.pageHeight ?? 0, row.pageHeight ?? 0) || prior.pageHeight;
+        prior.viewportWidth = Math.max(prior.viewportWidth ?? 0, row.viewportWidth ?? 0) || prior.viewportWidth;
+        prior.viewportHeight = Math.max(prior.viewportHeight ?? 0, row.viewportHeight ?? 0) || prior.viewportHeight;
+    }
+
+    return prior;
+}
+
+async function loadWebAttentionHeatmap(
+    projectId: string,
+    screenName: string,
+    timeRange?: string,
+    platform?: string,
+    appVersion?: string,
+) {
+    const normalizedScreenName = normalizeHeatmapScreenName(screenName);
+    if (!normalizedScreenName) {
+        throw ApiError.badRequest('screenName is invalid');
+    }
+    if (platform && platform !== 'web') {
+        return emptyWebAttentionHeatmap({}, 'attention maps are web-only');
+    }
+
+    const attentionPrior = await loadWebAttentionPrior(projectId, normalizedScreenName, timeRange);
+    const fallbackDimensions = dimensionsFromAttentionPrior(attentionPrior);
+    const startedAfter = buildStartedAfter(timeRange);
+    const conditions: SQL[] = [
+        eq(sessions.projectId, projectId),
+        eq(sessions.platform, 'web'),
+        eq(sessions.replayAvailable, true),
+        eq(sessions.recordingDeleted, false),
+        eq(sessions.isReplayExpired, false),
+    ];
+    if (startedAfter) conditions.push(gte(sessions.startedAt, startedAfter));
+    if (appVersion) conditions.push(eq(sessions.appVersion, appVersion));
+
+    const candidateRows = await db
+        .select({
+            sessionId: sessions.id,
+            startedAt: sessions.startedAt,
+            endedAt: sessions.endedAt,
+            durationSeconds: sessions.durationSeconds,
+            screensVisited: sessionMetrics.screensVisited,
+        })
+        .from(sessions)
+        .innerJoin(sessionMetrics, eq(sessionMetrics.sessionId, sessions.id))
+        .where(and(...conditions))
+        .orderBy(desc(sessions.startedAt))
+        .limit(WEB_ATTENTION_SESSION_SCAN_LIMIT);
+
+    const matchedRows = candidateRows
+        .filter((row) => normalizeHeatmapScreenPath(row.screensVisited || []).includes(normalizedScreenName))
+    const matchedSessionIds = matchedRows.map((row) => row.sessionId);
+    const durationMsBySessionId = new Map(
+        matchedRows.map((row) => {
+            const durationMsFromColumn = Number(row.durationSeconds ?? 0) > 0
+                ? Number(row.durationSeconds) * 1000
+                : null;
+            const durationMsFromDates = row.endedAt instanceof Date && row.endedAt.getTime() > row.startedAt.getTime()
+                ? row.endedAt.getTime() - row.startedAt.getTime()
+                : null;
+            return [row.sessionId, durationMsFromColumn ?? durationMsFromDates] as const;
+        }),
+    );
+    // Sample rather than always taking the most recent sessions: a small representative subset
+    // is enough to score an attention wash and avoids downloading every matching replay. The
+    // sampler leans slightly toward recent sessions but still spans the whole matched window.
+    const sampledSessionIds = sampleRecencyWeightedSubset(matchedSessionIds, WEB_ATTENTION_SAMPLE_SESSION_LIMIT);
+
+    if (sampledSessionIds.length === 0) {
+        return attentionFromPriorOrEmpty(attentionPrior, normalizedScreenName, 'no replay sessions matched this route');
+    }
+
+    const artifactRows = await db
+        .select({
+            id: recordingArtifacts.id,
+            sessionId: recordingArtifacts.sessionId,
+            s3ObjectKey: recordingArtifacts.s3ObjectKey,
+            endpointId: recordingArtifacts.endpointId,
+            startTime: recordingArtifacts.startTime,
+            createdAt: recordingArtifacts.createdAt,
+        })
+        .from(recordingArtifacts)
+        .where(and(
+            inArray(recordingArtifacts.sessionId, sampledSessionIds),
+            eq(recordingArtifacts.kind, 'rrweb'),
+            eq(recordingArtifacts.status, 'ready'),
+        ))
+        .orderBy(recordingArtifacts.createdAt)
+        .limit(WEB_ATTENTION_MAX_ARTIFACTS);
+
+    if (artifactRows.length === 0) {
+        return attentionFromPriorOrEmpty(attentionPrior, normalizedScreenName, 'matched sessions have no ready rrweb artifacts');
+    }
+
+    const artifactsBySession = new Map<string, typeof artifactRows>();
+    for (const artifact of artifactRows) {
+        const list = artifactsBySession.get(artifact.sessionId) ?? [];
+        list.push(artifact);
+        artifactsBySession.set(artifact.sessionId, list);
+    }
+
+    const sessionInputs = (await mapWithConcurrency(sampledSessionIds, WEB_ATTENTION_DOWNLOAD_CONCURRENCY, async (sessionId) => {
+        const artifacts = (artifactsBySession.get(sessionId) || [])
+            .sort((a, b) => (a.startTime ?? a.createdAt.getTime()) - (b.startTime ?? b.createdAt.getTime()))
+            .slice(0, WEB_ATTENTION_MAX_ARTIFACTS_PER_SESSION);
+        if (artifacts.length === 0) return null;
+
+        const events: any[] = [];
+        let dimensions: Partial<WebAttentionHeatmapDimensions> = { ...fallbackDimensions };
+
+        for (const artifact of artifacts) {
+            try {
+                const data = await downloadFromS3ForArtifact(projectId, artifact.s3ObjectKey, artifact.endpointId);
+                if (!data) continue;
+                const extracted = extractRrwebEventsFromArtifact(data, artifact.s3ObjectKey);
+                events.push(...extracted.events);
+                const rrwebDimensions = dimensionsFromRrwebEnvelope(extracted.page, extracted.viewport);
+                dimensions = {
+                    pageWidth: rrwebDimensions.pageWidth ?? dimensions.pageWidth,
+                    pageHeight: rrwebDimensions.pageHeight ?? dimensions.pageHeight,
+                    viewportWidth: rrwebDimensions.viewportWidth ?? dimensions.viewportWidth,
+                    viewportHeight: rrwebDimensions.viewportHeight ?? dimensions.viewportHeight,
+                };
+            } catch (err) {
+                logger.warn(
+                    {
+                        err,
+                        projectId,
+                        sessionId,
+                        artifactId: artifact.id,
+                    },
+                    '[overview] failed to load rrweb artifact for attention heatmap',
+                );
+            }
+        }
+
+        return events.length > 0
+            ? { events, dimensions, durationMs: durationMsBySessionId.get(sessionId) ?? null }
+            : null;
+    })).filter((input): input is NonNullable<typeof input> => input !== null);
+
+    if (sessionInputs.length === 0) {
+        return attentionFromPriorOrEmpty(attentionPrior, normalizedScreenName, 'rrweb artifacts could not be read');
+    }
+
+    return {
+        ...buildWebAttentionHeatmap(sessionInputs, fallbackDimensions, attentionPrior, normalizedScreenName),
+        reason: null,
+    };
+}
+
 const STABILITY_OVERVIEW_FP_LIMIT = 50;
 const STABILITY_OVERVIEW_DETAIL_LIMIT = 500;
 
@@ -2005,6 +2315,51 @@ router.get(
                 timeRange: scope.normalizedTimeRange,
             },
             build: async () => loadHeatmapSummary(scope.cookieHeader, scope.normalizedProjectId!, scope.normalizedTimeRange, scope.normalizedPlatform),
+        });
+    }),
+);
+
+router.get(
+    '/heatmaps/attention',
+    sessionAuth,
+    asyncHandler(async (req, res) => {
+        const scope = await resolveOverviewScope(req, { requireProjectId: true });
+        const screenName = typeof req.query.screenName === 'string' ? req.query.screenName : undefined;
+        if (!screenName) {
+            throw ApiError.badRequest('screenName is required');
+        }
+
+        const normalizedScreenName = normalizeHeatmapScreenName(screenName);
+        if (!normalizedScreenName) {
+            throw ApiError.badRequest('screenName is invalid');
+        }
+
+        const rawAppVersion = typeof req.query.appVersion === 'string' ? req.query.appVersion.trim() : '';
+        const appVersion = rawAppVersion && rawAppVersion !== 'all' ? rawAppVersion : undefined;
+
+        await respondWithOverviewCache({
+            cacheKey: buildOverviewCacheKey(
+                `heatmaps:attention:${normalizedScreenName}`,
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                `${scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:` : ''}${appVersion ? `ver:${appVersion}:` : ''}v4`,
+            ),
+            routeName: 'heatmaps-attention',
+            res,
+            ttlSeconds: WEB_ATTENTION_CACHE_TTL_SECONDS,
+            logContext: {
+                projectId: scope.normalizedProjectId,
+                screenName: normalizedScreenName,
+                timeRange: scope.normalizedTimeRange,
+                appVersion,
+            },
+            build: async () => loadWebAttentionHeatmap(
+                scope.normalizedProjectId!,
+                normalizedScreenName,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform,
+                appVersion,
+            ),
         });
     }),
 );

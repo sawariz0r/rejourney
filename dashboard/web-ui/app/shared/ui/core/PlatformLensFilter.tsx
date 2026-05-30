@@ -32,9 +32,7 @@ export const PlatformLensFilter: React.FC<PlatformLensFilterProps> = ({
     return (
         <div className={`min-w-0 max-w-full sm:w-auto ${className}`.trim()}>
             <div className="flex min-w-0 max-w-full flex-col gap-1 sm:flex-row sm:items-center">
-                <span className="shrink-0 text-[10px] font-black uppercase leading-none text-slate-500">
-                    Session platform
-                </span>
+
                 <div
                     role="group"
                     aria-label="Session platform"

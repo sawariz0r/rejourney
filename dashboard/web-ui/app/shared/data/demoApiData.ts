@@ -1543,8 +1543,9 @@ export const demoFrictionHeatmap: FrictionHeatmap = {
 
 import { demoReplayFixture as existingDemoReplayFixture } from './demoReplayData';
 import { demoReplayFixture as frankfurtDemoReplayFixture } from './demoReplayDataFrankfurt';
+import { demoReplayFixture as webDemoReplayFixture } from './demoReplayDataWeb';
 
-const demoReplayFixtures: any[] = [frankfurtDemoReplayFixture, existingDemoReplayFixture];
+const demoReplayFixtures: any[] = [webDemoReplayFixture, frankfurtDemoReplayFixture, existingDemoReplayFixture];
 const defaultDemoReplayFixture =
     demoReplayFixtures.find((fixture) => fixture.sessionId === DEMO_FEATURED_SESSION_ID) ||
     frankfurtDemoReplayFixture;
@@ -1555,14 +1556,17 @@ const buildDemoFullSession = (demoReplayFixture: any) => {
     const replayMetadata = getDemoReplaySessionMetadata(demoReplayFixture.sessionId);
     const startupEvent = sessionEvents.find((event: any) => event.type === 'app_startup') as { durationMs?: number } | undefined;
     const appStartupTimeMs = Math.round(startupEvent?.durationMs ?? replayMetadata?.appStartupTimeMs ?? 0);
-    const platform = demoReplayFixture.deviceInfo.os?.toLowerCase() === 'android' ? 'android' : 'ios';
-    const screenshotFrames = demoReplayFixture.screenshotFrames.map((frame: any) => ({
+    const rawOs = String(demoReplayFixture.deviceInfo.os || '').toLowerCase();
+    const platform = rawOs === 'android' ? 'android' : rawOs === 'ios' ? 'ios' : 'web';
+    const playbackMode = demoReplayFixture.playbackMode === 'rrweb' ? 'rrweb' as const : 'screenshots' as const;
+    const screenshotFrames = (demoReplayFixture.screenshotFrames || []).map((frame: any) => ({
         timestamp: frame.timestamp,
         url: `/demo/${demoReplayFixture.sessionId}/frames/${frame.file}`,
         index: frame.index,
     }));
     const identifiedUserId =
         demoReplayFixture.events.find((event: any) => event.type === 'user_identity_changed' && event.userId)?.userId ||
+        replayMetadata?.userId ||
         'demo-user';
     const deadTapCount =
         demoReplayFixture.metrics.deadTapCount ??
@@ -1584,12 +1588,14 @@ const buildDemoFullSession = (demoReplayFixture: any) => {
         canOpenReplay: true,
         status: 'ready',
         effectiveStatus: 'ready',
-        playbackMode: 'screenshots' as const,
+        playbackMode,
         platform,
         appVersion: demoReplayFixture.deviceInfo.appVersion || '1.0.0',
         sdkVersion: demoReplayFixture.deviceInfo.sdkVersion || replayMetadata?.sdkVersion,
         deviceInfo: demoReplayFixture.deviceInfo,
         geoLocation: demoReplayFixture.geoLocation,
+        webReferral: demoReplayFixture.webReferral ?? null,
+        webLandingRoute: demoReplayFixture.webLandingRoute ?? (platform === 'web' ? '/' : null),
         metadata: replayMetadata?.metadata,
         startTime: demoReplayFixture.startTime,
         endTime: demoReplayFixture.endTime,
@@ -1607,12 +1613,13 @@ const buildDemoFullSession = (demoReplayFixture: any) => {
         visitorSessionNumber: replayMetadata?.visitorSessionNumber,
         visitorFinalSessionNumber: replayMetadata?.visitorFinalSessionNumber,
         checkoutStatus: replayMetadata?.checkoutStatus,
-        hierarchySnapshots: demoReplayFixture.hierarchySnapshots,
+        hierarchySnapshots: demoReplayFixture.hierarchySnapshots || [],
         screenshotFrames,
-        screenshotFramesStatus: 'ready' as const,
-        screenshotFrameCount: demoReplayFixture.screenshotFrameCount,
-        screenshotFramesProcessedSegments: demoReplayFixture.screenshotFramesProcessedSegments,
-        screenshotFramesTotalSegments: demoReplayFixture.screenshotFramesTotalSegments,
+        screenshotFramesStatus: demoReplayFixture.screenshotFramesStatus || (playbackMode === 'rrweb' ? 'none' as const : 'ready' as const),
+        screenshotFrameCount: demoReplayFixture.screenshotFrameCount || screenshotFrames.length,
+        screenshotFramesProcessedSegments: demoReplayFixture.screenshotFramesProcessedSegments || 0,
+        screenshotFramesTotalSegments: demoReplayFixture.screenshotFramesTotalSegments || 0,
+        rrwebReplay: demoReplayFixture.rrwebReplay || { events: [], eventCount: 0, segments: [], page: null, viewport: null, loadMode: 'inline' as const },
         events: sessionEvents,
         networkRequests,
         batches: [],

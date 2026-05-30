@@ -8,6 +8,7 @@
 import { Project, RecordingSession, ProjectDailyStats } from '~/shared/types';
 import { demoReplayFixture as existingDemoReplayFixture } from './demoReplayData';
 import { demoReplayFixture as frankfurtDemoReplayFixture } from './demoReplayDataFrankfurt';
+import { demoReplayFixture as webDemoReplayFixture } from './demoReplayDataWeb';
 
 export const DEMO_NOW = Date.UTC(2026, 4, 18, 12, 0, 0);
 export const DEMO_NOW_ISO = new Date(DEMO_NOW).toISOString();
@@ -18,7 +19,7 @@ const demoRandom = () => {
     return demoRandomSeed / 0x100000000;
 };
 
-const demoRecordedReplayFixtures = [frankfurtDemoReplayFixture, existingDemoReplayFixture] as const;
+const demoRecordedReplayFixtures = [webDemoReplayFixture, frankfurtDemoReplayFixture, existingDemoReplayFixture] as const;
 
 export const DEMO_REPLAY_SESSION_IDS: string[] = demoRecordedReplayFixtures.map((fixture) => fixture.sessionId);
 
@@ -27,6 +28,10 @@ const demoReplayFixtureById = new Map<string, DemoReplayFixture>(
 );
 
 function getDemoReplayFrameUrl(fixture: DemoReplayFixture | undefined): string | null {
+    if (typeof fixture?.coverPhotoUrl === 'string' && fixture.coverPhotoUrl.trim()) {
+        return fixture.coverPhotoUrl;
+    }
+
     const coverFrame = fixture?.screenshotFrames?.find((frame: { file?: string }) => Boolean(frame.file));
     if (!fixture || !coverFrame?.file) return null;
     return `/demo/${fixture.sessionId}/frames/${coverFrame.file}`;
@@ -47,11 +52,13 @@ export function getDemoReplayCoverPhotoUrl(sessionId?: string | null, fallbackSe
 
     if (!fallbackSeed) return null;
 
-    const fallbackFixture = demoRecordedReplayFixtures[hashDemoCoverSeed(fallbackSeed) % demoRecordedReplayFixtures.length];
+    const coverableFixtures = demoRecordedReplayFixtures.filter((fixture) => Boolean(getDemoReplayFrameUrl(fixture)));
+    if (coverableFixtures.length === 0) return null;
+    const fallbackFixture = coverableFixtures[hashDemoCoverSeed(fallbackSeed) % coverableFixtures.length];
     return getDemoReplayFrameUrl(fallbackFixture);
 }
 
-// Featured session ID - this will use the newest real recording from the demo archive.
+// Keep the featured deep-link on the mobile recording while the replay list shows all recorded demos.
 export const DEMO_FEATURED_SESSION_ID = frankfurtDemoReplayFixture.sessionId;
 
 // Demo team for team context
@@ -102,6 +109,7 @@ const day = 24 * hour;
 type DemoReplayFixture = any;
 
 type DemoReplaySessionMetadata = {
+    userId?: string;
     deviceId: string;
     anonymousDisplayName?: string;
     isFirstSession: boolean;
@@ -119,6 +127,36 @@ type DemoReplaySessionMetadata = {
 };
 
 const demoReplaySessionMetadataById: Record<string, DemoReplaySessionMetadata> = {
+    [webDemoReplayFixture.sessionId]: {
+        userId: '9f73c1e0-5b6a-4f22-9e31-2a54f6c8d7b0',
+        deviceId: 'demo-web-device-docs-001',
+        anonymousDisplayName: 'WebVisitor9B4C',
+        isFirstSession: false,
+        userFirstSeenAt: new Date(webDemoReplayFixture.startTime - 3 * day).toISOString(),
+        visitorSessionNumber: 3,
+        visitorFinalSessionNumber: 7,
+        appStartupTimeMs: 1539,
+        retentionDays: 30,
+        retentionTier: 3,
+        sdkVersion: '0.3.0',
+        networkType: 'wired',
+        checkoutStatus: 'none',
+        metadata: {
+            appName: 'Rejourney Website',
+            appBundleId: 'rejourney.co',
+            demoSource: 'sanitized-prod-rrweb-trim',
+            userSegment: 'evaluating_team',
+            loyaltyTier: 'Researching',
+            acquisitionChannel: 'internal_docs',
+            plan: 'growth',
+            featureArea: 'web sdk docs',
+            browser: 'Chrome',
+            browserVersion: '148.0.7778.181',
+            os: 'macOS',
+            osVersion: '26.5.0',
+            userAgent: webDemoReplayFixture.deviceInfo.userAgent,
+        },
+    },
     [frankfurtDemoReplayFixture.sessionId]: {
         deviceId: 'demo-device-frankfurt-001',
         anonymousDisplayName: 'CoffeeRegular8F2A',
@@ -177,7 +215,8 @@ const buildRecordedDemoSession = (
     isFirstSession: boolean
 ): RecordingSession => {
     const startupEvent = fixture.events.find((event: any) => event.type === 'app_startup') as { durationMs?: number } | undefined;
-    const platform = fixture.deviceInfo.os?.toLowerCase() === 'android' ? 'android' : 'ios';
+    const rawOs = String(fixture.deviceInfo.os || '').toLowerCase();
+    const platform: RecordingSession['platform'] = rawOs === 'android' ? 'android' : rawOs === 'ios' ? 'ios' : 'web';
     const replayMetadata = getDemoReplaySessionMetadata(fixture.sessionId);
     const appStartupTimeMs = Math.round(startupEvent?.durationMs ?? replayMetadata?.appStartupTimeMs ?? 0);
 
@@ -192,9 +231,12 @@ const buildRecordedDemoSession = (
         sdkVersion: fixture.deviceInfo.sdkVersion || replayMetadata?.sdkVersion,
         deviceModel: fixture.deviceInfo.model || 'Unknown device',
         osVersion: fixture.deviceInfo.osVersion || 'Unknown',
+        webReferral: fixture.webReferral ?? null,
+        webLandingRoute: fixture.webLandingRoute ?? (platform === 'web' ? '/' : null),
         metadata: replayMetadata?.metadata,
         userId: (
             fixture.events.find((event: any) => event.type === 'user_identity_changed' && event.userId)?.userId ||
+            replayMetadata?.userId ||
             'demo-user'
         ),
         anonymousDisplayName: replayMetadata?.anonymousDisplayName,
@@ -239,6 +281,7 @@ const buildRecordedDemoSession = (
 
 // Demo sessions - varied states to showcase different features
 const demoBaseSessions: RecordingSession[] = [
+    buildRecordedDemoSession(webDemoReplayFixture, 'demo-web-device-docs-001', false),
     buildRecordedDemoSession(frankfurtDemoReplayFixture, 'demo-device-frankfurt-001', true),
     buildRecordedDemoSession(existingDemoReplayFixture, 'demo-device-001', false),
     // Session with crash
@@ -1157,7 +1200,7 @@ export const demoSessions: RecordingSession[] = [
     ...demoReferralSourceSessions,
 ];
 
-// Replays page demo fixtures should only include the real recorded phone replays.
+// Replays page demo fixtures should only include the real recorded demo replays.
 export const demoReplaySessions: RecordingSession[] = demoSessions.filter(
     (session) => DEMO_REPLAY_SESSION_IDS.includes(session.id)
 ).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());

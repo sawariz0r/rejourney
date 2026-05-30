@@ -1,6 +1,4 @@
 import React from 'react';
-import { MousePointer2 } from 'lucide-react';
-import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
 import { TouchHeatmapSection } from '~/features/app/shared/dashboard/TouchHeatmapSection';
 import { useSharedRejourneyTimeRange } from '~/shared/hooks/useSharedRejourneyTimeRange';
@@ -14,18 +12,20 @@ export const Heatmaps: React.FC = () => {
     const platform = platformLensToSessionPlatform(platformLens);
 
     return (
-        <div className="rejourney-heatmaps-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-slate-900">
-            <DashboardPageHeader
-                title="Heatmaps"
-                subtitle="Inspect interaction density by route or screen, with full-page maps for web journeys."
-                icon={<MousePointer2 className="w-6 h-6" />}
-                iconColor="bg-[#fce7f3]"
-            >
-                <DashboardLensControls timeRange={timeRange} onTimeRangeChange={setTimeRange} />
-            </DashboardPageHeader>
+        <div className="rejourney-heatmaps-page flex min-h-screen flex-col pb-10 font-sans text-slate-950 xl:h-full xl:min-h-0 xl:overflow-hidden xl:pb-0">
+            <header className="heatmap-page-header">
+                <div className="heatmap-page-hero-inner">
+                    <div className="min-w-0">
+                        <h1>Heatmaps</h1>
+                    </div>
+                    <div className="heatmap-page-actions">
+                        <DashboardLensControls timeRange={timeRange} onTimeRangeChange={setTimeRange} />
+                    </div>
+                </div>
+            </header>
 
-            <div className="mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-6">
-                <TouchHeatmapSection timeRange={timeRange} platform={platform} compact={false} />
+            <div className="heatmap-page-main mx-auto flex w-full max-w-[1900px] flex-1 flex-col px-3 py-4 sm:px-5 lg:px-6 xl:min-h-0 xl:py-3">
+                <TouchHeatmapSection timeRange={timeRange} platform={platform} compact={false} className="xl:min-h-0 xl:flex-1" />
             </div>
         </div>
     );

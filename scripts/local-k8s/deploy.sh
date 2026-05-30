@@ -147,14 +147,55 @@ apply_file() {
     kubectl apply -f "$1"
 }
 
+dump_node_pressure_diagnostics() {
+    local pressure_nodes
+    pressure_nodes="$(kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.conditions[?(@.type=="DiskPressure")]}{.status}{end}{"\n"}{end}' 2>/dev/null | awk '$2 == "True" { print $1 }' || true)"
+
+    if [ -z "$pressure_nodes" ]; then
+        return
+    fi
+
+    echo "[local-k8s] Node disk pressure detected; Kubernetes will not schedule local pods." >&2
+    echo "[local-k8s] Reclaim Docker space, for example: docker image prune -f && docker builder prune -f" >&2
+    kubectl get nodes -o wide || true
+
+    local node
+    for node in $pressure_nodes; do
+        kubectl describe node "$node" | sed -n '/Taints:/,/Addresses:/p' || true
+    done
+}
+
+dump_pod_wait_diagnostics() {
+    local selector="$1"
+
+    kubectl get pods -n "$NAMESPACE" -l "$selector" -o wide || true
+    kubectl describe pods -n "$NAMESPACE" -l "$selector" || true
+    dump_node_pressure_diagnostics
+}
+
+wait_for_pods_ready() {
+    local selector="$1"
+    local label="$2"
+    local timeout="$3"
+
+    if ! kubectl wait --for=condition=ready pod -l "$selector" -n "$NAMESPACE" --timeout="$timeout"; then
+        echo "[local-k8s] $label did not become ready within $timeout." >&2
+        dump_pod_wait_diagnostics "$selector"
+        error "$label did not become ready"
+    fi
+}
+
 wait_infra() {
-    kubectl wait --for=condition=ready pod -l app=postgres -n "$NAMESPACE" --timeout=180s
+    local infra_timeout="${LOCAL_K8S_INFRA_READY_TIMEOUT:-900s}"
+    local clickhouse_timeout="${LOCAL_K8S_CLICKHOUSE_READY_TIMEOUT:-900s}"
+
+    wait_for_pods_ready app=postgres PostgreSQL "$infra_timeout"
     # Deployments can briefly run two pods during a rolling update; `kubectl wait` on every
     # pod then blocks on the terminating replica. Rollout status waits for the deployment to finish.
-    kubectl rollout status deployment/redis -n "$NAMESPACE" --timeout=180s
-    kubectl rollout status deployment/minio -n "$NAMESPACE" --timeout=180s
-    kubectl wait --for=condition=complete job/minio-setup -n "$NAMESPACE" --timeout=180s || true
-    kubectl wait --for=condition=ready pod -l app=clickhouse -n "$NAMESPACE" --timeout=240s
+    kubectl rollout status deployment/redis -n "$NAMESPACE" --timeout="$infra_timeout"
+    kubectl rollout status deployment/minio -n "$NAMESPACE" --timeout="$infra_timeout"
+    kubectl wait --for=condition=complete job/minio-setup -n "$NAMESPACE" --timeout="$infra_timeout" || true
+    wait_for_pods_ready app=clickhouse ClickHouse "$clickhouse_timeout"
 }
 
 wait_full() {

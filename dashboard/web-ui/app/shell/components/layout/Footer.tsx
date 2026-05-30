@@ -30,6 +30,7 @@ export const Footer: React.FC = () => {
     { label: "Website Session Recording", href: "/web-session-replay" },
     { label: "Mobile Session Replay", href: "/mobile-session-replay" },
     { label: "Web Session Replay", href: "/web-session-replay" },
+    { label: "Heatmaps", href: "/heatmaps" },
     { label: "Replay-First Mentality", href: "/replay-first-mentality" },
     { label: "Importance of Open Source", href: "/importance-of-open-source" },
     { label: "What Is Session Replay", href: "/what-is-session-replay" },
@@ -102,7 +103,7 @@ export const Footer: React.FC = () => {
               <h2 className={headingClass}>Features</h2>
               <div className="space-y-4">
                 {featureLinks.map((item) => (
-                  <Link key={item.href} to={item.href} className={linkClass}>
+                  <Link key={`${item.href}-${item.label}`} to={item.href} className={linkClass}>
                     {item.label}
                   </Link>
                 ))}
@@ -113,7 +114,7 @@ export const Footer: React.FC = () => {
               <h2 className={headingClass}>Resources</h2>
               <div className="space-y-4">
                 {resourceLinks.map((item) => (
-                  <Link key={item.href} to={item.href} className={linkClass}>
+                  <Link key={`${item.href}-${item.label}`} to={item.href} className={linkClass}>
                     {item.label}
                   </Link>
                 ))}

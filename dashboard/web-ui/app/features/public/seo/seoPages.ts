@@ -156,6 +156,7 @@ const categoryPage = (config: {
   comparisonIntro: string;
   otherColumnTitle: string;
   comparisonOther: SeoComparisonValue;
+  officialSources?: SeoSource[];
   faq: SeoPage["faq"];
 }): SeoPage => ({
   kind: "category",
@@ -216,8 +217,9 @@ const alternativePage = (config: {
   ],
   chooseOtherTitle: `Choose ${config.competitor} if...`,
   chooseOther: config.chooseOther,
-  comparisonTitle: `Why teams compare Rejourney with ${config.competitor}`,
-  comparisonIntro:'',
+  comparisonTitle: `Checklist comparison: Rejourney and ${config.competitor}`,
+  comparisonIntro:
+    `Use this table as a starting point, then verify ${config.competitor}'s current packaging and limits against the official source before buying.`,
   otherColumnTitle: config.competitor,
   comparisonRows: config.comparisonRows,
   featureDifferences: config.featureDifferences,
@@ -248,9 +250,9 @@ export const SEO_PAGES: SeoPage[] = [
     path: "/record-user-sessions",
     badge: "Strategy guide",
     eyebrow: "Record user sessions",
-    title: "Record user sessions without losing the story",
+    title: "Record user sessions without building a clip graveyard",
     subtitle:
-      "Capture real user sessions, replay the moment, understand the pattern behind it, and give product, support, and engineering the same evidence.",
+      "Capture the session, the search that found it, and the signals that explain whether the behavior is a one-off or a pattern worth fixing.",
     metaTitle: "Record User Sessions | Rejourney",
     metaDescription:
       "Record user sessions on web and mobile with replay, heatmaps, journeys, privacy controls, product analytics, crash context, and lightweight SDKs.",
@@ -258,33 +260,33 @@ export const SEO_PAGES: SeoPage[] = [
     image: "/images/session-replay-preview.png",
     imageAlt: "Rejourney user session replay preview with event context",
     proofPoints: ["Replay search", "Heatmaps + journeys", "Crash context"],
-    whyTitle: "Recorded sessions should make the user action obvious",
+    whyTitle: "A useful recording starts with a question",
     whyParagraphs: [
-      "Teams record user sessions when something important happened but the chart cannot explain it: a funnel dropped, a customer got stuck, a rage click appeared, or support needs proof of what the user saw.",
-      "The strongest session replay software makes that investigation fast. Search by behavior, jump into the real user session, inspect the event timeline, and move from one strange moment to the repeated friction points that deserve attention.",
-      "Rejourney keeps replay close to heatmaps, user journeys, crashes, ANRs, privacy masking, and network context so a session does not become another isolated clip in a separate dashboard.",
+      "Most teams do not need more recordings. They need fewer, better recordings: the sessions that explain why checkout stalled, why onboarding looped, why a user rage-clicked a dead control, or why support keeps seeing the same complaint.",
+      "Start with a behavior query instead of opening random clips. A good recorded session includes the path, the intended outcome, the failed or delayed step, and the product or technical signal that made the moment worth watching.",
+      "Rejourney keeps replay beside heatmaps, journeys, crashes, ANRs, privacy rules, and network context, so a recording can become evidence another teammate can reopen and verify.",
     ],
     chooseOtherTitle: "Choose a heavier suite if...",
     chooseOther: [
-      "You need a broad enterprise data warehouse workflow more than replay investigation.",
-      "Your team already has mature analytics engineering around another platform.",
-      "You do not need native mobile or app stability context.",
+      "Your main problem is warehouse modeling, not user-session investigation.",
+      "Your team already has a trusted replay workflow tied to support and engineering tickets.",
+      "You do not need mobile app context, crash context, or request-level debugging next to replay.",
     ],
     comparisonTitle: "Record user sessions checklist",
     comparisonIntro:
-      "Use this checklist when comparing a session replay tool. The right choice should help product managers, customer support, and engineering work from the same evidence.",
+      "Use this checklist when comparing session replay tools. The tool should make the search, the recording, and the engineering handoff easy to reproduce.",
     otherColumnTitle: "Typical replay tool",
     comparisonOther: "partial",
     faq: [
       {
         question: "How do I record user sessions without guessing?",
         answer:
-          "Use a session replay SDK that captures the visual session, meaningful user action, event context, privacy controls, and performance impact. Rejourney adds heatmaps, journeys, crash context, and pricing that does not punish useful instrumentation.",
+          "Define the behavior first, then capture replay with route, event, request, device, release, and privacy context. Rejourney lets teams search for that behavior and inspect the matching session with heatmaps, journeys, and stability signals nearby.",
       },
       {
         question: "Can recorded sessions improve user experience?",
         answer:
-          "Yes. Product teams use Rejourney to see where onboarding, checkout, search, or activation breaks, then pair those sessions with journeys and heatmaps to improve user experience.",
+          "Yes, when the team uses recordings to find the moment expectation breaks. A replay of a failed signup, slow checkout, or confusing settings screen is much more useful when journeys and heatmaps show whether the same pattern repeats.",
       },
       {
         question: "Can developers use Rejourney for bugs?",
@@ -297,9 +299,9 @@ export const SEO_PAGES: SeoPage[] = [
     path: "/mobile-session-replay",
     badge: "Mobile apps",
     eyebrow: "Mobile session replay",
-    title: "Mobile session replay for real app behavior",
+    title: "Mobile session replay with the app context intact",
     subtitle:
-      "Watch taps, swipes, screen changes, crashes, ANRs, and slow moments from the user's actual mobile session.",
+      "Watch taps, gestures, screen changes, slow requests, crashes, and ANRs with enough metadata to reproduce what happened on the device.",
     metaTitle: "Mobile Session Replay | Rejourney",
     metaDescription:
       "Mobile session replay for iOS, React Native, and Expo with heatmaps, journeys, ANR detection, crash context, and lightweight SDKs.",
@@ -307,21 +309,21 @@ export const SEO_PAGES: SeoPage[] = [
     image: "/images/heatmaps.png",
     imageAlt: "Rejourney mobile heatmaps and replay analytics dashboard",
     proofPoints: ["React Native + Expo", "Native iOS", "Heatmaps + ANRs"],
-    whyTitle: "Mobile behavior needs mobile context",
+    whyTitle: "Mobile replay has to understand the app behind the pixels",
     whyParagraphs: [
-      "Mobile teams debug gestures, screen transitions, device conditions, slow frames, crashes, ANRs, and API calls. A web-only recorder cannot explain those app-specific moments well.",
-      "Rejourney brings replay, touch heatmaps, journey maps, crash reporting, ANR signals, and regional API performance into one dashboard so the app experience is visible as it happened.",
-      "That makes mobile replay useful beyond bug reports. Product can see hesitation, support can confirm the path, and engineering can inspect the context before asking a user to reproduce anything.",
+      "Mobile bugs often hide in app-specific context: screen transitions, gestures, OS versions, foreground and background changes, flaky networks, slow frames, crashes, and ANRs. A recording without those details is hard to act on.",
+      "Rejourney connects replay with touch heatmaps, journeys, crash reports, ANR signals, device metadata, and API performance so teams can see the session and the conditions around it.",
+      "That makes the replay useful before anyone asks the user to reproduce the problem. Product can see the hesitation, support can verify the path, and engineering can start with a screen, release, device, and likely cause.",
     ],
     chooseOtherTitle: "Choose a web-first tool if...",
     chooseOther: [
-      "Your product is only a website and does not need mobile app context.",
-      "You do not need native iOS, Expo, or React Native support.",
-      "You are only investigating desktop browser conversion flows.",
+      "Your product is browser-only and every important flow happens on the web.",
+      "You do not need React Native, Expo, or native iOS replay.",
+      "You already capture mobile crashes, API failures, and user paths in another workflow.",
     ],
     comparisonTitle: "Mobile replay requires mobile context",
     comparisonIntro:
-      "The best mobile replay tool should treat taps, swipes, screens, ANRs, crashes, devices, and network timing as first-class signals.",
+      "Mobile replay should treat taps, gestures, screens, app versions, devices, ANRs, crashes, and network timing as part of the recording.",
     otherColumnTitle: "Web-first replay tools",
     comparisonOther: "partial",
     faq: [
@@ -333,7 +335,7 @@ export const SEO_PAGES: SeoPage[] = [
       {
         question: "Can mobile replay help with crashes?",
         answer:
-          "Yes. Seeing the replay before a crash or ANR can reveal the screen, gesture, network state, and user path that led to the issue.",
+          "Yes. The replay before a crash or ANR can show the active screen, last gesture, loading state, network behavior, and path that made the stack trace easier to understand.",
       },
       {
         question: "Does Rejourney include heatmaps for mobile screens?",
@@ -346,9 +348,9 @@ export const SEO_PAGES: SeoPage[] = [
     path: "/web-session-replay",
     badge: "Browser replay",
     eyebrow: "Web session replay",
-    title: "Web session replay for every strange click",
+    title: "Web session replay for the state between pageviews",
     subtitle:
-      "See how people move through your website, checkout, onboarding, docs, and account flows without reducing the story to pageviews.",
+      "See the clicks, route changes, loading states, failed requests, and UI dead ends that traffic analytics usually flatten.",
     metaTitle: "Web Session Replay | Rejourney",
     metaDescription:
       "Web session replay for browser apps with product analytics, heatmaps, journeys, network context, console context, and replay search.",
@@ -356,21 +358,21 @@ export const SEO_PAGES: SeoPage[] = [
     image: "/images/landing-replay-theater.png",
     imageAlt: "Rejourney web session replay theater showing browser behavior and timeline context",
     proofPoints: ["Browser SDK", "Funnels + journeys", "Network context"],
-    whyTitle: "Website friction hides in the moments between clicks",
+    whyTitle: "Website friction hides in state between clicks",
     whyParagraphs: [
-      "A web analytics chart can tell you where people dropped. Web session replay shows the hesitation, repeated clicks, broken UI state, confusing copy, failed request, or dead end that made the drop happen.",
-      "Rejourney records browser sessions and connects them to event timelines, journeys, heatmaps, network context, and product analytics so teams can inspect behavior without stitching together separate tools.",
-      "That is especially useful for flows that look fine in QA but fail in production: checkout, sign-up, search, dashboards, pricing pages, and support-heavy account screens.",
+      "A chart can tell you where people dropped. Web replay can show whether they saw a disabled button, a buried validation message, a blank state, a stalled request, or copy that sent them the wrong way.",
+      "Rejourney records browser sessions and ties them to route changes, event timelines, journeys, heatmaps, console context, requests, and product analytics, so the behavior is not stranded in a separate tool.",
+      "That matters most in flows that pass QA but misbehave in production: checkout, sign-up, search, dashboards, pricing pages, docs, and support-heavy account screens.",
     ],
     chooseOtherTitle: "Choose pageview analytics alone if...",
     chooseOther: [
-      "You only need traffic acquisition and top-level conversion reporting.",
-      "You never need to inspect individual user paths or UI states.",
-      "You already have a separate workflow for replay, errors, heatmaps, and product analytics.",
+      "Your questions stop at acquisition, attribution, and top-level conversion.",
+      "You do not need to inspect individual UI states or request failures.",
+      "Your existing replay, error, heatmap, and analytics tools already share context cleanly.",
     ],
     comparisonTitle: "Web replay should connect behavior to system context",
     comparisonIntro:
-      "Browser replay becomes more useful when it includes the surrounding events, requests, journeys, and visual friction that explain the recording.",
+      "Browser replay becomes useful when it includes the events, requests, journeys, and visual friction around the recording.",
     otherColumnTitle: "Pageview analytics",
     comparisonOther: "partial",
     faq: [
@@ -392,12 +394,79 @@ export const SEO_PAGES: SeoPage[] = [
     ],
   }),
   categoryPage({
+    path: "/heatmaps",
+    badge: "Behavior analytics",
+    eyebrow: "Heatmaps",
+    title: "Heatmaps should explain attention, not common sense",
+    subtitle:
+      "Use web attention maps and mobile touch maps to understand what users notice, skim, miss, and repeat.",
+    metaTitle: "Heatmaps | Rejourney",
+    metaDescription:
+      "Use Rejourney heatmaps to compare web attention maps and mobile touch maps with replay, journeys, and product context.",
+    keywords: [
+      "heatmaps",
+      "heatmap analytics",
+      "attention maps",
+      "touch heatmaps",
+      "website attention maps",
+      "mobile heatmaps",
+      "session replay heatmaps",
+    ],
+    image: "/images/engineering/heatmaps-attention-docs.png",
+    imageAlt: "Rejourney web attention map over the Web SDK documentation page",
+    proofPoints: ["Web attention maps", "Mobile touch maps", "Replay context"],
+    whyTitle: "A heatmap is useful only when it tells you something surprising",
+    whyParagraphs: [
+      "The weak version of heatmaps is a pretty red overlay that proves people clicked buttons. Useful heatmaps answer a harder question: did users notice the copy, controls, layout, and page sections that were supposed to guide them?",
+      "Mobile touch maps are still valuable for repeated taps, dead zones, thumb reach, and controls that look interactive but are not. They become noisy when every obvious button is treated as an insight.",
+      "Web attention maps can go further because web pages have scroll depth, viewport exposure, reading patterns, pointer movement, and dense content. They can show a skimmed hero, an ignored docs warning, or a pricing block that absorbed attention before conversion.",
+    ],
+    chooseOtherTitle: "Choose touch-only heatmaps if...",
+    chooseOther: [
+      "You only need tap density on a mobile screen.",
+      "You are not evaluating copy, scroll depth, content exposure, or web page comprehension.",
+      "You do not plan to open replays from the same route or release before filing tickets.",
+    ],
+    comparisonTitle: "Heatmaps should separate attention from interaction",
+    comparisonIntro:
+      "Use heatmaps to separate actual attention from obvious interaction.",
+    otherColumnTitle: "Basic touch maps",
+    comparisonOther: "partial",
+    officialSources: [
+      { label: "Nielsen Norman Group: F-Shaped Pattern of Reading on the Web", href: "https://www.nngroup.com/articles/f-shaped-pattern-reading-web-content/" },
+      { label: "Nielsen Norman Group: Original F-Pattern eyetracking research", href: "https://www.nngroup.com/articles/f-shaped-pattern-reading-web-content-discovered/" },
+      { label: "Chartbeat: User Engagement Tracking Methodology", href: "https://help.chartbeat.com/hc/en-us/articles/360045890913-User-Engagement-Tracking-Methodology" },
+      { label: "Chartbeat: Using Engaged Time to understand your audience", href: "https://chartbeat.com/resources/research/using-engaged-time-to-understand-your-audience/" },
+      { label: "Chen, Anderson, and Sohn: eye/mouse movement correlation", href: "https://doi.org/10.1145/634067.634234" },
+      { label: "Huang, White, and Dumais: No Clicks, No Problem", href: "https://jeffhuang.com/papers/CursorBehavior_CHI11.pdf" },
+      { label: "Huang, White, and Buscher: Gaze and Cursor Alignment", href: "https://www.microsoft.com/en-us/research/publication/user-see-user-point-gaze-and-cursor-alignment-in-web-search/" },
+      { label: "Rayner: Eye movements in reading and information processing", href: "https://pubmed.ncbi.nlm.nih.gov/9849112/" },
+    ],
+    faq: [
+      {
+        question: "What is the difference between attention maps and touch maps?",
+        answer:
+          "Attention maps are web-only maps that help show what page content users noticed, skimmed, or ignored. Touch maps show where users tapped or touched, especially on mobile screens.",
+      },
+      {
+        question: "Why are attention maps more useful for web pages?",
+        answer:
+          "Web pages have reading order, scroll depth, hero copy, docs sections, pricing blocks, and content exposure. Attention maps can reveal whether those areas carried the user's focus, while touch maps often turn obvious buttons red.",
+      },
+      {
+        question: "When should I use mobile touch maps?",
+        answer:
+          "Use touch maps to find repeated taps, dead zones, gesture confusion, crowded controls, and mobile navigation friction. Pair them with replay before treating a hotspot as a product problem.",
+      },
+    ],
+  }),
+  categoryPage({
     path: "/replay-first-mentality",
     badge: "Product thinking",
     eyebrow: "Replay-first mentality",
-    title: "Replay-first mentality starts with what the user saw",
+    title: "Replay-first mentality starts with the session, not the chart",
     subtitle:
-      "A replay-first team uses real sessions as the starting point for product decisions, support escalations, bug triage, and release reviews.",
+      "Use real sessions as the first shared artifact in product decisions, support escalations, bug triage, and release reviews.",
     metaTitle: "Replay-First Mentality | Rejourney",
     metaDescription:
       "Learn the replay-first mentality for product, support, and engineering teams that want decisions grounded in real user sessions.",
@@ -405,21 +474,21 @@ export const SEO_PAGES: SeoPage[] = [
     image: "/images/hero-replay-workbench.png",
     imageAlt: "Rejourney replay workbench for replay-first product investigation",
     proofPoints: ["Evidence first", "Shared context", "Faster fixes"],
-    whyTitle: "Replay keeps teams honest about the lived experience",
+    whyTitle: "Replay gives the team a shared first object",
     whyParagraphs: [
-      "Dashboards are useful, but they can make the user feel abstract. A replay-first mentality asks the team to watch the experience before deciding what the metric means.",
-      "That changes the conversation. Product sees the missed expectation, support sees the exact path, and engineering sees the surrounding signals that made the session fail.",
-      "Rejourney is built around that habit: start from a real session, then branch into events, journeys, heatmaps, crashes, ANRs, network context, and analytics.",
+      "Dashboards are useful, but they can turn the user into a shape on a chart. Replay-first work asks the team to watch a real experience before naming the problem.",
+      "That changes the discussion. Product sees the missed expectation, support sees the path the customer took, and engineering sees the events, requests, crashes, or ANRs that shaped the session.",
+      "Rejourney is built around that habit: start from the session, then branch into events, journeys, heatmaps, stability, network context, and analytics to check scope.",
     ],
     chooseOtherTitle: "Rely on charts alone if...",
     chooseOther: [
-      "Your questions are only about traffic volume and high-level reporting.",
-      "Your team never needs to understand individual friction or support context.",
-      "You are comfortable making roadmap decisions without watching real sessions.",
+      "Your question is only about traffic volume or campaign reporting.",
+      "Support and engineering never need to inspect the same user path.",
+      "Your team already reviews real sessions elsewhere before prioritizing UX work.",
     ],
     comparisonTitle: "Replay-first versus dashboard-only work",
     comparisonIntro:
-      "Replay-first does not replace analytics. It anchors analytics in observable user behavior so the team knows what the numbers actually mean.",
+      "Replay-first does not replace analytics. It keeps the analytics conversation tied to observable user behavior.",
     otherColumnTitle: "Dashboard-only work",
     comparisonOther: "partial",
     faq: [
@@ -444,9 +513,9 @@ export const SEO_PAGES: SeoPage[] = [
     path: "/importance-of-open-source",
     badge: "Open source",
     eyebrow: "Importance of open source",
-    title: "The importance of open source for session replay data",
+    title: "Open source matters when replay data is this close to users",
     subtitle:
-      "Replay data sits close to your product, users, and debugging workflow. Open source gives teams more visibility into the tools that handle it.",
+      "Session replay touches product behavior, user privacy, and debugging workflows. Source visibility makes those boundaries easier to inspect.",
     metaTitle: "Importance of Open Source | Rejourney",
     metaDescription:
       "Why open source matters for session replay, product analytics, self-hosting, privacy, auditability, and long-term observability control.",
@@ -454,21 +523,21 @@ export const SEO_PAGES: SeoPage[] = [
     image: "/images/readme-user-journeys.png",
     imageAlt: "Rejourney open-source user journey analytics view",
     proofPoints: ["Source visibility", "Self-hosting", "Data control"],
-    whyTitle: "Open source matters when the data is this close to users",
+    whyTitle: "Trust starts at the capture boundary",
     whyParagraphs: [
-      "Session replay and analytics can become part of the nervous system of a product team. They collect behavioral context, debugging signals, and operational evidence that teams rely on every week.",
-      "Open source gives technical teams more visibility into how that system works: what the SDK captures, how data moves, what can be self-hosted, and how the platform can evolve if requirements change.",
-      "Rejourney pairs that source-visible foundation with a product surface for everyday work: replay, journeys, heatmaps, crashes, ANRs, API context, and analytics in one place.",
+      "Replay tools run inside your product and observe behavior that users rarely think about explicitly. That does not make replay bad, but it does mean teams should know what is captured, masked, stored, and shared.",
+      "Open source gives technical teams a way to inspect that boundary: SDK behavior, redaction rules, payload shape, deployment options, retention, and the path to self-hosting if requirements change.",
+      "Rejourney pairs that source-visible base with a practical workspace for replay, journeys, heatmaps, crashes, ANRs, API context, and analytics.",
     ],
     chooseOtherTitle: "Choose closed SaaS if...",
     chooseOther: [
-      "You do not need source visibility, self-hosting, or deployment flexibility.",
-      "You prefer buying into a large closed vendor ecosystem.",
-      "You are comfortable with opaque product and pricing changes.",
+      "You do not need to inspect SDK behavior, masking, storage, or deployment choices.",
+      "Your organization prefers a closed vendor suite with procurement and governance already solved.",
+      "You are comfortable with product and pricing changes you cannot audit or fork around.",
     ],
     comparisonTitle: "Open-source replay should still feel polished",
     comparisonIntro:
-      "The best open-source tools combine operational control with a product experience that PMs, support, design, and engineering can use every day.",
+      "Open-source replay still has to be usable. Control only helps if PMs, support, design, and engineering can actually work from the evidence.",
     otherColumnTitle: "Closed tools",
     comparisonOther: "partial",
     faq: [
@@ -493,9 +562,9 @@ export const SEO_PAGES: SeoPage[] = [
     path: "/what-is-session-replay",
     badge: "Guide",
     eyebrow: "Session replay guide",
-    title: "What is session replay?",
+    title: "What session replay actually shows",
     subtitle:
-      "Session replay lets teams watch how real users experience an app or website, then inspect the events, errors, and journeys around that moment.",
+      "Session replay reconstructs a user experience so teams can inspect the visible path, the surrounding events, and the system signals around a confusing moment.",
     metaTitle: "What Is Session Replay? | Rejourney",
     metaDescription:
       "Learn what session replay is, how it works, and how Rejourney uses replay with analytics, heatmaps, journeys, crashes, and network context.",
@@ -503,21 +572,21 @@ export const SEO_PAGES: SeoPage[] = [
     image: "/images/landing-replay-theater.png",
     imageAlt: "Rejourney replay theater explaining session replay",
     proofPoints: ["Behavior context", "Debugging evidence", "Product insight"],
-    whyTitle: "Session replay turns vague user feedback into evidence",
+    whyTitle: "Replay turns vague reports into inspectable behavior",
     whyParagraphs: [
-      "Session replay captures the meaningful parts of a user's experience so a team can reconstruct what happened. Instead of asking a user to describe a bug, the team can watch the confusing step, failed tap, slow screen, or broken checkout path.",
-      "The best replay tools do more than playback. They pair the session with product events, journeys, heatmaps, errors, device context, and network calls so teams understand both the user behavior and the system context.",
-      "Rejourney uses session replay as the center of the workflow for web and mobile teams. It is built for product, support, and engineering teams that want one shared view of the user experience.",
+      "Session replay does not read minds. It reconstructs enough of the experience for a team to inspect what the user saw, clicked, tapped, waited through, retried, or abandoned.",
+      "The replay is strongest when it carries context with it: product events, journeys, heatmaps, errors, device details, app or browser version, and network calls.",
+      "Rejourney uses replay as the center of the workflow for web and mobile teams, so product, support, and engineering can discuss the same user experience instead of trading screenshots and guesses.",
     ],
     chooseOtherTitle: "Use aggregate analytics alone if...",
     chooseOther: [
-      "You only need high-level traffic or acquisition reporting.",
-      "You do not need to see individual user friction.",
-      "You never debug bugs, UX issues, or support escalations from real sessions.",
+      "You only need acquisition, attribution, or high-level traffic reporting.",
+      "You do not need to inspect individual friction or production UI states.",
+      "Your team never debugs UX issues, support escalations, or release regressions from real sessions.",
     ],
     comparisonTitle: "Session replay versus analytics alone",
     comparisonIntro:
-      "Analytics answers what changed. Replay helps explain why it changed by showing the lived user experience.",
+      "Analytics can tell you what changed. Replay helps explain why by showing the user experience behind the metric.",
     otherColumnTitle: "Analytics alone",
     comparisonOther: "partial",
     faq: [
@@ -544,7 +613,7 @@ export const SEO_PAGES: SeoPage[] = [
     eyebrow: "How to see what your users do",
     title: "How to see what your users do without guessing",
     subtitle:
-      "Move from vague feedback and aggregate charts to actual sessions, journeys, heatmaps, events, crashes, and API context.",
+      "Move from vague feedback to real sessions, journey paths, heatmaps, events, crashes, and API context that point to the same moment.",
     metaTitle: "How to See What Your Users Do | Rejourney",
     metaDescription:
       "Learn how to see what users do in your app or website with session replay, heatmaps, journeys, events, crash context, and product analytics.",
@@ -552,21 +621,21 @@ export const SEO_PAGES: SeoPage[] = [
     image: "/images/readme-general-demo.png",
     imageAlt: "Rejourney dashboard showing user behavior analytics and replay context",
     proofPoints: ["Watch sessions", "Map journeys", "Find friction"],
-    whyTitle: "Seeing user behavior starts with the actual session",
+    whyTitle: "The right signal depends on the question",
     whyParagraphs: [
-      "Surveys, tickets, and dashboards all help, but they can leave teams guessing about the moment that caused confusion. Session replay gives you the user's real path through the product.",
-      "From there, the surrounding context matters. Heatmaps show where attention clusters, journeys show the paths people take, events show the sequence, and crashes or failed requests explain when the system shaped the experience.",
-      "Rejourney combines those layers so teams can move from 'users are dropping' to 'this is the screen, interaction, and technical context that caused the drop.'",
+      "Seeing what users do starts with choosing the right observation layer. Replay shows the individual session, journeys show repeated paths, heatmaps show attention or repeated interaction, events show sequence, and errors or requests show where the system changed the experience.",
+      "The mistake is opening everything at once. Start with a bounded question, such as users who reached checkout but did not pay, users who retried search, or accounts on a new release that hit a slow endpoint.",
+      "Rejourney combines those layers so a team can move from 'users are dropping' to 'this route, interaction, request, and release window explain the drop.'",
     ],
     chooseOtherTitle: "Stay with indirect signals if...",
     chooseOther: [
-      "You only need periodic qualitative research and broad trend reporting.",
-      "Your product does not need support, debugging, or conversion investigation.",
-      "You are comfortable making UX decisions without watching real behavior.",
+      "You only need broad trend reporting or scheduled qualitative research.",
+      "Your product does not need support, debugging, conversion, or release investigation.",
+      "Your team already has a reliable way to connect sessions, journeys, errors, and analytics.",
     ],
     comparisonTitle: "Direct observation versus guessing",
     comparisonIntro:
-      "The best behavior workflow combines direct session evidence with aggregate analytics so teams can see both the individual moment and the repeated pattern.",
+      "The strongest behavior workflow moves between the individual session and the repeated pattern.",
     otherColumnTitle: "Indirect signals",
     comparisonOther: "partial",
     faq: [
@@ -591,9 +660,9 @@ export const SEO_PAGES: SeoPage[] = [
     path: "/be-your-users",
     badge: "Team habit",
     eyebrow: "Be your users",
-    title: "Be your users for five minutes before you ship",
+    title: "Be your users without pretending to be them",
     subtitle:
-      "Watch the product from the user's side so roadmap debates, bug triage, and design decisions stay grounded in lived experience.",
+      "Watch real sessions before shipping so roadmap debates, bug triage, and design reviews stay attached to what people actually experienced.",
     metaTitle: "Be Your Users | Rejourney",
     metaDescription:
       "Be your users by watching real sessions, reviewing journeys, inspecting friction, and grounding product decisions in actual user behavior.",
@@ -601,21 +670,21 @@ export const SEO_PAGES: SeoPage[] = [
     image: "/images/user-journeys.png",
     imageAlt: "Rejourney user journeys view for understanding real product paths",
     proofPoints: ["User empathy", "Real sessions", "Shared reviews"],
-    whyTitle: "User empathy gets sharper when the team watches real sessions",
+    whyTitle: "Empathy works better when it has evidence",
     whyParagraphs: [
-      "It is easy to talk about users as segments, cohorts, or tickets. Watching a real session makes the product feel concrete again: the hesitation, the missed affordance, the repeated tap, the path that seemed obvious only to the team.",
-      "Rejourney helps teams build that habit without turning it into theater. Pick a session, watch the path, inspect the events, then use journeys and heatmaps to see whether the same friction repeats.",
-      "The result is a product conversation with better evidence and less guessing. Teams can decide what to fix because they have seen the experience from the user's side.",
+      "Teams can talk about users for hours and still miss the tiny moment where the product stops making sense. A replay makes that moment concrete: the hesitation, the missed affordance, the repeated tap, the path that was obvious only inside the building.",
+      "Rejourney helps teams build the habit without turning it into theater. Pick a flow, watch real sessions, write down what happened, then use journeys and heatmaps to check whether the same friction repeats.",
+      "The result is a product conversation with less mind-reading. The team can decide what to fix because it has seen the experience from the user's side and checked the pattern behind it.",
     ],
     chooseOtherTitle: "Skip session review if...",
     chooseOther: [
-      "Your product decisions do not depend on understanding user friction.",
-      "Your team already observes real sessions through another workflow.",
-      "You only need backend telemetry and do not need behavioral context.",
+      "Your decisions do not depend on understanding user-facing friction.",
+      "Your team already reviews real sessions before roadmap, design, and release decisions.",
+      "You only need backend telemetry and never need behavioral context.",
     ],
     comparisonTitle: "Empathy should be paired with evidence",
     comparisonIntro:
-      "Being your users is not a slogan. It is a product habit: observe real behavior, connect it to data, and make the next decision with clearer context.",
+      "Being your users is a product habit: observe real behavior, connect it to data, and leave with a concrete next decision.",
     otherColumnTitle: "Assumption-led work",
     comparisonOther: "partial",
     faq: [
@@ -641,7 +710,7 @@ export const SEO_PAGES: SeoPage[] = [
     competitor: "PostHog Session Replay",
     badge: "",
     subtitle:
-      "PostHog is a broad product analytics suite. Rejourney is the replay-first alternative for teams that want web and mobile session evidence, simple limits, and faster investigation workflows.",
+      "PostHog works well when you want a broad product OS. Rejourney is for teams that want replay, mobile evidence, heatmaps, journeys, and debugging context to stay close together.",
     metaTitle: "Rejourney vs PostHog Session Replay",
     metaDescription:
       "Compare Rejourney with PostHog session replay for web and mobile replay, unlimited events, retention, projects, team members, and pricing.",
@@ -650,9 +719,9 @@ export const SEO_PAGES: SeoPage[] = [
     imageAlt: "Rejourney replay dashboard as a PostHog session replay alternative",
     proofPoints: ["Replay-first analytics", "Mobile + web", "Simple included limits"],
     whyParagraphs: [
-      "PostHog publicly positions PostHog Cloud as a multi-product platform with product analytics, web analytics, session replay, feature flags, experiments, surveys, data warehouse, error tracking, logs, and more. That can be a good fit if you want a broad product OS.",
-      "Rejourney is narrower by design. It centers the workflow on replay, heatmaps, journeys, crashes, ANRs, network context, and product analytics so teams can move from a symptom to the exact user experience faster.",
-      "For teams comparing PostHog session replay costs and limits, the practical difference to evaluate is quota shape: PostHog publishes usage-based quotas and rates, while Rejourney emphasizes unlimited events, analytics retention, projects, and team members in its own plans.",
+      "PostHog Cloud is a multi-product platform: analytics, session replay, feature flags, experiments, surveys, warehouse tools, error tracking, logs, and more. That is useful if the team wants one large operating system for product work.",
+      "Rejourney is intentionally narrower. It keeps replay, heatmaps, journeys, crashes, ANRs, network context, and product analytics on the same investigation path so the team can move from a symptom to the user experience behind it.",
+      "The practical pricing question is quota shape. PostHog publishes usage-based quotas and rates; Rejourney keeps events, analytics retention, projects, and team members open in its own plans.",
     ],
     chooseOther: [
       "You want feature flags, experiments, and a broad all-in-one product analytics suite.",
@@ -728,7 +797,7 @@ export const SEO_PAGES: SeoPage[] = [
     competitor: "Sentry Session Replay",
     badge: "",
     subtitle:
-      "Sentry is excellent for error monitoring. Rejourney is the session replay alternative when product behavior, journeys, heatmaps, and team-wide analytics matter as much as exceptions.",
+      "Sentry is built for developer diagnostics. Rejourney is for teams that need replay to explain product behavior beyond exceptions.",
     metaTitle: "Rejourney vs Sentry Session Replay",
     metaDescription:
       "Compare Rejourney and Sentry Session Replay for replay, product analytics, heatmaps, journeys, unlimited events, and mobile debugging.",
@@ -737,9 +806,9 @@ export const SEO_PAGES: SeoPage[] = [
     imageAlt: "Rejourney crash and ANR replay context as a Sentry Session Replay alternative",
     proofPoints: ["Replay + product analytics", "Heatmaps + journeys", "Crash + API context"],
     whyParagraphs: [
-      "Sentry's public pricing and billing docs center the product around developer monitoring categories such as errors, tracing, logs, replays, monitors, profiling, and attachments. That is a strong fit when your main workflow is engineering diagnostics.",
-      "Rejourney connects replay with product analytics, heatmaps, journeys, crashes, ANRs, network context, and team collaboration. That makes it useful for support, product, design, and engineering in the same workspace.",
-      "If your team wants replay to explain both bugs and behavior, Rejourney gives you a focused path with unlimited events, analytics retention, projects, and team members.",
+      "Sentry's pricing and billing docs center on developer monitoring: errors, tracing, logs, replays, monitors, profiling, and attachments. That is the right center of gravity when engineering diagnostics are the main job.",
+      "Rejourney connects replay with product analytics, heatmaps, journeys, crashes, ANRs, network context, and team collaboration. Support, product, design, and engineering can work from the same session instead of passing evidence between tools.",
+      "If replay needs to explain both bugs and behavior, Rejourney keeps the investigation focused while leaving events, analytics retention, projects, and team members open.",
     ],
     chooseOther: [
       "Your main need is exception monitoring and developer error triage.",
@@ -816,7 +885,7 @@ export const SEO_PAGES: SeoPage[] = [
     competitor: "Datadog Session Replay",
     badge: "",
     subtitle:
-      "Datadog is a broad observability platform. Rejourney is the focused alternative for product teams that need replay, heatmaps, journeys, and app behavior without enterprise-suite complexity.",
+      "Datadog makes sense inside a broad observability stack. Rejourney is for product teams that want session evidence without adopting the whole stack.",
     metaTitle: "Rejourney vs Datadog Session Replay",
     metaDescription:
       "Compare Rejourney and Datadog Session Replay for product analytics, mobile replay, unlimited events, retention, projects, and teams.",
@@ -825,9 +894,9 @@ export const SEO_PAGES: SeoPage[] = [
     imageAlt: "Rejourney geo analytics and replay context as a Datadog alternative",
     proofPoints: ["Product-first UX", "Replay + API context", "Mobile + web"],
     whyParagraphs: [
-      "Datadog's public pricing page places Session Replay inside Real User Monitoring and Session Replay, alongside the broader Datadog observability catalog. That is useful when replay should sit inside an existing observability stack.",
-      "Rejourney centers the experience on session replay, journeys, heatmaps, crashes, ANRs, API context, and product analytics. It gives product and engineering the same evidence without starting from a large observability suite.",
-      "For teams that mainly want user-session evidence, Rejourney emphasizes replay-backed product workflows with unlimited events, analytics retention, team members, and projects.",
+      "Datadog places Session Replay inside Real User Monitoring and the wider Datadog observability catalog. That is useful when replay belongs beside logs, traces, APM, and platform monitoring.",
+      "Rejourney starts from the user session, then brings in journeys, heatmaps, crashes, ANRs, API context, and product analytics. Product and engineering can use the same evidence without a large observability rollout.",
+      "For teams that mainly need user-session evidence, Rejourney keeps the workflow replay-backed and keeps events, analytics retention, team members, and projects simple to plan.",
     ],
     chooseOther: [
       "You need infrastructure, logs, traces, APM, and enterprise observability in one vendor.",
@@ -904,7 +973,7 @@ export const SEO_PAGES: SeoPage[] = [
     competitor: "Amplitude Session Replay",
     badge: "",
     subtitle:
-      "Amplitude is a mature product analytics platform. Rejourney is the replay-first alternative when the team needs session evidence, mobile context, and simple included limits.",
+      "Amplitude is strong when analytics is the center. Rejourney is for teams that need the replay behind the metric.",
     metaTitle: "Rejourney vs Amplitude Session Replay",
     metaDescription:
       "Compare Rejourney and Amplitude Session Replay for replay-first analytics, mobile context, unlimited events, retention, projects, and seats.",
@@ -913,9 +982,9 @@ export const SEO_PAGES: SeoPage[] = [
     imageAlt: "Rejourney growth analytics as an Amplitude session replay alternative",
     proofPoints: ["Replay-first analytics", "Mobile UX evidence", "Crash + API context"],
     whyParagraphs: [
-      "Amplitude's public pricing page presents a broad digital analytics platform with product analytics, session replay, heatmaps, experimentation, activation, AI feedback, and related products. That can be a strong fit for mature analytics programs.",
-      "Rejourney starts from the session and surrounds it with journeys, heatmaps, crashes, network context, retention signals, and product analytics. That helps teams move from a chart anomaly to the moment that caused it.",
-      "Unlimited events, analytics retention, projects, and team members make Rejourney easier to open up across the team without turning every new event or collaborator into a planning question.",
+      "Amplitude presents a broad digital analytics platform with product analytics, session replay, heatmaps, experimentation, activation, AI feedback, and related products. That is a natural fit for mature analytics programs.",
+      "Rejourney starts from the session and surrounds it with journeys, heatmaps, crashes, network context, retention signals, and product analytics. The point is to move from a chart anomaly to the moment that caused it.",
+      "Unlimited events, analytics retention, projects, and team members make Rejourney easier to open across the team without turning every new event or collaborator into a planning question.",
     ],
     chooseOther: [
       "You need a mature enterprise product analytics suite with complex cohort analysis workflows.",
@@ -992,7 +1061,7 @@ export const SEO_PAGES: SeoPage[] = [
     competitor: "Mixpanel Session Replay",
     badge: "",
     subtitle:
-      "Mixpanel is known for event analytics. Rejourney is the alternative for teams that want replay, journeys, heatmaps, crashes, and unlimited team access together.",
+      "Mixpanel is built around event analytics. Rejourney is for teams that need replay, journeys, heatmaps, crashes, and API context beside the event trail.",
     metaTitle: "Rejourney vs Mixpanel Session Replay",
     metaDescription:
       "Compare Rejourney and Mixpanel Session Replay for replay-first product analytics, mobile replay, unlimited events, retention, projects, and teams.",
@@ -1001,9 +1070,9 @@ export const SEO_PAGES: SeoPage[] = [
     imageAlt: "Rejourney journey analytics as a Mixpanel session replay alternative",
     proofPoints: ["Journeys + replay", "Crash + API context", "Shared evidence"],
     whyParagraphs: [
-      "Mixpanel's public pricing page is organized around product analytics plans, monthly event limits, saved reports, seats, session replays, governance, support, and add-ons. That is a strong fit when event analytics is the core workflow.",
-      "Rejourney puts replay beside events, journey maps, heatmaps, crashes, API context, and device context. That makes the workflow practical for PMs, designers, support, and developers.",
-      "If the team wants to invite everyone into the evidence, Rejourney's unlimited team members and projects make shared investigation easier.",
+      "Mixpanel's pricing is organized around product analytics plans, monthly event limits, saved reports, seats, session replays, governance, support, and add-ons. That works when event analytics is the core workflow.",
+      "Rejourney puts replay beside events, journey maps, heatmaps, crashes, API context, and device context. PMs, designers, support, and developers can inspect the same user path.",
+      "If the team wants everyone in the evidence trail, Rejourney's unlimited team members and projects make shared investigation easier.",
     ],
     chooseOther: [
       "Your core need is event analytics and cohort reporting.",
@@ -1079,7 +1148,7 @@ export const SEO_PAGES: SeoPage[] = [
     competitor: "Pendo Session Replay",
     badge: "",
     subtitle:
-      "Pendo is built for product adoption and in-app guidance. Rejourney is the replay-first alternative for teams that want user evidence, mobile context, and observability in one place.",
+      "Pendo is built for product adoption and in-app guidance. Rejourney is for teams that need replay evidence before deciding what to guide, redesign, or fix.",
     metaTitle: "Rejourney vs Pendo Session Replay",
     metaDescription:
       "Compare Rejourney and Pendo Session Replay for replay-first analytics, mobile UX, unlimited team members, projects, events, and retention.",
@@ -1088,9 +1157,9 @@ export const SEO_PAGES: SeoPage[] = [
     imageAlt: "Rejourney team alerts and shared replay workspace as a Pendo alternative",
     proofPoints: ["Replay-led UX", "Team-wide workspace", "Crash + API context"],
     whyParagraphs: [
-      "Pendo's public pricing page is organized around software experience management bundles, monthly active users, analytics, in-app guides, session replays, discovery, sentiment, journey orchestration, and related capabilities.",
-      "Rejourney combines replay, heatmaps, journeys, product analytics, crashes, ANRs, and network context, so the product team and engineering team can work from the same evidence.",
-      "Unlimited events, analytics retention, projects, and team members help teams roll replay evidence out broadly without making access a budget negotiation.",
+      "Pendo's pricing is organized around software experience management bundles, monthly active users, analytics, in-app guides, session replays, discovery, sentiment, journey orchestration, and related capabilities.",
+      "Rejourney combines replay, heatmaps, journeys, product analytics, crashes, ANRs, and network context, so product and engineering can work from the same evidence.",
+      "Unlimited events, analytics retention, projects, and team members help teams share replay evidence broadly without making access a budget negotiation.",
     ],
     chooseOther: [
       "You need in-app guides, surveys, and product adoption workflows more than replay investigation.",
@@ -1166,7 +1235,7 @@ export const SEO_PAGES: SeoPage[] = [
     competitor: "Smartlook",
     badge: "",
     subtitle:
-      "Smartlook is entering Cisco end-of-sale and end-of-life. Rejourney is the Smartlook alternative for teams that still need replay, heatmaps, journeys, mobile evidence, and technical context in one focused workflow.",
+      "Smartlook is entering Cisco end-of-sale and end-of-life. Rejourney is for teams that still need replay, heatmaps, journeys, mobile evidence, and technical context in one focused workflow.",
     metaTitle: "Smartlook Alternatives: Rejourney vs Smartlook",
     metaDescription:
       "Compare Rejourney and Smartlook alternatives before Cisco ends Smartlook. Review session replay, heatmaps, funnels, mobile replay, crash context, pricing, and migration risk.",
@@ -1176,8 +1245,8 @@ export const SEO_PAGES: SeoPage[] = [
     proofPoints: ["Cisco EOL timing", "Replay + heatmaps", "Mobile + technical context"],
     whyParagraphs: [
       "Cisco's official end-of-sale notice says Smartlook.com reaches end of sale on May 31, 2026, with the last date to renew or add to an existing subscription on August 31, 2026 and last support on August 31, 2027.",
-      "Smartlook historically served teams that needed recordings, heatmaps, events, funnels, crash reports, and web/mobile behavior analytics. The migration question is whether teams still need that product and UX evidence layer, or whether they want to move into Cisco's listed migration product, Splunk Observability Cloud - RUM+DXA.",
-      "Rejourney is built for teams that want the session, heatmap, journey, metric, crash, ANR, API call, and device context in the same investigation path after Smartlook stops being the center of the workflow.",
+      "Smartlook served teams that needed recordings, heatmaps, events, funnels, crash reports, and web/mobile behavior analytics. The migration question is whether teams still need that behavior-evidence layer, or whether they want Cisco's listed migration product, Splunk Observability Cloud - RUM+DXA.",
+      "Rejourney is built for teams that want session replay, heatmaps, journeys, metrics, crashes, ANRs, API calls, and device context on the same investigation path after Smartlook stops being the center of the workflow.",
     ],
     chooseOther: [
       "You are already committed to Cisco or Splunk observability as the replacement path.",
@@ -1257,7 +1326,7 @@ export const SEO_PAGES: SeoPage[] = [
     competitor: "Hotjar",
     badge: "",
     subtitle:
-      "Hotjar is known for heatmaps, recordings, surveys, and feedback. Rejourney is the Hotjar alternative for teams that want replay, heatmaps, journeys, mobile evidence, product analytics, and technical context together.",
+      "Hotjar is a good fit for website heatmaps, recordings, surveys, and feedback. Rejourney is for teams that need those behavior signals tied to product and engineering evidence.",
     metaTitle: "Hotjar Alternatives: Rejourney vs Hotjar",
     metaDescription:
       "Compare Rejourney and Hotjar alternatives for heatmaps, session replay, user journeys, mobile analytics, unlimited events, retention, projects, and teams.",
@@ -1266,8 +1335,8 @@ export const SEO_PAGES: SeoPage[] = [
     imageAlt: "Mobile app heatmap showing concentrated taps and attention across a coffee app screen",
     proofPoints: ["Heatmaps + replay", "Journeys + analytics", "Mobile + stability context"],
     whyParagraphs: [
-      "Hotjar's official pricing page frames Observe around heatmaps and recordings, with additional Ask and Engage products for surveys, feedback, user interviews, and user tests. That is useful when a website team wants classic qualitative UX research tools.",
-      "Rejourney is built for product teams that need the session, the heatmap, the journey, the metric, the crash, and the API context in the same investigation path.",
+      "Hotjar frames Observe around heatmaps and recordings, with Ask and Engage for surveys, feedback, user interviews, and user tests. That is useful when a website team wants classic qualitative UX research tools.",
+      "Rejourney is built for product teams that need the session, heatmap, journey, metric, crash, and API context on the same investigation path.",
       "If your team is comparing Hotjar alternatives because recordings alone are not enough, Rejourney keeps replay close to product analytics, mobile context, and technical evidence.",
     ],
     chooseOther: [
@@ -1346,7 +1415,7 @@ export const SEO_PAGES: SeoPage[] = [
     competitor: "Fullstory",
     badge: "",
     subtitle:
-      "Fullstory is a mature digital experience platform. Rejourney is the leaner replay-first alternative with simple limits, mobile context, and open-source/self-hosting paths.",
+      "Fullstory is a mature digital experience platform. Rejourney is the leaner replay-first alternative with mobile context, simple limits, and open-source/self-hosting paths.",
     metaTitle: "Fullstory Alternatives: Rejourney vs Fullstory",
     metaDescription:
       "Compare Rejourney with Fullstory alternatives for session replay, mobile analytics, heatmaps, journeys, unlimited events, retention, projects, and teams.",
@@ -1357,7 +1426,7 @@ export const SEO_PAGES: SeoPage[] = [
     whyParagraphs: [
       "Fullstory's public plans page presents Analytics, Workforce, and Anywhere packages, with Analytics plans named Business, Advanced, and Enterprise. It also lists a free plan for individuals and small teams.",
       "Rejourney keeps replay, heatmaps, journeys, crashes, ANRs, API context, and product analytics together without requiring a complex suite rollout.",
-      "For teams that want source visibility or self-hosting paths, Rejourney also offers an open-source foundation.",
+      "For teams that want source visibility or a self-hosting path, Rejourney also offers an open-source foundation.",
     ],
     chooseOther: [
       "You need a mature enterprise digital experience platform with existing procurement support.",

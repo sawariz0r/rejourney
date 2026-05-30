@@ -12,6 +12,9 @@ type WebReplayPlayerProps = {
     playbackRate: number;
     durationSeconds: number;
     backgroundGaps?: CompressedBackgroundGap[];
+    fitMode?: 'contain' | 'width' | 'document-width';
+    documentWidth?: number | null;
+    documentHeight?: number | null;
 };
 
 function replayEventSignature(event: any): string {
@@ -38,27 +41,50 @@ function buildReplayKey(events: any[]): string {
     return `${replayEventSignature(first)}:${firstHref}`;
 }
 
-function applyScale(root: HTMLElement): boolean {
+function applyScale(
+    root: HTMLElement,
+    fitMode: 'contain' | 'width' | 'document-width',
+    documentWidth?: number | null,
+    documentHeight?: number | null,
+): boolean {
     const wrapper = root.querySelector<HTMLElement>('.replayer-wrapper');
     const iframe = root.querySelector<HTMLIFrameElement>('iframe');
     if (!wrapper || !iframe) return false;
-    const iframeW = Number(iframe.getAttribute('width')) || iframe.offsetWidth;
+    const documentFit = fitMode === 'document-width';
+    const sourceWidth = documentFit && documentWidth && Number.isFinite(documentWidth) && documentWidth > 0
+        ? documentWidth
+        : null;
+    const sourceHeight = documentFit && documentHeight && Number.isFinite(documentHeight) && documentHeight > 0
+        ? documentHeight
+        : null;
+    if (sourceWidth) {
+        iframe.setAttribute('width', `${Math.round(sourceWidth)}`);
+        iframe.style.width = `${sourceWidth}px`;
+        wrapper.style.width = `${sourceWidth}px`;
+    }
+    if (sourceHeight) {
+        iframe.setAttribute('height', `${Math.round(sourceHeight)}`);
+        iframe.style.height = `${sourceHeight}px`;
+        wrapper.style.height = `${sourceHeight}px`;
+    }
+    const iframeW = sourceWidth || Number(iframe.getAttribute('width')) || iframe.offsetWidth;
     if (!iframeW) return false;
     const containerW = root.clientWidth;
     const containerH = root.clientHeight;
     if (containerW <= 0 || containerH <= 0) return false;
-    const iframeH = Number(iframe.getAttribute('height')) || iframe.offsetHeight;
+    const iframeH = sourceHeight || Number(iframe.getAttribute('height')) || iframe.offsetHeight;
     if (iframeH <= 0) return false;
-    // contain: scale so neither dimension overflows
-    const scale = Math.min(containerW / iframeW, containerH / iframeH);
+    const scale = fitMode === 'width' || documentFit
+        ? containerW / iframeW
+        : Math.min(containerW / iframeW, containerH / iframeH);
     if (!Number.isFinite(scale) || scale <= 0) return false;
     const scaledW = iframeW * scale;
     const scaledH = iframeH * scale;
     wrapper.style.transformOrigin = 'top left';
     wrapper.style.transform = `scale(${scale})`;
     wrapper.style.position = 'absolute';
-    wrapper.style.left = `${(containerW - scaledW) / 2}px`;
-    wrapper.style.top = `${(containerH - scaledH) / 2}px`;
+    wrapper.style.left = fitMode === 'width' || documentFit ? '0px' : `${(containerW - scaledW) / 2}px`;
+    wrapper.style.top = fitMode === 'width' || documentFit ? '0px' : `${(containerH - scaledH) / 2}px`;
     return true;
 }
 
@@ -70,6 +96,9 @@ export default function WebReplayPlayer({
     playbackRate,
     durationSeconds,
     backgroundGaps = [],
+    fitMode = 'contain',
+    documentWidth = null,
+    documentHeight = null,
 }: WebReplayPlayerProps) {
     const rootRef = useRef<HTMLDivElement>(null);
     const replayerRef = useRef<RrwebReplayer | null>(null);
@@ -216,7 +245,7 @@ export default function WebReplayPlayer({
             if (retryTimer) window.clearTimeout(retryTimer);
             raf = requestAnimationFrame(() => {
                 raf = 0;
-                if (!applyScale(root) && root.isConnected) {
+                if (!applyScale(root, fitMode, documentWidth, documentHeight) && root.isConnected) {
                     retryTimer = window.setTimeout(rescale, 50);
                 }
             });
@@ -240,7 +269,7 @@ export default function WebReplayPlayer({
             window.removeEventListener('resize', rescale);
             window.removeEventListener('orientationchange', rescale);
         };
-    }, []);
+    }, [documentHeight, documentWidth, fitMode]);
 
     useEffect(() => {
         const replayer = replayerRef.current;

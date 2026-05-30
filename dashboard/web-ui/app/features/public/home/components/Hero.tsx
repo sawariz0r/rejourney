@@ -4,15 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import type { MarketingHomeCopy, MarketingLocale } from '~/shared/lib/internationalMarketing';
 
 const LIVE_DEMO_PATH = '/demo/general';
-
-const RetroHeroBlocks: React.FC = () => (
-    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
-        <div className="absolute -left-16 top-16 hidden h-32 w-72 -rotate-6 border-2 border-black bg-[#fff08a] shadow-[8px_8px_0_0_rgba(0,0,0,1)] md:block" />
-        <div className="absolute -right-20 top-14 hidden h-28 w-72 rotate-12 border-2 border-black bg-[#f9a8d4] shadow-[8px_8px_0_0_rgba(0,0,0,1)] md:block" />
-        <div className="absolute -left-28 bottom-[18rem] h-24 w-60 rotate-6 border-2 border-black bg-[#bbf7d0] shadow-[8px_8px_0_0_rgba(0,0,0,1)] sm:-left-12 sm:bottom-[20rem] sm:h-28 sm:w-72" />
-        <div className="absolute -right-32 bottom-[14rem] h-20 w-56 -rotate-8 border-2 border-black bg-[#c4b5fd] shadow-[7px_7px_0_0_rgba(0,0,0,1)] sm:-right-16 sm:bottom-[18rem] sm:h-24 sm:w-68" />
-    </div>
-);
+const RAINDROP_LOGO_PATH = '/rejourneyIcon-removebg-preview.png';
 
 const ProductDemoPreview: React.FC = () => (
     <div className="relative mx-auto mt-9 w-full overflow-hidden border-2 border-black bg-white shadow-[10px_10px_0_0_rgba(0,0,0,1)] sm:mt-10" dir="ltr">
@@ -64,8 +56,8 @@ const renderHeroHeadline = (copy: HeroCopy, isRtl: boolean) => {
         ? 'block max-w-full break-words font-display text-[2.15rem] font-extrabold leading-[1.14] tracking-normal text-black min-[380px]:text-[2.55rem] sm:text-[3.2rem] md:text-[3.95rem] lg:text-[4.3rem] xl:text-[4.8rem]'
         : 'block max-w-full break-words text-balance font-display text-[2.35rem] font-extrabold leading-[1] tracking-normal text-black min-[380px]:text-[2.75rem] sm:text-[4rem] md:text-[4.75rem] lg:whitespace-nowrap lg:text-[5.1rem] xl:text-[5.5rem]';
     const headlineSecondaryClass = isRtl
-        ? 'mt-3 block max-w-full break-words font-display text-[1.95rem] font-extrabold leading-[1.16] tracking-normal text-[#5dadec] min-[380px]:text-[2.25rem] sm:mt-4 sm:text-[2.95rem] md:text-[3.55rem] lg:mt-5 lg:text-[3.95rem] xl:text-[4.45rem]'
-        : 'mt-4 block max-w-full break-words text-balance font-display text-[2.05rem] font-extrabold leading-[1.02] tracking-normal text-[#5dadec] min-[380px]:text-[2.25rem] sm:mt-4 sm:text-[3.85rem] md:text-[4.55rem] lg:mt-5 lg:whitespace-nowrap lg:text-[5rem] xl:text-[5.4rem]';
+        ? 'mt-3 flex max-w-full flex-wrap items-center justify-center gap-[0.16em] break-words font-display text-[1.95rem] font-extrabold leading-[1.16] tracking-normal text-[#5dadec] min-[380px]:text-[2.25rem] sm:mt-4 sm:text-[2.95rem] md:text-[3.55rem] lg:mt-5 lg:text-[3.95rem] xl:text-[4.45rem]'
+        : 'mt-4 flex max-w-full flex-wrap items-center justify-center gap-[0.16em] break-words text-balance font-display text-[2.05rem] font-extrabold leading-[1.02] tracking-normal text-[#5dadec] min-[380px]:text-[2.25rem] sm:mt-4 sm:text-[3.85rem] md:text-[4.55rem] lg:mt-5 lg:whitespace-nowrap lg:text-[5rem] xl:text-[5.4rem]';
 
     return (
         <>
@@ -73,7 +65,14 @@ const renderHeroHeadline = (copy: HeroCopy, isRtl: boolean) => {
                 {renderHeadlineWithProtectedPunctuation(copy.headlinePrimary)}
             </span>
             <span className={headlineSecondaryClass}>
-                {renderHeadlineWithProtectedPunctuation(copy.headlineSecondary)}
+                <span>Fix Leaks</span>
+                <img
+                    src={RAINDROP_LOGO_PATH}
+                    alt=""
+                    aria-hidden="true"
+                    className="inline-block h-[0.82em] w-[0.82em] shrink-0 object-contain"
+                    draggable={false}
+                />
             </span>
         </>
     );
@@ -87,7 +86,6 @@ export const Hero: React.FC<{ copy: HeroCopy; homeCopy: MarketingHomeCopy['hero'
             aria-label={homeCopy.ariaLabel}
             className={`relative w-full overflow-hidden border-b-2 border-black bg-white px-4 pb-16 text-black sm:px-6 sm:pb-20 lg:px-8 lg:pb-28 ${isRtl ? 'pt-20 sm:pt-28 lg:pt-32' : 'pt-16 sm:pt-24 lg:pt-28'}`}
         >
-            <RetroHeroBlocks />
             <div className="relative z-10 mx-auto max-w-7xl">
                 <div className="mx-auto max-w-6xl space-y-8 text-center sm:space-y-9" dir={dir}>
                     <h1 className="mx-auto max-w-6xl text-black">

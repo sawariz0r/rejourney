@@ -55,7 +55,7 @@ import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
 import { RecordingSession } from '~/shared/types';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
-import { getDemoReplayCoverPhotoUrl } from '~/shared/data/demoData';
+import { DEMO_REPLAY_SESSION_IDS, getDemoReplayCoverPhotoUrl } from '~/shared/data/demoData';
 
 const toUtcDateKey = (value: string): string | null => {
     const date = new Date(value);
@@ -189,6 +189,7 @@ const RECOMMENDED_SESSION_PRIORITY_STYLES: Record<RecommendedSession['priority']
 const MAX_RECOMMENDED_SESSIONS = 8;
 const MIN_RECOMMENDED_SESSION_SCORE = 70;
 const MAX_RECOMMENDATIONS_PER_CATEGORY = 2;
+const DEMO_REPLAY_SESSION_ID_SET = new Set(DEMO_REPLAY_SESSION_IDS);
 
 const ANONYMOUS_NICKNAME_STYLES = [
     'border-emerald-200 bg-emerald-100 text-emerald-800',
@@ -659,6 +660,41 @@ function buildRecommendedSessions(sessions: RecordingSession[]): RecommendedSess
     }
 
     return picks;
+}
+
+function getRecordedDemoSessions(sessions: RecordingSession[]): RecordingSession[] {
+    const byId = new Map(sessions.map((session) => [session.id, session]));
+    return DEMO_REPLAY_SESSION_IDS
+        .map((sessionId) => byId.get(sessionId))
+        .filter((session): session is RecordingSession => Boolean(session));
+}
+
+function buildDemoRecommendedSessions(sessions: RecordingSession[]): RecommendedSession[] {
+    const recordedSessions = getRecordedDemoSessions(sessions);
+    const scoredRecommendations = new Map(
+        buildRecommendedSessions(recordedSessions).map((recommendation) => [recommendation.session.id, recommendation]),
+    );
+
+    return recordedSessions.map((session) => {
+        const scored = scoredRecommendations.get(session.id);
+        if (scored) return scored;
+
+        if (session.platform === 'web') {
+            return {
+                session,
+                category: 'Web SDK Replay',
+                priority: 'watch',
+                reason: 'Docs path replay shows the Web SDK setup flow and custom-event section',
+            };
+        }
+
+        return {
+            session,
+            category: 'Recorded Demo Replay',
+            priority: 'watch',
+            reason: 'Recorded replay with visual artifacts available for inspection',
+        };
+    });
 }
 
 const EmptyStateCard: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => (
@@ -1819,13 +1855,16 @@ export const GeneralOverview: React.FC = () => {
     }, []);
 
     const recommendedSessions = useMemo(
-        () => buildRecommendedSessions(sessions),
-        [sessions],
+        () => isDemoMode ? buildDemoRecommendedSessions(sessions) : buildRecommendedSessions(sessions),
+        [isDemoMode, sessions],
     );
 
     // Prefer backend-aggregated top users (accurate all-window counts).
     // Fall back to session-pool computation only in demo mode.
     const topUsers = useMemo(() => {
+        if (isDemoMode) {
+            return buildTopUsers(sessions.filter((session) => DEMO_REPLAY_SESSION_ID_SET.has(session.id)));
+        }
         if (topUsersFromBackend.length > 0) {
             return topUsersFromBackend.map((entry) => {
                 const identity = getTopUserIdentity(entry.latestSession);
@@ -1843,7 +1882,7 @@ export const GeneralOverview: React.FC = () => {
             });
         }
         return buildTopUsers(sessions);
-    }, [topUsersFromBackend, sessions]);
+    }, [isDemoMode, topUsersFromBackend, sessions]);
 
     const handleCopyTopUser = useCallback(async (value: string, userKey: string) => {
         try {

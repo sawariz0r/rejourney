@@ -21,6 +21,15 @@ function extractDraggedTabId(event: React.DragEvent): string {
     return event.dataTransfer.getData(TAB_DRAG_MIME) || event.dataTransfer.getData('text/plain');
 }
 
+function getPaneBodyClass(routeWithoutPrefix: string): string {
+    const usesViewportFit = routeWithoutPrefix.startsWith('/analytics/heatmaps');
+    const desktopOverflow = usesViewportFit
+        ? 'overflow-y-auto pb-10 xl:overflow-hidden xl:pb-0'
+        : 'overflow-y-auto pb-10';
+
+    return `relative flex-1 min-h-0 overflow-x-hidden pt-0 ${desktopOverflow}`;
+}
+
 export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
     const {
         tabs,
@@ -49,6 +58,9 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
         if (!secondaryTab) return null;
         return TabRegistry.resolve(stripPathPrefix(secondaryTab.path));
     }, [secondaryTab]);
+    const secondaryRouteWithoutPrefix = secondaryTab ? stripPathPrefix(secondaryTab.path) : '';
+    const primaryPaneBodyClass = getPaneBodyClass(routeWithoutPrefix);
+    const secondaryPaneBodyClass = getPaneBodyClass(secondaryRouteWithoutPrefix);
     const primaryPaneKey = `${location.pathname}${location.search}`;
     const primaryPaneContent = (
         <ClientErrorBoundary key={`primary:${primaryPaneKey}`} fallbackClassName={PANE_ERROR_FALLBACK_CLASS}>
@@ -113,7 +125,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
             <div className="flex flex-col h-full min-h-0 bg-transparent">
                 <TabBar group="primary" pathPrefix={tabPathPrefix} />
                 <div
-                    className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-10 pt-0"
+                    className={primaryPaneBodyClass}
                     ref={primaryScrollRef}
                     onDragOver={(event) => {
                         const tabId = extractDraggedTabId(event);
@@ -148,7 +160,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
             {/* Primary Pane */}
             <section className="flex min-w-0 flex-col border-r border-slate-200 h-full" style={{ width: `${splitRatio * 100}%` }}>
                 <TabBar group="primary" pathPrefix={tabPathPrefix} />
-                <div ref={primaryScrollRef} className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-10 pt-0">
+                <div ref={primaryScrollRef} className={primaryPaneBodyClass}>
                     {primaryPaneContent}
                 </div>
             </section>
@@ -163,7 +175,7 @@ export const TabWorkspace: React.FC<TabWorkspaceProps> = ({ children }) => {
             {/* Secondary Pane */}
             <section className="flex min-w-0 flex-col h-full" style={{ width: `${(1 - splitRatio) * 100}%` }}>
                 <TabBar group="secondary" pathPrefix={tabPathPrefix} />
-                <div ref={secondaryScrollRef} className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-transparent pb-10 pt-0">
+                <div ref={secondaryScrollRef} className={`${secondaryPaneBodyClass} bg-transparent`}>
                     {SecondaryComponent && secondaryTabDefinition ? (
                         <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-slate-500">Loading tab…</div>}>
                             <ClientErrorBoundary key={`secondary:${secondaryTab.id}:${secondaryTab.path}`} fallbackClassName={PANE_ERROR_FALLBACK_CLASS}>

@@ -14,6 +14,7 @@ import { isUuid } from "~/shared/lib/ids";
 import { isPublicRoutePath } from "~/shared/lib/publicRoutePaths";
 import * as demoApiData from '~/shared/data/demoApiData';
 import { demoProjects, demoSessions } from '~/shared/data/demoData';
+import { buildDemoHeatmapOverview, getDemoWebAttentionHeatmap } from '~/shared/data/demoHeatmapData';
 
 // Re-export types for consumers
 export type { IssueSession };
@@ -2459,8 +2460,21 @@ export interface JourneysOverviewResponse {
   failedSections: string[];
 }
 
+export type HeatmapMode = 'attention' | 'touch';
+
+export interface HeatmapHotspot {
+  x: number;
+  y: number;
+  intensity: number;
+  isRageTap: boolean;
+  kind?: 'attention' | 'touch' | 'rage';
+  // Total engaged dwell (ms) across all sampled sessions for this bucket (attention maps only).
+  dwellMs?: number;
+}
+
 export interface HeatmapOverviewScreen {
   name: string;
+  platform?: string | null;
   visits: number;
   rageTaps: number;
   errors: number;
@@ -2469,7 +2483,7 @@ export interface HeatmapOverviewScreen {
   screenshotUrl: string | null;
   sessionIds?: string[];
   screenFirstSeenMs?: number | null;
-  touchHotspots?: Array<{ x: number; y: number; intensity: number; isRageTap: boolean }>;
+  touchHotspots?: HeatmapHotspot[];
   pageWidth?: number | null;
   pageHeight?: number | null;
   viewportWidth?: number | null;
@@ -2494,7 +2508,7 @@ export interface HeatmapIterationScreen {
   name: string;
   screenshotUrl: string | null;
   screenFirstSeenMs?: number | null;
-  touchHotspots?: Array<{ x: number; y: number; intensity: number; isRageTap: boolean }>;
+  touchHotspots?: HeatmapHotspot[];
   pageWidth?: number | null;
   pageHeight?: number | null;
   viewportWidth?: number | null;
@@ -2531,6 +2545,22 @@ export interface HeatmapOverviewResponse {
 export interface HeatmapScreenOverviewResponse {
   screen: HeatmapOverviewScreen | null;
   failedSections: string[];
+}
+
+export interface WebAttentionHeatmapResponse {
+  hotspots: HeatmapHotspot[];
+  sampledSessions: number;
+  avgSessionDurationMs: number | null;
+  // Engaged dwell ms (summed across sampled sessions) per equal-height depth slice top→bottom.
+  dwellByDepth?: number[];
+  eventCount: number;
+  generatedAt: string;
+  confidence: 'high' | 'medium' | 'low';
+  pageWidth: number | null;
+  pageHeight: number | null;
+  viewportWidth: number | null;
+  viewportHeight: number | null;
+  reason: string | null;
 }
 
 export interface ErrorOverviewGroup {
@@ -2912,73 +2942,7 @@ export async function getJourneysOverview(projectId: string, timeRange?: string,
 export async function getHeatmapsOverview(projectId: string, timeRange?: string, platform?: string): Promise<HeatmapOverviewResponse> {
   const normalizedPlatform = platform && platform !== 'all' ? platform : undefined;
   if (isDemoMode()) {
-    const [alltime, friction] = await Promise.all([
-      getAlltimeHeatmap(projectId),
-      getFrictionHeatmap(projectId, timeRange),
-    ]);
-
-    const byName = new Map<string, HeatmapOverviewScreen>();
-    for (const screen of alltime.screens || []) {
-      byName.set(screen.name, {
-        ...screen,
-        rangeVisits: screen.visits,
-        rangeRageTaps: screen.rageTaps,
-        rangeErrors: screen.errors,
-        rangeExitRate: screen.exitRate,
-        rangeFrictionScore: screen.frictionScore,
-        rangeImpactScore: screen.frictionScore,
-        rangeRageTapRatePer100: 0,
-        rangeErrorRatePer100: 0,
-        rangeIncidentRatePer100: 0,
-        rangeEstimatedAffectedSessions: 0,
-        primarySignal: 'mixed',
-        confidence: 'medium',
-        priority: 'watch',
-        evidenceSessionId: screen.sessionIds?.[0] || null,
-      });
-    }
-    for (const screen of friction.screens || []) {
-      const existing = byName.get(screen.name);
-      byName.set(screen.name, {
-        ...(existing || screen),
-        ...screen,
-        rangeVisits: screen.visits,
-        rangeRageTaps: screen.rageTaps,
-        rangeErrors: screen.errors,
-        rangeExitRate: screen.exitRate,
-        rangeFrictionScore: screen.frictionScore,
-        rangeImpactScore: screen.frictionScore,
-        rangeRageTapRatePer100: 0,
-        rangeErrorRatePer100: 0,
-        rangeIncidentRatePer100: 0,
-        rangeEstimatedAffectedSessions: 0,
-        primarySignal: 'mixed',
-        confidence: 'medium',
-        priority: 'watch',
-        evidenceSessionId: screen.sessionIds?.[0] || existing?.evidenceSessionId || null,
-      });
-    }
-
-    return {
-      screens: Array.from(byName.values()),
-      screenIteration: {
-        overall: Array.from(byName.values()).map((screen) => ({
-          name: screen.name,
-          screenshotUrl: screen.screenshotUrl,
-          touchHotspots: screen.touchHotspots,
-          visits: screen.rangeVisits || screen.visits,
-          touches: screen.visits,
-          rageTaps: screen.rangeRageTaps || screen.rageTaps,
-          errors: screen.rangeErrors || screen.errors,
-          incidentRatePer100: screen.rangeIncidentRatePer100,
-          lastSeenAt: alltime.lastUpdated || null,
-          evidenceSessionId: screen.evidenceSessionId,
-        })),
-        versions: [],
-      },
-      lastUpdated: alltime.lastUpdated,
-      failedSections: [],
-    };
+    return buildDemoHeatmapOverview();
   }
 
   const params = new URLSearchParams({ projectId });
@@ -3005,6 +2969,22 @@ export async function getHeatmapScreenOverview(projectId: string, screenName: st
   const endpoint = `/api/overview/heatmaps/screen?${params.toString()}`;
   const cacheKey = `overview:heatmaps:screen:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v7`;
   return fetchWithCache<HeatmapScreenOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
+}
+
+export async function getWebAttentionHeatmap(projectId: string, screenName: string, timeRange?: string, platform?: string, appVersion?: string | null): Promise<WebAttentionHeatmapResponse> {
+  const normalizedPlatform = platform && platform !== 'all' ? platform : undefined;
+  const normalizedAppVersion = appVersion && appVersion !== 'all' ? appVersion : undefined;
+  if (isDemoMode()) {
+    return getDemoWebAttentionHeatmap(screenName);
+  }
+
+  const params = new URLSearchParams({ projectId, screenName });
+  if (timeRange) params.set('timeRange', timeRange);
+  if (normalizedPlatform) params.set('platform', normalizedPlatform);
+  if (normalizedAppVersion) params.set('appVersion', normalizedAppVersion);
+  const endpoint = `/api/overview/heatmaps/attention?${params.toString()}`;
+  const cacheKey = `overview:heatmaps:attention:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:${normalizedAppVersion || 'all'}:v4`;
+  return fetchWithCache<WebAttentionHeatmapResponse>(endpoint, {}, cacheKey, 600_000);
 }
 
 export async function getErrorsOverview(projectId: string, timeRange?: string, platform?: string): Promise<ErrorsOverviewResponse> {
@@ -3238,7 +3218,7 @@ export interface AlltimeHeatmapScreen {
   screenshotUrl: string | null;
   sessionIds?: string[];
   screenFirstSeenMs?: number | null;
-  touchHotspots: Array<{ x: number; y: number; intensity: number; isRageTap: boolean }>;
+  touchHotspots: HeatmapHotspot[];
   pageWidth?: number | null;
   pageHeight?: number | null;
   viewportWidth?: number | null;
@@ -4485,6 +4465,7 @@ export const api = {
   getJourneysOverview,
   getHeatmapsOverview,
   getHeatmapScreenOverview,
+  getWebAttentionHeatmap,
   getErrorsOverview,
   getCrashesOverview,
   getANRsOverview,

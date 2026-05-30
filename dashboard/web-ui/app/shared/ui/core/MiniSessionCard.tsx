@@ -112,12 +112,11 @@ export const MiniSessionCard: React.FC<MiniSessionCardProps> = ({
             : 'other';
     const displayUrl = session.webLandingRoute || '/';
 
-    // Web/rrweb sessions have no screenshot artifacts, so the cover endpoint always 404s for them.
-    // Skip the fetch entirely and render the URL-based placeholder instead.
-    const normalizedCoverPath = isWebSession ? null : (() => {
+    // Web/rrweb sessions usually have no cover endpoint, but demo fixtures can provide a real cover asset.
+    const normalizedCoverPath = (() => {
         const raw = session.coverPhotoUrl && session.coverPhotoUrl.trim().length > 0
             ? session.coverPhotoUrl.trim()
-            : (session.id ? `/api/sessions/cover/${session.id}` : null);
+            : (isWebSession ? null : (session.id ? `/api/sessions/cover/${session.id}` : null));
         if (!raw) return null;
         // Normalize legacy path: /api/sessions/:id/cover -> /api/sessions/cover/:id
         const legacyMatch = raw.match(/^\/api\/sessions\/([^/]+)\/cover$/);
