@@ -75,38 +75,52 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Check if VERSION changed
+      - name: Check if iOS release is needed
         id: version_check
-        run: |
-          VERSION="$(tr -d '[:space:]' < packages/ios/VERSION)"
-          PREV_VERSION="$(git show HEAD~1:packages/ios/VERSION | tr -d '[:space:]')"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Current: $VERSION  Previous: $PREV_VERSION"
-
-          if [ "$VERSION" != "$PREV_VERSION" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Create and push iOS release tag
-        if: steps.version_check.outputs.changed == 'true'
         env:
-          VERSION: ${{ steps.version_check.outputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "::add-mask::$GH_TOKEN"
+          VERSION="$(tr -d '[:space:]' < packages/ios/VERSION)"
           TAG="v${VERSION}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Current iOS SDK version: $VERSION"
 
           if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
-            echo "Tag $TAG already exists — bump packages/ios/VERSION to a new value to release."
-            exit 1
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists."
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG does not exist yet."
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$TAG"
-          git push origin "$TAG"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub release $TAG already exists."
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+            echo "GitHub release $TAG does not exist yet."
+          fi
+
+      - name: Create and push iOS release tag
+        if: steps.version_check.outputs.release_exists != 'true'
+        env:
+          VERSION: ${{ steps.version_check.outputs.version }}
+          TAG: ${{ steps.version_check.outputs.tag }}
+          TAG_EXISTS: ${{ steps.version_check.outputs.tag_exists }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "::add-mask::$GH_TOKEN"
+
+          if [ "$TAG_EXISTS" != "true" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+          else
+            echo "Reusing existing tag $TAG to create missing GitHub release."
+          fi
 
           NOTES_FILE=".github/releases/ios-${VERSION}.md"
           NOTES_ARGS=(--generate-notes)
