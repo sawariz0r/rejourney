@@ -11,10 +11,22 @@
  *   the session first becomes replay_available=true.
  * - replay_quota_counted_at makes replay counting idempotent across retries,
  *   worker replays, and reconciliation.
+ * - The replay_usage_split cutover row is inserted only after production
+ *   ledgers are caught up; until then new replay increments stay paused.
  */
 
 import { eq, and, sql, inArray, isNull } from 'drizzle-orm';
-import { db, teams, users, projects, projectUsage, billingNotifications, teamMembers, sessions } from '../db/client.js';
+import {
+    db,
+    teams,
+    users,
+    projects,
+    projectUsage,
+    billingNotifications,
+    teamMembers,
+    sessions,
+    billingCutovers,
+} from '../db/client.js';
 import {
     getSessionLimitCacheWithLock,
     invalidateSessionLimitCache,
@@ -35,6 +47,9 @@ import {
 } from '../utils/billing.js';
 import { logger } from '../logger.js';
 import { ApiError } from '../middleware/index.js';
+
+const REPLAY_USAGE_SPLIT_CUTOVER_NAME = 'replay_usage_split';
+let warnedMissingReplayUsageCutover = false;
 
 // =============================================================================
 // Types
@@ -579,6 +594,7 @@ export async function incrementProjectSessionReplayIfNeeded(sessionId: string): 
                 sessionId: sessions.id,
                 projectId: sessions.projectId,
                 startedAt: sessions.startedAt,
+                replayQuotaCountedAt: sessions.replayQuotaCountedAt,
                 replayAvailable: sessions.replayAvailable,
                 replayQuotaBillingExhausted: sessions.replayQuotaBillingExhausted,
                 teamId: projects.teamId,
@@ -593,6 +609,35 @@ export async function incrementProjectSessionReplayIfNeeded(sessionId: string): 
             .limit(1);
 
         if (!row || !row.replayAvailable || row.replayQuotaBillingExhausted) {
+            return null;
+        }
+
+        if (row.replayQuotaCountedAt) {
+            return null;
+        }
+
+        const [cutover] = await tx
+            .select({ cutoverAt: billingCutovers.cutoverAt })
+            .from(billingCutovers)
+            .where(eq(billingCutovers.name, REPLAY_USAGE_SPLIT_CUTOVER_NAME))
+            .limit(1);
+
+        if (!cutover?.cutoverAt) {
+            if (!warnedMissingReplayUsageCutover) {
+                warnedMissingReplayUsageCutover = true;
+                logger.warn(
+                    { cutoverName: REPLAY_USAGE_SPLIT_CUTOVER_NAME },
+                    'Replay usage split cutover is not finalized; replay usage increment skipped'
+                );
+            }
+            return null;
+        }
+
+        if (row.startedAt < cutover.cutoverAt) {
+            await tx
+                .update(sessions)
+                .set({ replayQuotaCountedAt: countedAt, updatedAt: countedAt })
+                .where(and(eq(sessions.id, sessionId), isNull(sessions.replayQuotaCountedAt)));
             return null;
         }
 

@@ -298,7 +298,7 @@ Session-creation rules:
 
 - New sessions are inserted with `status='processing'` and a matching `session_metrics` row.
 - Captured analytics session counting happens only when the session row is first created.
-- Replay quota counting happens only when reconciliation first marks `replay_available=true`; `sessions.replay_quota_counted_at` prevents duplicate increments.
+- Replay quota counting happens only when reconciliation first marks `replay_available=true` after the `billing_cutovers('replay_usage_split')` row exists; `sessions.replay_quota_counted_at` prevents duplicate increments. Pre-cutover sessions are covered by the preserved legacy replay ledger and may be marked counted without incrementing replay usage.
 - Replay-quota-exhausted sessions still count as captured analytics sessions, but they do not increment replay usage.
 - Replay screenshot uploads are rejected if the project disables recording or the session is sampled out.
 - The backend does not depend on `/session/end` to create or close sessions.

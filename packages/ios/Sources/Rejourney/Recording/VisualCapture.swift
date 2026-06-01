@@ -1426,7 +1426,7 @@ private final class CaptureStateMachine {
     }
 }
 
-private final class RedactionMask {
+final class RedactionMask {
     private var _explicitViews = NSHashTable<UIView>.weakObjects()
     private let _lock = NSLock()
     

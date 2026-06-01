@@ -431,9 +431,6 @@ export const sessions = pgTable(
         index('sessions_archive_replay_idx')
             .on(table.projectId, table.startedAt)
             .where(sql`${table.replayAvailable} = true`),
-        index('sessions_replay_quota_counted_idx')
-            .on(table.projectId, table.replayQuotaCountedAt)
-            .where(sql`${table.replayQuotaCountedAt} IS NOT NULL`),
         /** Speeds “first session for device” checks on the archive list */
         index('sessions_project_device_started_idx').on(table.projectId, table.deviceId, table.startedAt),
         /** Speeds first-session checks (resolveArchiveFirstSessionIds), new_user filter NOT EXISTS, and live-badge visitor EXISTS — all use coalesce(device_id, anonymous_hash, user_display_id) */
@@ -686,6 +683,12 @@ export const retentionRunLock = pgTable('retention_run_lock', {
 // =============================================================================
 // Billing & Usage Models
 // =============================================================================
+
+export const billingCutovers = pgTable('billing_cutovers', {
+    name: varchar('name', { length: 128 }).primaryKey(),
+    cutoverAt: timestamp('cutover_at').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 export const projectUsage = pgTable(
     'project_usage',

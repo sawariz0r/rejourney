@@ -197,8 +197,10 @@ Important semantics:
   known to be available.
 - `replay_available=true` should mean "this replay was intentionally retained
   and is available to view."
-- `replay_quota_counted_at` should be set only for retained, available replays
-  that count toward replay usage.
+- `replay_quota_counted_at` should normally be set only for retained, available
+  replays that count toward replay usage. The exception is pre-cutover sessions
+  covered by the preserved legacy ledger; those may be lazily marked counted
+  without incrementing usage.
 - Some smart capture rules are immediate (`duration >= N seconds`, crash, rage
   tap); others are delayed/offline (`failed to return after onboarding`,
   churned later). Delayed rules need a decision window before visual artifacts
@@ -371,15 +373,45 @@ project_usage.session_replays integer default 0 not null
 billing_usage.session_replays integer default 0 not null
 sessions.replay_quota_counted_at timestamp null
 billing_notifications.dedupe_key text null
+billing_cutovers row support
 ```
 
 Backfill rules:
 
 - Copy `project_usage.sessions` into `project_usage.session_replays` when the new column is still zero.
 - Copy `billing_usage.sessions` into `billing_usage.session_replays` when the new column is still zero.
-- Mark existing `sessions.replay_quota_counted_at` so pre-migration sessions already represented in the preserved replay ledger cannot increment replay usage again later.
+- Do not bulk-update or index the hot `sessions` table in the deploy migration.
+- Do not insert the `billing_cutovers('replay_usage_split')` row in the deploy migration. Runtime replay usage increments remain paused until production SSH finalizes the cutover.
 - Backfill does not call alert sending and does not lower any existing current-period usage.
 - Existing `warning_80` and `limit_100` notifications get a canonical dedupe key where possible; duplicate historical rows are left alone and only the oldest row becomes the keyed record.
+
+Production cutover finalization:
+
+```sql
+BEGIN;
+
+UPDATE project_usage
+SET session_replays = GREATEST(session_replays, sessions)
+WHERE session_replays < sessions;
+
+UPDATE billing_usage
+SET session_replays = GREATEST(session_replays, sessions)
+WHERE session_replays < sessions;
+
+INSERT INTO billing_cutovers (name, cutover_at)
+VALUES ('replay_usage_split', NOW())
+ON CONFLICT (name) DO NOTHING;
+
+COMMIT;
+```
+
+This final SSH step is intentionally small and only touches usage ledger tables
+plus one cutover row. It catches up any sessions created while the old app was
+still running during deploy. After the cutover row exists, sessions that started
+before `cutover_at` are treated as covered by the preserved ledger and may be
+lazily marked `replay_quota_counted_at` without incrementing replay usage.
+Sessions that start after `cutover_at` increment `project_usage.session_replays`
+once when they first become `replay_available=true`.
 
 Stripe metadata stays backward compatible. Active prices may keep `session_limit`;
 that key now means monthly session replay limit. Add `session_replay_limit` only
@@ -434,7 +466,11 @@ screenshots/rrweb are expected billing behavior, not upload failure.
 1. Run local tests and type checks for backend/dashboard billing paths.
 2. Push/merge only after local verification passes.
 3. Wait for CI to go green.
-4. After production SSH is provided, run the production migration/backfill.
+4. After production SSH is provided, finalize the replay usage cutover:
+   - confirm the Drizzle migration applied.
+   - raise `project_usage.session_replays` and `billing_usage.session_replays` with `GREATEST(session_replays, sessions)`.
+   - insert `billing_cutovers('replay_usage_split')`.
+   - optionally run a later low-priority batched `sessions.replay_quota_counted_at` historical marker backfill.
 5. Verify in production:
    - no existing current-period replay usage was reset or lowered.
    - replay quota checks use `project_usage.session_replays`.
@@ -452,4 +488,5 @@ Do not do these in the replay split deploy. Track them for later cleanup:
 - Remove v1 Redis cache fallback after one deploy plus the full cache TTL.
 - Keep `project_usage.sessions` permanently as captured analytics sessions.
 - Keep old billing notification types (`warning_80`, `limit_100`) unless historical notification rows are migrated.
+- Keep `billing_cutovers('replay_usage_split')` permanently unless replay usage history is rebuilt from a separate audited source.
 - Keep `sessions.replay_quota_billing_exhausted` as the audit marker for analytics-only sessions caused by replay quota exhaustion.
