@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { gunzipSync } from 'zlib';
 import { db, projects, recordingArtifacts, sessionMetrics, sessions } from '../db/client.js';
-import { downloadFromS3ForArtifact, getObjectSizeBytesForArtifact } from '../db/s3.js';
+import { downloadFromS3ForArtifact } from '../db/s3.js';
 import { logger } from '../logger.js';
 import { ensureHierarchyArtifactCompressed } from './hierarchyArtifactCompression.js';
 import { processEventsArtifact } from './ingestEventArtifactProcessor.js';
@@ -40,19 +40,6 @@ type ArtifactProcessorContext = {
 
 type ArtifactProcessor = (context: ArtifactProcessorContext) => Promise<{ sizeBytes: number }>;
 
-function assertArtifactObjectSize(kind: string | null | undefined, sizeBytes: number | null): number {
-    if (typeof sizeBytes !== 'number' || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
-        throw new Error(`Artifact object not visible yet for ${kind}`);
-    }
-    return sizeBytes;
-}
-
-async function loadArtifactObjectSize(context: ArtifactProcessorContext): Promise<number> {
-    return assertArtifactObjectSize(
-        context.job.kind,
-        await getObjectSizeBytesForArtifact(context.projectId, context.s3Key, context.artifact.endpointId),
-    );
-}
 
 function parseMaybeGzippedJson(data: Buffer, s3ObjectKey?: string | null): any {
     const isGzipped = (data.length > 2 && data[0] === 0x1f && data[1] === 0x8b) ||
