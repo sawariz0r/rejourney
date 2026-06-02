@@ -80,13 +80,10 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      # Blue-green guarantee: never kill an old pod before a new one is Ready.
-      # Combined with minReadySeconds=10 this means traffic never hits an unhealthy pod.
-      maxUnavailable: 0
-      # Surge by the full replica count so all new pods start simultaneously.
-      # Pre-pulling images in deploy-release.sh (prepull_images) keeps this fast
-      # regardless of which node the scheduler picks.
-      maxSurge: 3
+      # api-ingest is pinned to the Postgres-primary node. Replacing one pod at
+      # a time avoids needing spare CPU for surge pods during deploys.
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app: api-ingest

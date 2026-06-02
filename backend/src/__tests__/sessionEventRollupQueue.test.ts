@@ -4,9 +4,11 @@ const {
     addMock,
     closeMock,
     createArtifactBullWorkerMock,
+    delMock,
     downloadFromS3ForArtifactMock,
     enqueueSessionEffectsJobMock,
     evalMock,
+    existsMock,
     getJobMock,
     insertValuesMock,
     processEventsArtifactMock,
@@ -17,9 +19,11 @@ const {
     addMock: vi.fn(async () => undefined),
     closeMock: vi.fn(async () => undefined),
     createArtifactBullWorkerMock: vi.fn(() => ({ close: closeMock })),
+    delMock: vi.fn(async () => 1),
     downloadFromS3ForArtifactMock: vi.fn(async () => Buffer.from('{"events":[]}')),
     enqueueSessionEffectsJobMock: vi.fn(async () => true),
     evalMock: vi.fn(async () => 1),
+    existsMock: vi.fn(async () => 0),
     getJobMock: vi.fn(async (): Promise<any> => null),
     insertValuesMock: vi.fn(() => ({ onConflictDoNothing: vi.fn(async () => undefined) })),
     processEventsArtifactMock: vi.fn(async () => undefined),
@@ -74,7 +78,9 @@ vi.mock('../db/client.js', () => ({
 
 vi.mock('../db/redis.js', () => ({
     getRedis: () => ({
+        del: delMock,
         eval: evalMock,
+        exists: existsMock,
         set: setMock,
     }),
 }));
@@ -128,29 +134,32 @@ describe('sessionEventRollupQueue', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         delete process.env.RJ_SESSION_EVENT_ROLLUP_BATCH_SIZE;
+        delete process.env.RJ_SESSION_EVENT_ROLLUP_CONCURRENCY;
+        delete process.env.RJ_SESSION_EVENT_ROLLUP_DELAY_MS;
         delete process.env.RJ_SESSION_EVENT_ROLLUP_SWEEP_ENABLED;
         selectResults.length = 0;
         getJobMock.mockResolvedValue(null);
+        existsMock.mockResolvedValue(0);
         setMock.mockResolvedValue('OK');
     });
 
-    it('builds one job id per session debounce bucket', () => {
+    it('builds one coalesced job id per session', () => {
         expect(buildSessionEventRollupJobId('session-1', 100_000, 2_000))
-            .toBe('session-event-rollup-session-1-51');
+            .toBe('session-event-rollup-session-1');
         expect(buildSessionEventRollupJobId('session-1', 102_000, 2_000))
-            .toBe('session-event-rollup-session-1-52');
+            .toBe('session-event-rollup-session-1');
     });
 
     it('bounds env values', () => {
         expect(resolveSessionEventRollupDelayMs('50')).toBe(500);
         expect(resolveSessionEventRollupDelayMs('120000')).toBe(60000);
-        expect(resolveSessionEventRollupDelayMs('bad')).toBe(2000);
+        expect(resolveSessionEventRollupDelayMs('bad')).toBe(60000);
         expect(resolveSessionEventRollupConcurrency('0')).toBe(1);
         expect(resolveSessionEventRollupConcurrency('128')).toBe(64);
-        expect(resolveSessionEventRollupConcurrency('bad')).toBe(12);
+        expect(resolveSessionEventRollupConcurrency('bad')).toBe(48);
         expect(resolveSessionEventRollupBatchSize('0')).toBe(1);
         expect(resolveSessionEventRollupBatchSize('1000')).toBe(250);
-        expect(resolveSessionEventRollupBatchSize('bad')).toBe(50);
+        expect(resolveSessionEventRollupBatchSize('bad')).toBe(250);
         expect(shouldSweepPendingSessionEventRollups()).toBe(false);
         expect(shouldSweepPendingSessionEventRollups('true')).toBe(true);
         expect(shouldSweepPendingSessionEventRollups('1')).toBe(true);
@@ -169,9 +178,27 @@ describe('sessionEventRollupQueue', () => {
             { sessionId: 'session-1' },
             {
                 delay: 2_000,
-                jobId: 'session-event-rollup-session-1-51',
+                jobId: 'session-event-rollup-session-1',
             },
         );
+    });
+
+    it('marks a dirty flag but skips enqueue when a live session job exists', async () => {
+        getJobMock.mockResolvedValue({
+            getState: vi.fn(async () => 'waiting'),
+            remove: vi.fn(async () => undefined),
+        });
+
+        const queued = await enqueueSessionEventRollupJob('session-1');
+
+        expect(queued).toBe(false);
+        expect(setMock).toHaveBeenCalledWith(
+            'dirty:session-event-rollup:session-1',
+            '1',
+            'PX',
+            expect.any(Number),
+        );
+        expect(addMock).not.toHaveBeenCalled();
     });
 
     it('processes a bounded batch and marks artifacts rolled up after event processing', async () => {
@@ -216,7 +243,7 @@ describe('sessionEventRollupQueue', () => {
         expect(addMock).toHaveBeenCalledWith(
             'session-event-rollup',
             { sessionId: 'session-1' },
-            expect.objectContaining({ delay: 2_000 }),
+            expect.objectContaining({ delay: 60_000 }),
         );
     });
 
@@ -253,7 +280,7 @@ describe('sessionEventRollupQueue', () => {
         expect(createArtifactBullWorkerMock).toHaveBeenCalledWith(
             'rj-session-event-rollup',
             processSessionEventRollupJobFromBullMQ,
-            12,
+            48,
         );
         expect(worker.close).toBe(closeMock);
     });

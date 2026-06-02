@@ -83,8 +83,10 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: ingest-worker
-  minReplicas: 8
-  maxReplicas: 12
+  # Keep ingest workers bounded so artifact storms do not starve API,
+  # dashboard, replay, or lifecycle pods on the current 3-node cluster.
+  minReplicas: 4
+  maxReplicas: 6
   metrics:
     - type: Resource
       resource:

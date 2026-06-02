@@ -14,8 +14,10 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      # Avoid requiring spare cluster CPU during worker deploys. Losing one
+      # background worker briefly is safer than wedging the rollout.
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app: ingest-worker
@@ -231,8 +233,10 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      # Avoid requiring spare cluster CPU during worker deploys. Losing one
+      # background worker briefly is safer than wedging the rollout.
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app: replay-worker
@@ -242,6 +246,8 @@ spec:
         app: replay-worker
     spec:
       terminationGracePeriodSeconds: 60
+      # Session event rollup is DB-write heavy; prefer the Postgres-primary
+      # datacenter while still allowing fallback if FSN1 is temporarily full.
       affinity:
         nodeAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -250,7 +256,7 @@ spec:
                 matchExpressions:
                   - key: rejourney.co/datacenter
                     operator: In
-                    values: ["hel1"]
+                    values: ["fsn1"]
       imagePullSecrets:
         - name: ghcr-secret
       securityContext:
@@ -354,7 +360,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: rejourney
 spec:
-  replicas: 1
+  replicas: 5
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -377,7 +383,7 @@ spec:
                 matchExpressions:
                   - key: rejourney.co/datacenter
                     operator: In
-                    values: ["hel1"]
+                    values: ["fsn1"]
       imagePullSecrets:
         - name: ghcr-secret
       securityContext:
@@ -475,11 +481,13 @@ spec:
             - name: RJ_SESSION_EFFECTS_CONCURRENCY
               value: "12"
             - name: RJ_SESSION_EVENT_ROLLUP_DELAY_MS
-              value: "2000"
+              # Coalesce event bursts per session so fast ingest drains do not
+              # create thousands of duplicate no-op rollup jobs.
+              value: "60000"
             - name: RJ_SESSION_EVENT_ROLLUP_CONCURRENCY
-              value: "12"
+              value: "48"
             - name: RJ_SESSION_EVENT_ROLLUP_BATCH_SIZE
-              value: "50"
+              value: "250"
           resources:
             requests:
               cpu: 500m

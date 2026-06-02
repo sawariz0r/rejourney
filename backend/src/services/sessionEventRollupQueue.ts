@@ -14,10 +14,12 @@ import type { ArtifactJobContext } from './artifactJobProcessor.js';
 import { processEventsArtifact } from './ingestEventArtifactProcessor.js';
 import { enqueueSessionEffectsJob } from './sessionEffectsQueue.js';
 
-const DEFAULT_SESSION_EVENT_ROLLUP_DELAY_MS = 2_000;
-const DEFAULT_SESSION_EVENT_ROLLUP_CONCURRENCY = 12;
-const DEFAULT_SESSION_EVENT_ROLLUP_BATCH_SIZE = 50;
+const DEFAULT_SESSION_EVENT_ROLLUP_DELAY_MS = 60_000;
+const DEFAULT_SESSION_EVENT_ROLLUP_CONCURRENCY = 48;
+const DEFAULT_SESSION_EVENT_ROLLUP_BATCH_SIZE = 250;
 const DEFAULT_SESSION_EVENT_ROLLUP_LOCK_TTL_MS = 10 * 60_000;
+const SESSION_EVENT_ROLLUP_DIRTY_TTL_MS = 24 * 60 * 60_000;
+const SESSION_EVENT_ROLLUP_BUSY_RETRY_DELAY_MS = 30_000;
 
 function parseBoundedInteger(
     raw: string | undefined,
@@ -55,11 +57,35 @@ export function shouldSweepPendingSessionEventRollups(
 
 export function buildSessionEventRollupJobId(
     sessionId: string,
+    _nowMs = Date.now(),
+    _delayMs = resolveSessionEventRollupDelayMs(),
+): string {
+    return `session-event-rollup-${sessionId}`;
+}
+
+function buildSessionEventRollupRetryJobId(
+    sessionId: string,
     nowMs = Date.now(),
-    delayMs = resolveSessionEventRollupDelayMs(),
+    delayMs = SESSION_EVENT_ROLLUP_BUSY_RETRY_DELAY_MS,
 ): string {
     const dueBucket = Math.floor((nowMs + delayMs) / Math.max(1, delayMs));
-    return `session-event-rollup-${sessionId}-${dueBucket}`;
+    return `session-event-rollup-${sessionId}-retry-${dueBucket}`;
+}
+
+function rollupDirtyKey(sessionId: string): string {
+    return `dirty:session-event-rollup:${sessionId}`;
+}
+
+async function markRollupDirty(sessionId: string): Promise<void> {
+    await getRedis().set(rollupDirtyKey(sessionId), '1', 'PX', SESSION_EVENT_ROLLUP_DIRTY_TTL_MS);
+}
+
+async function clearRollupDirty(sessionId: string): Promise<void> {
+    await getRedis().del(rollupDirtyKey(sessionId));
+}
+
+async function hasRollupDirty(sessionId: string): Promise<boolean> {
+    return (await getRedis().exists(rollupDirtyKey(sessionId))) > 0;
 }
 
 export async function enqueueSessionEventRollupJob(
@@ -71,6 +97,30 @@ export async function enqueueSessionEventRollupJob(
     const delayMs = options.delayMs ?? resolveSessionEventRollupDelayMs();
     const queue = getSessionEventRollupQueue();
     const jobId = buildSessionEventRollupJobId(sessionId, options.nowMs ?? Date.now(), delayMs);
+    await markRollupDirty(sessionId);
+
+    const existing = await queue.getJob(jobId);
+
+    if (existing) {
+        const state = await existing.getState();
+        if (state !== 'completed' && state !== 'failed' && state !== 'unknown') {
+            logger.debug({ sessionId, jobId, existingState: state }, 'session.event_rollup_job_already_exists');
+            return false;
+        }
+        await existing.remove().catch(() => {/* ignore races */});
+    }
+
+    await queue.add('session-event-rollup', { sessionId }, { jobId, delay: delayMs });
+    logger.debug({ sessionId, jobId, delayMs }, 'session.event_rollup_job_enqueued');
+    return true;
+}
+
+async function enqueueSessionEventRollupRetryJob(
+    sessionId: string,
+    delayMs = SESSION_EVENT_ROLLUP_BUSY_RETRY_DELAY_MS,
+): Promise<boolean> {
+    const queue = getSessionEventRollupQueue();
+    const jobId = buildSessionEventRollupRetryJobId(sessionId, Date.now(), delayMs);
     const existing = await queue.getJob(jobId);
 
     if (existing) {
@@ -225,21 +275,27 @@ export async function processSessionEventRollupJobFromBullMQ(
     const lockToken = await acquireRollupLock(sessionId);
 
     if (!lockToken) {
-        const requeued = await enqueueSessionEventRollupJob(sessionId, { delayMs: 5_000 });
+        await markRollupDirty(sessionId);
+        const requeued = await enqueueSessionEventRollupRetryJob(sessionId);
         log.info({ requeued }, 'session.event_rollup_lock_busy');
         return;
     }
 
     try {
+        await clearRollupDirty(sessionId);
         const result = await processSessionEventRollupBatch(sessionId);
+        const dirty = await hasRollupDirty(sessionId);
         if (result.processed > 0) {
             await enqueueSessionEffectsJob(sessionId);
         }
-        if (result.hasMore) {
-            await enqueueSessionEventRollupJob(sessionId, { delayMs: 1_000 });
+        if (result.hasMore || dirty) {
+            await enqueueSessionEventRollupRetryJob(
+                sessionId,
+                result.hasMore ? 1_000 : resolveSessionEventRollupDelayMs(),
+            );
         }
 
-        log.info(result, 'session.event_rollup_job_processed');
+        log.info({ ...result, dirty }, 'session.event_rollup_job_processed');
     } finally {
         await releaseRollupLock(sessionId, lockToken);
     }

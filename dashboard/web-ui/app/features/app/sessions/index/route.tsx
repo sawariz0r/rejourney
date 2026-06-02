@@ -56,7 +56,6 @@ import {
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 300] as const;
 const QUERY_GROUPS_STORAGE_PREFIX = 'rejourney:session-archive:query-groups:v1';
-const QUERY_BUILDER_UPDATE_STICKER_SEEN_KEY = 'rejourney:session-archive:query-builder-update-sticker-seen:v1';
 
 type SortKey = 'date' | 'duration' | 'apiResponse' | 'startup' | 'screens' | 'apiSuccess' | 'apiError' | 'crashes' | 'anrs' | 'errors' | 'rage' | 'network';
 type SortDirection = 'asc' | 'desc';
@@ -161,24 +160,6 @@ function writeStoredQueryGroups(projectId: string, groups: QueryGroup[]): void {
   }
 }
 
-function readQueryBuilderUpdateStickerSeen(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(QUERY_BUILDER_UPDATE_STICKER_SEEN_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function markQueryBuilderUpdateStickerSeen(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(QUERY_BUILDER_UPDATE_STICKER_SEEN_KEY, '1');
-  } catch {
-    // Storage can fail in private mode; hiding it for the current view is still enough.
-  }
-}
-
 export const RecordingsList: React.FC = () => {
   const navigate = useNavigate();
   const pathPrefix = usePathPrefix();
@@ -202,7 +183,6 @@ export const RecordingsList: React.FC = () => {
   const [queryGroups, setQueryGroups] = useState<QueryGroup[]>(() => createEmptyQueryGroups());
   const [queryGroupsProjectId, setQueryGroupsProjectId] = useState<string | null>(null);
   const [showQueryBuilder, setShowQueryBuilder] = useState(false);
-  const [hasSeenQueryBuilderUpdateSticker, setHasSeenQueryBuilderUpdateSticker] = useState(() => readQueryBuilderUpdateStickerSeen());
   const [sortConfigs, setSortConfigs] = useState<SortConfig[]>([{ key: 'date', direction: 'desc' }]);
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -596,12 +576,8 @@ export const RecordingsList: React.FC = () => {
   }, [selectedProjectId]);
 
   const handleQueryButtonClick = useCallback(() => {
-    if (!hasSeenQueryBuilderUpdateSticker) {
-      setHasSeenQueryBuilderUpdateSticker(true);
-      markQueryBuilderUpdateStickerSeen();
-    }
     setShowQueryBuilder((value) => !value);
-  }, [hasSeenQueryBuilderUpdateSticker]);
+  }, []);
 
   const handleClearActiveFilters = useCallback(() => {
     if (typeof window !== 'undefined' && !window.confirm('Clear the search text and all query filters?')) {
@@ -680,11 +656,6 @@ export const RecordingsList: React.FC = () => {
                 {totalConditions > 0 && (
                   <span className="ml-1 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-950">
                     {totalConditions}
-                  </span>
-                )}
-                {!hasSeenQueryBuilderUpdateSticker && (
-                  <span className="absolute -right-2 -top-2 rounded-full border border-pink-200 bg-pink-50 px-1.5 py-0.5 text-[9px] font-semibold text-pink-700 shadow-sm">
-                    Update
                   </span>
                 )}
               </button>

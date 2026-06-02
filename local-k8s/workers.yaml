@@ -381,11 +381,13 @@ spec:
             - name: RJ_SESSION_EFFECTS_CONCURRENCY
               value: "12"
             - name: RJ_SESSION_EVENT_ROLLUP_DELAY_MS
-              value: "2000"
+              # Coalesce event bursts per session so fast ingest drains do not
+              # create thousands of duplicate no-op rollup jobs.
+              value: "60000"
             - name: RJ_SESSION_EVENT_ROLLUP_CONCURRENCY
-              value: "12"
+              value: "48"
             - name: RJ_SESSION_EVENT_ROLLUP_BATCH_SIZE
-              value: "50"
+              value: "250"
           resources:
             requests:
               cpu: 50m
