@@ -1,6 +1,6 @@
 # Admin tools without public URLs (Tailscale + kubectl)
 
-Public Ingress for **pgweb**, **Redis Commander**, and all monitoring tools is **removed from Git**. Customer Ingress (`rejourney.co`, `api.`, `ingest.`) is unchanged.
+Public Ingress for **pgweb** and all monitoring tools is **removed from Git**. Customer Ingress (`rejourney.co`, `api.`, `ingest.`) is unchanged.
 
 Tailscale is only for **operator access** to the node and cluster. It protects your `ssh`, `kubectl`, and `kubectl port-forward` sessions to the VPS. It does **not** sit in front of normal in-cluster traffic such as `Grafana -> VictoriaMetrics` or `postgres-exporter -> postgres`.
 
@@ -23,15 +23,15 @@ Remove or **grey-cloud** (DNS only) these if they still exist:
 | **VictoriaMetrics** | `kubectl -n rejourney port-forward svc/victoria-metrics 8428:8428` | http://127.0.0.1:8428 | Raw PromQL query UI |
 | **Pushgateway** | `kubectl -n rejourney port-forward svc/pushgateway 9091:9091` | http://127.0.0.1:9091 | Inspect worker heartbeat metrics |
 | pgweb | `kubectl -n rejourney port-forward svc/pgweb 8081:8081` | http://127.0.0.1:8081 | PostgreSQL admin UI |
-| Redis Commander | `kubectl -n rejourney port-forward svc/redis-commander 8082:8081` | http://127.0.0.1:8082 | Redis admin UI |
 
 ## Monitoring gotchas
 
 - **Grafana/Gatus red public health checks do not always mean the app is down.** Cloudflare managed challenge can return `403` to automated public HTTP probes even while the service is healthy.
 - Prefer **internal service URLs** for Gatus app-health checks:
-  - `http://api.rejourney.svc.cluster.local:3000/health/ready`
-  - `http://api.rejourney.svc.cluster.local:3000/health/live`
-  - `http://api.rejourney.svc.cluster.local:3000/health/ingest`
+  - `http://api-ingest.rejourney.svc.cluster.local:3000/health/ready`
+  - `http://api-ingest.rejourney.svc.cluster.local:3000/health/live`
+  - `http://api-ingest.rejourney.svc.cluster.local:3000/health/ingest`
+  - `http://api-dashboard.rejourney.svc.cluster.local:3000/health/ready`
   - `http://web.rejourney.svc.cluster.local`
 - Keep **TLS checks** on the public hostnames because those validate the public edge certs served through Cloudflare.
 - **Kubernetes dashboards imported from Grafana.com often assume a `cluster` label.** If the dashboard variables are empty or show `N/A`, verify VictoriaMetrics is attaching a static cluster label during scrape.
@@ -50,7 +50,7 @@ Remove or **grey-cloud** (DNS only) these if they still exist:
 ## Restart workloads after env change
 
 ```bash
-kubectl -n rejourney rollout restart deployment api ingest-worker replay-worker session-lifecycle-worker alert-worker
+kubectl -n rejourney rollout restart deployment api-ingest api-dashboard ingest-upload ingest-worker replay-worker session-lifecycle-worker alert-worker web
 ```
 
 ## Apply manifests
@@ -97,5 +97,5 @@ kubectl get certificate -n kube-system
 
 ## Related
 
-- [network-exposure-and-tailscale.md](./network-exposure-and-tailscale.md)
+- [allthingscloud.md](./allthingscloud.md)
 - [rejourney-ci.md](./rejourney-ci.md)

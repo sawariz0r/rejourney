@@ -1,6 +1,6 @@
 # Rejourney CI + Deploy Path (Visual)
 
-Last updated: 2026-05-22
+Last updated: 2026-06-02
 
 This doc owns the CI, image-build, deploy, `db-setup`, and local parity flow.
 
@@ -97,7 +97,7 @@ Image build contents:
 
 Primary workflow file:
 
-- [`/.github/workflows/rejourney-ci.yml`](/Users/mora/Desktop/Dev-mac/rejourney/.github/workflows/rejourney-ci.yml)
+- [`/.github/workflows/rejourney-ci.yml`](../.github/workflows/rejourney-ci.yml)
 
 ## [C2] Production Deploy On The VPS
 
@@ -151,7 +151,7 @@ DEPLOY_CLICKHOUSE=false by default
 
 Production deploy entrypoint:
 
-- [`scripts/k8s/deploy-release.sh`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/k8s/deploy-release.sh)
+- [`scripts/k8s/deploy-release.sh`](../scripts/k8s/deploy-release.sh)
 
 ## [C3] db-setup / Migrations / Bootstrap
 
@@ -197,11 +197,11 @@ drizzle-kit migrate
 
 Relevant files:
 
-- [`k8s/api.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/k8s/api.yaml)
-- [`local-k8s/api.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/local-k8s/api.yaml)
-- [`backend/scripts/seedIfDatabaseEmpty.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/scripts/seedIfDatabaseEmpty.ts)
-- [`backend/scripts/bootstrapSystemData.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/scripts/bootstrapSystemData.ts)
-- [`backend/drizzle/20260326011544_nice_black_bird/migration.sql`](/Users/mora/Desktop/Dev-mac/rejourney/backend/drizzle/20260326011544_nice_black_bird/migration.sql)
+- [`k8s/api.yaml`](../k8s/api.yaml)
+- [`local-k8s/api.yaml`](../local-k8s/api.yaml)
+- [`backend/scripts/seedIfDatabaseEmpty.ts`](../backend/scripts/seedIfDatabaseEmpty.ts)
+- [`backend/scripts/bootstrapSystemData.ts`](../backend/scripts/bootstrapSystemData.ts)
+- [`backend/drizzle/20260326011544_nice_black_bird/migration.sql`](../backend/drizzle/20260326011544_nice_black_bird/migration.sql)
 
 ## [C4] Local CI Parity Flow
 
@@ -254,10 +254,10 @@ Local parity nuance:
 
 Relevant files:
 
-- [`scripts/local-k8s/rejourney-ci.sh`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/local-k8s/rejourney-ci.sh)
-- [`scripts/local-k8s/deploy.sh`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/local-k8s/deploy.sh)
-- [`scripts/local-k8s/update-ips.sh`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/local-k8s/update-ips.sh)
-- [`local-k8s/README.md`](/Users/mora/Desktop/Dev-mac/rejourney/local-k8s/README.md)
+- [`scripts/local-k8s/rejourney-ci.sh`](../scripts/local-k8s/rejourney-ci.sh)
+- [`scripts/local-k8s/deploy.sh`](../scripts/local-k8s/deploy.sh)
+- [`scripts/local-k8s/update-ips.sh`](../scripts/local-k8s/update-ips.sh)
+- [`local-k8s/README.md`](../local-k8s/README.md)
 
 ## [C5] Safety Rails / Failure Modes
 
@@ -288,6 +288,49 @@ crictl RemoveImage DeadlineExceeded during cleanup
   -> cleanup noise after the real failure, not the root cause
 ```
 
+Post-deploy production health sweep:
+
+```bash
+# Rollouts and autoscalers
+kubectl get deploy -n rejourney \
+  -o custom-columns=NAME:.metadata.name,REPLICAS:.spec.replicas,READY:.status.readyReplicas,UPDATED:.status.updatedReplicas,AVAILABLE:.status.availableReplicas
+kubectl get hpa -n rejourney -o wide
+
+# Node and hot pod pressure
+kubectl top nodes
+kubectl top pods -n rejourney --containers | grep -E 'api-dashboard|api-ingest|ingest-upload|ingest-worker|replay-worker|session-lifecycle-worker|postgres-local|redis-node|pgbouncer'
+
+# Public health endpoints
+curl -sS -o /dev/null -w 'rejourney.co %{http_code} %{time_total}s\n' https://rejourney.co
+curl -sS -o /dev/null -w 'api %{http_code} %{time_total}s\n' https://api.rejourney.co/health
+curl -sS -o /dev/null -w 'ingest %{http_code} %{time_total}s\n' https://ingest.rejourney.co/health
+```
+
+Queue health sweep:
+
+```bash
+POD=$(kubectl get pod -n rejourney -l app=session-lifecycle-worker -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n rejourney "$POD" -- node --input-type=module -e '
+const qmod=await import("./dist/services/artifactBullQueue.js");
+const queues={ingest:qmod.getIngestQueue(),replay:qmod.getReplayQueue(),flush:qmod.getFlushQueue(),effects:qmod.getSessionEffectsQueue(),rollup:qmod.getSessionEventRollupQueue()};
+const out={};
+for (const [name,q] of Object.entries(queues)) {
+  out[name]=await q.getJobCounts("waiting","delayed","active","completed","failed","prioritized","paused");
+  await q.close().catch(()=>{});
+}
+console.log(JSON.stringify(out));
+process.exit(0);
+'
+```
+
+Reading queue results:
+
+- `waiting=0` with small `delayed` on `rj-session-event-rollup` is healthy; the rollup queue intentionally debounces for 60s.
+- `rj-session-effects` delayed jobs are normal debounced follow-up work.
+- BullMQ failed counts include the retained DLQ window. Sample newest failed jobs and timestamps before tying a red queue panel to the current deploy.
+- If `session-lifecycle-worker` is not `5/5`, event/activity stream lag can return even when ingest and replay queues are clear.
+- If `ingest-worker` HPA exceeds the intended `max=6`, it can starve lifecycle/replay/API capacity on the current 3-node cluster.
+
 ## [C6] Commands / Primary Files
 
 ```text
@@ -305,14 +348,14 @@ cd backend && node --import tsx scripts/backfillClickHouseApiEndpointRollups.ts 
 
 Primary files:
 
-- [`/.github/workflows/rejourney-ci.yml`](/Users/mora/Desktop/Dev-mac/rejourney/.github/workflows/rejourney-ci.yml)
-- [`scripts/k8s/deploy-release.sh`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/k8s/deploy-release.sh)
-- [`scripts/local-k8s/rejourney-ci.sh`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/local-k8s/rejourney-ci.sh)
-- [`scripts/local-k8s/deploy.sh`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/local-k8s/deploy.sh)
-- [`k8s/api.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/k8s/api.yaml)
-- [`k8s/clickhouse.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/k8s/clickhouse.yaml)
-- [`k8s/clickhouse-setup.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/k8s/clickhouse-setup.yaml)
-- [`k8s/clickhouse-backfill-api-rollups.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/k8s/clickhouse-backfill-api-rollups.yaml)
-- [`local-k8s/api.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/local-k8s/api.yaml)
-- [`local-k8s/clickhouse.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/local-k8s/clickhouse.yaml)
-- [`backend/scripts/backfillClickHouseApiEndpointRollups.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/scripts/backfillClickHouseApiEndpointRollups.ts)
+- [`/.github/workflows/rejourney-ci.yml`](../.github/workflows/rejourney-ci.yml)
+- [`scripts/k8s/deploy-release.sh`](../scripts/k8s/deploy-release.sh)
+- [`scripts/local-k8s/rejourney-ci.sh`](../scripts/local-k8s/rejourney-ci.sh)
+- [`scripts/local-k8s/deploy.sh`](../scripts/local-k8s/deploy.sh)
+- [`k8s/api.yaml`](../k8s/api.yaml)
+- [`k8s/clickhouse.yaml`](../k8s/clickhouse.yaml)
+- [`k8s/clickhouse-setup.yaml`](../k8s/clickhouse-setup.yaml)
+- [`k8s/clickhouse-backfill-api-rollups.yaml`](../k8s/clickhouse-backfill-api-rollups.yaml)
+- [`local-k8s/api.yaml`](../local-k8s/api.yaml)
+- [`local-k8s/clickhouse.yaml`](../local-k8s/clickhouse.yaml)
+- [`backend/scripts/backfillClickHouseApiEndpointRollups.ts`](../backend/scripts/backfillClickHouseApiEndpointRollups.ts)

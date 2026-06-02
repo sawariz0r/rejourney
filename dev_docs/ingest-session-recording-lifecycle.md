@@ -1,10 +1,10 @@
 # Ingest + Session Recording Lifecycle (Visual)
 
-Last updated: 2026-05-21
+Last updated: 2026-06-02
 
 This doc is the ingest/runtime view: package start, upload lanes, relay, workers, Redis, and Postgres session state.
 
-Deploy topology (which process runs where) lives in [All things cloud](/Users/mora/Desktop/Dev-mac/rejourney/dev_docs/allthingscloud.md). Deploy, `db-setup`, GitHub Actions, and local parity are in [Rejourney CI + Deploy Path](/Users/mora/Desktop/Dev-mac/rejourney/dev_docs/rejourney-ci.md).
+Deploy topology (which process runs where) lives in [All things cloud](../dev_docs/allthingscloud.md). Deploy, `db-setup`, GitHub Actions, and local parity are in [Rejourney CI + Deploy Path](../dev_docs/rejourney-ci.md).
 
 Shortest correct mental model:
 
@@ -247,20 +247,20 @@ Package-side rules that matter downstream:
 - In the normal React Native flow, the session ID is generated on-device.
 - There is still a backend fallback for `/api/ingest/presign` without a `sessionId`; it mints `session_{timestamp}_{randomHex}`.
 - The timestamp embedded in the session ID is later used by the backend to infer `started_at`.
-- JS fetches [`/api/sdk/config`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/sdk.ts) before start and can disable replay before any visual upload happens.
-- Native obtains the upload credential from [`/api/ingest/auth/device`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestDeviceAuth.ts) and sends it as `x-upload-token`.
+- JS fetches [`/api/sdk/config`](../backend/src/routes/sdk.ts) before start and can disable replay before any visual upload happens.
+- Native obtains the upload credential from [`/api/ingest/auth/device`](../backend/src/routes/ingestDeviceAuth.ts) and sends it as `x-upload-token`.
 
 Relevant package files:
 
-- [`packages/browser/src/sdk/client.ts`](/Users/mora/Desktop/Dev-mac/rejourney/packages/browser/src/sdk/client.ts)
-- [`packages/browser/src/sdk/startup.ts`](/Users/mora/Desktop/Dev-mac/rejourney/packages/browser/src/sdk/startup.ts)
-- [`packages/browser/src/sdk/networkInterceptor.ts`](/Users/mora/Desktop/Dev-mac/rejourney/packages/browser/src/sdk/networkInterceptor.ts)
-- [`packages/browser/src/sdk/replayUploadQueue.ts`](/Users/mora/Desktop/Dev-mac/rejourney/packages/browser/src/sdk/replayUploadQueue.ts)
-- [`packages/react-native/src/index.ts`](/Users/mora/Desktop/Dev-mac/rejourney/packages/react-native/src/index.ts)
-- [`packages/react-native/android/src/main/java/com/rejourney/recording/ReplayOrchestrator.kt`](/Users/mora/Desktop/Dev-mac/rejourney/packages/react-native/android/src/main/java/com/rejourney/recording/ReplayOrchestrator.kt)
-- [`packages/react-native/android/src/main/java/com/rejourney/recording/TelemetryPipeline.kt`](/Users/mora/Desktop/Dev-mac/rejourney/packages/react-native/android/src/main/java/com/rejourney/recording/TelemetryPipeline.kt)
-- [`packages/react-native/android/src/main/java/com/rejourney/engine/DeviceRegistrar.kt`](/Users/mora/Desktop/Dev-mac/rejourney/packages/react-native/android/src/main/java/com/rejourney/engine/DeviceRegistrar.kt)
-- [`packages/react-native/ios/Engine/RejourneyImpl.swift`](/Users/mora/Desktop/Dev-mac/rejourney/packages/react-native/ios/Engine/RejourneyImpl.swift)
+- [`packages/browser/src/sdk/client.ts`](../packages/browser/src/sdk/client.ts)
+- [`packages/browser/src/sdk/startup.ts`](../packages/browser/src/sdk/startup.ts)
+- [`packages/browser/src/sdk/networkInterceptor.ts`](../packages/browser/src/sdk/networkInterceptor.ts)
+- [`packages/browser/src/sdk/replayUploadQueue.ts`](../packages/browser/src/sdk/replayUploadQueue.ts)
+- [`packages/react-native/src/index.ts`](../packages/react-native/src/index.ts)
+- [`packages/react-native/android/src/main/java/com/rejourney/recording/ReplayOrchestrator.kt`](../packages/react-native/android/src/main/java/com/rejourney/recording/ReplayOrchestrator.kt)
+- [`packages/react-native/android/src/main/java/com/rejourney/recording/TelemetryPipeline.kt`](../packages/react-native/android/src/main/java/com/rejourney/recording/TelemetryPipeline.kt)
+- [`packages/react-native/android/src/main/java/com/rejourney/engine/DeviceRegistrar.kt`](../packages/react-native/android/src/main/java/com/rejourney/engine/DeviceRegistrar.kt)
+- [`packages/react-native/ios/Engine/RejourneyImpl.swift`](../packages/react-native/ios/Engine/RejourneyImpl.swift)
 
 ## [I2] Upload Lanes / Session Creation
 
@@ -307,13 +307,13 @@ Session-creation rules:
 
 Relevant routes:
 
-- [`backend/src/routes/ingestUploads.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestUploads.ts)
-- [`backend/src/routes/ingestLifecycle.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestLifecycle.ts)
-- [`backend/src/routes/ingestUploadRelay.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestUploadRelay.ts)
-- [`backend/src/routes/ingestFaults.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestFaults.ts)
-- [`backend/src/services/ingestSessionLifecycle.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/ingestSessionLifecycle.ts)
-- [`backend/src/services/ingestArtifactLifecycle.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/ingestArtifactLifecycle.ts)
-- [`backend/src/services/sessionIngestImmutability.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionIngestImmutability.ts)
+- [`backend/src/routes/ingestUploads.ts`](../backend/src/routes/ingestUploads.ts)
+- [`backend/src/routes/ingestLifecycle.ts`](../backend/src/routes/ingestLifecycle.ts)
+- [`backend/src/routes/ingestUploadRelay.ts`](../backend/src/routes/ingestUploadRelay.ts)
+- [`backend/src/routes/ingestFaults.ts`](../backend/src/routes/ingestFaults.ts)
+- [`backend/src/services/ingestSessionLifecycle.ts`](../backend/src/services/ingestSessionLifecycle.ts)
+- [`backend/src/services/ingestArtifactLifecycle.ts`](../backend/src/services/ingestArtifactLifecycle.ts)
+- [`backend/src/services/sessionIngestImmutability.ts`](../backend/src/services/sessionIngestImmutability.ts)
 
 ## [I3] Upload Relay / Artifact + lifecycle workers / Artifact states
 
@@ -405,10 +405,10 @@ failed    -> pending      (SDK retries same clientUploadId)
 
 Important worker nuance:
 
-- **ingest-artifact worker** ([`ingestArtifactWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/ingestArtifactWorker.ts)) consumes from `rj-ingest-artifacts`: `events`, `crashes`, and `anrs`.
+- **ingest-artifact worker** ([`ingestArtifactWorker.ts`](../backend/src/worker/ingestArtifactWorker.ts)) consumes from `rj-ingest-artifacts`: `events`, `crashes`, and `anrs`.
 - The same ingest-worker process also runs the `rj-artifact-flush` worker. It reads `artifact:buf:{artifactId}`, writes the bytes to the selected S3 endpoint, calls `markArtifactUploadStored()` to enqueue normal processing, then deletes the Redis buffer.
-- **replay-artifact worker** ([`replayArtifactWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/replayArtifactWorker.ts)) consumes from `rj-replay-artifacts`: `screenshots`, `hierarchy`, and `rrweb`.
-- **session-lifecycle worker** ([`sessionLifecycleWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/sessionLifecycleWorker.ts)) runs periodic sweeps and hosts `rj-session-event-rollup` plus `rj-session-effects`.
+- **replay-artifact worker** ([`replayArtifactWorker.ts`](../backend/src/worker/replayArtifactWorker.ts)) consumes from `rj-replay-artifacts`: `screenshots`, `hierarchy`, and `rrweb`.
+- **session-lifecycle worker** ([`sessionLifecycleWorker.ts`](../backend/src/worker/sessionLifecycleWorker.ts)) runs periodic sweeps and hosts `rj-session-event-rollup` plus `rj-session-effects`.
 - `events` artifact jobs only validate/summarize payloads and mark artifacts ready; `rj-session-event-rollup` serializes event metrics, heatmaps, and downstream analytics side effects per session.
 - `crashes` and `anrs` artifacts create issue rows and increment crash/ANR counters.
 - `screenshots`, `hierarchy`, and `rrweb` mostly affect replay availability and final session presentation.
@@ -417,16 +417,33 @@ Important worker nuance:
 - The heavy full-table artifact lifecycle backfill is manual by default. Normal worker startup skips it unless `INGEST_ENABLE_STARTUP_BACKFILL=true`.
 - Manual backfill command: `cd backend && npm run db:backfill:artifact-lifecycle`
 
+Session event rollup checkpoints:
+
+- `recording_artifacts.event_rollup_requested_at` is set only for `events` artifacts when the ingest worker marks the artifact `ready`.
+- `recording_artifacts.event_rollup_processed_at` is set by `rj-session-event-rollup` after that artifact has been applied to session metrics/timeline state.
+- The rollup queue is per-session, not per-artifact. Job IDs coalesce to `session-event-rollup-{sessionId}` so event storms for one session create one delayed rollup job instead of thousands of duplicate jobs.
+- If more events arrive while a rollup job is already queued or active, Redis marks `dirty:session-event-rollup:{sessionId}`. The lock holder clears and rechecks that marker, then schedules one retry if more work arrived.
+- The per-session Redis lock prevents two workers from applying metrics for the same session at the same time. Lock-busy jobs should not inflate the queue; they mark the session dirty and rely on the holder/retry path.
+- Production defaults are intentionally coarse-grained: 60s delay, concurrency 48 per lifecycle pod, batch size 250 artifacts, and 5 lifecycle pods. This lets ingest drain quickly while rollups debounce active sessions.
+
+Backfill policy for these checkpoint columns:
+
+- Do **not** broad-backfill historical `events` artifacts whose `event_rollup_requested_at` is null. Legacy rows predate the checkpoint columns and were already handled by older processing paths.
+- A broad update from `NULL` to `requested` would enqueue/reprocess millions of old artifacts and can double-apply session metrics.
+- Only do a targeted repair for a known deploy window where new `events` artifacts became `ready` but lost their rollup enqueue/checkpoint. Bound by `created_at`, project/session IDs, and artifact status.
+- The optional manual index in [`backend/drizzle/manual/event-rollup-pending-index-concurrent.sql`](../backend/drizzle/manual/event-rollup-pending-index-concurrent.sql) is for recovery/sweep performance only. Run it during a quiet window before enabling `RJ_SESSION_EVENT_ROLLUP_SWEEP_ENABLED=true`.
+
 Relevant files:
 
-- [`backend/src/routes/ingestUploadRelay.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestUploadRelay.ts)
-- [`backend/src/services/artifactBullQueue.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/artifactBullQueue.ts)
-- [`backend/src/services/artifactFlushJobProcessor.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/artifactFlushJobProcessor.ts)
-- [`backend/src/worker/ingestArtifactWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/ingestArtifactWorker.ts)
-- [`backend/src/worker/replayArtifactWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/replayArtifactWorker.ts)
-- [`backend/src/worker/sessionLifecycleWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/sessionLifecycleWorker.ts)
-- [`backend/src/services/artifactJobProcessor.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/artifactJobProcessor.ts)
-- [`backend/src/services/ingestArtifactLifecycle.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/ingestArtifactLifecycle.ts)
+- [`backend/src/routes/ingestUploadRelay.ts`](../backend/src/routes/ingestUploadRelay.ts)
+- [`backend/src/services/artifactBullQueue.ts`](../backend/src/services/artifactBullQueue.ts)
+- [`backend/src/services/artifactFlushJobProcessor.ts`](../backend/src/services/artifactFlushJobProcessor.ts)
+- [`backend/src/services/sessionEventRollupQueue.ts`](../backend/src/services/sessionEventRollupQueue.ts)
+- [`backend/src/worker/ingestArtifactWorker.ts`](../backend/src/worker/ingestArtifactWorker.ts)
+- [`backend/src/worker/replayArtifactWorker.ts`](../backend/src/worker/replayArtifactWorker.ts)
+- [`backend/src/worker/sessionLifecycleWorker.ts`](../backend/src/worker/sessionLifecycleWorker.ts)
+- [`backend/src/services/artifactJobProcessor.ts`](../backend/src/services/artifactJobProcessor.ts)
+- [`backend/src/services/ingestArtifactLifecycle.ts`](../backend/src/services/ingestArtifactLifecycle.ts)
 
 ## [I4] Reconciliation / Auto-Finalizer / Close-Time Math
 
@@ -509,9 +526,9 @@ Legacy compatibility fields may still exist physically in the schema, but they a
 
 Relevant files:
 
-- [`backend/src/services/sessionReconciliation.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionReconciliation.ts)
-- [`backend/src/services/sessionTiming.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionTiming.ts)
-- [`backend/src/routes/ingestLifecycle.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestLifecycle.ts)
+- [`backend/src/services/sessionReconciliation.ts`](../backend/src/services/sessionReconciliation.ts)
+- [`backend/src/services/sessionTiming.ts`](../backend/src/services/sessionTiming.ts)
+- [`backend/src/routes/ingestLifecycle.ts`](../backend/src/routes/ingestLifecycle.ts)
 
 ## [I5] Redis vs Postgres Ownership
 
@@ -571,8 +588,8 @@ Postgres owns:
 
 Schema anchors:
 
-- [`backend/src/db/schema.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/db/schema.ts)
-- [`backend/src/db/redis.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/db/redis.ts)
+- [`backend/src/db/schema.ts`](../backend/src/db/schema.ts)
+- [`backend/src/db/redis.ts`](../backend/src/db/redis.ts)
 
 ## [I6] Quick Answers / Constants
 
@@ -620,6 +637,10 @@ BullMQ job retry attempts              5    (exponential backoff, base 1s)
 BullMQ flush job retry attempts        8    (exponential backoff, base 500ms)
 BullMQ completed job retention         1h
 BullMQ failed job retention            7d   (DLQ window)
+Session event rollup debounce          60s  (coalesces active-session event bursts)
+Session event rollup concurrency       48   per session-lifecycle-worker pod
+Session event rollup batch size        250  events artifacts per session job
+Session event rollup lock TTL          10m  per-session Redis lock
 Upload relay token TTL                 1h
 SDK background rollover threshold      60s
 SDK rollover grace window              2s
@@ -628,7 +649,7 @@ SDK event heartbeat                    5s
 
 ## [I7] Archive list duration + read model (dashboard)
 
-The sessions archive endpoint (`GET /api/sessions`, implemented in [`backend/src/routes/sessions.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/sessions.ts)) is the main dashboard read path. It is not the ingest write path, but it reflects the same lifecycle rules.
+The sessions archive endpoint (`GET /api/sessions`, implemented in [`backend/src/routes/sessions.ts`](../backend/src/routes/sessions.ts)) is the main dashboard read path. It is not the ingest write path, but it reflects the same lifecycle rules.
 
 List payload shape:
 
@@ -651,7 +672,7 @@ Dashboard client behavior:
 
 ## [I8] Ingest guardrails + late-arrival behavior
 
-Current hard-ingest guard ([`sessionIngestImmutability.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionIngestImmutability.ts)):
+Current hard-ingest guard ([`sessionIngestImmutability.ts`](../backend/src/services/sessionIngestImmutability.ts)):
 
 - Block only when `status` is `failed` or `deleted`
 - Also block when `recording_deleted = true`
@@ -682,19 +703,19 @@ This is the critical rule that keeps "background for >60s, then reopen app" from
 
 ## Primary Files
 
-- [`backend/src/routes/sessions.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/sessions.ts)
-- [`backend/src/routes/ingestUploads.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestUploads.ts)
-- [`backend/src/routes/ingestLifecycle.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestLifecycle.ts)
-- [`backend/src/routes/ingestUploadRelay.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestUploadRelay.ts)
-- [`backend/src/routes/ingestDeviceAuth.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestDeviceAuth.ts)
-- [`backend/src/services/ingestSessionLifecycle.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/ingestSessionLifecycle.ts)
-- [`backend/src/services/ingestArtifactLifecycle.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/ingestArtifactLifecycle.ts)
-- [`backend/src/services/sessionReconciliation.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionReconciliation.ts)
-- [`backend/src/services/sessionTiming.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionTiming.ts)
-- [`backend/src/services/sessionPresentationState.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionPresentationState.ts)
-- [`backend/src/services/sessionIngestImmutability.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionIngestImmutability.ts)
-- [`backend/src/services/artifactJobProcessor.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/artifactJobProcessor.ts)
-- [`backend/src/services/artifactBullQueue.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/artifactBullQueue.ts)
-- [`backend/src/worker/ingestArtifactWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/ingestArtifactWorker.ts)
-- [`backend/src/worker/replayArtifactWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/replayArtifactWorker.ts)
-- [`backend/src/worker/sessionLifecycleWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/sessionLifecycleWorker.ts)
+- [`backend/src/routes/sessions.ts`](../backend/src/routes/sessions.ts)
+- [`backend/src/routes/ingestUploads.ts`](../backend/src/routes/ingestUploads.ts)
+- [`backend/src/routes/ingestLifecycle.ts`](../backend/src/routes/ingestLifecycle.ts)
+- [`backend/src/routes/ingestUploadRelay.ts`](../backend/src/routes/ingestUploadRelay.ts)
+- [`backend/src/routes/ingestDeviceAuth.ts`](../backend/src/routes/ingestDeviceAuth.ts)
+- [`backend/src/services/ingestSessionLifecycle.ts`](../backend/src/services/ingestSessionLifecycle.ts)
+- [`backend/src/services/ingestArtifactLifecycle.ts`](../backend/src/services/ingestArtifactLifecycle.ts)
+- [`backend/src/services/sessionReconciliation.ts`](../backend/src/services/sessionReconciliation.ts)
+- [`backend/src/services/sessionTiming.ts`](../backend/src/services/sessionTiming.ts)
+- [`backend/src/services/sessionPresentationState.ts`](../backend/src/services/sessionPresentationState.ts)
+- [`backend/src/services/sessionIngestImmutability.ts`](../backend/src/services/sessionIngestImmutability.ts)
+- [`backend/src/services/artifactJobProcessor.ts`](../backend/src/services/artifactJobProcessor.ts)
+- [`backend/src/services/artifactBullQueue.ts`](../backend/src/services/artifactBullQueue.ts)
+- [`backend/src/worker/ingestArtifactWorker.ts`](../backend/src/worker/ingestArtifactWorker.ts)
+- [`backend/src/worker/replayArtifactWorker.ts`](../backend/src/worker/replayArtifactWorker.ts)
+- [`backend/src/worker/sessionLifecycleWorker.ts`](../backend/src/worker/sessionLifecycleWorker.ts)

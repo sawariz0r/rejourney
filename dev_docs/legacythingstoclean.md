@@ -67,3 +67,22 @@ but should also delete derived root-frame objects for the same session. Project 
 TODO: xplicitly delete `sessions/{sessionId}/` in the session retention purge path after canonical artifact deletion succeeds.
 
 Until this is fixed, do not treat root `sessions/{sessionId}/frames/` as source-of-truth storage. It can be rebuilt from canonical screenshot artifacts while those artifacts still exist.
+
+---
+
+## 5. Legacy `recording_artifacts` event-rollup checkpoint nulls
+
+**Background:** event artifact rollup now uses two checkpoint columns on `recording_artifacts`:
+
+- `event_rollup_requested_at`
+- `event_rollup_processed_at`
+
+New `events` artifacts set `event_rollup_requested_at` when the ingest worker marks them `ready`, then `rj-session-event-rollup` sets `event_rollup_processed_at` after applying the artifact to session metrics/timeline state.
+
+**Current legacy shape:** old ready `events` artifacts can have both columns null because they predate the checkpointed rollup flow. That is expected. Do not interpret historical nulls as a live backlog.
+
+**Do not broad-backfill:** setting `event_rollup_requested_at` on all old ready event artifacts would make the lifecycle sweep eligible to reprocess millions of legacy artifacts and can double-apply old session metrics.
+
+**Allowed repair:** only run a bounded repair for a known bad deploy window where new ready event artifacts lost their rollup enqueue/checkpoint. Scope the repair by `created_at`, project/session IDs, `kind = 'events'`, `status = 'ready'`, and `event_rollup_processed_at IS NULL`.
+
+**Optional later cleanup:** after retention has removed enough old artifact rows, consider an audit-only migration that marks ancient legacy event rows as intentionally skipped/legacy-processed. Do not do that in normal deploy, and do not use it to enqueue work.

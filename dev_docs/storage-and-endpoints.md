@@ -193,6 +193,7 @@ Compatibility behavior:
 - The proxy fallback routes are `/api/session/rrweb-segment/:sessionId/:artifactId` and `/api/session/frame/:sessionId/:timestamp`.
 - Artifact-specific signed URLs are generated from `recording_artifacts.endpoint_id` when endpoint pinning exists.
 - If proxy traffic is high during normal replay viewing, the likely failure is object-storage CORS, dashboard CSP, expired signed URLs, or an unreachable provider endpoint.
+- OVH/S3-compatible endpoints may occasionally return `409 OperationAborted` while materializing derived screenshot frame objects. Treat that as a provider write race/degraded direct path, not as replay queue blockage. Frequent 409s should be fixed with retry/backoff in frame materialization before adding API or replay-worker capacity.
 
 ---
 
@@ -264,7 +265,8 @@ ORDER BY backup_coverage_percent ASC, eligible_sessions DESC;
 - `scripts/k8s/session-backup.mjs`
 - `k8s/archive.yaml`
 - `docs/selfhosted/backup-recovery.md`
-# Storage Endpoints & Shadow System
+
+## 12) Extended Storage Endpoint Internals
 
 > Multi-endpoint S3 architecture with redundancy, encryption, and runtime management. The database is the source of truth for storage configuration in production deployments.
 
@@ -274,7 +276,7 @@ ORDER BY backup_coverage_percent ASC, eligible_sessions DESC;
 
 Rejourney supports **multiple S3 endpoints** per project with **weighted load balancing** and **automatic shadow copies** for redundancy. This is managed entirely through the `storage_endpoints` table in PostgreSQL.
 
-**Key concept:** In Production (Distributed Cloud), S3 credentials are **never** in environment variables. They're encrypted and stored in the database, managed via the [manage-s3-endpoints.mjs](/scripts/k8s/manage-s3-endpoints.mjs) script. In Self-Hosted mode, the system gracefully falls back to `.env` variables if the table is empty.
+**Key concept:** In Production (Distributed Cloud), S3 credentials are **never** in environment variables. They're encrypted and stored in the database, managed via the [manage-s3-endpoints.mjs](../scripts/k8s/manage-s3-endpoints.mjs) script. In Self-Hosted mode, the system gracefully falls back to `.env` variables if the table is empty.
 
 **Deployment modes:**
 - **Self-hosted Docker / dev Docker:** Typically a single S3 endpoint (MinIO or external). No load balancing.
@@ -324,9 +326,9 @@ SDK (React Native / Mobile)
 
 Key endpoints:
 
-- [`POST /api/ingest/presign`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestUploads.ts)
-- [`POST /api/ingest/segment/presign`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestUploads.ts)
-- [`PUT /upload/artifacts/:artifactId`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestUploadRelay.ts)
+- [`POST /api/ingest/presign`](../backend/src/routes/ingestUploads.ts)
+- [`POST /api/ingest/segment/presign`](../backend/src/routes/ingestUploads.ts)
+- [`PUT /upload/artifacts/:artifactId`](../backend/src/routes/ingestUploadRelay.ts)
 
 ---
 
@@ -633,7 +635,7 @@ export async function getShadowEndpoints(projectId: string): Promise<StorageEndp
 
 ### K3s Deployment
 
-In [k8s/api.yaml](k8s/api.yaml), the API pod injects S3 config from Kubernetes secrets:
+In [k8s/api.yaml](../k8s/api.yaml), the API pod injects S3 config from Kubernetes secrets:
 
 ```yaml
 env:
@@ -836,7 +838,7 @@ Result: A global shadow endpoint with priority 10 will receive copies of all rec
 
 ## Integration Points
 
-### Ingest Flow ([POST /api/ingest/presign](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/routes/ingestUploads.ts) + relay)
+### Ingest Flow ([POST /api/ingest/presign](../backend/src/routes/ingestUploads.ts) + relay)
 
 ```typescript
 1. Validate idempotency (Redis)
@@ -848,7 +850,7 @@ Result: A global shadow endpoint with priority 10 will receive copies of all rec
 7. Normal artifact BullMQ queues process from S3 and mark status=ready
 ```
 
-### Download Flow ([GET /api/sessions/{id}/artifacts](backend/src/routes/sessions.ts))
+### Download Flow ([GET /api/sessions/{id}/artifacts](../backend/src/routes/sessions.ts))
 
 ```typescript
 1. Fetch artifact record (includes stored endpointId)
@@ -857,7 +859,7 @@ Result: A global shadow endpoint with priority 10 will receive copies of all rec
 4. SDK downloads directly from that endpoint
 ```
 
-### Dashboard Replay Manifest Flow ([GET /api/session/{id}/replay-manifest](backend/src/routes/sessions.ts))
+### Dashboard Replay Manifest Flow ([GET /api/session/{id}/replay-manifest](../backend/src/routes/sessions.ts))
 
 ```typescript
 1. Authorize the dashboard user for the session.
@@ -875,6 +877,7 @@ Operational notes:
 - Manifest and frame cache keys are versioned separately from the older session bootstrap cache, currently under `v5:*` on the backend.
 - Screenshot frame indexes use `screenshot_frames:v2:*`. The frame byte proxy cache uses `screenshot_frame_data:*`.
 - High proxy route volume means the direct storage path is degraded. Check bucket CORS, dashboard CSP, signed URL expiry, and the `endpoint_url` / public endpoint for the artifact's `endpoint_id`.
+- If replay-worker logs show `OperationAborted` while uploading `sessions/{sessionId}/frames/{timestamp}.jpg`, inspect provider write concurrency and retry behavior. This usually affects cold screenshot replay frame materialization, not canonical artifact ingestion.
 
 ### Endpoint Enumeration (Admin API)
 
@@ -1041,9 +1044,9 @@ GROUP BY ep.id;
 
 ## References
 
-- [Database Schema](backend/drizzle/20260207004512_marvelous_skrulls/migration.sql#L485-L500)
-- [S3 Client Implementation](backend/src/db/s3.ts)
-- [Ingest Routes](backend/src/routes/ingest.ts)
-- [Management Script](scripts/k8s/manage-s3-endpoints.mjs)
-- [K3s API Manifest](k8s/api.yaml)
-- [K3s Postgres Manifest](k8s/postgres.yaml)
+- [Database Schema](../backend/src/db/schema.ts)
+- [S3 Client Implementation](../backend/src/db/s3.ts)
+- [Ingest Upload Routes](../backend/src/routes/ingestUploads.ts)
+- [Management Script](../scripts/k8s/manage-s3-endpoints.mjs)
+- [K3s API Manifest](../k8s/api.yaml)
+- [Postgres Service Aliases](../k8s/postgres-service-aliases.yaml)

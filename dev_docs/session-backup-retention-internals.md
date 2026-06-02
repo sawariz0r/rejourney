@@ -1,6 +1,6 @@
 # Session Backup + Retention Internals
 
-Last updated: 2026-05-21
+Last updated: 2026-06-02
 
 This is the internal/operator doc for how session backup and retention work in the backend and Kubernetes workers.
 
@@ -43,19 +43,19 @@ This is not the user-facing product story. It is the worker/runtime story.
 Main code paths:
 
 - Backup queue enqueue from backend finalize path:
-  - [`backend/src/services/sessionBackupQueue.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionBackupQueue.ts)
+  - [`backend/src/services/sessionBackupQueue.ts`](../backend/src/services/sessionBackupQueue.ts)
 - Backup runner / queue drainer:
-  - [`scripts/k8s/session-backup.mjs`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/k8s/session-backup.mjs)
+  - [`scripts/k8s/session-backup.mjs`](../scripts/k8s/session-backup.mjs)
 - Deployed backup CronJob copy:
-  - [`k8s/archive.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/k8s/archive.yaml)
+  - [`k8s/archive.yaml`](../k8s/archive.yaml)
 - Retention safety gate:
-  - [`backend/src/services/sessionBackupGate.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionBackupGate.ts)
+  - [`backend/src/services/sessionBackupGate.ts`](../backend/src/services/sessionBackupGate.ts)
 - Empty-session predicate:
-  - [`backend/src/services/sessionRetentionEligibility.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionRetentionEligibility.ts)
+  - [`backend/src/services/sessionRetentionEligibility.ts`](../backend/src/services/sessionRetentionEligibility.ts)
 - Retention worker:
-  - [`backend/src/worker/retentionWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/retentionWorker.ts)
+  - [`backend/src/worker/retentionWorker.ts`](../backend/src/worker/retentionWorker.ts)
 - Purge implementation:
-  - [`backend/src/services/sessionArtifactPurge.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionArtifactPurge.ts)
+  - [`backend/src/services/sessionArtifactPurge.ts`](../backend/src/services/sessionArtifactPurge.ts)
 
 Important tables:
 
@@ -77,7 +77,7 @@ There are two ways a session gets into backup flow:
 
 ### Backend enqueue conditions
 
-[`enqueueSessionBackupCandidate()`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionBackupQueue.ts) only queues a session when all of these are true:
+[`enqueueSessionBackupCandidate()`](../backend/src/services/sessionBackupQueue.ts) only queues a session when all of these are true:
 
 - `s.id = $sessionId`
 - `s.status IN ('ready', 'completed')`
@@ -100,7 +100,7 @@ So a stale or bad backup-log row with `artifact_count = 0` no longer blocks a la
 
 ### Queue seed conditions
 
-Bulk queue seeding in [`session-backup.mjs`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/k8s/session-backup.mjs) is slightly broader but still conservative:
+Bulk queue seeding in [`session-backup.mjs`](../scripts/k8s/session-backup.mjs) is slightly broader but still conservative:
 
 - `s.status IN ('ready', 'completed')`
 - project is not deleted
@@ -113,7 +113,7 @@ The seeder does not separately require `ended_at IS NOT NULL`, but in practice f
 
 ### What counts as "provably empty"
 
-The empty-session predicate in [`sessionRetentionEligibility.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionRetentionEligibility.ts) is intentionally strict.
+The empty-session predicate in [`sessionRetentionEligibility.ts`](../backend/src/services/sessionRetentionEligibility.ts) is intentionally strict.
 
 A session is considered empty only if all of these are true:
 
@@ -163,7 +163,7 @@ session-backup CronJob
 
 ### Drainer behavior
 
-The backup drainer in [`session-backup.mjs`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/k8s/session-backup.mjs):
+The backup drainer in [`session-backup.mjs`](../scripts/k8s/session-backup.mjs):
 
 - acquires a global Postgres run lock in `session_backup_run_lock`
 - cleans up completed queue rows
@@ -194,7 +194,7 @@ The queue row is moved back to `pending` with:
 - `next_retry_at = NOW() + backoff`
 - `last_error` populated
 
-Backoff is exponential and capped by env-driven settings in [`session-backup.mjs`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/k8s/session-backup.mjs).
+Backoff is exponential and capped by env-driven settings in [`session-backup.mjs`](../scripts/k8s/session-backup.mjs).
 
 ### Terminal `source_missing` parking
 
@@ -226,7 +226,7 @@ The backup worker only copies `recording_artifacts` rows where:
 - `ra.session_id = $sessionId`
 - `ra.status = 'ready'`
 
-That fetch happens in [`fetchArtifacts()`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/k8s/session-backup.mjs).
+That fetch happens in [`fetchArtifacts()`](../scripts/k8s/session-backup.mjs).
 
 Important implication:
 
@@ -305,7 +305,7 @@ Every successful backup writes quality metadata.
 
 ## [B5] Retention Eligibility + Purge Rules
 
-Retention runs in [`retentionWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/retentionWorker.ts).
+Retention runs in [`retentionWorker.ts`](../backend/src/worker/retentionWorker.ts).
 
 ### Normal expiry candidate conditions
 
@@ -319,7 +319,7 @@ A session is considered for retention expiry when:
 
 ### Backup safety gate
 
-Before purge, retention partitions candidates into backed-up vs not-backed-up using [`partitionBackedUpSessions()`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionBackupGate.ts).
+Before purge, retention partitions candidates into backed-up vs not-backed-up using [`partitionBackedUpSessions()`](../backend/src/services/sessionBackupGate.ts).
 
 A session counts as safe to purge when either:
 
@@ -347,13 +347,13 @@ Retention also has a repair path for sessions already marked expired/deleted but
 - still has `recording_artifacts`
 - still must pass the same backup safety gate first
 
-That path is implemented in [`repairExpiredSessionArtifactsBatch()`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionArtifactPurge.ts).
+That path is implemented in [`repairExpiredSessionArtifactsBatch()`](../backend/src/services/sessionArtifactPurge.ts).
 
 ## [B6] What Gets Deleted vs What Stays
 
 ### Normal retention purge deletes
 
-[`purgeSessionArtifacts()`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/sessionArtifactPurge.ts) deletes:
+[`purgeSessionArtifacts()`](../backend/src/services/sessionArtifactPurge.ts) deletes:
 
 - canonical storage objects under:
   - `tenant/{teamId}/project/{projectId}/sessions/{sessionId}/`
@@ -399,7 +399,7 @@ So for a real backed-up recording session:
 
 Session rows are only hard-deleted as part of project/team deletion flows, not routine retention.
 
-That happens in [`hardDeleteProject()`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/services/deletion.ts), which:
+That happens in [`hardDeleteProject()`](../backend/src/services/deletion.ts), which:
 
 - marks project deleted
 - revokes API keys
@@ -481,6 +481,6 @@ If `session_backup_log` is missing, or counts do not satisfy the safety gate:
 - backup run lock:
   - `session_backup_run_lock`
 - deployed backup logic:
-  - [`k8s/archive.yaml`](/Users/mora/Desktop/Dev-mac/rejourney/k8s/archive.yaml)
+  - [`k8s/archive.yaml`](../k8s/archive.yaml)
 - source-of-truth backup script:
-  - [`scripts/k8s/session-backup.mjs`](/Users/mora/Desktop/Dev-mac/rejourney/scripts/k8s/session-backup.mjs)
+  - [`scripts/k8s/session-backup.mjs`](../scripts/k8s/session-backup.mjs)

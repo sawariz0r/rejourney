@@ -1,6 +1,6 @@
 # Production S3 and R2 Backup Formats
 
-Last updated: 2026-05-21
+Last updated: 2026-06-02
 
 This document describes the real artifact formats used by production ingest, retention, and backup.
 
@@ -105,6 +105,7 @@ Result:
 - Replay manifests now prefer derived individual JPEG frame objects for playback. When `RJ_SCREENSHOT_FRAME_OBJECTS_ENABLED` is not `false`, frame extraction materializes objects at `sessions/{sessionId}/frames/{timestamp}.jpg`.
 - Derived frame upload concurrency is controlled by `RJ_SCREENSHOT_FRAME_UPLOAD_CONCURRENCY` (default `4`). The extracted frame index is cached in Redis under `screenshot_frames:v2:*` for 7 days by default.
 - Frame responses include both a signed direct JPEG URL and a same-origin proxy URL (`/api/session/frame/:sessionId/:timestamp`). If materialization fails or a session is not warm yet, the direct URL can intentionally be the proxy URL.
+- Some S3-compatible providers, including OVH, can return `409 OperationAborted` during concurrent writes to derived frame objects. That should be handled as a retryable materialization/fallback event, not as canonical artifact loss.
 
 Result:
 

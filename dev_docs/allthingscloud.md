@@ -1,6 +1,6 @@
 # All Things Cloud
 
-Last updated: 2026-05-22
+Last updated: 2026-06-02
 
 Operator-facing map of production: traffic path, pod placement, storage, HA failover, and the reasoning behind every architectural decision.
 
@@ -80,7 +80,8 @@ graph LR
         TR0["Traefik ×1\npreferred FSN1"]
         APIING["api-ingest ×3–6\nHPA · required affinity to primary\nall serial DB calls local"]
         WEB0["web ×1"]
-        U0["ingest-upload ×1–2\nHPA"]
+        U0["ingest-upload ×2\nHPA fixed"]
+        SLC["session-lifecycle-worker ×5\npreferred FSN1"]
         PG1["postgres-local-1\nCNPG primary"]
         RD0["redis-node-0\nSentinel master"]
         PGB0["pgbouncer (rw)\npool 60"]
@@ -90,9 +91,9 @@ graph LR
     subgraph worker1["rejourney-hel1-worker-1 · CX43 · 8 vCPU / 16 GB · HEL1"]
         direction TB
         APIDASH1["api-dashboard ×1\nHPA 2–5 · preferred HEL1\nuses dbRead for analytics"]
-        IW1["ingest-worker ×bulk\nHPA 5–12 · preferred HEL1"]
+        IW1["ingest-worker ×bulk\nHPA 4–6 · preferred HEL1"]
         RW1["replay-worker ×bulk\nHPA 1–10 · preferred HEL1"]
-        U1["ingest-upload overflow"]
+        U1["ingest-upload overflow only if rescheduled"]
         PG2["postgres-local-2\nCNPG sync standby"]
         RD2["redis-node-2\nSentinel replica"]
         PGB1["pgbouncer (rw)\npool 60"]
@@ -101,11 +102,10 @@ graph LR
 
     subgraph quorum1["rejourney-hel1-quorum-1 · CX43 · 8 vCPU / 16 GB · HEL1 · excluded from LB"]
         direction TB
-        APIDASH2["api-dashboard ×1\nHPA · preferred HEL1"]
-        IW2["ingest-worker ×bulk\nHPA · preferred HEL1"]
-        RW2["replay-worker ×bulk\nHPA · preferred HEL1"]
+        APIDASH2["api-dashboard ×1\nHPA 2–5 · preferred HEL1"]
+        IW2["ingest-worker ×bulk\nHPA 4–6 · preferred HEL1"]
+        RW2["replay-worker ×bulk\nHPA 1–10 · preferred HEL1"]
         AW["alert-worker ×1\npreferred HEL1"]
-        SLC["session-lifecycle-worker ×1\npreferred HEL1"]
         WEB1["web ×1"]
         RD1["redis-node-1\nSentinel replica"]
         PGB2["pgbouncer (rw)\npool 60"]
@@ -133,7 +133,7 @@ graph LR
 - **Green** — `api-ingest` pods (SDK traffic only): required pod affinity to the CNPG primary node, preferred FSN1. All serial DB calls stay local. Isolated from dashboard traffic so a slow dashboard aggregation can never starve the SDK event loop.
 - **Indigo** — `api-dashboard` pods (operator UI + everything else): preferred HEL1 next to the read replica. Writes go to the primary via pgbouncer (rw); heavy reads (`dbRead`) go to the standby via pgbouncer-ro — local-DC for both because writes are rare on this path.
 - **Blue** — Data: CNPG primary + Redis master on FSN1, standby + replicas on HEL1. pgbouncer (rw) on all three nodes; pgbouncer-ro only on HEL1 (next to standby).
-- **Red** — Workers: prefer HEL1 (preferred affinity, weight 100), fall back to FSN1 only when HEL1 is full. DB latency is acceptable for async processing; ingest/replay writes use `SET LOCAL synchronous_commit = local` to skip the 25ms SyncRep wait.
+- **Red** — Workers: ingest/replay prefer HEL1 and fall back to FSN1 only when HEL1 is full; session-lifecycle prefers FSN1 because event rollup is DB-write heavy. DB latency is acceptable for async processing; ingest/replay writes use `SET LOCAL synchronous_commit = local` to skip the 25ms SyncRep wait.
 - **Cyan** — Ingress: Traefik single replica on FSN1. quorum-1 excluded from LB entirely.
 - **Orange** — Monitoring: all on FSN1 for simplicity. Goes dark if FSN1 fails — acceptable gap.
 
@@ -162,7 +162,7 @@ graph LR
     subgraph hel1["HEL1 — worker-1 + quorum-1 · unchanged"]
         direction TB
         APIDASHF["api-dashboard ×2\nunchanged, HEL1"]
-        WK["all workers\n(preferred HEL1, same as today)"]
+        WK["bulk workers preferred HEL1\nsession-lifecycle preferred FSN1"]
         DB2["postgres standby · redis replicas\npgbouncer (rw) replicas\npgbouncer-ro replicas"]
     end
 
@@ -225,14 +225,17 @@ A backward-compat `api` Service still exists and aliases `api-ingest` so anythin
 - `api-ingest` does not set `DATABASE_URL_READ`, so its `dbRead` aliases `db`. Tests, local dev, and the legacy `api` Service backers all use the same fallback path.
 - Today only the two heaviest aggregations in `dashboardOverview.ts` (`loadUserFirstSeenMap`, `loadTopUsersPreview`) use `dbRead`. Other dashboard reads are still on `db` — incremental migration is safe to do later.
 
-### `ingest-worker`, `replay-worker`
+### `ingest-worker`, `replay-worker`, `session-lifecycle-worker`
 
-- **Preferred HEL1, weight 100.** Fall back to FSN1 only when HEL1 is full.
-- HPA: `ingest-worker` 8–12, `replay-worker` 1–10.
-- IO-bound, not CPU-bound — HPA can undershoot during queue spikes (workers may sit below CPU limits while waiting on S3/DB round-trips). The ingest HPA now keeps more headroom for event backlog drain.
+- `ingest-worker` and `replay-worker` are **preferred HEL1, weight 100**. They fall back to FSN1 only when HEL1 is full.
+- `session-lifecycle-worker` is **fixed at 5 replicas, preferred FSN1**. It hosts `rj-session-event-rollup` and `rj-session-effects`; keeping it close to the Postgres primary lets event/activity rollups catch up quickly after ingest storms.
+- HPA: `ingest-worker` min 4 / max 6, `replay-worker` min 1 / max 10. Do not raise ingest max without checking lifecycle, Postgres, Redis, and replay headroom.
+- IO-bound, not CPU-bound — HPA can undershoot during queue spikes (workers may sit below CPU limits while waiting on S3/DB round-trips). Queue depth is the primary signal.
 - Workers are **event-driven via BullMQ** — no SQL polling. Five queues are backed by the Redis Sentinel cluster: `rj-artifact-flush` (Redis buffered relay uploads waiting for S3), `rj-ingest-artifacts` (cheap artifact ready/validation for events, crashes, anrs), `rj-replay-artifacts` (screenshots, hierarchy), `rj-session-event-rollup` (per-session event metrics rollup), and `rj-session-effects` (debounced per-session reconcile/cache effects). Workers block on the queue and consume jobs as they arrive.
 - Event artifact jobs now validate/summarize the payload, mark the artifact ready, and enqueue `rj-session-event-rollup`; the heavy event metrics/heatmap/ClickHouse work is serial per session so one large session cannot occupy the whole ingest worker pool. Crash/ANR jobs still process directly and enqueue `rj-session-effects` with a 15s debounce window. Replay artifacts still reconcile immediately to preserve replay readiness.
+- `rj-session-event-rollup` coalesces to one job ID per session (`session-event-rollup-{sessionId}`) and uses a Redis dirty marker to avoid duplicate no-op queue storms while still catching events that arrive during an active rollup.
 - The broad `queuePendingSessionEventRollups` Postgres recovery sweep is disabled by default (`RJ_SESSION_EVENT_ROLLUP_SWEEP_ENABLED` unset). Keep it off on the 20M-row production table unless the optional concurrent index in `backend/drizzle/manual/event-rollup-pending-index-concurrent.sql` has been built successfully.
+- Do not broad-backfill old `recording_artifacts.event_rollup_requested_at IS NULL` rows. Historical nulls are expected legacy history and should not be interpreted as live backlog.
 - BullMQ deduplication uses `jobId = artifact-{artifactId}`. Stalled jobs (worker died mid-process) are automatically re-queued after `stalledInterval = 30s`, up to `maxStalledCount = 3`.
 - Retry policy: 5 attempts, exponential backoff starting at 1s. Failed jobs are kept in the failed set for 7 days (DLQ window). Completed jobs retained 1h for observability.
 - Queue depth monitoring: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, `LLEN bull:rj-replay-artifacts:wait`, `LLEN bull:rj-session-event-rollup:wait`, and `LLEN bull:rj-session-effects:wait` in Redis. Artifact queues should be near zero in steady state; `rj-session-event-rollup` and `rj-session-effects` can briefly hold delayed per-session jobs during ingest bursts.
@@ -240,12 +243,13 @@ A backward-compat `api` Service still exists and aliases `api-ingest` so anythin
 
 ### `ingest-upload`
 
-- HPA: min 1, max 2.
+- HPA: min 2, max 2.
 - Upload relay path: collect tiny artifact bodies, write `artifact:buf:{artifactId}` to Redis with a 30-minute TTL, mark `recording_artifacts.status='buffered'`, enqueue `rj-artifact-flush`, and return 204. S3 latency is moved out of the SDK request path.
 
 ### `alert-worker`, `session-lifecycle-worker`
 
-- Single-replica, preferred HEL1.
+- `alert-worker` is single-replica, preferred HEL1.
+- `session-lifecycle-worker` is covered in the worker section above: fixed 5 replicas, preferred FSN1.
 
 ### `retention-worker`, `stripe-sync-worker`
 
@@ -429,7 +433,7 @@ Local k8s uses the same idea with `http:` allowed for MinIO/local endpoints. Buc
 
 1. **Never rename a Hetzner server without a coordinated k3s migration.** CCM matches Hetzner server names to k8s node names. Mismatch → `network-unavailable:NoSchedule` taint → no pods schedule there. Also breaks PV nodeAffinity (immutable field — must delete/recreate PVs). Requires: k3s `node-name` config change on all nodes, cluster-reset if etcd gets corrupted, flannel FDB repopulation (k3s restart on all nodes), PV rebuild.
 
-2. **API and Traefik affinity use `rejourney.co/datacenter=fsn1`.** New nodes must be labelled on join. Workers and `api-dashboard` use `rejourney.co/datacenter=hel1`.
+2. **API and Traefik affinity use `rejourney.co/datacenter=fsn1`.** New nodes must be labelled on join. `api-dashboard`, `ingest-worker`, and `replay-worker` prefer HEL1; `session-lifecycle-worker` prefers FSN1 because event rollup is DB-write heavy.
 
 3. **Do not add `topologySpreadConstraints` to `api-ingest`.** `maxSkew:1 ScheduleAnyway` overrides the preferred affinity and spreads pods to HEL1, causing 6–11s p50 response times. (Same constraint previously applied to the unified `api` deployment.) Workers had a similar issue with topologySpread fighting the HEL1 affinity and overflowing to FSN1; both were removed in May 2026.
 
@@ -441,7 +445,7 @@ Local k8s uses the same idea with `http:` allowed for MinIO/local endpoints. Buc
 
 7. **CNPG sync replication degrades to async when standby is down.** `maxSyncReplicas: 1` — intentional. You briefly lose the sync guarantee during CNPG upgrades.
 
-8. **HPA can undershoot for IO-bound workers.** `ingest-worker` and `replay-worker` may wait on S3 and DB instead of saturating CPU. Monitor queue depth: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, `LLEN bull:rj-replay-artifacts:wait`, `LLEN bull:rj-session-event-rollup:wait`, and `LLEN bull:rj-session-effects:wait` in Redis. If `rj-ingest-artifacts` is non-zero and growing, confirm HPA is at the 12-replica max before changing code. If `rj-session-event-rollup` is growing while ingest is empty, tune the rollup batch/concurrency rather than adding ingest pods.
+8. **HPA can undershoot for IO-bound workers.** `ingest-worker` and `replay-worker` may wait on S3 and DB instead of saturating CPU. Monitor queue depth: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, `LLEN bull:rj-replay-artifacts:wait`, `LLEN bull:rj-session-event-rollup:wait`, and `LLEN bull:rj-session-effects:wait` in Redis. If `rj-ingest-artifacts` is non-zero and growing, confirm HPA is at the 6-replica max before changing code. If `rj-session-event-rollup` is growing while ingest is empty, first confirm `session-lifecycle-worker` is 5/5, then tune rollup batch/concurrency rather than adding ingest pods.
 
 9. **`api-ingest`/Postgres colocation is enforced twice.** `api-ingest` has required pod affinity to the current CNPG primary, CI auto-corrects via `pin_deployment_to_postgres_primary api-ingest`, and the `api-postgres-colocator` CronJob handles later failovers (its `API_DEPLOYMENT` env is set to `api-ingest`). `api-dashboard` does NOT colocate with the primary — it lives on HEL1. If you see slow ingest: compare `kubectl get pods -n rejourney -l app=api-ingest -o wide` with `kubectl get pods -n rejourney -l cnpg.io/cluster=postgres-local,cnpg.io/instanceRole=primary -o wide`, then inspect `kubectl get jobs -n rejourney -l app=api-postgres-colocator`.
 
