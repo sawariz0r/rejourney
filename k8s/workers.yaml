@@ -474,6 +474,12 @@ spec:
               value: "15000"
             - name: RJ_SESSION_EFFECTS_CONCURRENCY
               value: "12"
+            - name: RJ_SESSION_EVENT_ROLLUP_DELAY_MS
+              value: "2000"
+            - name: RJ_SESSION_EVENT_ROLLUP_CONCURRENCY
+              value: "12"
+            - name: RJ_SESSION_EVENT_ROLLUP_BATCH_SIZE
+              value: "50"
           resources:
             requests:
               cpu: 500m

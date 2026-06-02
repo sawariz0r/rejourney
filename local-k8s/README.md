@@ -149,8 +149,11 @@ in `uploaded` status permanently (the worker never sees the job).
 
 **`session-lifecycle-worker` needs Redis:** This worker runs `queueRecoverableArtifacts`
 which re-enqueues BullMQ jobs for any `uploaded` artifacts that lost their job
-(e.g. after a Redis restart). It must have `REDIS_URL` in its env — see
-`local-k8s/workers.yaml`.
+(e.g. after a Redis restart). It also hosts `rj-session-event-rollup` and
+`rj-session-effects`, so it must have `REDIS_URL` in its env — see
+`local-k8s/workers.yaml`. The broad pending event-rollup recovery sweep stays
+off unless `RJ_SESSION_EVENT_ROLLUP_SWEEP_ENABLED=true` is set; production
+should only enable that after the optional concurrent index has been built.
 
 **ClickHouse local analytics parity:** Local defaults enable ClickHouse so `npm run ci:local`
 exercises the API endpoint analytics path. Host-side processes talk to ClickHouse

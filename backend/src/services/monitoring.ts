@@ -18,6 +18,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { logger } from '../logger.js';
 import { ABANDONED_ARTIFACT_TTL_MS, REPLAY_PENDING_ARTIFACT_GRACE_MS } from './ingestUploadRelay.js';
+import type { BullQueueCounts } from './artifactBullQueue.js';
 
 // Worker names for monitoring
 export type WorkerName =
@@ -38,7 +39,7 @@ export type WorkerMetric = {
     value: number;
 };
 
-interface QueueHealth {
+export interface QueueHealth {
     pendingJobs: number;
     processingJobs: number;
     dlqJobs: number;
@@ -46,6 +47,9 @@ interface QueueHealth {
     sessionEffectsWaiting: number;
     sessionEffectsActive: number;
     sessionEffectsFailed: number;
+    sessionEventRollupWaiting: number;
+    sessionEventRollupActive: number;
+    sessionEventRollupFailed: number;
     oldestPendingAge: number | null;  // in seconds
     oldestReplayPendingAge: number | null;
     replayPendingByKind: {
@@ -74,19 +78,136 @@ function escapePrometheusLabelValue(value: string): string {
     return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
 }
 
-function renderWorkerMetric(metric: WorkerMetric): string {
+function renderWorkerMetricSample(metric: WorkerMetric): string {
     const labels = metric.labels && Object.keys(metric.labels).length > 0
         ? `{${Object.entries(metric.labels)
             .map(([key, value]) => `${key}="${escapePrometheusLabelValue(String(value))}"`)
             .join(',')}}`
         : '';
 
-    const type = metric.type ?? 'gauge';
-    return (
-        `# TYPE ${metric.name} ${type}\n` +
-        `# HELP ${metric.name} ${metric.help}\n` +
-        `${metric.name}${labels} ${metric.value}\n`
-    );
+    return `${metric.name}${labels} ${metric.value}\n`;
+}
+
+function renderWorkerMetrics(metrics: WorkerMetric[]): string {
+    const declared = new Set<string>();
+    let body = '';
+
+    for (const metric of metrics) {
+        if (!Number.isFinite(metric.value)) continue;
+        if (!declared.has(metric.name)) {
+            const type = metric.type ?? 'gauge';
+            body +=
+                `# TYPE ${metric.name} ${type}\n` +
+                `# HELP ${metric.name} ${metric.help}\n`;
+            declared.add(metric.name);
+        }
+        body += renderWorkerMetricSample(metric);
+    }
+
+    return body;
+}
+
+export function buildQueueHealthWorkerMetrics(queueHealth: QueueHealth): WorkerMetric[] {
+    const statusValue = queueHealth.status === 'healthy'
+        ? 0
+        : queueHealth.status === 'degraded'
+            ? 1
+            : 2;
+
+    return [
+        {
+            help: 'Logical queue health status: 0 healthy, 1 degraded, 2 critical',
+            name: 'rejourney_queue_health_status',
+            value: statusValue,
+        },
+        {
+            help: 'Total pending jobs across primary ingest/flush queues',
+            name: 'rejourney_queue_health_pending_jobs',
+            value: queueHealth.pendingJobs,
+        },
+        {
+            help: 'Total active jobs across artifact and session follow-up queues',
+            name: 'rejourney_queue_health_processing_jobs',
+            value: queueHealth.processingJobs,
+        },
+        {
+            help: 'Total failed BullMQ jobs retained in DLQ windows',
+            name: 'rejourney_queue_health_failed_jobs',
+            value: queueHealth.dlqJobs,
+        },
+        {
+            help: 'Session event rollup jobs waiting or delayed',
+            name: 'rejourney_queue_health_session_event_rollup_waiting_jobs',
+            value: queueHealth.sessionEventRollupWaiting,
+        },
+        {
+            help: 'Session event rollup jobs active',
+            name: 'rejourney_queue_health_session_event_rollup_active_jobs',
+            value: queueHealth.sessionEventRollupActive,
+        },
+        {
+            help: 'Session event rollup jobs failed',
+            name: 'rejourney_queue_health_session_event_rollup_failed_jobs',
+            value: queueHealth.sessionEventRollupFailed,
+        },
+        {
+            help: 'Session effects jobs waiting or delayed',
+            name: 'rejourney_queue_health_session_effects_waiting_jobs',
+            value: queueHealth.sessionEffectsWaiting,
+        },
+        {
+            help: 'Session effects jobs active',
+            name: 'rejourney_queue_health_session_effects_active_jobs',
+            value: queueHealth.sessionEffectsActive,
+        },
+        {
+            help: 'Session effects jobs failed',
+            name: 'rejourney_queue_health_session_effects_failed_jobs',
+            value: queueHealth.sessionEffectsFailed,
+        },
+        {
+            help: 'Stale pending replay artifacts detected by lifecycle monitoring',
+            name: 'rejourney_queue_health_stale_pending_replay_artifacts',
+            value: queueHealth.stalePendingReplayArtifacts,
+        },
+    ];
+}
+
+export async function collectBullQueueCountMetrics(): Promise<WorkerMetric[]> {
+    const {
+        FLUSH_QUEUE_NAME,
+        INGEST_QUEUE_NAME,
+        REPLAY_QUEUE_NAME,
+        SESSION_EFFECTS_QUEUE_NAME,
+        SESSION_EVENT_ROLLUP_QUEUE_NAME,
+        getFlushQueueCounts,
+        getIngestQueueCounts,
+        getReplayQueueCounts,
+        getSessionEffectsQueueCounts,
+        getSessionEventRollupQueueCounts,
+    } = await import('./artifactBullQueue.js');
+
+    const queueCounts: Array<{ counts: BullQueueCounts; queue: string }> = await Promise.all([
+        getIngestQueueCounts().then((counts) => ({ queue: INGEST_QUEUE_NAME, counts })),
+        getReplayQueueCounts().then((counts) => ({ queue: REPLAY_QUEUE_NAME, counts })),
+        getFlushQueueCounts().then((counts) => ({ queue: FLUSH_QUEUE_NAME, counts })),
+        getSessionEffectsQueueCounts().then((counts) => ({ queue: SESSION_EFFECTS_QUEUE_NAME, counts })),
+        getSessionEventRollupQueueCounts().then((counts) => ({ queue: SESSION_EVENT_ROLLUP_QUEUE_NAME, counts })),
+    ]);
+
+    const metrics: WorkerMetric[] = [];
+    for (const { queue, counts } of queueCounts) {
+        for (const state of ['waiting', 'delayed', 'active', 'failed'] as const) {
+            metrics.push({
+                help: 'BullMQ jobs by queue and state, sampled by worker heartbeat',
+                labels: { queue, state },
+                name: 'rejourney_bullmq_queue_jobs',
+                value: counts[state],
+            });
+        }
+    }
+
+    return metrics;
 }
 
 /**
@@ -138,9 +259,7 @@ export async function pingWorker(
                 `worker_heartbeat_duration_ms ${ping}\n`;
         }
 
-        for (const metric of extraMetrics) {
-            body += renderWorkerMetric(metric);
-        }
+        body += renderWorkerMetrics(extraMetrics);
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -198,12 +317,13 @@ export async function checkQueueHealth(): Promise<QueueHealth> {
         const replayGraceSeconds = Math.floor(REPLAY_PENDING_ARTIFACT_GRACE_MS / 1000);
 
         // Query BullMQ queue counts instead of ingest_jobs table.
-        const { getFlushQueueCounts, getIngestQueueCounts, getReplayQueueCounts, getSessionEffectsQueueCounts } = await import('./artifactBullQueue.js');
-        const [ingestCounts, replayCounts, flushCounts, sessionEffectsCounts] = await Promise.all([
+        const { getFlushQueueCounts, getIngestQueueCounts, getReplayQueueCounts, getSessionEffectsQueueCounts, getSessionEventRollupQueueCounts } = await import('./artifactBullQueue.js');
+        const [ingestCounts, replayCounts, flushCounts, sessionEffectsCounts, sessionEventRollupCounts] = await Promise.all([
             getIngestQueueCounts(),
             getReplayQueueCounts(),
             getFlushQueueCounts(),
             getSessionEffectsQueueCounts(),
+            getSessionEventRollupQueueCounts(),
         ]);
 
         // BullMQ states → logical queue health mapping:
@@ -214,8 +334,11 @@ export async function checkQueueHealth(): Promise<QueueHealth> {
         const sessionEffectsWaiting = sessionEffectsCounts.waiting + sessionEffectsCounts.delayed;
         const sessionEffectsActive = sessionEffectsCounts.active;
         const sessionEffectsFailed = sessionEffectsCounts.failed;
-        const processingJobs = ingestCounts.active + replayCounts.active + flushCounts.active + sessionEffectsActive;
-        const dlqJobs        = ingestCounts.failed + replayCounts.failed + flushCounts.failed + sessionEffectsFailed;
+        const sessionEventRollupWaiting = sessionEventRollupCounts.waiting + sessionEventRollupCounts.delayed;
+        const sessionEventRollupActive = sessionEventRollupCounts.active;
+        const sessionEventRollupFailed = sessionEventRollupCounts.failed;
+        const processingJobs = ingestCounts.active + replayCounts.active + flushCounts.active + sessionEffectsActive + sessionEventRollupActive;
+        const dlqJobs        = ingestCounts.failed + replayCounts.failed + flushCounts.failed + sessionEffectsFailed + sessionEventRollupFailed;
         const failedJobs     = dlqJobs; // same concept in BullMQ — exhausted jobs
         const replayWaiting = replayCounts.waiting + replayCounts.delayed;
         const replayKindBase = Math.floor(replayWaiting / 3);
@@ -280,6 +403,9 @@ export async function checkQueueHealth(): Promise<QueueHealth> {
             sessionEffectsWaiting,
             sessionEffectsActive,
             sessionEffectsFailed,
+            sessionEventRollupWaiting,
+            sessionEventRollupActive,
+            sessionEventRollupFailed,
             oldestPendingAge,
             oldestReplayPendingAge,
             stalePendingReplayArtifacts,
@@ -302,6 +428,9 @@ export async function checkQueueHealth(): Promise<QueueHealth> {
             sessionEffectsWaiting: 0,
             sessionEffectsActive: 0,
             sessionEffectsFailed: 0,
+            sessionEventRollupWaiting: 0,
+            sessionEventRollupActive: 0,
+            sessionEventRollupFailed: 0,
             oldestPendingAge: null,
             oldestReplayPendingAge: null,
             stalePendingReplayArtifacts: 0,
@@ -326,8 +455,12 @@ export async function pingIngestWorkerWithQueueHealth(
     const queueHealth = await checkQueueHealth();
 
     const message = `pending=${queueHealth.pendingJobs},dlq=${queueHealth.dlqJobs},replay_screenshots=${queueHealth.replayPendingByKind.screenshots},replay_hierarchy=${queueHealth.replayPendingByKind.hierarchy},replay_rrweb=${queueHealth.replayPendingByKind.rrweb},session_effects_waiting=${queueHealth.sessionEffectsWaiting},session_effects_active=${queueHealth.sessionEffectsActive},stale_replay_pending=${queueHealth.stalePendingReplayArtifacts}`;
+    const metrics = [
+        ...buildQueueHealthWorkerMetrics(queueHealth),
+        ...await collectBullQueueCountMetrics(),
+    ];
 
-    await pingWorker('ingestWorker', status, message, processingTime);
+    await pingWorker('ingestWorker', status, message, processingTime, metrics);
 
     // Also ping a separate queue monitor if configured
     if (queueHealth.status !== 'healthy') {

@@ -342,6 +342,7 @@ Relevant routes:
                                                │ Redis (BullMQ)                     │
                                                │  rj-ingest-artifacts (events/...)  │
                                                │  rj-replay-artifacts (screens/...) │
+                                               │  rj-session-event-rollup           │
                                                └────────────────┬───────────────────┘
                                                                 │ event-driven consume
                                                                 ▼
@@ -356,7 +357,8 @@ Relevant routes:
                                             ▼
                               process / normalize (artifactJobProcessor)
                               artifact = ready / failed
-                              reconcileSessionState()
+                              event metrics roll up per session
+                              reconcileSessionState() as needed
 ```
 
 ```text
@@ -378,6 +380,7 @@ failed    -> pending      (SDK retries same clientUploadId)
 │ Each sweep (at most every 10s):                                             │
 │   abandon expired pending artifacts (> 10m)                                 │
 │   queueRecoverableArtifacts (uploaded artifacts + buffered flush jobs)      │
+│   queuePendingSessionEventRollups if explicitly enabled after safe indexing │
 │   reconcileDueSessions (batched)                                            │
 │                                                                              │
 │ Stalled job recovery: BullMQ detects stalled workers automatically          │
@@ -391,7 +394,9 @@ failed    -> pending      (SDK retries same clientUploadId)
 │                                                                              │
 │ ingest-worker consumes rj-ingest-artifacts and hosts rj-artifact-flush      │
 │ replay-worker consumes rj-replay-artifacts                                  │
-│ On job: processArtifactJob -> reconcileSessionState() as needed             │
+│ session-lifecycle-worker hosts rj-session-event-rollup + rj-session-effects │
+│ On ingest event job: validate/summarize -> ready -> per-session rollup      │
+│ On replay job: processArtifactJob -> reconcileSessionState() as needed      │
 │ On fail: exponential backoff, up to 5 attempts                              │
 │ Flush jobs: 8 attempts, exponential backoff starting at 500ms               │
 │ On stall: BullMQ auto re-queues (no manual sweep needed)                    │
@@ -403,8 +408,8 @@ Important worker nuance:
 - **ingest-artifact worker** ([`ingestArtifactWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/ingestArtifactWorker.ts)) consumes from `rj-ingest-artifacts`: `events`, `crashes`, and `anrs`.
 - The same ingest-worker process also runs the `rj-artifact-flush` worker. It reads `artifact:buf:{artifactId}`, writes the bytes to the selected S3 endpoint, calls `markArtifactUploadStored()` to enqueue normal processing, then deletes the Redis buffer.
 - **replay-artifact worker** ([`replayArtifactWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/replayArtifactWorker.ts)) consumes from `rj-replay-artifacts`: `screenshots`, `hierarchy`, and `rrweb`.
-- **session-lifecycle worker** ([`sessionLifecycleWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/sessionLifecycleWorker.ts)) runs periodic sweeps only; it does not process artifact bytes itself.
-- `events` artifacts update session metadata, `session_metrics`, and downstream analytics side effects.
+- **session-lifecycle worker** ([`sessionLifecycleWorker.ts`](/Users/mora/Desktop/Dev-mac/rejourney/backend/src/worker/sessionLifecycleWorker.ts)) runs periodic sweeps and hosts `rj-session-event-rollup` plus `rj-session-effects`.
+- `events` artifact jobs only validate/summarize payloads and mark artifacts ready; `rj-session-event-rollup` serializes event metrics, heatmaps, and downstream analytics side effects per session.
 - `crashes` and `anrs` artifacts create issue rows and increment crash/ANR counters.
 - `screenshots`, `hierarchy`, and `rrweb` mostly affect replay availability and final session presentation.
 - BullMQ job deduplication uses `jobId = artifact-{artifactId}`. A duplicate enqueue while a job is active/waiting returns without creating a second job.
@@ -518,6 +523,8 @@ Relevant files:
 │   rj-ingest-artifacts                │      │ session_metrics                      │
 │   rj-artifact-flush                  │      │ recording_artifacts                  │
 │   rj-replay-artifacts                │      │ project_usage                        │
+│   rj-session-event-rollup            │      │                                      │
+│   rj-session-effects                 │      │                                      │
 │ artifact:buf:{artifactId}            │      │                                      │
 │ sdk:config:*                         │      │ device_usage                         │
 │ ingest:idempotency:*                 │      │                                      │
@@ -545,7 +552,7 @@ Relevant files:
 Redis owns:
 
 - artifact write-ahead buffers: `artifact:buf:{artifactId}` with 30-minute TTL
-- artifact job queues (BullMQ): `rj-artifact-flush`, `rj-ingest-artifacts`, `rj-replay-artifacts`
+- artifact job queues (BullMQ): `rj-artifact-flush`, `rj-ingest-artifacts`, `rj-replay-artifacts`, `rj-session-event-rollup`, `rj-session-effects`
 - SDK config cache
 - ingest idempotency markers
 - replay-limit cache plus distributed lock

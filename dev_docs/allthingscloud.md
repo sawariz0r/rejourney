@@ -230,11 +230,12 @@ A backward-compat `api` Service still exists and aliases `api-ingest` so anythin
 - **Preferred HEL1, weight 100.** Fall back to FSN1 only when HEL1 is full.
 - HPA: `ingest-worker` 8–12, `replay-worker` 1–10.
 - IO-bound, not CPU-bound — HPA can undershoot during queue spikes (workers may sit below CPU limits while waiting on S3/DB round-trips). The ingest HPA now keeps more headroom for event backlog drain.
-- Workers are **event-driven via BullMQ** — no SQL polling. Four queues are backed by the Redis Sentinel cluster: `rj-artifact-flush` (Redis buffered relay uploads waiting for S3), `rj-ingest-artifacts` (events, crashes, anrs), `rj-replay-artifacts` (screenshots, hierarchy), and `rj-session-effects` (debounced per-session reconcile/cache effects). Workers block on the queue and consume jobs as they arrive.
-- Event/crash/ANR artifact jobs mark artifacts ready first, then enqueue `rj-session-effects` with a 15s debounce window so tiny event artifacts do not each rerun full session reconciliation. Replay artifacts still reconcile immediately to preserve replay readiness.
+- Workers are **event-driven via BullMQ** — no SQL polling. Five queues are backed by the Redis Sentinel cluster: `rj-artifact-flush` (Redis buffered relay uploads waiting for S3), `rj-ingest-artifacts` (cheap artifact ready/validation for events, crashes, anrs), `rj-replay-artifacts` (screenshots, hierarchy), `rj-session-event-rollup` (per-session event metrics rollup), and `rj-session-effects` (debounced per-session reconcile/cache effects). Workers block on the queue and consume jobs as they arrive.
+- Event artifact jobs now validate/summarize the payload, mark the artifact ready, and enqueue `rj-session-event-rollup`; the heavy event metrics/heatmap/ClickHouse work is serial per session so one large session cannot occupy the whole ingest worker pool. Crash/ANR jobs still process directly and enqueue `rj-session-effects` with a 15s debounce window. Replay artifacts still reconcile immediately to preserve replay readiness.
+- The broad `queuePendingSessionEventRollups` Postgres recovery sweep is disabled by default (`RJ_SESSION_EVENT_ROLLUP_SWEEP_ENABLED` unset). Keep it off on the 20M-row production table unless the optional concurrent index in `backend/drizzle/manual/event-rollup-pending-index-concurrent.sql` has been built successfully.
 - BullMQ deduplication uses `jobId = artifact-{artifactId}`. Stalled jobs (worker died mid-process) are automatically re-queued after `stalledInterval = 30s`, up to `maxStalledCount = 3`.
 - Retry policy: 5 attempts, exponential backoff starting at 1s. Failed jobs are kept in the failed set for 7 days (DLQ window). Completed jobs retained 1h for observability.
-- Queue depth monitoring: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, `LLEN bull:rj-replay-artifacts:wait`, and `LLEN bull:rj-session-effects:wait` in Redis. Artifact queues should be near zero in steady state; `rj-session-effects` can briefly hold delayed per-session jobs during ingest bursts.
+- Queue depth monitoring: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, `LLEN bull:rj-replay-artifacts:wait`, `LLEN bull:rj-session-event-rollup:wait`, and `LLEN bull:rj-session-effects:wait` in Redis. Artifact queues should be near zero in steady state; `rj-session-event-rollup` and `rj-session-effects` can briefly hold delayed per-session jobs during ingest bursts.
 - `/health/queue` returns `503` whenever BullMQ has failed/DLQ jobs, including historical failed jobs retained during the 7-day DLQ window. Before treating it as a fresh outage, sample the newest failed job per queue and compare `failedOn` to the current deploy window.
 
 ### `ingest-upload`
@@ -356,6 +357,13 @@ Production infrastructure verification on 2026-05-22:
 | kube-state-metrics | Cluster-level k8s object metrics. |
 | postgres-exporter | Scrapes CNPG primary. |
 
+Grafana provisions the Rejourney dashboards from `k8s/grafana-dashboards.yaml`.
+For artifact backlog incidents, start with `55 — Artifact Ingest Diagnosis`.
+The top row should show `rj-ingest-artifacts` waiting decreasing after deploy;
+if ingest drops but `rj-session-event-rollup` grows, the bottleneck has moved
+to the new per-session rollup worker. The compact queue view is also embedded
+in `50 — Application`.
+
 ### CoreDNS
 
 - 2 replicas (1 FSN1, 1 HEL1). Without a HEL1 replica, FSN1 failure causes 30–60s cluster-wide DNS outage.
@@ -433,7 +441,7 @@ Local k8s uses the same idea with `http:` allowed for MinIO/local endpoints. Buc
 
 7. **CNPG sync replication degrades to async when standby is down.** `maxSyncReplicas: 1` — intentional. You briefly lose the sync guarantee during CNPG upgrades.
 
-8. **HPA can undershoot for IO-bound workers.** `ingest-worker` and `replay-worker` may wait on S3 and DB instead of saturating CPU. Monitor queue depth: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, `LLEN bull:rj-replay-artifacts:wait`, and `LLEN bull:rj-session-effects:wait` in Redis. If `rj-ingest-artifacts` is non-zero and growing, confirm HPA is at the 12-replica max before changing code.
+8. **HPA can undershoot for IO-bound workers.** `ingest-worker` and `replay-worker` may wait on S3 and DB instead of saturating CPU. Monitor queue depth: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, `LLEN bull:rj-replay-artifacts:wait`, `LLEN bull:rj-session-event-rollup:wait`, and `LLEN bull:rj-session-effects:wait` in Redis. If `rj-ingest-artifacts` is non-zero and growing, confirm HPA is at the 12-replica max before changing code. If `rj-session-event-rollup` is growing while ingest is empty, tune the rollup batch/concurrency rather than adding ingest pods.
 
 9. **`api-ingest`/Postgres colocation is enforced twice.** `api-ingest` has required pod affinity to the current CNPG primary, CI auto-corrects via `pin_deployment_to_postgres_primary api-ingest`, and the `api-postgres-colocator` CronJob handles later failovers (its `API_DEPLOYMENT` env is set to `api-ingest`). `api-dashboard` does NOT colocate with the primary — it lives on HEL1. If you see slow ingest: compare `kubectl get pods -n rejourney -l app=api-ingest -o wide` with `kubectl get pods -n rejourney -l cnpg.io/cluster=postgres-local,cnpg.io/instanceRole=primary -o wide`, then inspect `kubectl get jobs -n rejourney -l app=api-postgres-colocator`.
 

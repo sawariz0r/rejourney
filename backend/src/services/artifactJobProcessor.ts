@@ -4,11 +4,12 @@ import { db, projects, recordingArtifacts, sessionMetrics, sessions } from '../d
 import { downloadFromS3ForArtifact } from '../db/s3.js';
 import { logger } from '../logger.js';
 import { ensureHierarchyArtifactCompressed } from './hierarchyArtifactCompression.js';
-import { processEventsArtifact } from './ingestEventArtifactProcessor.js';
+import { summarizeEventsArtifact } from './ingestEventArtifactProcessor.js';
 import { processAnrsArtifact, processCrashesArtifact } from './ingestFaultArtifactProcessors.js';
 import { processRecoveredReplayArtifact } from './ingestReplayArtifactProcessor.js';
 import { runArtifactCompletionEffects } from './artifactCompletionEffects.js';
 import { reconcileSessionState } from './sessionReconciliation.js';
+import { enqueueSessionEventRollupJob } from './sessionEventRollupQueue.js';
 import { enqueueSessionEffectsJob } from './sessionEffectsQueue.js';
 import type { ArtifactJobData, Job } from './artifactBullQueue.js';
 
@@ -39,7 +40,13 @@ type ArtifactProcessorContext = {
     session: typeof sessions.$inferSelect;
 };
 
-type ArtifactProcessor = (context: ArtifactProcessorContext) => Promise<{ sizeBytes: number }>;
+type ArtifactProcessorResult = {
+    endTime?: number | null;
+    sizeBytes: number;
+    startTime?: number | null;
+};
+
+type ArtifactProcessor = (context: ArtifactProcessorContext) => Promise<ArtifactProcessorResult>;
 
 
 function parseMaybeGzippedJson(data: Buffer, s3ObjectKey?: string | null): any {
@@ -83,8 +90,7 @@ export const artifactProcessors: Record<string, ArtifactProcessor> = {
     events: async (context) => {
         const data = await downloadFromS3ForArtifact(context.projectId, context.s3Key, context.artifact.endpointId);
         if (!data) throw new Error('Artifact payload missing from S3 for events');
-        await processEventsArtifact(context.job, context.session, context.metrics, context.projectId, data, context.log);
-        return { sizeBytes: data.length };
+        return summarizeEventsArtifact(data);
     },
     crashes: async (context) => {
         const data = await downloadFromS3ForArtifact(context.projectId, context.s3Key, context.artifact.endpointId);
@@ -155,7 +161,7 @@ function shouldRepairReadyEventsArtifact(
 }
 
 function shouldDeferSessionEffects(kind: string | null | undefined): boolean {
-    return kind === 'events' || kind === 'crashes' || kind === 'anrs';
+    return kind === 'crashes' || kind === 'anrs';
 }
 
 function isReplayArtifactKind(kind: string | null | undefined): boolean {
@@ -165,7 +171,7 @@ function isReplayArtifactKind(kind: string | null | undefined): boolean {
 export async function runArtifactProcessorByKind(
     kind: string | null | undefined,
     context: ArtifactProcessorContext,
-): Promise<{ sizeBytes: number }> {
+): Promise<ArtifactProcessorResult> {
     const processor = getArtifactProcessor(kind);
     if (!processor) {
         throw new Error(`Unsupported artifact kind: ${kind}`);
@@ -264,7 +270,7 @@ export async function processArtifactJobFromBullMQ(
     // not miss foreground/background evidence.
     if (artifact.status === 'ready') {
         if (shouldRepairReadyEventsArtifact(kind, artifact)) {
-            const { sizeBytes } = await runArtifactProcessorByKind(kind, {
+            const repairResult = await runArtifactProcessorByKind(kind, {
                 artifact,
                 job: jobCtx,
                 log: artifactLog,
@@ -275,14 +281,35 @@ export async function processArtifactJobFromBullMQ(
             });
             await db.update(recordingArtifacts)
                 .set({
-                    sizeBytes: artifact.sizeBytes ?? sizeBytes,
+                    endTime: artifact.endTime ?? repairResult.endTime ?? null,
+                    sizeBytes: artifact.sizeBytes ?? repairResult.sizeBytes,
+                    startTime: artifact.startTime ?? repairResult.startTime ?? null,
                     verifiedAt: artifact.verifiedAt ?? new Date(),
                 })
                 .where(eq(recordingArtifacts.id, artifactId));
             artifactLog.info(
-                { event: 'artifact.ready_event_repaired', actualObjectSize: sizeBytes },
+                { event: 'artifact.ready_event_repaired', actualObjectSize: repairResult.sizeBytes },
                 'artifact.ready_event_repaired',
             );
+        }
+        if (kind === 'events') {
+            const eventRollupRequested = Boolean((artifact as any).eventRollupRequestedAt);
+            const eventRollupProcessed = Boolean((artifact as any).eventRollupProcessedAt);
+            if (eventRollupRequested && !eventRollupProcessed) {
+                const sessionEventRollupQueued = await enqueueSessionEventRollupJob(session.id);
+                artifactLog.info(
+                    { event: 'artifact.ready_event_rollup_deferred', sessionEventRollupQueued },
+                    'artifact.ready_event_rollup_deferred',
+                );
+                return;
+            }
+
+            const sessionEffectsQueued = await enqueueSessionEffectsJob(session.id);
+            artifactLog.info(
+                { event: 'artifact.ready_session_effects_deferred', sessionEffectsQueued },
+                'artifact.ready_session_effects_deferred',
+            );
+            return;
         }
         if (shouldDeferSessionEffects(kind)) {
             const sessionEffectsQueued = await enqueueSessionEffectsJob(session.id);
@@ -303,7 +330,7 @@ export async function processArtifactJobFromBullMQ(
     }
 
     // Run the kind-specific processor — throws on failure, BullMQ retries
-    const { sizeBytes } = await runArtifactProcessorByKind(kind, {
+    const processorResult = await runArtifactProcessorByKind(kind, {
         artifact,
         job: jobCtx,
         log: artifactLog,
@@ -312,20 +339,27 @@ export async function processArtifactJobFromBullMQ(
         s3Key: s3ObjectKey,
         session,
     });
+    const { sizeBytes } = processorResult;
 
     const completedAt = new Date();
+    const readyUpdate: Record<string, unknown> = {
+        status: 'ready',
+        readyAt: completedAt,
+        uploadCompletedAt: artifact.uploadCompletedAt ?? completedAt,
+        verifiedAt: artifact.verifiedAt ?? completedAt,
+        sizeBytes,
+    };
+    if (kind === 'events') {
+        readyUpdate.eventRollupRequestedAt = completedAt;
+        readyUpdate.endTime = processorResult.endTime ?? null;
+        readyUpdate.startTime = processorResult.startTime ?? null;
+    }
 
     // Mark artifact as ready in Postgres (skip SyncRep wait — idempotent on replay)
     await db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL synchronous_commit = local`);
         await tx.update(recordingArtifacts)
-            .set({
-                status: 'ready',
-                readyAt: completedAt,
-                uploadCompletedAt: artifact.uploadCompletedAt ?? completedAt,
-                verifiedAt: artifact.verifiedAt ?? completedAt,
-                sizeBytes,
-            })
+            .set(readyUpdate)
             .where(eq(recordingArtifacts.id, artifactId));
     });
 
@@ -334,6 +368,20 @@ export async function processArtifactJobFromBullMQ(
     // but handle the DLQ case via the 'failed' worker event in startArtifactWorker.ts.
     // The artifact stays "uploaded" until retry succeeds or we mark it failed via
     // the markArtifactFailedAfterExhausted helper below.
+
+    if (kind === 'events') {
+        const sessionEventRollupQueued = await enqueueSessionEventRollupJob(session.id);
+        artifactLog.info(
+            {
+                event: 'artifact.processed',
+                replayArtifact: false,
+                actualObjectSize: sizeBytes,
+                sessionEventRollupQueued,
+            },
+            'artifact.processed',
+        );
+        return;
+    }
 
     if (shouldDeferSessionEffects(kind)) {
         const sessionEffectsQueued = await enqueueSessionEffectsJob(session.id);

@@ -12,7 +12,7 @@ MP4 upload is not currently wired up end-to-end — only screenshot mode is supp
 
 ## 2. Stale `ingest_jobs` references after BullMQ migration
 
-**Background:** Artifact job dispatch was migrated from a Postgres poll loop (`ingest_jobs` table) to BullMQ Redis queues (`rj-artifact-flush`, `rj-ingest-artifacts`, `rj-replay-artifacts`, plus debounced `rj-session-effects` for session-level follow-up work). The table drop is already done by migration `20260503000000_drop_ingest_jobs`, and current application schema exports no longer include `ingestJobs`.
+**Background:** Artifact job dispatch was migrated from a Postgres poll loop (`ingest_jobs` table) to BullMQ Redis queues (`rj-artifact-flush`, `rj-ingest-artifacts`, `rj-replay-artifacts`, plus per-session `rj-session-event-rollup` and debounced `rj-session-effects` follow-up work). The table drop is already done by migration `20260503000000_drop_ingest_jobs`, and current application schema exports no longer include `ingestJobs`.
 
 **Current gap:** a few non-historical helpers still mention `ingest_jobs` and should be removed or rewritten so they do not assume the old table exists:
 

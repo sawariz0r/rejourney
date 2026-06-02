@@ -534,6 +534,8 @@ export const recordingArtifacts = pgTable(
         readyAt: timestamp('ready_at'),
         uploadCompletedAt: timestamp('upload_completed_at'),
         verifiedAt: timestamp('verified_at'),
+        eventRollupRequestedAt: timestamp('event_rollup_requested_at'),
+        eventRollupProcessedAt: timestamp('event_rollup_processed_at'),
         timestamp: doublePrecision('timestamp'),
         // Replay segment timing fields
         startTime: bigint('start_time', { mode: 'number' }), // Segment start time in epoch ms

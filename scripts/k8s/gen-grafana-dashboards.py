@@ -15,6 +15,7 @@ OUT_YAML = os.path.join(REPO_ROOT, "k8s", "grafana-dashboards.yaml")
 DATASOURCE = {"type": "prometheus", "uid": "victoria-metrics"}
 ACTIVE_PVC_REGEX = 'grafana-data|gatus-data|victoria-metrics-data|redis-data-redis-node-[0-9]+|postgres-local-[0-9]+'
 DATABASE_PVC_REGEX = 'redis-data-redis-node-[0-9]+|postgres-local-[0-9]+'
+QUEUE_SAMPLER_JOB = 'sessionLifecycleWorker'
 
 NEXT_ID = [0]
 def nid():
@@ -67,6 +68,27 @@ def target(expr, legend="", instant=False, ref="A"):
 
 def zero(expr):
     return f'({expr}) OR vector(0)'
+
+def bull_queue_jobs_expr(queue_regex='.*', state_regex='.*'):
+    return f'max by (queue, state)(rejourney_bullmq_queue_jobs{{job="{QUEUE_SAMPLER_JOB}",queue=~"{queue_regex}",state=~"{state_regex}"}})'
+
+def bull_queue_state_by_queue_expr(state):
+    return f'max by (queue)(rejourney_bullmq_queue_jobs{{job="{QUEUE_SAMPLER_JOB}",state="{state}"}})'
+
+def bull_queue_state_total_expr(state):
+    return f'sum(max by (queue)(rejourney_bullmq_queue_jobs{{job="{QUEUE_SAMPLER_JOB}",state="{state}"}}))'
+
+def bull_queue_single_state_expr(queue, state):
+    return f'max(rejourney_bullmq_queue_jobs{{job="{QUEUE_SAMPLER_JOB}",queue="{queue}",state="{state}"}})'
+
+def bull_queue_pending_by_queue_expr():
+    return f'sum by (queue)(max by (queue, state)(rejourney_bullmq_queue_jobs{{job="{QUEUE_SAMPLER_JOB}",state=~"waiting|delayed"}}))'
+
+def bull_queue_pending_expr(queue):
+    return f'sum(max by (state)(rejourney_bullmq_queue_jobs{{job="{QUEUE_SAMPLER_JOB}",queue="{queue}",state=~"waiting|delayed"}}))'
+
+def bull_queue_pending_total_expr():
+    return f'sum(max by (queue, state)(rejourney_bullmq_queue_jobs{{job="{QUEUE_SAMPLER_JOB}",state=~"waiting|delayed"}}))'
 
 def stat(title, expr, x, y, w=4, h=4, unit="short", legend="", mappings=None,
          thresholds=None, decimals=None, color_mode="value", instant=False):
@@ -346,6 +368,24 @@ def d_overview():
     panels.append(stat("Backup queue depth", zero('sum(rejourney_session_backup_queue_queued)'), 12, y, w=4, h=4))
     panels.append(stat("Backup queue oldest age", zero('max(rejourney_session_backup_queue_oldest_age_seconds)'), 16, y, w=4, h=4, unit="s"))
     panels.append(stat("Upload p95 (recent)", zero('max(rejourney_artifacts_upload_latency_recent_p95_seconds)'), 20, y, w=4, h=4, unit="s"))
+    y += 4
+
+    panels.append(row("Artifact Queue Health", y)); y += 1
+    panels.append(stat("Queue health", zero('max(rejourney_queue_health_status)'), 0, y, w=4, h=4,
+                       mappings=[{"type": "value", "options": {
+                           "0": {"text": "Healthy", "color": "green"},
+                           "1": {"text": "Degraded", "color": "orange"},
+                           "2": {"text": "Critical", "color": "red"},
+                       }}],
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 2}]}))
+    panels.append(stat("Ingest waiting", zero(bull_queue_pending_expr("rj-ingest-artifacts")), 4, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1000}, {"color": "red", "value": 10000}]}))
+    panels.append(stat("Ingest active", zero(bull_queue_single_state_expr("rj-ingest-artifacts", "active")), 8, y, w=4, h=4))
+    panels.append(stat("Event rollup waiting", zero(bull_queue_pending_expr("rj-session-event-rollup")), 12, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1000}, {"color": "red", "value": 10000}]}))
+    panels.append(stat("Event rollup active", zero(bull_queue_single_state_expr("rj-session-event-rollup", "active")), 16, y, w=4, h=4))
+    panels.append(stat("BullMQ failed", zero(bull_queue_state_total_expr("failed")), 20, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 10}]}))
     y += 4
 
     return dashboard("rejourney-overview", "00 — Overview", ["overview"], panels)
@@ -989,6 +1029,37 @@ def d_application():
                         20, y, w=4, h=4, unit="percent"))
     y += 4
 
+    panels.append(row("BullMQ artifact queue drain", y)); y += 1
+    panels.append(stat("Ingest waiting", zero(bull_queue_pending_expr("rj-ingest-artifacts")), 0, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1000}, {"color": "red", "value": 10000}]}))
+    panels.append(stat("Ingest active", zero(bull_queue_single_state_expr("rj-ingest-artifacts", "active")), 4, y, w=4, h=4))
+    panels.append(stat("Replay waiting", zero(bull_queue_pending_expr("rj-replay-artifacts")), 8, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1000}, {"color": "red", "value": 10000}]}))
+    panels.append(stat("Event rollup waiting", zero(bull_queue_pending_expr("rj-session-event-rollup")), 12, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1000}, {"color": "red", "value": 10000}]}))
+    panels.append(stat("Event rollup active", zero(bull_queue_single_state_expr("rj-session-event-rollup", "active")), 16, y, w=4, h=4))
+    panels.append(stat("All BullMQ failed", zero(bull_queue_state_total_expr("failed")), 20, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 10}]}))
+    y += 4
+
+    panels.append(ts("Waiting + delayed by queue",
+                     [(bull_queue_pending_by_queue_expr(), "{{queue}}")],
+                     0, y, w=12, h=8, unit="short"))
+    panels.append(ts("Active jobs by queue",
+                     [(bull_queue_state_by_queue_expr("active"), "{{queue}}")],
+                     12, y, w=12, h=8, unit="short"))
+    y += 8
+
+    panels.append(ts("Failed jobs by queue",
+                     [(bull_queue_state_by_queue_expr("failed"), "{{queue}}")],
+                     0, y, w=12, h=8, unit="short"))
+    panels.append(ts("Worker replicas — ready/current/max",
+                     [('kube_deployment_status_replicas_ready{namespace="rejourney",deployment=~"ingest-worker|replay-worker|session-lifecycle-worker"}', "ready — {{deployment}}"),
+                      ('kube_horizontalpodautoscaler_status_current_replicas{namespace="rejourney",horizontalpodautoscaler=~"ingest-worker|replay-worker"}', "hpa current — {{horizontalpodautoscaler}}"),
+                      ('kube_horizontalpodautoscaler_spec_max_replicas{namespace="rejourney",horizontalpodautoscaler=~"ingest-worker|replay-worker"}', "hpa max — {{horizontalpodautoscaler}}")],
+                     12, y, w=12, h=8, unit="short"))
+    y += 8
+
     panels.append(ts("API memory by pod",
                      [(f'sum by (pod)(container_memory_working_set_bytes{{{api_lbl}}})', "{{pod}}"),
                       (f'sum by (pod)(container_memory_rss{{{api_lbl}}})', "rss — {{pod}}")],
@@ -1119,6 +1190,169 @@ def d_application():
     y += 8
 
     return dashboard("rejourney-application", "50 — Application", ["app"], panels)
+
+# ============================================================
+# 55 — Artifact Ingest Diagnosis
+# ============================================================
+def d_artifact_ingest():
+    reset_ids()
+    panels = []
+    y = 0
+    worker_lbl = 'namespace="rejourney",pod=~"(ingest-worker|replay-worker|session-lifecycle-worker)-.*"'
+
+    panels.append(row("Queue drain board", y)); y += 1
+    panels.append(stat("Queue health", zero('max(rejourney_queue_health_status)'), 0, y, w=4, h=4,
+                       mappings=[{"type": "value", "options": {
+                           "0": {"text": "Healthy", "color": "green"},
+                           "1": {"text": "Degraded", "color": "orange"},
+                           "2": {"text": "Critical", "color": "red"},
+                       }}],
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 2}]}))
+    panels.append(stat("Total waiting", zero(bull_queue_pending_total_expr()), 4, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1000}, {"color": "red", "value": 10000}]}))
+    panels.append(stat("Ingest waiting", zero(bull_queue_pending_expr("rj-ingest-artifacts")), 8, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1000}, {"color": "red", "value": 10000}]}))
+    panels.append(stat("Event rollup waiting", zero(bull_queue_pending_expr("rj-session-event-rollup")), 12, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1000}, {"color": "red", "value": 10000}]}))
+    panels.append(stat("Active jobs", zero(bull_queue_state_total_expr("active")), 16, y, w=4, h=4))
+    panels.append(stat("Failed jobs", zero(bull_queue_state_total_expr("failed")), 20, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 10}]}))
+    y += 4
+
+    panels.append(row("BullMQ queues", y)); y += 1
+    panels.append(ts("Waiting + delayed by queue",
+                     [(bull_queue_pending_by_queue_expr(), "{{queue}}")],
+                     0, y, w=12, h=8, unit="short"))
+    panels.append(ts("Active by queue",
+                     [(bull_queue_state_by_queue_expr("active"), "{{queue}}")],
+                     12, y, w=12, h=8, unit="short"))
+    y += 8
+    panels.append(ts("Failed by queue",
+                     [(bull_queue_state_by_queue_expr("failed"), "{{queue}}")],
+                     0, y, w=12, h=8, unit="short"))
+    panels.append(ts("All queue states",
+                     [(bull_queue_jobs_expr('rj-artifact-flush|rj-ingest-artifacts|rj-replay-artifacts|rj-session-event-rollup|rj-session-effects'), "{{queue}} — {{state}}")],
+                     12, y, w=12, h=8, unit="short"))
+    y += 8
+    panels.append(table("BullMQ queue samples",
+                        [(bull_queue_jobs_expr('rj-artifact-flush|rj-ingest-artifacts|rj-replay-artifacts|rj-session-event-rollup|rj-session-effects'), "")],
+                        0, y, w=24, h=8))
+    y += 8
+
+    panels.append(row("Workers and HPA", y)); y += 1
+    panels.append(ts("Worker replicas — ready/current/max",
+                     [('kube_deployment_status_replicas_ready{namespace="rejourney",deployment=~"ingest-worker|replay-worker|session-lifecycle-worker"}', "ready — {{deployment}}"),
+                      ('kube_horizontalpodautoscaler_status_current_replicas{namespace="rejourney",horizontalpodautoscaler=~"ingest-worker|replay-worker"}', "hpa current — {{horizontalpodautoscaler}}"),
+                      ('kube_horizontalpodautoscaler_status_desired_replicas{namespace="rejourney",horizontalpodautoscaler=~"ingest-worker|replay-worker"}', "hpa desired — {{horizontalpodautoscaler}}"),
+                      ('kube_horizontalpodautoscaler_spec_max_replicas{namespace="rejourney",horizontalpodautoscaler=~"ingest-worker|replay-worker"}', "hpa max — {{horizontalpodautoscaler}}")],
+                     0, y, w=12, h=8, unit="short"))
+    panels.append(ts("Worker heartbeats",
+                     [('worker_up{job=~"ingestWorker|replayWorker|sessionLifecycleWorker"}', "{{job}}"),
+                      ('time() - worker_last_heartbeat_unix{job=~"ingestWorker|replayWorker|sessionLifecycleWorker"}', "age — {{job}}")],
+                     12, y, w=12, h=8, unit="short"))
+    y += 8
+    panels.append(ts("Worker CPU cores",
+                     [(f'sum by (pod)(rate(container_cpu_usage_seconds_total{{{worker_lbl},container!="",container!="POD"}}[2m]))', "{{pod}}")],
+                     0, y, w=8, h=8, unit="short", decimals=3))
+    panels.append(ts("Worker memory",
+                     [(f'sum by (pod)(container_memory_working_set_bytes{{{worker_lbl},container!="",container!="POD"}})', "{{pod}}")],
+                     8, y, w=8, h=8, unit="bytes"))
+    panels.append(ts("Worker CPU throttling",
+                     [(f'sum by (pod)(rate(container_cpu_cfs_throttled_seconds_total{{{worker_lbl},container!="",container!="POD"}}[2m]))', "{{pod}}")],
+                     16, y, w=8, h=8, unit="s", decimals=3))
+    y += 8
+
+    panels.append(row("Artifact throughput and DB state", y)); y += 1
+    panels.append(ts("Artifacts created/completed/failed — recent window",
+                     [(zero('sum(rejourney_artifacts_created_recent_created_count)'), "created"),
+                      (zero('sum(rejourney_artifacts_completed_recent_completed_count)'), "completed"),
+                      (zero('sum(rejourney_artifacts_failed_recent_artifact_count)'), "failed")],
+                     0, y, w=12, h=8, unit="short"))
+    panels.append(ts("Recording artifacts by status and kind",
+                     [(zero('sum by (kind, status)(rejourney_recording_artifacts_by_status_artifact_count)'), "{{kind}} — {{status}}")],
+                     12, y, w=12, h=8, unit="short"))
+    y += 8
+    panels.append(ts("Upload latency",
+                     [(zero('max(rejourney_artifacts_upload_latency_recent_p50_seconds)'), "p50"),
+                      (zero('max(rejourney_artifacts_upload_latency_recent_p95_seconds)'), "p95"),
+                      (zero('max(rejourney_artifacts_upload_latency_recent_p99_seconds)'), "p99"),
+                      (zero('max(rejourney_artifacts_upload_latency_recent_max_seconds)'), "max")],
+                     0, y, w=12, h=8, unit="s"))
+    panels.append(ts("Uploaded/ready event artifacts",
+                     [(zero('sum(rejourney_recording_artifacts_by_status_artifact_count{kind="events",status="uploaded"})'), "events uploaded"),
+                      (zero('sum(rejourney_recording_artifacts_by_status_artifact_count{kind="events",status="ready"})'), "events ready"),
+                      (zero('sum(rejourney_recording_artifacts_by_status_artifact_count{kind="events",status="failed"})'), "events failed")],
+                     12, y, w=12, h=8, unit="short"))
+    y += 8
+
+    panels.append(row("Redis and BullMQ backing store", y)); y += 1
+    panels.append(stat("Redis evictions (1h)", 'increase(redis_evicted_keys_total[1h])', 0, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "red", "value": 1}]}))
+    panels.append(stat("Redis blocked clients", 'redis_blocked_clients', 4, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]}))
+    panels.append(gauge("Redis memory % max",
+                        '100 * redis_memory_used_bytes / clamp_min(redis_memory_max_bytes, 1)',
+                        8, y, w=4, h=4, unit="percent"))
+    panels.append(stat("Redis connected clients", 'redis_connected_clients', 12, y, w=4, h=4))
+    panels.append(stat("Redis failed calls / sec", 'rate(redis_commands_failed_calls_total[2m])', 16, y, w=4, h=4, unit="ops"))
+    panels.append(stat("Redis rejected calls / sec", 'rate(redis_commands_rejected_calls_total[2m])', 20, y, w=4, h=4, unit="ops"))
+    y += 4
+    panels.append(ts("Redis commands / sec",
+                     [('rate(redis_commands_processed_total[2m])', "processed"),
+                      ('rate(redis_commands_failed_calls_total[2m])', "failed"),
+                      ('rate(redis_commands_rejected_calls_total[2m])', "rejected")],
+                     0, y, w=12, h=8, unit="ops"))
+    panels.append(ts("Redis command latency p95/p99",
+                     [('histogram_quantile(0.95, sum by (le)(rate(redis_commands_latencies_usec_bucket[5m]))) / 1000', "p95"),
+                      ('histogram_quantile(0.99, sum by (le)(rate(redis_commands_latencies_usec_bucket[5m]))) / 1000', "p99")],
+                     12, y, w=12, h=8, unit="ms"))
+    y += 8
+
+    panels.append(row("Postgres pressure", y)); y += 1
+    panels.append(stat("Waiting backends", 'sum(cnpg_backends_waiting_total{namespace="rejourney"})', 0, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 5}, {"color": "red", "value": 20}]}))
+    panels.append(stat("Max tx duration", 'max(cnpg_backends_max_tx_duration_seconds{namespace="rejourney"})', 4, y, w=4, h=4, unit="s",
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 30}, {"color": "red", "value": 300}]}))
+    panels.append(stat("Temp files (1h)", 'increase(cnpg_pg_stat_database_temp_files{datname="rejourney",namespace="rejourney"}[1h])', 8, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 10}, {"color": "red", "value": 100}]}))
+    panels.append(stat("Deadlocks (1h)", 'increase(cnpg_pg_stat_database_deadlocks{datname="rejourney",namespace="rejourney"}[1h])', 12, y, w=4, h=4,
+                       thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "red", "value": 1}]}))
+    panels.append(stat("DB commit / sec", 'rate(cnpg_pg_stat_database_xact_commit{datname="rejourney",namespace="rejourney"}[2m])', 16, y, w=4, h=4, unit="ops"))
+    panels.append(stat("DB rollback / sec", 'rate(cnpg_pg_stat_database_xact_rollback{datname="rejourney",namespace="rejourney"}[2m])', 20, y, w=4, h=4, unit="ops"))
+    y += 4
+    panels.append(ts("DB row operations / sec",
+                     [('rate(cnpg_pg_stat_database_tup_inserted{datname="rejourney",namespace="rejourney"}[2m])', "inserted"),
+                      ('rate(cnpg_pg_stat_database_tup_updated{datname="rejourney",namespace="rejourney"}[2m])', "updated"),
+                      ('rate(cnpg_pg_stat_database_tup_deleted{datname="rejourney",namespace="rejourney"}[2m])', "deleted"),
+                      ('rate(cnpg_pg_stat_database_tup_fetched{datname="rejourney",namespace="rejourney"}[2m])', "fetched")],
+                     0, y, w=12, h=8, unit="ops"))
+    panels.append(ts("DB cache and blocks",
+                     [('100 * sum(cnpg_pg_stat_database_blks_hit{datname="rejourney",namespace="rejourney"}) / clamp_min(sum(cnpg_pg_stat_database_blks_hit{datname="rejourney",namespace="rejourney"}) + sum(cnpg_pg_stat_database_blks_read{datname="rejourney",namespace="rejourney"}), 1)', "cache hit %"),
+                      ('rate(cnpg_pg_stat_database_blks_read{datname="rejourney",namespace="rejourney"}[2m])', "blocks read/s")],
+                     12, y, w=12, h=8, unit="short"))
+    y += 8
+
+    panels.append(row("Replay/session consistency", y)); y += 1
+    panels.append(ts("Replay/event lag signals",
+                     [(zero('max(rejourney_ingest_replay_event_gap_recent_replay_ready_zero_event_sessions)'), "replay-ready zero-event"),
+                      (zero('max(rejourney_ingest_replay_event_gap_recent_replay_ready_waiting_event_sessions)'), "replay-ready waiting events"),
+                      (zero('max(rejourney_ingest_replay_event_gap_recent_waiting_event_jobs)'), "waiting event jobs"),
+                      (zero('max(rejourney_queue_health_stale_pending_replay_artifacts)'), "stale pending replay")],
+                     0, y, w=12, h=8, unit="short"))
+    panels.append(ts("Replay-eligible availability",
+                     [(zero('sum(rejourney_sessions_replay_availability_recent_session_count{replay_state="available"})'), "available"),
+                      (zero('sum(rejourney_sessions_replay_availability_recent_session_count{replay_state="not_available"})'), "not available")],
+                     12, y, w=12, h=8, unit="short"))
+    y += 8
+
+    return dashboard(
+        "rejourney-artifact-ingest",
+        "55 — Artifact Ingest Diagnosis",
+        ["app", "ingest", "queues"],
+        panels,
+        refresh="10s",
+        time_from="now-6h",
+    )
 
 # ============================================================
 # 60 — Storage & Backups
@@ -1534,6 +1768,7 @@ dashes = [
     ("30-redis", d_redis()),
     ("40-traefik", d_traefik()),
     ("50-application", d_application()),
+    ("55-artifact-ingest", d_artifact_ingest()),
     ("60-storage", d_storage()),
     ("70-self", d_self()),
     ("80-users", d_users()),

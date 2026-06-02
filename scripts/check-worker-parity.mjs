@@ -26,6 +26,9 @@ const mirroredEnvKeys = {
   'session-lifecycle-worker': [
     'RJ_SESSION_EFFECTS_DELAY_MS',
     'RJ_SESSION_EFFECTS_CONCURRENCY',
+    'RJ_SESSION_EVENT_ROLLUP_DELAY_MS',
+    'RJ_SESSION_EVENT_ROLLUP_CONCURRENCY',
+    'RJ_SESSION_EVENT_ROLLUP_BATCH_SIZE',
   ],
 };
 

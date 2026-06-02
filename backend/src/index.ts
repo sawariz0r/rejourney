@@ -226,6 +226,9 @@ app.get('/health/queue', async (_req, res) => {
             sessionEffectsWaiting: queueHealth.sessionEffectsWaiting,
             sessionEffectsActive: queueHealth.sessionEffectsActive,
             sessionEffectsFailed: queueHealth.sessionEffectsFailed,
+            sessionEventRollupWaiting: queueHealth.sessionEventRollupWaiting,
+            sessionEventRollupActive: queueHealth.sessionEventRollupActive,
+            sessionEventRollupFailed: queueHealth.sessionEventRollupFailed,
             oldestPendingSeconds: queueHealth.oldestPendingAge,
             timestamp: new Date().toISOString(),
         });

@@ -6,6 +6,7 @@
  *   rj-replay-artifacts  — screenshots, hierarchy, rrweb  (was polled from ingest_jobs)
  *   rj-artifact-flush    — Redis-buffered uploads waiting to be written to S3
  *   rj-session-effects   — debounced per-session reconcile/cache effects
+ *   rj-session-event-rollup — per-session event metrics rollup
  *
  * Using jobId = `artifact-{artifactId}` gives natural deduplication:
  * BullMQ will not enqueue a second job for the same artifact while the first
@@ -48,12 +49,17 @@ export type SessionEffectsJobData = {
     sessionId: string;
 };
 
+export type SessionEventRollupJobData = {
+    sessionId: string;
+};
+
 // ─── Queue names ──────────────────────────────────────────────────────────────
 
 export const INGEST_QUEUE_NAME = 'rj-ingest-artifacts';
 export const REPLAY_QUEUE_NAME = 'rj-replay-artifacts';
 export const FLUSH_QUEUE_NAME = 'rj-artifact-flush';
 export const SESSION_EFFECTS_QUEUE_NAME = 'rj-session-effects';
+export const SESSION_EVENT_ROLLUP_QUEUE_NAME = 'rj-session-event-rollup';
 
 const REPLAY_KINDS = new Set(['screenshots', 'hierarchy', 'rrweb']);
 
@@ -90,6 +96,7 @@ let _ingestQueue: Queue<ArtifactJobData> | null = null;
 let _replayQueue: Queue<ArtifactJobData> | null = null;
 let _flushQueue: Queue<ArtifactFlushJobData> | null = null;
 let _sessionEffectsQueue: Queue<SessionEffectsJobData> | null = null;
+let _sessionEventRollupQueue: Queue<SessionEventRollupJobData> | null = null;
 
 const DEFAULT_JOB_OPTIONS = {
     attempts: 5,
@@ -105,6 +112,12 @@ const FLUSH_JOB_OPTIONS = {
 };
 
 const SESSION_EFFECTS_JOB_OPTIONS = {
+    ...DEFAULT_JOB_OPTIONS,
+    attempts: 5,
+    backoff: { type: 'exponential' as const, delay: 1000 },
+};
+
+const SESSION_EVENT_ROLLUP_JOB_OPTIONS = {
     ...DEFAULT_JOB_OPTIONS,
     attempts: 5,
     backoff: { type: 'exponential' as const, delay: 1000 },
@@ -153,6 +166,17 @@ export function getSessionEffectsQueue(): Queue<SessionEffectsJobData> {
         });
     }
     return _sessionEffectsQueue!;
+}
+
+export function getSessionEventRollupQueue(): Queue<SessionEventRollupJobData> {
+    if (!_sessionEventRollupQueue) {
+        const { Queue: BullQueue } = require('bullmq');
+        _sessionEventRollupQueue = new BullQueue(SESSION_EVENT_ROLLUP_QUEUE_NAME, {
+            connection: createBullMQRedisConnection(),
+            defaultJobOptions: SESSION_EVENT_ROLLUP_JOB_OPTIONS,
+        });
+    }
+    return _sessionEventRollupQueue!;
 }
 
 export function getQueueForKind(kind: string): Queue<ArtifactJobData> {
@@ -281,6 +305,17 @@ export async function getFlushQueueCounts(): Promise<BullQueueCounts> {
 
 export async function getSessionEffectsQueueCounts(): Promise<BullQueueCounts> {
     const q = getSessionEffectsQueue();
+    const counts = await q.getJobCounts('waiting', 'active', 'failed', 'delayed');
+    return {
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        failed: counts.failed ?? 0,
+        delayed: counts.delayed ?? 0,
+    };
+}
+
+export async function getSessionEventRollupQueueCounts(): Promise<BullQueueCounts> {
+    const q = getSessionEventRollupQueue();
     const counts = await q.getJobCounts('waiting', 'active', 'failed', 'delayed');
     return {
         waiting: counts.waiting ?? 0,

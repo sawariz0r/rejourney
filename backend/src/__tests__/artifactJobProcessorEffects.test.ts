@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
     downloadFromS3ForArtifactMock,
+    enqueueSessionEventRollupJobMock,
     enqueueSessionEffectsJobMock,
     executeMock,
     limitResults,
@@ -15,6 +16,7 @@ const {
     const txUpdateSetMock = vi.fn();
     return {
         downloadFromS3ForArtifactMock: vi.fn(async () => Buffer.from('{"events":[]}')),
+        enqueueSessionEventRollupJobMock: vi.fn(async () => true),
         enqueueSessionEffectsJobMock: vi.fn(async () => true),
         executeMock: vi.fn(async () => undefined),
         limitResults: [] as any[][],
@@ -101,6 +103,12 @@ vi.mock('../services/hierarchyArtifactCompression.js', () => ({
 
 vi.mock('../services/ingestEventArtifactProcessor.js', () => ({
     processEventsArtifact: processEventsArtifactMock,
+    summarizeEventsArtifact: vi.fn((data: Buffer) => ({
+        endTime: null,
+        eventCount: 0,
+        sizeBytes: data.length,
+        startTime: null,
+    })),
 }));
 
 vi.mock('../services/ingestFaultArtifactProcessors.js', () => ({
@@ -110,6 +118,10 @@ vi.mock('../services/ingestFaultArtifactProcessors.js', () => ({
 
 vi.mock('../services/ingestReplayArtifactProcessor.js', () => ({
     processRecoveredReplayArtifact: processRecoveredReplayArtifactMock,
+}));
+
+vi.mock('../services/sessionEventRollupQueue.js', () => ({
+    enqueueSessionEventRollupJob: enqueueSessionEventRollupJobMock,
 }));
 
 vi.mock('../services/sessionEffectsQueue.js', () => ({
@@ -162,18 +174,20 @@ describe('processArtifactJobFromBullMQ completion effects', () => {
         }]);
     });
 
-    it('defers session effects for event artifacts after marking them ready', async () => {
+    it('defers event metrics rollup for event artifacts after marking them ready', async () => {
         await processArtifactJobFromBullMQ(makeJob('events') as any, {
             maxAttempts: 5,
             workerId: 'worker-1',
         });
 
-        expect(processEventsArtifactMock).toHaveBeenCalledTimes(1);
+        expect(processEventsArtifactMock).not.toHaveBeenCalled();
         expect(txUpdateSetMock).toHaveBeenCalledWith(expect.objectContaining({
+            eventRollupRequestedAt: expect.any(Date),
             sizeBytes: expect.any(Number),
             status: 'ready',
         }));
-        expect(enqueueSessionEffectsJobMock).toHaveBeenCalledWith('session-1');
+        expect(enqueueSessionEventRollupJobMock).toHaveBeenCalledWith('session-1');
+        expect(enqueueSessionEffectsJobMock).not.toHaveBeenCalled();
         expect(reconcileSessionStateMock).not.toHaveBeenCalled();
         expect(runArtifactCompletionEffectsMock).not.toHaveBeenCalled();
     });

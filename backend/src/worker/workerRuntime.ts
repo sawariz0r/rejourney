@@ -1,6 +1,13 @@
 import { pool } from '../db/client.js';
 import { logger } from '../logger.js';
-import { checkQueueHealth, pingWorker, type WorkerName } from '../services/monitoring.js';
+import {
+    buildQueueHealthWorkerMetrics,
+    checkQueueHealth,
+    collectBullQueueCountMetrics,
+    pingWorker,
+    type WorkerMetric,
+    type WorkerName,
+} from '../services/monitoring.js';
 
 type PollingWorkerOptions = {
     heartbeatIntervalMs: number;
@@ -16,9 +23,14 @@ function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function buildQueueHeartbeatMessage(): Promise<string> {
+async function buildQueueHeartbeat(): Promise<{ message: string; metrics: WorkerMetric[] }> {
     const queueHealth = await checkQueueHealth();
-    return `waiting=${queueHealth.pendingJobs},active=${queueHealth.processingJobs},failed=${queueHealth.dlqJobs},replay_waiting=${queueHealth.replayPendingByKind.screenshots + queueHealth.replayPendingByKind.hierarchy + queueHealth.replayPendingByKind.rrweb},session_effects_waiting=${queueHealth.sessionEffectsWaiting},session_effects_active=${queueHealth.sessionEffectsActive},stale_replay_pending=${queueHealth.stalePendingReplayArtifacts}`;
+    const metrics = [
+        ...buildQueueHealthWorkerMetrics(queueHealth),
+        ...await collectBullQueueCountMetrics(),
+    ];
+    const message = `waiting=${queueHealth.pendingJobs},active=${queueHealth.processingJobs},failed=${queueHealth.dlqJobs},replay_waiting=${queueHealth.replayPendingByKind.screenshots + queueHealth.replayPendingByKind.hierarchy + queueHealth.replayPendingByKind.rrweb},session_event_rollup_waiting=${queueHealth.sessionEventRollupWaiting},session_event_rollup_active=${queueHealth.sessionEventRollupActive},session_effects_waiting=${queueHealth.sessionEffectsWaiting},session_effects_active=${queueHealth.sessionEffectsActive},stale_replay_pending=${queueHealth.stalePendingReplayArtifacts}`;
+    return { message, metrics };
 }
 
 export function startPollingWorker(options: PollingWorkerOptions): void {
@@ -31,8 +43,8 @@ export function startPollingWorker(options: PollingWorkerOptions): void {
         lastHeartbeatAt = now;
 
         try {
-            const message = await buildQueueHeartbeatMessage();
-            await pingWorker(options.workerName, 'up', message);
+            const { message, metrics } = await buildQueueHeartbeat();
+            await pingWorker(options.workerName, 'up', message, undefined, metrics);
         } catch (err) {
             logger.debug({ err, workerName: options.workerName }, 'Failed to send heartbeat');
         }

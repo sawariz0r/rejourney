@@ -4,6 +4,10 @@ import {
     queueRecoverableArtifacts,
     recoverStalePendingReplayArtifacts,
 } from '../services/ingestArtifactLifecycle.js';
+import {
+    queuePendingSessionEventRollups,
+    startSessionEventRollupWorker,
+} from '../services/sessionEventRollupQueue.js';
 import { startSessionEffectsWorker } from '../services/sessionEffectsQueue.js';
 import { reconcileDueSessions } from '../services/sessionReconciliation.js';
 import { SESSION_LIFECYCLE_WORKER } from './workerDefinitions.js';
@@ -15,12 +19,16 @@ import { startPollingWorker } from './workerRuntime.js';
 let lastSessionSweepAt = 0;
 
 export function startSessionLifecycleWorker(): void {
+    const sessionEventRollupWorker = startSessionEventRollupWorker();
     const sessionEffectsWorker = startSessionEffectsWorker();
 
     startPollingWorker({
         heartbeatIntervalMs: SESSION_LIFECYCLE_WORKER.heartbeatIntervalMs,
         onShutdown: async () => {
-            await sessionEffectsWorker.close();
+            await Promise.all([
+                sessionEventRollupWorker.close(),
+                sessionEffectsWorker.close(),
+            ]);
         },
         onTick: async () => {
             const now = Date.now();
@@ -32,6 +40,7 @@ export function startSessionLifecycleWorker(): void {
             const recoveredPendingReplay = await recoverStalePendingReplayArtifacts(100);
             const abandoned = await abandonExpiredPendingArtifacts(100);
             const recovered = await queueRecoverableArtifacts(100);
+            const eventRollupsQueued = await queuePendingSessionEventRollups(100);
             const reconciled = await reconcileDueSessions(
                 SESSION_LIFECYCLE_WORKER.reconcileBatchSize,
                 SESSION_LIFECYCLE_WORKER.reconcileMaxBatches,
@@ -41,10 +50,12 @@ export function startSessionLifecycleWorker(): void {
                 recoveredPendingReplay.checked > 0
                 || abandoned > 0
                 || recovered > 0
+                || eventRollupsQueued > 0
                 || reconciled > 0
             ) {
                 logger.info({
                     abandoned,
+                    eventRollupsQueued,
                     recovered,
                     recoveredPendingReplay: recoveredPendingReplay.recovered,
                     stalePendingReplayChecked: recoveredPendingReplay.checked,

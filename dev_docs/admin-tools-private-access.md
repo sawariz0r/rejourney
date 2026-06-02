@@ -39,20 +39,13 @@ Remove or **grey-cloud** (DNS only) these if they still exist:
 - **Real pod/container CPU and RAM usage comes from cAdvisor, not kube-state-metrics or postgres-exporter.** If a dashboard shows object state but no live resource usage, verify the `cadvisor` DaemonSet is healthy and VictoriaMetrics is scraping it.
 - **PostgreSQL dashboards can show mostly `N/A` if `postgres-exporter` cannot connect.** One common failure mode on this cluster is exporter logs showing `pq: SSL is not enabled on the server`; in that case the exporter needs internal non-SSL mode (`PGSSLMODE=disable`) unless Postgres is explicitly configured for SSL.
 - **Best-practice hardening for postgres-exporter:** use a dedicated `postgres-exporter-secret` backed by a read-only `monitoring` DB user with `pg_monitor`, instead of reusing the main app `DATABASE_URL`.
+- **Artifact backlog incidents:** open Grafana `55 — Artifact Ingest Diagnosis` first. `rj-ingest-artifacts` waiting should fall after the backend rollup deploy; if it falls while `rj-session-event-rollup` rises, tune rollup concurrency/batch size rather than adding ingest pods.
 
 ## Grafana setup (first login)
 
 1. Get the admin password: `kubectl get secret grafana-secret -n rejourney -o jsonpath='{.data.admin-password}' | base64 -d`
 2. Login at http://127.0.0.1:3000 with user `admin`
-3. Import dashboards via **Dashboards → Import**:
-
-| Dashboard | ID | Covers |
-|---|---|---|
-| Node Exporter Full | `1860` | CPU, RAM, disk, network |
-| Kubernetes Cluster | `13332` | Pod/deployment health, resource usage |
-| PostgreSQL | `9628` | Connections, query stats, table sizes |
-| Traefik | `17346` | Requests/s, latency, error rate per route |
-| VictoriaMetrics | `10229` | VM internal health |
+3. Rejourney dashboards are provisioned automatically from `k8s/grafana-dashboards.yaml`; imported community dashboards are temporary and cleaned up on deploy.
 
 ## Restart workloads after env change
 

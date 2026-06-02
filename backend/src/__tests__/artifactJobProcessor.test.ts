@@ -9,6 +9,7 @@ const {
     processCrashesArtifactMock,
     processEventsArtifactMock,
     processRecoveredReplayArtifactMock,
+    summarizeEventsArtifactMock,
 } = vi.hoisted(() => ({
     downloadFromS3ForArtifactMock: vi.fn(async () => Buffer.from('{"ok":true}')),
     ensureHierarchyArtifactCompressedMock: vi.fn(async () => ({ sizeBytes: 256 })),
@@ -17,6 +18,12 @@ const {
     processCrashesArtifactMock: vi.fn(async () => undefined),
     processEventsArtifactMock: vi.fn(async () => undefined),
     processRecoveredReplayArtifactMock: vi.fn(async () => undefined),
+    summarizeEventsArtifactMock: vi.fn((data: Buffer) => ({
+        endTime: null,
+        eventCount: 0,
+        sizeBytes: data.length,
+        startTime: null,
+    })),
 }));
 
 vi.mock('../db/s3.js', () => ({
@@ -30,6 +37,7 @@ vi.mock('../services/hierarchyArtifactCompression.js', () => ({
 
 vi.mock('../services/ingestEventArtifactProcessor.js', () => ({
     processEventsArtifact: processEventsArtifactMock,
+    summarizeEventsArtifact: summarizeEventsArtifactMock,
 }));
 
 vi.mock('../services/ingestFaultArtifactProcessors.js', () => ({
@@ -61,10 +69,11 @@ describe('artifactJobProcessor routing', () => {
         ensureHierarchyArtifactCompressedMock.mockResolvedValue({ sizeBytes: 256 });
     });
 
-    it('routes events to the event processor only', async () => {
+    it('summarizes events without running the heavy event processor', async () => {
         await runArtifactProcessorByKind('events', { ...baseContext, job: { ...baseContext.job, kind: 'events' } } as any);
 
-        expect(processEventsArtifactMock).toHaveBeenCalledTimes(1);
+        expect(summarizeEventsArtifactMock).toHaveBeenCalledTimes(1);
+        expect(processEventsArtifactMock).not.toHaveBeenCalled();
         expect(processCrashesArtifactMock).not.toHaveBeenCalled();
         expect(processAnrsArtifactMock).not.toHaveBeenCalled();
         expect(processRecoveredReplayArtifactMock).not.toHaveBeenCalled();

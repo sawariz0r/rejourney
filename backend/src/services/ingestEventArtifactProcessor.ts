@@ -102,6 +102,33 @@ function extractTelemetryEvents(parsedArtifact: any): any[] {
     return [];
 }
 
+export type EventArtifactSummary = {
+    endTime: number | null;
+    eventCount: number;
+    sizeBytes: number;
+    startTime: number | null;
+};
+
+export function summarizeEventsArtifact(data: Buffer): EventArtifactSummary {
+    const payload = parseMaybeGzippedJson(data);
+    const eventsData = extractTelemetryEvents(payload);
+    let earliestClientEventAt: Date | null = null;
+    let latestClientEventAt: Date | null = null;
+
+    for (const event of eventsData) {
+        const eventAt = coerceTimestampToDate(event?.timestamp);
+        earliestClientEventAt = minDate(earliestClientEventAt, eventAt);
+        latestClientEventAt = maxDate(latestClientEventAt, eventAt);
+    }
+
+    return {
+        endTime: latestClientEventAt?.getTime() ?? null,
+        eventCount: eventsData.length,
+        sizeBytes: data.length,
+        startTime: earliestClientEventAt?.getTime() ?? null,
+    };
+}
+
 async function recomputeCanonicalMobileFrustrationCounts(params: {
     sessionId: string;
     projectId: string;
@@ -308,7 +335,15 @@ function capBackgroundSecondsToElapsed(
     return Math.min(backgroundSeconds, elapsedSeconds);
 }
 
-export async function processEventsArtifact(job: any, session: any, metrics: any, projectId: string, data: Buffer, log: any) {
+export async function processEventsArtifact(
+    job: any,
+    session: any,
+    metrics: any,
+    projectId: string,
+    data: Buffer,
+    log: any,
+    options: { recomputeMobileFrustrationCounts?: boolean } = {},
+) {
     const payload = parseMaybeGzippedJson(data);
     const eventsData = payload.events || [];
     const deviceInfo = payload.deviceInfo;
@@ -828,15 +863,19 @@ export async function processEventsArtifact(job: any, session: any, metrics: any
         rageTapCount,
         deadTapCount,
     };
-    const canonicalMobileFrustrationCounts = shouldTrustClientFrustrationCountsForPlatform(session.platform)
+    const canonicalMobileFrustrationCounts = options.recomputeMobileFrustrationCounts === false
         ? null
-        : await recomputeCanonicalMobileFrustrationCounts({
-            sessionId: job.sessionId,
-            projectId,
-            currentArtifactId: job.artifactId,
-            currentEvents: eventsData,
-            log,
-        });
+        : (
+            shouldTrustClientFrustrationCountsForPlatform(session.platform)
+                ? null
+                : await recomputeCanonicalMobileFrustrationCounts({
+                    sessionId: job.sessionId,
+                    projectId,
+                    currentArtifactId: job.artifactId,
+                    currentEvents: eventsData,
+                    log,
+                })
+        );
     const mergedFrustrationCounts = canonicalMobileFrustrationCounts
         ?? mergeEventArtifactFrustrationCounts(existingMetrics, artifactFrustrationCounts);
 
