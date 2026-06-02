@@ -36,20 +36,27 @@ export const NeoButton: React.FC<NeoButtonProps> = ({
         md: "text-sm px-4 py-2 h-10 gap-2",
         lg: "text-base px-6 py-3 h-12 gap-2.5"
     };
+    const iconSizes = {
+        sm: "[&>svg]:!h-3.5 [&>svg]:!w-3.5",
+        md: "[&>svg]:!h-4 [&>svg]:!w-4",
+        lg: "[&>svg]:!h-5 [&>svg]:!w-5"
+    };
+    const directIconClass = `${iconSizes[size]} [&>svg]:shrink-0`;
+    const iconSlotClass = `inline-flex shrink-0 items-center justify-center ${iconSizes[size]} [&>svg]:shrink-0`;
 
     return (
         <button
-            className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+            className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${directIconClass} ${className}`}
             disabled={isLoading || disabled}
             {...props}
         >
             {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="animate-spin" />
             ) : (
                 <>
-                    {leftIcon}
+                    {leftIcon && <span className={iconSlotClass}>{leftIcon}</span>}
                     {children}
-                    {rightIcon}
+                    {rightIcon && <span className={iconSlotClass}>{rightIcon}</span>}
                 </>
             )}
         </button>

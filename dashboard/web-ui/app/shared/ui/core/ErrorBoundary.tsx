@@ -27,6 +27,9 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       const isDev = import.meta.env.DEV;
+      const message = isDev
+        ? this.state.error?.message || 'An unexpected error occurred'
+        : 'An unexpected error occurred. Please reload the page or contact support if it keeps happening.';
       const fallbackClassName = this.props.fallbackClassName || 'min-h-screen flex items-center justify-center bg-background p-8';
 
       return (
@@ -35,7 +38,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="border-2 border-red-500 bg-red-50 p-6 rounded-lg">
               <h1 className="text-xl font-bold text-red-800 mb-4">Something went wrong</h1>
               <p className="text-sm text-red-700 mb-4">
-                {this.state.error?.message || 'An unexpected error occurred'}
+                {message}
               </p>
               {isDev && this.state.error?.stack && (
                 <details className="text-xs text-red-600 mb-4">

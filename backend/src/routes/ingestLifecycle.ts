@@ -21,9 +21,15 @@ import { hasStoredClosedTiming, resolveAuthoritativeSessionClose, selectMaxObser
 import { loadSuccessorSessionStartedAt } from '../services/sessionTimingQuery.js';
 import { markSessionIngestActivity, reconcileSessionState } from '../services/sessionReconciliation.js';
 import { isSessionIngestImmutable } from '../services/sessionIngestImmutability.js';
-import { getRedisDiagnosticsForLog, invalidateSessionExistsCache } from '../db/redis.js';
+import { getRedisDiagnosticsForLog, invalidateSessionEndpointCache, invalidateSessionExistsCache } from '../db/redis.js';
 
 const router = Router();
+
+function invalidateIngestHotPathCaches(projectId: string, sessionId: string): void {
+    invalidateSessionExistsCache(projectId, sessionId).catch(() => {});
+    invalidateSessionEndpointCache(projectId, sessionId).catch(() => {});
+}
+
 
 router.post(
     '/session/end',
@@ -82,6 +88,7 @@ router.post(
         const session = lifecycle.session;
 
         if (isSessionIngestImmutable(session)) {
+            invalidateIngestHotPathCaches(session.projectId, session.id);
             log.info(
                 {
                     event: 'ingest.session_end_idempotent',
@@ -144,6 +151,7 @@ router.post(
         });
 
         if (preserveStoredCloseTiming) {
+            invalidateIngestHotPathCaches(session.projectId, session.id);
             log.info({
                 preservedEndedAt: session.endedAt.toISOString(),
                 preservedDurationSeconds: session.durationSeconds,
@@ -211,9 +219,7 @@ router.post(
         });
         await reconcileSessionState(session.id);
 
-        // Invalidate the session existence cache so closed sessions don't get
-        // erroneously treated as active on the next presign attempt.
-        invalidateSessionExistsCache(session.projectId, session.id).catch(() => {});
+        invalidateIngestHotPathCaches(session.projectId, session.id);
 
         log.info({
             durationSeconds: resolvedClose.durationSeconds,

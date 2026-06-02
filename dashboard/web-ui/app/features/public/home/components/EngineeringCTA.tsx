@@ -3,6 +3,8 @@ import { ArrowRight, Terminal } from 'lucide-react';
 import { Link, useLocation } from 'react-router';
 import { getLocalizedPublicPath, getMarketingLocaleFromPathname, type MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
+const CTA_ICON_CLASS = 'h-5 w-5 shrink-0';
+
 export const EngineeringCTA: React.FC<{ copy: MarketingHomeCopy['engineeringCta'] }> = ({ copy }) => {
     const location = useLocation();
     const locale = getMarketingLocaleFromPathname(location.pathname);
@@ -48,7 +50,7 @@ export const EngineeringCTA: React.FC<{ copy: MarketingHomeCopy['engineeringCta'
                             <button
                                 className="flex w-full items-center justify-center gap-3 border-2 border-black bg-black px-4 py-4 text-xs font-black uppercase tracking-widest text-white shadow-[5px_5px_0px_0px_rgba(93,173,236,1)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#5dadec] hover:text-black hover:shadow-neo-lg active:translate-y-0 sm:w-auto sm:px-8 sm:text-base"
                             >
-                                <Terminal size={20} strokeWidth={3} />
+                                <Terminal className={CTA_ICON_CLASS} strokeWidth={3} aria-hidden />
                                 {copy.primary}
                             </button>
                         </Link>
@@ -58,7 +60,7 @@ export const EngineeringCTA: React.FC<{ copy: MarketingHomeCopy['engineeringCta'
                                 className="flex w-full items-center justify-center gap-3 border-2 border-black bg-[#fef08a] px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-neo transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-neo-lg active:translate-y-0 sm:w-auto sm:px-8 sm:text-base"
                             >
                                 {copy.secondary}
-                                <ArrowRight size={20} strokeWidth={3} />
+                                <ArrowRight className={CTA_ICON_CLASS} strokeWidth={3} aria-hidden />
                             </button>
                         </Link>
                     </div>

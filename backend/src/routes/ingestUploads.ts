@@ -4,9 +4,14 @@ import { and, eq } from 'drizzle-orm';
 import { db, projects, sessionMetrics, sessions } from '../db/client.js';
 import { logger } from '../logger.js';
 import {
+    getIngestProjectCache,
+    getIngestSessionCache,
     getIdempotencyStatus,
     setIdempotencyStatus,
     getSessionExistsCache,
+    invalidateSessionExistsCache,
+    setIngestProjectCache,
+    setIngestSessionCache,
     setSessionExistsCache,
 } from '../db/redis.js';
 import { generateS3Key, getEndpointForSession } from '../db/s3.js';
@@ -118,21 +123,23 @@ async function resolveReplayBillingGate(teamId: string): Promise<ReplayBillingGa
 async function findExistingProjectSession(
     projectId: string,
     sessionId?: string | null,
-    options: { hydrateCacheHit?: boolean } = {},
+    _options: { hydrateCacheHit?: boolean } = {},
 ) {
     if (!sessionId) {
         return null;
     }
 
-    // Fast path: Redis existence flag avoids a DB round-trip for every presign
-    // after the first. We cache "this sessionId is valid for this projectId" for
-    // 1 hour — subsequent chunks of the same session all hit Redis instead of DB.
-    const cachedExists = await getSessionExistsCache(projectId, sessionId);
-    if (cachedExists && !options.hydrateCacheHit) {
-        // Return a minimal stub — callers only use this to skip billing/limit checks.
-        // ensureIngestSession will fetch (or reuse) the full row via its own logic.
-        return { id: sessionId, projectId } as any;
+    const cachedSession = await getIngestSessionCache(projectId, sessionId);
+    if (cachedSession) {
+        return {
+            ...cachedSession,
+            __ingestSessionCacheHit: true,
+        } as any;
     }
+
+    // Retain the legacy existence check for observability/backward compatibility,
+    // but hydrate the row once after deploy so repeat presigns use the full cache.
+    const cachedExists = await getSessionExistsCache(projectId, sessionId);
 
     const [session] = await db
         .select()
@@ -141,11 +148,32 @@ async function findExistingProjectSession(
         .limit(1);
 
     if (session) {
-        // Populate cache for all future chunks of this session (fire-and-forget)
+        setIngestSessionCache(projectId, session as unknown as Record<string, unknown>).catch(() => {});
         setSessionExistsCache(projectId, sessionId).catch(() => {});
+    } else if (cachedExists) {
+        invalidateSessionExistsCache(projectId, sessionId).catch(() => {});
     }
 
     return session ?? null;
+}
+
+async function loadProjectForIngest(projectId: string) {
+    const cachedProject = await getIngestProjectCache(projectId);
+    if (cachedProject) {
+        return cachedProject as any;
+    }
+
+    const [project] = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, projectId))
+        .limit(1);
+
+    if (project) {
+        setIngestProjectCache(projectId, project as unknown as Record<string, unknown>).catch(() => {});
+    }
+
+    return project ?? null;
 }
 
 router.post(
@@ -210,7 +238,7 @@ router.post(
         // Run the byte-budget check, project lookup, and session lookup in parallel —
         // all three are independent and together they were the first sequential wall
         // of DB round-trips on this hot path.
-        const [, [project], existingSession] = await Promise.all([
+        const [, project, existingSession] = await Promise.all([
             enforceIngestByteBudget({
                 projectId,
                 deviceId: deviceAuthId,
@@ -218,7 +246,7 @@ router.post(
                 bytes: requestedSizeBytes,
                 endpoint: 'presign',
             }),
-            db.select().from(projects).where(eq(projects.id, projectId)).limit(1),
+            loadProjectForIngest(projectId),
             findExistingProjectSession(projectId, providedSessionId),
         ]);
 
@@ -301,6 +329,7 @@ router.post(
         const endpoint = await getEndpointForSession(session.id, projectId);
 
         const artifact = await registerPendingArtifact({
+            projectId,
             sessionId: session.id,
             kind,
             s3ObjectKey: s3Key,
@@ -308,6 +337,7 @@ router.post(
             clientUploadId: batchId,
             declaredSizeBytes: requestedSizeBytes,
             timestamp: Date.now(),
+            prefetchedSession: session,
         });
         const presignedUrl = buildArtifactUploadRelayUrl({
             artifactId: artifact.id,
@@ -493,7 +523,7 @@ router.post(
         }
 
         const deviceId = extractDeviceIdFromUploadToken(req);
-        const [, [project], existingSession] = await Promise.all([
+        const [, project, existingSession] = await Promise.all([
             enforceIngestByteBudget({
                 projectId,
                 deviceId,
@@ -501,7 +531,7 @@ router.post(
                 bytes: requestedSizeBytes,
                 endpoint: 'segment/presign',
             }),
-            db.select().from(projects).where(eq(projects.id, projectId)).limit(1),
+            loadProjectForIngest(projectId),
             findExistingProjectSession(projectId, data.sessionId, { hydrateCacheHit: true }),
         ]);
 
@@ -709,6 +739,7 @@ router.post(
             startTime: startTimeInt,
             endTime: endTimeInt,
             frameCount: Number.isFinite(Number(data.eventCount)) ? Number(data.eventCount) : null,
+            prefetchedSession: session,
         });
 
         if (preparation.action === 'skip') {
@@ -859,7 +890,7 @@ router.post(
         // Project lookup runs in parallel with the idempotency Redis check below — but
         // we need the project before we can check recordingEnabled, so kick it off early
         // and await it after the idempotency fast-paths.
-        const projectPromise = db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+        const projectPromise = loadProjectForIngest(projectId);
 
         const idempotencyKey = req.headers['idempotency-key'] as string;
         if (idempotencyKey) {
@@ -902,7 +933,7 @@ router.post(
 
         // Byte-budget check, project resolution, and session lookup are all independent
         // — run them in parallel to collapse three serial round-trips into one wall-clock wait.
-        const [, [project], existingSession] = await Promise.all([
+        const [, project, existingSession] = await Promise.all([
             enforceIngestByteBudget({
                 projectId,
                 deviceId: segmentDeviceId,
@@ -1129,6 +1160,7 @@ router.post(
             startTime: startTimeInt,
             endTime: endTimeInt,
             frameCount: data.frameCount || null,
+            prefetchedSession: session,
         });
         if (preparation.action === 'skip') {
             if (idempotencyKey) {

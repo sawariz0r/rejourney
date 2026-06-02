@@ -5,6 +5,7 @@ import type { MarketingHomeCopy, MarketingLocale } from '~/shared/lib/internatio
 
 const LIVE_DEMO_PATH = '/demo/general';
 const RAINDROP_LOGO_PATH = '/rejourneyIcon-removebg-preview.png';
+const CTA_ICON_CLASS = 'h-5 w-5 shrink-0';
 
 const ProductDemoPreview: React.FC = () => (
     <div className="relative mx-auto mt-9 w-full overflow-hidden border-2 border-black bg-white shadow-[10px_10px_0_0_rgba(0,0,0,1)] sm:mt-10" dir="ltr">
@@ -102,14 +103,14 @@ export const Hero: React.FC<{ copy: HeroCopy; homeCopy: MarketingHomeCopy['hero'
                             className="inline-flex w-full items-center justify-center gap-3 border-2 border-black bg-[#16a34a] px-7 py-4 text-center text-base font-black text-white shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] transition-all hover:-translate-y-0.5 hover:bg-[#15803d] hover:shadow-[7px_7px_0px_0px_rgba(0,0,0,1)] sm:w-auto sm:px-10"
                         >
                             Get started $0
-                            <ArrowRight size={19} strokeWidth={3} />
+                            <ArrowRight className={CTA_ICON_CLASS} strokeWidth={3} aria-hidden />
                         </Link>
                         <Link
                             to={LIVE_DEMO_PATH}
                             className="inline-flex w-full items-center justify-center gap-3 border-2 border-black bg-slate-950 px-7 py-4 text-center text-base font-black text-white shadow-[5px_5px_0px_0px_rgba(93,173,236,1)] transition-all hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-[7px_7px_0px_0px_rgba(93,173,236,1)] sm:w-auto sm:px-10"
                         >
                             Live demo
-                            <ArrowRight size={19} strokeWidth={3} />
+                            <ArrowRight className={CTA_ICON_CLASS} strokeWidth={3} aria-hidden />
                         </Link>
                     </div>
                 </div>

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     logger: {
         debug: vi.fn(),
         error: vi.fn(),
+        info: vi.fn(),
         warn: vi.fn(),
     },
     mockS3Send: vi.fn(),
@@ -35,6 +36,11 @@ vi.mock('../db/client.js', () => ({
 
 vi.mock('../db/schema.js', () => ({
     storageEndpoints: mocks.storageEndpoints,
+}));
+
+vi.mock('../db/redis.js', () => ({
+    getEndpointByIdCache: vi.fn(async () => null),
+    setEndpointByIdCache: vi.fn(async () => undefined),
 }));
 
 vi.mock('../services/crypto.js', () => ({

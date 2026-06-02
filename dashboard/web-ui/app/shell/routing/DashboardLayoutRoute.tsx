@@ -137,6 +137,7 @@ export default function DashboardLayout() {
 
 export function ErrorBoundary() {
     const error = useRouteError();
+    const isDev = import.meta.env.DEV;
 
     if (isRouteErrorResponse(error) && error.status === 503) {
         return (
@@ -153,7 +154,7 @@ export function ErrorBoundary() {
 
     const message = isRouteErrorResponse(error)
         ? error.statusText || `Dashboard error ${error.status}`
-        : error instanceof Error
+        : isDev && error instanceof Error
             ? error.message
             : "An unexpected dashboard error occurred.";
 

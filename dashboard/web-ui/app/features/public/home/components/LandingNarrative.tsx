@@ -17,6 +17,10 @@ import {
 } from 'lucide-react';
 import type { MarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 
+const CONTROL_ICON_CLASS = 'h-4 w-4 shrink-0';
+const CTA_ICON_CLASS = 'h-4 w-4 shrink-0';
+const STORY_ICON_CLASS = 'h-[22px] w-[22px] shrink-0';
+
 const productStories = [
     {
         copyIndex: 0,
@@ -162,8 +166,8 @@ const LandingFaq: React.FC<{ copy: MarketingHomeCopy['narrative']['faq']; dir?: 
                                 </span>
                                 <span className="shrink-0 border-2 border-black p-1">
                                     {open === i
-                                        ? <Minus size={16} strokeWidth={3} />
-                                        : <Plus size={16} strokeWidth={3} />
+                                        ? <Minus className={CONTROL_ICON_CLASS} strokeWidth={3} aria-hidden />
+                                        : <Plus className={CONTROL_ICON_CLASS} strokeWidth={3} aria-hidden />
                                     }
                                 </span>
                             </button>
@@ -212,7 +216,7 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
                             className="inline-flex w-full items-center justify-center gap-2 border-2 border-black bg-[#fef08a] px-5 py-3 text-sm font-black uppercase text-black shadow-neo transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#67e8f9] hover:shadow-neo-lg active:translate-x-0 active:translate-y-0 active:shadow-none sm:w-auto sm:px-6 sm:py-4"
                         >
                             {copy.demoCta}
-                            <ArrowRight size={17} strokeWidth={3} />
+                            <ArrowRight className={CTA_ICON_CLASS} strokeWidth={3} aria-hidden />
                         </Link>
                     </div>
 
@@ -238,7 +242,7 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
                                     </div>
                                     <div className="flex min-w-0 flex-col justify-center p-5 sm:p-8 lg:p-12">
                                         <div className={`mb-6 grid h-12 w-12 shrink-0 place-items-center border-2 border-black ${story.accent} shadow-neo-sm`}>
-                                            <Icon size={22} strokeWidth={2.7} />
+                                            <Icon className={STORY_ICON_CLASS} strokeWidth={2.7} aria-hidden />
                                         </div>
                                         <p className="mb-3 text-[11px] font-black uppercase text-slate-400">{story.eyebrow}</p>
                                         <h3 className="max-w-xl break-words text-2xl font-black uppercase leading-tight tracking-tight sm:text-4xl">

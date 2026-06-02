@@ -84,7 +84,7 @@ spec:
     kind: Deployment
     name: ingest-worker
   minReplicas: 5
-  maxReplicas: 12
+  maxReplicas: 16
   metrics:
     - type: Resource
       resource:

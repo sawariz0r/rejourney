@@ -652,28 +652,30 @@ export const RecordingsList: React.FC = () => {
         </DashboardPageHeader>
 
         {/* Search & Controls Row */}
-        <div className="border-b border-slate-200 bg-white/90 px-4 py-3 sm:px-6">
-          <div className="flex flex-col gap-2 max-w-[1800px] mx-auto sm:flex-row sm:items-center">
-            <div className="relative flex-1 group min-w-0">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-blue-600" />
+        <div className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="group relative min-w-0 sm:flex-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center text-slate-400 transition-colors group-focus-within:text-[#2563eb]">
+                <Search className="h-4 w-4 shrink-0" />
+              </span>
               <input
                 type="text"
                 placeholder="Search session ID, UUID, fingerprint..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-10 w-full rounded-[8px] border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm font-medium text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                className="h-10 w-full rounded-md border border-slate-300 bg-white py-2 pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:font-semibold placeholder:text-slate-400 focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/15"
               />
             </div>
 
-            <div className="flex items-center gap-2 sm:ml-auto">
+            <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
               <button
                 onClick={handleQueryButtonClick}
-                className={`relative flex h-10 flex-1 items-center justify-center gap-1.5 rounded-[8px] border px-3 text-sm font-semibold shadow-sm transition whitespace-nowrap sm:flex-initial ${showQueryBuilder || totalConditions > 0
+                className={`relative flex h-10 w-full min-w-[7.5rem] items-center justify-center gap-2 rounded-md border px-3 text-sm font-bold shadow-sm transition whitespace-nowrap sm:w-auto ${showQueryBuilder || totalConditions > 0
                   ? 'border-slate-950 bg-slate-950 text-white'
                   : 'border-slate-300 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-slate-950'
                   }`}
               >
-                {showQueryBuilder ? <ChevronUp className="h-3.5 w-3.5" /> : <Filter className="h-3.5 w-3.5" />}
+                {showQueryBuilder ? <ChevronUp className="h-4 w-4 shrink-0" /> : <Filter className="h-4 w-4 shrink-0" />}
                 {showQueryBuilder ? 'Hide query' : 'Query'}
                 {totalConditions > 0 && (
                   <span className="ml-1 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-950">

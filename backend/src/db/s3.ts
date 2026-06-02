@@ -131,6 +131,8 @@ function resolveInternalEndpointUrl(endpoint: StorageEndpoint): string {
 
 // Cache endpoints by projectId (null key = global default)
 const endpointCache = new Map<string | null, CachedEndpoint>();
+const endpointByIdCache = new Map<string, CachedEndpoint>();
+const sessionEndpointCache = new Map<string, CachedEndpoint>();
 
 // Cache S3 clients by endpoint ID
 const s3ClientPool = new Map<string, S3ClientEntry>();
@@ -139,6 +141,34 @@ let backupR2DeletionTarget: ExternalS3DeletionTarget | null | undefined;
 // =============================================================================
 // Endpoint Management
 // =============================================================================
+
+const ENDPOINT_MEMORY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function getFreshCachedEndpoint(cache: Map<string, CachedEndpoint>, key: string): StorageEndpoint | null {
+    const cached = cache.get(key);
+    if (!cached) return null;
+    if (cached.expiresAt > Date.now()) return cached.endpoint;
+    cache.delete(key);
+    return null;
+}
+
+function rememberEndpoint(endpoint: StorageEndpoint, projectId?: string | null): void {
+    const entry = { endpoint, expiresAt: Date.now() + ENDPOINT_MEMORY_CACHE_TTL_MS };
+    endpointByIdCache.set(endpoint.id, entry);
+    if (projectId !== undefined) {
+        endpointCache.set(projectId, entry);
+    }
+}
+
+function sessionEndpointMemoryKey(projectId: string, sessionId: string): string {
+    return `${projectId}:${sessionId}`;
+}
+
+function rememberSessionEndpoint(projectId: string, sessionId: string, endpoint: StorageEndpoint): void {
+    const entry = { endpoint, expiresAt: Date.now() + ENDPOINT_MEMORY_CACHE_TTL_MS };
+    sessionEndpointCache.set(sessionEndpointMemoryKey(projectId, sessionId), entry);
+    endpointByIdCache.set(endpoint.id, entry);
+}
 
 /**
  * Get storage endpoint for a project with weighted load balancing.
@@ -155,10 +185,17 @@ export async function getEndpointForProject(projectId: string): Promise<StorageE
     const { storageEndpoints } = await import('./schema.js');
     const { getEndpointCache, setEndpointCache } = await import('./redis.js');
 
+    const memoryCached = getFreshCachedEndpoint(endpointCache as Map<string, CachedEndpoint>, projectId);
+    if (memoryCached) {
+        return memoryCached;
+    }
+
     // Fast path: Redis cache hit
     const cached = await getEndpointCache(projectId);
     if (cached) {
-        return cached as unknown as StorageEndpoint;
+        const endpoint = cached as unknown as StorageEndpoint;
+        rememberEndpoint(endpoint, projectId);
+        return endpoint;
     }
 
     // Get all active non-shadow endpoints for this project
@@ -192,6 +229,7 @@ export async function getEndpointForProject(projectId: string): Promise<StorageE
     // Single endpoint - no load balancing needed
     if (endpoints.length === 1) {
         const endpoint = endpoints[0] as StorageEndpoint;
+        rememberEndpoint(endpoint, projectId);
         setEndpointCache(projectId, endpoint as unknown as Record<string, unknown>).catch(() => {});
         return endpoint;
     }
@@ -203,6 +241,7 @@ export async function getEndpointForProject(projectId: string): Promise<StorageE
     // to the same endpoint within a 10-minute window — this is intentional and safe
     // because the endpointId is stored on each artifact at creation time.
     const selected = selectWeightedRandom(endpoints as StorageEndpoint[]);
+    rememberEndpoint(selected, projectId);
     setEndpointCache(projectId, selected as unknown as Record<string, unknown>).catch(() => {});
     return selected;
 }
@@ -237,6 +276,23 @@ export async function getEndpointForSession(
 ): Promise<StorageEndpoint> {
     const { db } = await import('./client.js');
     const { recordingArtifacts } = await import('./schema.js');
+    const {
+        getSessionEndpointCache,
+        setSessionEndpointCache,
+    } = await import('./redis.js');
+
+    const memoryKey = sessionEndpointMemoryKey(projectId, sessionId);
+    const memoryCached = getFreshCachedEndpoint(sessionEndpointCache, memoryKey);
+    if (memoryCached) {
+        return memoryCached;
+    }
+
+    const redisCached = await getSessionEndpointCache(projectId, sessionId);
+    if (redisCached) {
+        const endpoint = redisCached as unknown as StorageEndpoint;
+        rememberSessionEndpoint(projectId, sessionId, endpoint);
+        return endpoint;
+    }
 
     const [existing] = await db
         .select({ endpointId: recordingArtifacts.endpointId })
@@ -249,21 +305,42 @@ export async function getEndpointForSession(
 
     if (existing?.endpointId) {
         const endpoint = await getEndpointById(existing.endpointId);
-        if (endpoint) return endpoint;
+        if (endpoint) {
+            rememberSessionEndpoint(projectId, sessionId, endpoint);
+            setSessionEndpointCache(projectId, sessionId, endpoint as unknown as Record<string, unknown>).catch(() => {});
+            return endpoint;
+        }
     }
 
-    return getEndpointForProject(projectId);
+    const endpoint = await getEndpointForProject(projectId);
+    rememberSessionEndpoint(projectId, sessionId, endpoint);
+    setSessionEndpointCache(projectId, sessionId, endpoint as unknown as Record<string, unknown>).catch(() => {});
+    return endpoint;
 }
 
 /**
  * Get storage endpoint by ID (for downloads from specific location)
  */
 export async function getEndpointById(endpointId: string): Promise<StorageEndpoint | null> {
+    const cachedById = getFreshCachedEndpoint(endpointByIdCache, endpointId);
+    if (cachedById) {
+        return cachedById;
+    }
+
     // Check all caches first
     for (const [, cached] of endpointCache) {
         if (cached.endpoint.id === endpointId && cached.expiresAt > Date.now()) {
+            endpointByIdCache.set(endpointId, cached);
             return cached.endpoint;
         }
+    }
+
+    const { getEndpointByIdCache, setEndpointByIdCache } = await import('./redis.js');
+    const redisCached = await getEndpointByIdCache(endpointId);
+    if (redisCached) {
+        const endpoint = redisCached as unknown as StorageEndpoint;
+        rememberEndpoint(endpoint);
+        return endpoint;
     }
 
     const { db } = await import('./client.js');
@@ -274,6 +351,11 @@ export async function getEndpointById(endpointId: string): Promise<StorageEndpoi
         .from(storageEndpoints)
         .where(eq(storageEndpoints.id, endpointId))
         .limit(1);
+
+    if (endpoint) {
+        rememberEndpoint(endpoint as StorageEndpoint);
+        setEndpointByIdCache(endpointId, endpoint as unknown as Record<string, unknown>).catch(() => {});
+    }
 
     return endpoint as StorageEndpoint | null;
 }

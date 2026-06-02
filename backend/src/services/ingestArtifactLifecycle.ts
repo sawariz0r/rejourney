@@ -17,6 +17,7 @@ import {
 } from './artifactBullQueue.js';
 
 type PendingArtifactParams = {
+    projectId?: string;
     sessionId: string;
     kind: string;
     s3ObjectKey: string;
@@ -27,6 +28,7 @@ type PendingArtifactParams = {
     startTime?: number | null;
     endTime?: number | null;
     frameCount?: number | null;
+    prefetchedSession?: any;
 };
 
 type CompleteArtifactParams = {
@@ -302,7 +304,17 @@ export async function prepareReplayArtifactForUpload(
 }
 
 export async function registerPendingArtifact(params: PendingArtifactParams) {
-    const [guardSession] = await db.select().from(sessions).where(eq(sessions.id, params.sessionId)).limit(1);
+    let guardSession = (
+        params.prefetchedSession?.id === params.sessionId
+        && (!params.projectId || params.prefetchedSession?.projectId === params.projectId)
+    )
+        ? params.prefetchedSession
+        : null;
+
+    if (!guardSession) {
+        [guardSession] = await db.select().from(sessions).where(eq(sessions.id, params.sessionId)).limit(1);
+    }
+
     if (!guardSession) {
         throw ApiError.internal('Session not found for artifact registration');
     }

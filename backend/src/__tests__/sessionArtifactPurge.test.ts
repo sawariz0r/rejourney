@@ -50,6 +50,8 @@ vi.mock('../db/client.js', () => ({
 
 vi.mock('../db/redis.js', () => ({
     getRedis: () => mocks.mockRedis,
+    invalidateSessionEndpointCache: vi.fn(async () => undefined),
+    invalidateSessionExistsCache: vi.fn(async () => undefined),
 }));
 
 vi.mock('../db/s3.js', () => ({

@@ -514,19 +514,63 @@ export async function invalidateSessionLimitCache(
 }
 
 // =============================================================================
-// Session existence cache
+// Session hot-path caches
 //
 // findExistingProjectSession() queries the same sessions row on every presign
 // call. A typical session uploads 50-200 chunks, each requiring a presign —
-// that's 50-200 identical PK lookups. We only need to know "does this session
-// exist for this project?" — the actual row is fetched once inside
-// ensureIngestSession. Cache a simple existence flag for 1 hour.
+// that's 50-200 identical PK lookups. Keep a short-lived hydrated row for the
+// presign hot path, plus the legacy existence flag used by older code paths.
 // =============================================================================
 
 const SESSION_EXISTS_CACHE_TTL_SECONDS = 3600; // 1 hour
+const INGEST_SESSION_CACHE_TTL_SECONDS = 300; // 5 minutes
+const INGEST_PROJECT_CACHE_TTL_SECONDS = 30; // 30 seconds
+
+const CACHED_DATE_FIELDS = new Set([
+    'acceptedAt',
+    'billingCycleAnchor',
+    'createdAt',
+    'deletedAt',
+    'endedAt',
+    'explicitEndedAt',
+    'expiresAt',
+    'finalizedAt',
+    'lastIngestActivityAt',
+    'lastUsedAt',
+    'paymentFailedAt',
+    'recordingDeletedAt',
+    'replayQuotaCountedAt',
+    'startedAt',
+    'stripeCurrentPeriodEnd',
+    'stripeCurrentPeriodStart',
+    'updatedAt',
+]);
+
+function reviveCachedRecord(raw: string): Record<string, unknown> | null {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(parsed)) {
+        if (!CACHED_DATE_FIELDS.has(key) || typeof value !== 'string') {
+            continue;
+        }
+
+        const date = new Date(value);
+        if (Number.isFinite(date.getTime())) {
+            parsed[key] = date;
+        }
+    }
+    return parsed;
+}
 
 function sessionExistsCacheKey(projectId: string, sessionId: string): string {
     return `ingest:session:${projectId}:${sessionId}`;
+}
+
+function ingestSessionCacheKey(projectId: string, sessionId: string): string {
+    return `ingest:session:row:${projectId}:${sessionId}`;
+}
+
+function ingestProjectCacheKey(projectId: string): string {
+    return `ingest:project:${projectId}`;
 }
 
 export async function getSessionExistsCache(projectId: string, sessionId: string): Promise<boolean> {
@@ -555,6 +599,52 @@ export async function invalidateSessionExistsCache(projectId: string, sessionId:
         await redisClient.del(sessionExistsCacheKey(projectId, sessionId));
     } catch (err) {
         logRedisOperationFailed('invalidate_session_exists_cache', err, { projectId });
+    }
+}
+
+export async function getIngestSessionCache(projectId: string, sessionId: string): Promise<Record<string, unknown> | null> {
+    const redisClient = getRedis();
+    try {
+        const raw = await redisClient.get(ingestSessionCacheKey(projectId, sessionId));
+        return raw ? reviveCachedRecord(raw) : null;
+    } catch (err) {
+        logRedisOperationFailed('get_ingest_session_cache', err, { projectId });
+        return null;
+    }
+}
+
+export async function setIngestSessionCache(projectId: string, session: Record<string, unknown>): Promise<void> {
+    const sessionId = typeof session.id === 'string' ? session.id : null;
+    if (!sessionId) return;
+
+    const redisClient = getRedis();
+    try {
+        const pipeline = redisClient.pipeline();
+        pipeline.setex(ingestSessionCacheKey(projectId, sessionId), INGEST_SESSION_CACHE_TTL_SECONDS, JSON.stringify(session));
+        pipeline.setex(sessionExistsCacheKey(projectId, sessionId), SESSION_EXISTS_CACHE_TTL_SECONDS, '1');
+        await pipeline.exec();
+    } catch (err) {
+        logRedisOperationFailed('set_ingest_session_cache', err, { projectId });
+    }
+}
+
+export async function getIngestProjectCache(projectId: string): Promise<Record<string, unknown> | null> {
+    const redisClient = getRedis();
+    try {
+        const raw = await redisClient.get(ingestProjectCacheKey(projectId));
+        return raw ? reviveCachedRecord(raw) : null;
+    } catch (err) {
+        logRedisOperationFailed('get_ingest_project_cache', err, { projectId });
+        return null;
+    }
+}
+
+export async function setIngestProjectCache(projectId: string, project: Record<string, unknown>): Promise<void> {
+    const redisClient = getRedis();
+    try {
+        await redisClient.setex(ingestProjectCacheKey(projectId), INGEST_PROJECT_CACHE_TTL_SECONDS, JSON.stringify(project));
+    } catch (err) {
+        logRedisOperationFailed('set_ingest_project_cache', err, { projectId });
     }
 }
 
@@ -591,6 +681,65 @@ export async function setEndpointCache(projectId: string, endpoint: Record<strin
         await redisClient.setex(endpointCacheKey(projectId), ENDPOINT_CACHE_TTL_SECONDS, JSON.stringify(endpoint));
     } catch (err) {
         logRedisOperationFailed('set_endpoint_cache', err, { projectId });
+    }
+}
+
+function sessionEndpointCacheKey(projectId: string, sessionId: string): string {
+    return `endpoint:session:${projectId}:${sessionId}`;
+}
+
+function endpointByIdCacheKey(endpointId: string): string {
+    return `endpoint:id:${endpointId}`;
+}
+
+export async function getSessionEndpointCache(projectId: string, sessionId: string): Promise<Record<string, unknown> | null> {
+    const redisClient = getRedis();
+    try {
+        const raw = await redisClient.get(sessionEndpointCacheKey(projectId, sessionId));
+        if (!raw) return null;
+        return JSON.parse(raw) as Record<string, unknown>;
+    } catch (err) {
+        logRedisOperationFailed('get_session_endpoint_cache', err, { projectId });
+        return null;
+    }
+}
+
+export async function setSessionEndpointCache(projectId: string, sessionId: string, endpoint: Record<string, unknown>): Promise<void> {
+    const redisClient = getRedis();
+    try {
+        await redisClient.setex(sessionEndpointCacheKey(projectId, sessionId), ENDPOINT_CACHE_TTL_SECONDS, JSON.stringify(endpoint));
+    } catch (err) {
+        logRedisOperationFailed('set_session_endpoint_cache', err, { projectId });
+    }
+}
+
+export async function invalidateSessionEndpointCache(projectId: string, sessionId: string): Promise<void> {
+    const redisClient = getRedis();
+    try {
+        await redisClient.del(sessionEndpointCacheKey(projectId, sessionId));
+    } catch (err) {
+        logRedisOperationFailed('invalidate_session_endpoint_cache', err, { projectId });
+    }
+}
+
+export async function getEndpointByIdCache(endpointId: string): Promise<Record<string, unknown> | null> {
+    const redisClient = getRedis();
+    try {
+        const raw = await redisClient.get(endpointByIdCacheKey(endpointId));
+        if (!raw) return null;
+        return JSON.parse(raw) as Record<string, unknown>;
+    } catch (err) {
+        logRedisOperationFailed('get_endpoint_by_id_cache', err, { endpointId });
+        return null;
+    }
+}
+
+export async function setEndpointByIdCache(endpointId: string, endpoint: Record<string, unknown>): Promise<void> {
+    const redisClient = getRedis();
+    try {
+        await redisClient.setex(endpointByIdCacheKey(endpointId), ENDPOINT_CACHE_TTL_SECONDS, JSON.stringify(endpoint));
+    } catch (err) {
+        logRedisOperationFailed('set_endpoint_by_id_cache', err, { endpointId });
     }
 }
 

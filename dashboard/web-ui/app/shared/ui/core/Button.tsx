@@ -33,14 +33,24 @@ export const Button: React.FC<ButtonProps> = ({
     icon: "h-9 w-9 p-0",
   };
 
+  const iconSizes = {
+    sm: "[&>svg]:!h-3.5 [&>svg]:!w-3.5",
+    md: "[&>svg]:!h-4 [&>svg]:!w-4",
+    lg: "[&>svg]:!h-5 [&>svg]:!w-5",
+    icon: "[&>svg]:!h-4 [&>svg]:!w-4",
+  };
+  const directIconClass = `${iconSizes[size]} [&>svg]:shrink-0`;
+  const iconSlotClass = `inline-flex shrink-0 items-center justify-center ${iconSizes[size]} [&>svg]:shrink-0`;
+  const hasChildren = React.Children.count(children) > 0;
+
   return (
     <button
-      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${directIconClass} ${className}`}
       {...props}
     >
-      {leftIcon && <span className="mr-2">{leftIcon}</span>}
+      {leftIcon && <span className={`${iconSlotClass} ${hasChildren ? 'mr-2' : ''}`}>{leftIcon}</span>}
       {children}
-      {rightIcon && <span className="ml-2">{rightIcon}</span>}
+      {rightIcon && <span className={`${iconSlotClass} ${hasChildren ? 'ml-2' : ''}`}>{rightIcon}</span>}
     </button>
   );
 };

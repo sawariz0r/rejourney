@@ -22,7 +22,6 @@ import {
     Pause,
     RotateCcw,
     RotateCw,
-    Loader2,
     Layers,
     Move,
     Maximize2,
@@ -1247,9 +1246,9 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     // State
     const [fullSession, setFullSession] = useState<FullSession | null>(null);
     const [isCoreLoading, setIsCoreLoading] = useState(true);
-    const [isTimelineLoading, setIsTimelineLoading] = useState(true);
-    const [isHierarchyLoading, setIsHierarchyLoading] = useState(true);
-    const [isStatsLoading, setIsStatsLoading] = useState(true);
+    const [isTimelineLoading, setIsTimelineLoading] = useState(false);
+    const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
+    const [isStatsLoading, setIsStatsLoading] = useState(false);
     const [isFramesLoading, setIsFramesLoading] = useState(false);
     const [isReplayManifestLoading, setIsReplayManifestLoading] = useState(false);
     const [isReplayLoaderSettling, setIsReplayLoaderSettling] = useState(false);
@@ -2160,7 +2159,6 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
             fullSession?.rrwebReplay?.loadMode === 'segments'
         )
     );
-    const secondaryDataLoading = isTimelineLoading || isHierarchyLoading || isStatsLoading || isReplayManifestLoading || rrwebSegmentsLoading;
 
     // Determine playback mode.
     const playbackMode = useMemo(() => {
@@ -3554,8 +3552,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         (
             isReplayManifestLoading ||
             rrwebReplayPreparing ||
-            visualReplayPreparing ||
-            (fullSession?.playbackMode === 'rrweb' && isTimelineLoading)
+            visualReplayPreparing
         )
     );
     const shouldShowInitialReplayLoaderRaw = Boolean(
@@ -3592,9 +3589,6 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         return (
             <SessionLoadingOverlay
                 isCoreLoading={isCoreLoading || !hasCurrentFullSession}
-                isTimelineLoading={isTimelineLoading}
-                isHierarchyLoading={isHierarchyLoading}
-                isStatsLoading={isStatsLoading}
                 isFramesLoading={isFramesLoading || visualReplayPreparing}
                 isReplayManifestLoading={isReplayManifestLoading}
                 isRrwebSegmentsLoading={rrwebSegmentsLoading || (rrwebReplayPreparing && !isReplayManifestLoading)}
@@ -4167,12 +4161,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 	                                    </p>
 	                                </div>
 	                                <div className="dashboard-mobile-scroll flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto text-[9px] font-black uppercase text-slate-700 sm:flex-wrap sm:overflow-visible md:text-[10px]">
-	                                    {secondaryDataLoading ? (
-                                        <span className="border border-black bg-[#ecfeff] px-2 py-1 text-black">
-                                            Syncing
-                                        </span>
-                                    ) : null}
-		                                    {playbackMode !== 'rrweb' ? (
+			                                    {playbackMode !== 'rrweb' ? (
 		                                        <span className="border border-black bg-[#67e8f9] px-2 py-1 text-black">
 		                                            {screenshotFrames.length > 0
 		                                                ? `Frame ${Math.min(currentFrameIndex + 1, screenshotFrames.length)}/${screenshotFrames.length}`
@@ -4252,7 +4241,6 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                         </div>
                                                     </div>
                                                     <div className="flex shrink-0 items-center gap-2 text-[9px] font-black uppercase text-slate-400">
-                                                        {secondaryDataLoading && <span className="text-sky-500">Syncing</span>}
                                                         {webReferral && <span className="max-w-[8rem] truncate" title={webReferral}>↩ {webReferral}</span>}
                                                         {webUtm && <span className={`max-w-[8rem] truncate ${webUtm.hasUtm ? '' : 'text-slate-300'}`} title={webUtm.title}>UTM {webUtm.label}</span>}
                                                         <span title="Compressed S3 storage">{compressedStorageLabel}</span>
@@ -4268,7 +4256,6 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                         {replayUrlCopyButton}
                                                         {webReferral && <span className="shrink-0 text-slate-400" title={webReferral}>· ↩ {webReferral}</span>}
                                                         {webUtm && <span className={`max-w-[8rem] shrink truncate ${webUtm.hasUtm ? 'text-slate-400' : 'text-slate-300'}`} title={webUtm.title}>· UTM {webUtm.label}</span>}
-                                                        {secondaryDataLoading && <span className="shrink-0 text-[9px] font-black uppercase text-sky-500">Syncing</span>}
                                                     </div>
                                                     <div className="shrink-0 px-3 text-[9px] font-black uppercase text-slate-400">{compressedStorageLabel}</div>
                                                     <div className="flex shrink-0 items-stretch text-slate-500">
@@ -4289,7 +4276,6 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                         </div>
                                                     </div>
                                                     <div className="flex shrink-0 items-center gap-2 text-[9px] font-black uppercase text-slate-400">
-                                                        {secondaryDataLoading && <span className="text-sky-500">Syncing</span>}
                                                         {webReferral && <span className="max-w-[8rem] truncate" title={webReferral}>↩ {webReferral}</span>}
                                                         {webUtm && <span className={`max-w-[8rem] truncate ${webUtm.hasUtm ? '' : 'text-slate-300'}`} title={webUtm.title}>UTM {webUtm.label}</span>}
                                                         <span>{compressedStorageLabel}</span>
@@ -4306,14 +4292,6 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     durationSeconds={webReplayDurationSeconds}
                                                     backgroundGaps={webReplayBackgroundGaps}
                                                 />
-                                                {isPlaying && rrwebSegmentsLoading && (
-                                                    <div className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2">
-                                                        <span className="flex items-center gap-2 border-2 border-black bg-white px-3 py-1.5 text-xs font-black uppercase text-black shadow-neo-sm">
-                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                            Buffering
-                                                        </span>
-                                                    </div>
-                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -4379,14 +4357,6 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                         </div>
                                                     )}
 
-                                                    {isBuffering && (
-                                                        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-slate-950/30">
-                                                            <span className="flex items-center gap-2 border-2 border-black bg-white px-3 py-1.5 text-xs font-black uppercase text-black shadow-neo-sm">
-                                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                                Buffering
-                                                            </span>
-                                                        </div>
-                                                    )}
 
                                                     <div className="pointer-events-none absolute bottom-2 left-1/2 h-1 w-28 -translate-x-1/2 rounded-full bg-slate-900/30" />
                                                 </div>

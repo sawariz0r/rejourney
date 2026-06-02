@@ -1,5 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { db, projects, recordingArtifacts, sessions, sessionMetrics, teams } from '../db/client.js';
+import { setIngestSessionCache, setSessionExistsCache } from '../db/redis.js';
 import { logger } from '../logger.js';
 import { ApiError } from '../middleware/index.js';
 import { getRequestIp } from '../utils/requestIp.js';
@@ -326,6 +327,9 @@ export async function maybeBackfillSessionStartedAt(
         .where(eq(sessions.id, sessionId));
 
     const [updated] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
+    if (updated) {
+        setIngestSessionCache(updated.projectId, updated as unknown as Record<string, unknown>).catch(() => {});
+    }
     return updated ?? null;
 }
 
@@ -402,13 +406,16 @@ export async function ensureIngestSession(
 ): Promise<{ session: any; created: boolean }> {
     // Use the caller's already-fetched session row to skip a DB round-trip.
     // Only trust it if the projectId matches — guards against stale data bugs.
+    const prefetchedWasCacheHit = prefetchedSession?.__ingestSessionCacheHit === true;
     let session: any = (prefetchedSession?.id === sessionId && prefetchedSession?.projectId === projectId)
         ? prefetchedSession
         : null;
+    let loadedSessionFromDb = false;
 
     if (!session) {
         let [fetched] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
         session = fetched ?? null;
+        loadedSessionFromDb = Boolean(session);
     }
 
     let created = false;
@@ -441,6 +448,7 @@ export async function ensureIngestSession(
 
         created = inserted.length > 0;
         [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
+        loadedSessionFromDb = Boolean(session);
 
         if (!session) {
             throw ApiError.internal('Failed to materialize session for ingest');
@@ -456,11 +464,13 @@ export async function ensureIngestSession(
     }
 
     const updates = buildMetadataUpdates(session, metadata, req, options);
+    let updatedSessionMetadata = false;
     if (Object.keys(updates).length > 0) {
         await db.update(sessions)
             .set(updates)
             .where(eq(sessions.id, sessionId));
         [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
+        updatedSessionMetadata = Boolean(session);
     }
 
     // Only INSERT session_metrics when we just created the session. For existing
@@ -477,6 +487,11 @@ export async function ensureIngestSession(
     }
 
     await maybeRunGeoLookup(session.id, req);
+
+    if (session && (created || loadedSessionFromDb || updatedSessionMetadata || !prefetchedWasCacheHit)) {
+        setIngestSessionCache(projectId, session as unknown as Record<string, unknown>).catch(() => {});
+        setSessionExistsCache(projectId, sessionId).catch(() => {});
+    }
 
     return { session, created };
 }

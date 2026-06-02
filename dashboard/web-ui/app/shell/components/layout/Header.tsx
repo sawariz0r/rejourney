@@ -193,12 +193,9 @@ export const Header: React.FC = () => {
             </Link>
             <Link
               to={roadmapPath}
-              className={`relative ${publicNavLinkClass}`}
+              className={publicNavLinkClass}
             >
               {copy.roadmap}
-              <span className="absolute -right-4 -top-2 rotate-12 border border-black bg-[#f9a8d4] px-1 py-[1px] text-[8px] font-black uppercase leading-none text-black shadow-[2px_2px_0_0_rgba(0,0,0,1)]">
-                {copy.newBadge}
-              </span>
             </Link>
             <Link
               to={pricingPath}
@@ -238,11 +235,8 @@ export const Header: React.FC = () => {
             <Link to={docsPath} className={mobileNavLinkClass}>
               {copy.docs}
             </Link>
-            <Link to={roadmapPath} className={`relative ${mobileNavLinkClass}`}>
+            <Link to={roadmapPath} className={mobileNavLinkClass}>
               {copy.roadmap}
-              <span className="ml-0.5 border border-black bg-[#f9a8d4] px-1 text-[8px] font-black leading-none text-black">
-                {copy.newBadge}
-              </span>
             </Link>
             <Link to={pricingPath} className={mobileNavLinkClass}>
               {copy.pricing}

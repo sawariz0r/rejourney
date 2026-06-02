@@ -6,7 +6,7 @@ import {
     sessionMetrics,
     sessions,
 } from '../db/client.js';
-import { getRedis } from '../db/redis.js';
+import { getRedis, invalidateSessionEndpointCache, invalidateSessionExistsCache } from '../db/redis.js';
 import {
     deleteObjectsFromProjectStorage,
     deletePrefixFromBackupR2,
@@ -370,6 +370,10 @@ export async function purgeSessionArtifacts(
         const cacheKeyCount = invalidateCaches
             ? await invalidatePurgedSessionCaches(context.sessionId)
             : 0;
+        if (invalidateCaches) {
+            invalidateSessionExistsCache(context.projectId, context.sessionId).catch(() => {});
+            invalidateSessionEndpointCache(context.projectId, context.sessionId).catch(() => {});
+        }
 
         await finalizeRetentionDeletionLog(logId, {
             status: 'completed',
