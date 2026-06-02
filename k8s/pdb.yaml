@@ -94,7 +94,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: rejourney
 spec:
-  minAvailable: 3  # 5 min replicas (HPA) — ensures queue processing never fully stalls during disruptions
+  minAvailable: 3  # HPA min is higher; keep disruption floor conservative so queue processing never fully stalls.
   selector:
     matchLabels:
       app: ingest-worker

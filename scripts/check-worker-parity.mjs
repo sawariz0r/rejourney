@@ -16,13 +16,17 @@ const mirroredEnvKeys = {
     'RJ_INGEST_JOB_CONCURRENCY',
     'RJ_INGEST_BATCH_SIZE',
     'RJ_INGEST_MAX_RUNNABLE_PER_SESSION',
+    'RJ_SESSION_EFFECTS_DELAY_MS',
   ],
   'replay-worker': [
     'RJ_INGEST_JOB_CONCURRENCY',
     'RJ_INGEST_BATCH_SIZE',
     'RJ_INGEST_MAX_RUNNABLE_PER_SESSION',
   ],
-  'session-lifecycle-worker': [],
+  'session-lifecycle-worker': [
+    'RJ_SESSION_EFFECTS_DELAY_MS',
+    'RJ_SESSION_EFFECTS_CONCURRENCY',
+  ],
 };
 
 function read(filePath) {

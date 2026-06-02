@@ -5,6 +5,7 @@ import { checkQueueHealth, pingWorker, type WorkerName } from '../services/monit
 type PollingWorkerOptions = {
     heartbeatIntervalMs: number;
     onStartup?: () => Promise<void>;
+    onShutdown?: () => Promise<void>;
     onTick: () => Promise<void>;
     pollIntervalMs: number;
     startupMessage?: string;
@@ -17,7 +18,7 @@ function sleep(ms: number): Promise<void> {
 
 async function buildQueueHeartbeatMessage(): Promise<string> {
     const queueHealth = await checkQueueHealth();
-    return `waiting=${queueHealth.pendingJobs},active=${queueHealth.processingJobs},failed=${queueHealth.dlqJobs},replay_waiting=${queueHealth.replayPendingByKind.screenshots + queueHealth.replayPendingByKind.hierarchy + queueHealth.replayPendingByKind.rrweb},stale_replay_pending=${queueHealth.stalePendingReplayArtifacts}`;
+    return `waiting=${queueHealth.pendingJobs},active=${queueHealth.processingJobs},failed=${queueHealth.dlqJobs},replay_waiting=${queueHealth.replayPendingByKind.screenshots + queueHealth.replayPendingByKind.hierarchy + queueHealth.replayPendingByKind.rrweb},session_effects_waiting=${queueHealth.sessionEffectsWaiting},session_effects_active=${queueHealth.sessionEffectsActive},stale_replay_pending=${queueHealth.stalePendingReplayArtifacts}`;
 }
 
 export function startPollingWorker(options: PollingWorkerOptions): void {
@@ -40,6 +41,7 @@ export function startPollingWorker(options: PollingWorkerOptions): void {
     async function shutdown(signal: string): Promise<void> {
         logger.info({ signal, workerName: options.workerName }, 'Worker shutting down');
         isRunning = false;
+        await options.onShutdown?.();
         await pool.end();
         process.exit(0);
     }

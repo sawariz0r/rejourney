@@ -169,6 +169,8 @@ spec:
               value: "75"
             - name: RJ_INGEST_MAX_RUNNABLE_PER_SESSION
               value: "6"
+            - name: RJ_SESSION_EFFECTS_DELAY_MS
+              value: "15000"
           resources:
             requests:
               cpu: 75m
@@ -374,6 +376,10 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
+            - name: RJ_SESSION_EFFECTS_DELAY_MS
+              value: "15000"
+            - name: RJ_SESSION_EFFECTS_CONCURRENCY
+              value: "12"
           resources:
             requests:
               cpu: 50m

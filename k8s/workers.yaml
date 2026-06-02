@@ -10,7 +10,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: rejourney
 spec:
-  replicas: 5
+  replicas: 8
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -203,6 +203,8 @@ spec:
               value: "75"
             - name: RJ_INGEST_MAX_RUNNABLE_PER_SESSION
               value: "6"
+            - name: RJ_SESSION_EFFECTS_DELAY_MS
+              value: "15000"
           resources:
             requests:
               cpu: 750m
@@ -468,13 +470,17 @@ spec:
                   key: STORAGE_ENCRYPTION_KEY
             - name: PUSHGATEWAY_URL
               value: "http://pushgateway.rejourney.svc.cluster.local:9091"
+            - name: RJ_SESSION_EFFECTS_DELAY_MS
+              value: "15000"
+            - name: RJ_SESSION_EFFECTS_CONCURRENCY
+              value: "12"
           resources:
             requests:
-              cpu: 150m
-              memory: 192Mi
+              cpu: 500m
+              memory: 384Mi
             limits:
-              cpu: 750m
-              memory: 512Mi
+              cpu: "2"
+              memory: 1024Mi
 
 ---
 # Retention Worker CronJob

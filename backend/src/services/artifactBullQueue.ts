@@ -1,10 +1,11 @@
 /**
  * Artifact BullMQ Queues
  *
- * Three queues backed by the existing Redis Sentinel cluster:
+ * Queues backed by the existing Redis Sentinel cluster:
  *   rj-ingest-artifacts  — events, crashes, anrs   (was polled from ingest_jobs)
  *   rj-replay-artifacts  — screenshots, hierarchy, rrweb  (was polled from ingest_jobs)
  *   rj-artifact-flush    — Redis-buffered uploads waiting to be written to S3
+ *   rj-session-effects   — debounced per-session reconcile/cache effects
  *
  * Using jobId = `artifact-{artifactId}` gives natural deduplication:
  * BullMQ will not enqueue a second job for the same artifact while the first
@@ -43,11 +44,16 @@ export type ArtifactFlushJobData = {
     artifactId: string;
 };
 
+export type SessionEffectsJobData = {
+    sessionId: string;
+};
+
 // ─── Queue names ──────────────────────────────────────────────────────────────
 
 export const INGEST_QUEUE_NAME = 'rj-ingest-artifacts';
 export const REPLAY_QUEUE_NAME = 'rj-replay-artifacts';
 export const FLUSH_QUEUE_NAME = 'rj-artifact-flush';
+export const SESSION_EFFECTS_QUEUE_NAME = 'rj-session-effects';
 
 const REPLAY_KINDS = new Set(['screenshots', 'hierarchy', 'rrweb']);
 
@@ -83,6 +89,7 @@ export function createBullMQRedisConnection() {
 let _ingestQueue: Queue<ArtifactJobData> | null = null;
 let _replayQueue: Queue<ArtifactJobData> | null = null;
 let _flushQueue: Queue<ArtifactFlushJobData> | null = null;
+let _sessionEffectsQueue: Queue<SessionEffectsJobData> | null = null;
 
 const DEFAULT_JOB_OPTIONS = {
     attempts: 5,
@@ -95,6 +102,12 @@ const FLUSH_JOB_OPTIONS = {
     ...DEFAULT_JOB_OPTIONS,
     attempts: 8,
     backoff: { type: 'exponential' as const, delay: 500 },
+};
+
+const SESSION_EFFECTS_JOB_OPTIONS = {
+    ...DEFAULT_JOB_OPTIONS,
+    attempts: 5,
+    backoff: { type: 'exponential' as const, delay: 1000 },
 };
 
 export function getIngestQueue(): Queue<ArtifactJobData> {
@@ -129,6 +142,17 @@ export function getFlushQueue(): Queue<ArtifactFlushJobData> {
         });
     }
     return _flushQueue!;
+}
+
+export function getSessionEffectsQueue(): Queue<SessionEffectsJobData> {
+    if (!_sessionEffectsQueue) {
+        const { Queue: BullQueue } = require('bullmq');
+        _sessionEffectsQueue = new BullQueue(SESSION_EFFECTS_QUEUE_NAME, {
+            connection: createBullMQRedisConnection(),
+            defaultJobOptions: SESSION_EFFECTS_JOB_OPTIONS,
+        });
+    }
+    return _sessionEffectsQueue!;
 }
 
 export function getQueueForKind(kind: string): Queue<ArtifactJobData> {
@@ -255,11 +279,22 @@ export async function getFlushQueueCounts(): Promise<BullQueueCounts> {
     };
 }
 
+export async function getSessionEffectsQueueCounts(): Promise<BullQueueCounts> {
+    const q = getSessionEffectsQueue();
+    const counts = await q.getJobCounts('waiting', 'active', 'failed', 'delayed');
+    return {
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        failed: counts.failed ?? 0,
+        delayed: counts.delayed ?? 0,
+    };
+}
+
 // ─── Worker factory ───────────────────────────────────────────────────────────
 
-export type ArtifactWorkerProcessor<T extends { artifactId: string } = ArtifactJobData> = (job: Job<T>) => Promise<void>;
+export type ArtifactWorkerProcessor<T = ArtifactJobData> = (job: Job<T>) => Promise<void>;
 
-export function createArtifactBullWorker<T extends { artifactId: string } = ArtifactJobData>(
+export function createArtifactBullWorker<T = ArtifactJobData>(
     queueName: string,
     processor: ArtifactWorkerProcessor<T>,
     concurrency: number,

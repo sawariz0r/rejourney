@@ -43,6 +43,9 @@ interface QueueHealth {
     processingJobs: number;
     dlqJobs: number;
     failedJobs: number;
+    sessionEffectsWaiting: number;
+    sessionEffectsActive: number;
+    sessionEffectsFailed: number;
     oldestPendingAge: number | null;  // in seconds
     oldestReplayPendingAge: number | null;
     replayPendingByKind: {
@@ -195,11 +198,12 @@ export async function checkQueueHealth(): Promise<QueueHealth> {
         const replayGraceSeconds = Math.floor(REPLAY_PENDING_ARTIFACT_GRACE_MS / 1000);
 
         // Query BullMQ queue counts instead of ingest_jobs table.
-        const { getFlushQueueCounts, getIngestQueueCounts, getReplayQueueCounts } = await import('./artifactBullQueue.js');
-        const [ingestCounts, replayCounts, flushCounts] = await Promise.all([
+        const { getFlushQueueCounts, getIngestQueueCounts, getReplayQueueCounts, getSessionEffectsQueueCounts } = await import('./artifactBullQueue.js');
+        const [ingestCounts, replayCounts, flushCounts, sessionEffectsCounts] = await Promise.all([
             getIngestQueueCounts(),
             getReplayQueueCounts(),
             getFlushQueueCounts(),
+            getSessionEffectsQueueCounts(),
         ]);
 
         // BullMQ states → logical queue health mapping:
@@ -207,8 +211,11 @@ export async function checkQueueHealth(): Promise<QueueHealth> {
         //   active             → "processing"
         //   failed             → "dlq / failed" (all retries exhausted)
         const pendingJobs    = ingestCounts.waiting + ingestCounts.delayed + flushCounts.waiting + flushCounts.delayed;
-        const processingJobs = ingestCounts.active + replayCounts.active + flushCounts.active;
-        const dlqJobs        = ingestCounts.failed + replayCounts.failed + flushCounts.failed;
+        const sessionEffectsWaiting = sessionEffectsCounts.waiting + sessionEffectsCounts.delayed;
+        const sessionEffectsActive = sessionEffectsCounts.active;
+        const sessionEffectsFailed = sessionEffectsCounts.failed;
+        const processingJobs = ingestCounts.active + replayCounts.active + flushCounts.active + sessionEffectsActive;
+        const dlqJobs        = ingestCounts.failed + replayCounts.failed + flushCounts.failed + sessionEffectsFailed;
         const failedJobs     = dlqJobs; // same concept in BullMQ — exhausted jobs
         const replayWaiting = replayCounts.waiting + replayCounts.delayed;
         const replayKindBase = Math.floor(replayWaiting / 3);
@@ -270,6 +277,9 @@ export async function checkQueueHealth(): Promise<QueueHealth> {
             processingJobs,
             dlqJobs,
             failedJobs,
+            sessionEffectsWaiting,
+            sessionEffectsActive,
+            sessionEffectsFailed,
             oldestPendingAge,
             oldestReplayPendingAge,
             stalePendingReplayArtifacts,
@@ -289,6 +299,9 @@ export async function checkQueueHealth(): Promise<QueueHealth> {
             processingJobs: 0,
             dlqJobs: 0,
             failedJobs: 0,
+            sessionEffectsWaiting: 0,
+            sessionEffectsActive: 0,
+            sessionEffectsFailed: 0,
             oldestPendingAge: null,
             oldestReplayPendingAge: null,
             stalePendingReplayArtifacts: 0,
@@ -312,7 +325,7 @@ export async function pingIngestWorkerWithQueueHealth(
 ): Promise<void> {
     const queueHealth = await checkQueueHealth();
 
-    const message = `pending=${queueHealth.pendingJobs},dlq=${queueHealth.dlqJobs},replay_screenshots=${queueHealth.replayPendingByKind.screenshots},replay_hierarchy=${queueHealth.replayPendingByKind.hierarchy},replay_rrweb=${queueHealth.replayPendingByKind.rrweb},stale_replay_pending=${queueHealth.stalePendingReplayArtifacts}`;
+    const message = `pending=${queueHealth.pendingJobs},dlq=${queueHealth.dlqJobs},replay_screenshots=${queueHealth.replayPendingByKind.screenshots},replay_hierarchy=${queueHealth.replayPendingByKind.hierarchy},replay_rrweb=${queueHealth.replayPendingByKind.rrweb},session_effects_waiting=${queueHealth.sessionEffectsWaiting},session_effects_active=${queueHealth.sessionEffectsActive},stale_replay_pending=${queueHealth.stalePendingReplayArtifacts}`;
 
     await pingWorker('ingestWorker', status, message, processingTime);
 

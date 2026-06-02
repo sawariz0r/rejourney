@@ -4,6 +4,7 @@ import {
     queueRecoverableArtifacts,
     recoverStalePendingReplayArtifacts,
 } from '../services/ingestArtifactLifecycle.js';
+import { startSessionEffectsWorker } from '../services/sessionEffectsQueue.js';
 import { reconcileDueSessions } from '../services/sessionReconciliation.js';
 import { SESSION_LIFECYCLE_WORKER } from './workerDefinitions.js';
 import { startPollingWorker } from './workerRuntime.js';
@@ -14,8 +15,13 @@ import { startPollingWorker } from './workerRuntime.js';
 let lastSessionSweepAt = 0;
 
 export function startSessionLifecycleWorker(): void {
+    const sessionEffectsWorker = startSessionEffectsWorker();
+
     startPollingWorker({
         heartbeatIntervalMs: SESSION_LIFECYCLE_WORKER.heartbeatIntervalMs,
+        onShutdown: async () => {
+            await sessionEffectsWorker.close();
+        },
         onTick: async () => {
             const now = Date.now();
             if (now - lastSessionSweepAt < SESSION_LIFECYCLE_WORKER.sessionSweepIntervalMs) {

@@ -9,6 +9,7 @@ import { processAnrsArtifact, processCrashesArtifact } from './ingestFaultArtifa
 import { processRecoveredReplayArtifact } from './ingestReplayArtifactProcessor.js';
 import { runArtifactCompletionEffects } from './artifactCompletionEffects.js';
 import { reconcileSessionState } from './sessionReconciliation.js';
+import { enqueueSessionEffectsJob } from './sessionEffectsQueue.js';
 import type { ArtifactJobData, Job } from './artifactBullQueue.js';
 
 // ─── Job context type ─────────────────────────────────────────────────────────
@@ -153,6 +154,14 @@ function shouldRepairReadyEventsArtifact(
     return kind === 'events' && (artifact.startTime == null || artifact.endTime == null);
 }
 
+function shouldDeferSessionEffects(kind: string | null | undefined): boolean {
+    return kind === 'events' || kind === 'crashes' || kind === 'anrs';
+}
+
+function isReplayArtifactKind(kind: string | null | undefined): boolean {
+    return kind === 'screenshots' || kind === 'hierarchy' || kind === 'rrweb';
+}
+
 export async function runArtifactProcessorByKind(
     kind: string | null | undefined,
     context: ArtifactProcessorContext,
@@ -275,6 +284,14 @@ export async function processArtifactJobFromBullMQ(
                 'artifact.ready_event_repaired',
             );
         }
+        if (shouldDeferSessionEffects(kind)) {
+            const sessionEffectsQueued = await enqueueSessionEffectsJob(session.id);
+            artifactLog.info(
+                { event: 'artifact.ready_session_effects_deferred', sessionEffectsQueued },
+                'artifact.ready_session_effects_deferred',
+            );
+            return;
+        }
         const reconcileResult = await reconcileSessionState(session.id);
         await runArtifactCompletionEffects({
             kind,
@@ -318,6 +335,20 @@ export async function processArtifactJobFromBullMQ(
     // The artifact stays "uploaded" until retry succeeds or we mark it failed via
     // the markArtifactFailedAfterExhausted helper below.
 
+    if (shouldDeferSessionEffects(kind)) {
+        const sessionEffectsQueued = await enqueueSessionEffectsJob(session.id);
+        artifactLog.info(
+            {
+                event: 'artifact.processed',
+                replayArtifact: false,
+                actualObjectSize: sizeBytes,
+                sessionEffectsQueued,
+            },
+            'artifact.processed',
+        );
+        return;
+    }
+
     const reconcileResult = await reconcileSessionState(session.id);
     await runArtifactCompletionEffects({
         kind,
@@ -328,7 +359,7 @@ export async function processArtifactJobFromBullMQ(
     artifactLog.info(
         {
             event: 'artifact.processed',
-            replayArtifact: kind === 'screenshots' || kind === 'hierarchy' || kind === 'rrweb',
+            replayArtifact: isReplayArtifactKind(kind),
             actualObjectSize: sizeBytes,
         },
         'artifact.processed',

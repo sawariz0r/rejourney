@@ -223,6 +223,9 @@ app.get('/health/queue', async (_req, res) => {
             pendingJobs: queueHealth.pendingJobs,
             processingJobs: queueHealth.processingJobs,
             dlqJobs: queueHealth.dlqJobs,
+            sessionEffectsWaiting: queueHealth.sessionEffectsWaiting,
+            sessionEffectsActive: queueHealth.sessionEffectsActive,
+            sessionEffectsFailed: queueHealth.sessionEffectsFailed,
             oldestPendingSeconds: queueHealth.oldestPendingAge,
             timestamp: new Date().toISOString(),
         });

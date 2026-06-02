@@ -228,12 +228,13 @@ A backward-compat `api` Service still exists and aliases `api-ingest` so anythin
 ### `ingest-worker`, `replay-worker`
 
 - **Preferred HEL1, weight 100.** Fall back to FSN1 only when HEL1 is full.
-- HPA: `ingest-worker` 5–12, `replay-worker` 1–10.
-- IO-bound, not CPU-bound — HPA undershoots during queue spikes (workers sit at 30–40% CPU while waiting on S3 round-trips). If the queue grows: manually scale and patch the HPA max first.
-- Workers are **event-driven via BullMQ** — no SQL polling. Three queues are backed by the Redis Sentinel cluster: `rj-artifact-flush` (Redis buffered relay uploads waiting for S3), `rj-ingest-artifacts` (events, crashes, anrs), and `rj-replay-artifacts` (screenshots, hierarchy). Workers block on the queue and consume jobs as they arrive.
+- HPA: `ingest-worker` 8–12, `replay-worker` 1–10.
+- IO-bound, not CPU-bound — HPA can undershoot during queue spikes (workers may sit below CPU limits while waiting on S3/DB round-trips). The ingest HPA now keeps more headroom for event backlog drain.
+- Workers are **event-driven via BullMQ** — no SQL polling. Four queues are backed by the Redis Sentinel cluster: `rj-artifact-flush` (Redis buffered relay uploads waiting for S3), `rj-ingest-artifacts` (events, crashes, anrs), `rj-replay-artifacts` (screenshots, hierarchy), and `rj-session-effects` (debounced per-session reconcile/cache effects). Workers block on the queue and consume jobs as they arrive.
+- Event/crash/ANR artifact jobs mark artifacts ready first, then enqueue `rj-session-effects` with a 15s debounce window so tiny event artifacts do not each rerun full session reconciliation. Replay artifacts still reconcile immediately to preserve replay readiness.
 - BullMQ deduplication uses `jobId = artifact-{artifactId}`. Stalled jobs (worker died mid-process) are automatically re-queued after `stalledInterval = 30s`, up to `maxStalledCount = 3`.
 - Retry policy: 5 attempts, exponential backoff starting at 1s. Failed jobs are kept in the failed set for 7 days (DLQ window). Completed jobs retained 1h for observability.
-- Queue depth monitoring: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, and `LLEN bull:rj-replay-artifacts:wait` in Redis. All should be near zero in steady state.
+- Queue depth monitoring: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, `LLEN bull:rj-replay-artifacts:wait`, and `LLEN bull:rj-session-effects:wait` in Redis. Artifact queues should be near zero in steady state; `rj-session-effects` can briefly hold delayed per-session jobs during ingest bursts.
 - `/health/queue` returns `503` whenever BullMQ has failed/DLQ jobs, including historical failed jobs retained during the 7-day DLQ window. Before treating it as a fresh outage, sample the newest failed job per queue and compare `failedOn` to the current deploy window.
 
 ### `ingest-upload`
@@ -432,7 +433,7 @@ Local k8s uses the same idea with `http:` allowed for MinIO/local endpoints. Buc
 
 7. **CNPG sync replication degrades to async when standby is down.** `maxSyncReplicas: 1` — intentional. You briefly lose the sync guarantee during CNPG upgrades.
 
-8. **HPA undershoots for IO-bound workers.** `ingest-worker` and `replay-worker` stay at 30–40% CPU while waiting on S3 and DB. If the BullMQ queue grows, HPA won't fire — CPU is the wrong signal. Monitor queue depth: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, and `LLEN bull:rj-replay-artifacts:wait` in Redis. If any are non-zero and growing, manually scale: `kubectl scale deployment ingest-worker --replicas=12`, patch HPA max first.
+8. **HPA can undershoot for IO-bound workers.** `ingest-worker` and `replay-worker` may wait on S3 and DB instead of saturating CPU. Monitor queue depth: `LLEN bull:rj-artifact-flush:wait`, `LLEN bull:rj-ingest-artifacts:wait`, `LLEN bull:rj-replay-artifacts:wait`, and `LLEN bull:rj-session-effects:wait` in Redis. If `rj-ingest-artifacts` is non-zero and growing, confirm HPA is at the 12-replica max before changing code.
 
 9. **`api-ingest`/Postgres colocation is enforced twice.** `api-ingest` has required pod affinity to the current CNPG primary, CI auto-corrects via `pin_deployment_to_postgres_primary api-ingest`, and the `api-postgres-colocator` CronJob handles later failovers (its `API_DEPLOYMENT` env is set to `api-ingest`). `api-dashboard` does NOT colocate with the primary — it lives on HEL1. If you see slow ingest: compare `kubectl get pods -n rejourney -l app=api-ingest -o wide` with `kubectl get pods -n rejourney -l cnpg.io/cluster=postgres-local,cnpg.io/instanceRole=primary -o wide`, then inspect `kubectl get jobs -n rejourney -l app=api-postgres-colocator`.
 
