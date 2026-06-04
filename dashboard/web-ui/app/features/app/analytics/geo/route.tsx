@@ -115,7 +115,8 @@ interface GeoMapCluster {
 const MAX_RENDERED_GEO_CLUSTERS = 260;
 const GEO_LOCATION_MARKER_LIMIT = 1200;
 const GEO_LATENCY_LOCATION_LOOKUP_LIMIT = 1600;
-const RECENT_GEO_SESSION_LIMIT = 100;
+const RECENT_GEO_SESSION_FETCH_LIMIT = 100;
+const GEO_SIDEBAR_SESSION_LIMIT = 50;
 const GEO_LOCATION_SESSION_LIMIT = 100;
 const GEO_SIDEBAR_DEFAULT_WIDTH = 340;
 const GEO_SIDEBAR_MIN_WIDTH = 300;
@@ -654,6 +655,10 @@ function rankUniqueVisitorSessions(sessions: GeoSessionRow[]): GeoSessionRow[] {
     return [...visitorMap.values()]
         .sort((a, b) => b.count - a.count || b.latestStartedMs - a.latestStartedMs || a.label.localeCompare(b.label))
         .map((item) => item.session);
+}
+
+function sortSessionsByStartedAtDesc(sessions: GeoSessionRow[]): GeoSessionRow[] {
+    return [...sessions].sort((a, b) => getSessionStartedMs(b) - getSessionStartedMs(a));
 }
 
 function AnimalAvatar({ animal, seed, size = 32, active = false }: { animal: AnonymousAnimal; seed: string; size?: number; active?: boolean }) {
@@ -1548,7 +1553,7 @@ export const Geo: React.FC = () => {
             platform,
             hasRecording: true,
             includeTotal: false,
-            limit: RECENT_GEO_SESSION_LIMIT,
+            limit: RECENT_GEO_SESSION_FETCH_LIMIT,
             sort: 'date',
             sortDir: 'desc',
         })
@@ -1917,7 +1922,10 @@ export const Geo: React.FC = () => {
 
     const scopedSessions = selectedMarker ? markerSessions : selectedCluster ? selectedClusterSessions : recentSessions;
     const scopedSessionsState = selectedMarker ? markerSessionsState : recentSessionsState;
-    const scopedUserRows = useMemo(() => rankUniqueVisitorSessions(scopedSessions), [scopedSessions]);
+    const scopedSessionRows = useMemo(
+        () => sortSessionsByStartedAtDesc(scopedSessions).slice(0, GEO_SIDEBAR_SESSION_LIMIT),
+        [scopedSessions],
+    );
     const selectedVisitorSessionRows = useMemo(() => {
         const rows = visitorSessions.length > 0 ? visitorSessions : selectedVisitor ? [selectedVisitor] : [];
         return [...rows].sort((a, b) => getSessionStartedMs(b) - getSessionStartedMs(a));
@@ -2060,11 +2068,11 @@ export const Geo: React.FC = () => {
                                     <div>
                                         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
                                             <div className="min-w-0">
-                                                <div className="dashboard-label">{selectedVisitor ? 'Sessions' : 'Users'}</div>
+                                                <div className="dashboard-label">Sessions</div>
                                                 <div className="mt-0.5 truncate text-xs font-semibold text-slate-500">
                                                     {selectedVisitor
                                                         ? `${selectedVisitorSessionRows.length.toLocaleString()} for ${getVisitorDisplayName(selectedVisitor)}`
-                                                        : `${scopedUserRows.length.toLocaleString()} shown for ${scopeLabel}`}
+                                                        : `${scopedSessionRows.length.toLocaleString()} latest replay sessions for ${scopeLabel}`}
                                                 </div>
                                             </div>
 	                                            {(selectedMarker || selectedCluster || selectedVisitor) && (
@@ -2098,10 +2106,10 @@ export const Geo: React.FC = () => {
                                         )}
 
                                         {!selectedVisitor && scopedSessionsState === 'loading' && (
-                                            <div className="px-4 py-8 text-center text-xs font-semibold text-slate-500">Loading users...</div>
+                                            <div className="px-4 py-8 text-center text-xs font-semibold text-slate-500">Loading sessions...</div>
                                         )}
                                         {!selectedVisitor && scopedSessionsState === 'error' && (
-                                            <div className="px-4 py-8 text-center text-xs font-semibold text-rose-700">Could not load users.</div>
+                                            <div className="px-4 py-8 text-center text-xs font-semibold text-rose-700">Could not load sessions.</div>
                                         )}
                                         {selectedVisitor && visitorSessionsState === 'loading' && (
                                             <div className="border-b border-slate-100 px-4 py-2 text-xs font-semibold text-slate-500">
@@ -2113,9 +2121,9 @@ export const Geo: React.FC = () => {
                                                 Could not load full history.
                                             </div>
                                         )}
-                                        {!selectedVisitor && scopedSessionsState === 'idle' && scopedUserRows.length === 0 && (
+                                        {!selectedVisitor && scopedSessionsState === 'idle' && scopedSessionRows.length === 0 && (
                                             <div className="px-4 py-8 text-center text-xs font-semibold text-slate-500">
-                                                No replay-ready users for this scope.
+                                                No replay-ready sessions for this scope.
                                             </div>
                                         )}
                                         {selectedVisitor && visitorSessionsState === 'idle' && selectedVisitorSessionRows.length === 0 && (
@@ -2123,7 +2131,7 @@ export const Geo: React.FC = () => {
                                         )}
                                         {!selectedVisitor &&
                                             scopedSessionsState === 'idle' &&
-                                            scopedUserRows.map((session) => {
+                                            scopedSessionRows.map((session) => {
                                                 const animal = getSessionAnimal(session);
                                                 const seed = getSessionIdentitySeed(session);
                                                 const isActive = activeSessionId === session.id;

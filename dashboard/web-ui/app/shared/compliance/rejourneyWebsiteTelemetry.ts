@@ -7,6 +7,7 @@ export const REJOURNEY_PUBLIC_KEY = "rj_7797d985a1268e15da862b71121bf385";
 export const CONSENT_STORAGE_KEY = "rejourney.webSdkConsent.v1";
 
 const VISITOR_UUID_STORAGE_KEY = "rejourney.websiteVisitorUuid.v1";
+const REVENUE_EVENT_STORAGE_PREFIX = "rejourney.websiteRevenueEventTracked.v1";
 const CONSENT_VERSION = "2026-05-17.web-sdk";
 const OFFICIAL_HOSTS = new Set([
   "rejourney.co",
@@ -18,6 +19,28 @@ const OFFICIAL_HOSTS = new Set([
 
 type ConsentChoice = "accepted" | "rejected";
 type PrimitiveRecord = Record<string, PrimitiveMetadataValue>;
+
+export type RejourneyRevenueEventInput = {
+  transactionId: string;
+  amount: number;
+  currency?: string;
+  teamId?: string;
+  planId?: string;
+  planName?: string;
+  planDisplayName?: string;
+  priceId?: string;
+  productId?: string;
+  subscriptionId?: string | null;
+  checkoutSessionId?: string;
+  billingInterval?: string;
+  changeType?: string;
+  source?: "stripe_checkout" | "stripe_plan_change";
+  sessionReplayLimit?: number;
+  videoRetentionDays?: number;
+  isRenewal?: boolean;
+  isTrialConversion?: boolean;
+  dedupeKey?: string;
+};
 
 let rejourneyInitPromise: Promise<boolean> | null = null;
 let clickTrackingInstalled = false;
@@ -260,6 +283,59 @@ function interactionBaseProperties(): PrimitiveRecord {
 function trackCustomEvent(name: string, properties: Record<string, unknown> = {}): void {
   if (!canTrackRejourneyWebsiteTelemetry()) return;
   Rejourney.logEvent(name, properties);
+}
+
+function revenueEventStorageKey(dedupeKey: string): string {
+  const normalized = dedupeKey.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 180);
+  return `${REVENUE_EVENT_STORAGE_PREFIX}:${normalized}`;
+}
+
+function claimRevenueEventDedupeKey(dedupeKey: string): boolean {
+  const storageKey = revenueEventStorageKey(dedupeKey);
+  if (safeLocalStorageGet(storageKey)) return false;
+  safeLocalStorageSet(storageKey, new Date().toISOString());
+  return true;
+}
+
+export function trackRejourneyRevenueEvent(input: RejourneyRevenueEventInput): boolean {
+  if (!canTrackRejourneyWebsiteTelemetry()) return false;
+
+  const amount = Number(input.amount);
+  const transactionId = input.transactionId.trim();
+  if (!transactionId || !Number.isFinite(amount) || amount <= 0) return false;
+
+  const dedupeKey = input.dedupeKey || transactionId;
+  if (!claimRevenueEventDedupeKey(dedupeKey)) return false;
+
+  const currency = (input.currency || "USD").trim().toUpperCase() || "USD";
+  const amountMajor = Math.round(amount * 100) / 100;
+
+  trackCustomEvent("purchase_completed", stripUndefinedMetadata({
+    transactionId,
+    orderId: transactionId,
+    amount: amountMajor,
+    currency,
+    paymentProvider: "stripe",
+    platform: "web",
+    revenueSource: "rejourney_billing",
+    source: input.source || "stripe_checkout",
+    teamId: input.teamId,
+    planId: input.planId,
+    planName: input.planName,
+    planDisplayName: input.planDisplayName,
+    priceId: input.priceId,
+    productId: input.productId,
+    subscriptionId: input.subscriptionId || undefined,
+    checkoutSessionId: input.checkoutSessionId,
+    billingInterval: input.billingInterval,
+    changeType: input.changeType,
+    sessionReplayLimit: input.sessionReplayLimit,
+    videoRetentionDays: input.videoRetentionDays,
+    isRenewal: input.isRenewal ?? false,
+    isTrialConversion: input.isTrialConversion ?? false,
+  }));
+
+  return true;
 }
 
 function installInteractionTracking(): void {

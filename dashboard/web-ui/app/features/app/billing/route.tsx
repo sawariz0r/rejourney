@@ -59,6 +59,14 @@ import {
   launchBillingCheckout,
   parseBillingCheckoutSearchParams,
 } from '~/features/app/billing/checkoutFlow';
+import {
+  buildBillingRevenueEvent,
+  clearPendingCheckoutRevenueContext,
+  mergeRevenuePlan,
+  readPendingCheckoutRevenueContext,
+  writePendingCheckoutRevenueContext,
+} from '~/features/app/billing/revenueTracking';
+import { trackRejourneyRevenueEvent } from '~/shared/compliance/rejourneyWebsiteTelemetry';
 
 const PLAN_DESCRIPTIONS: Record<string, string> = {
   free: 'Perfect for Stable Monthly Rejourney',
@@ -131,11 +139,11 @@ export const BillingSettings: React.FC = () => {
   const wait = useCallback((ms: number) => new Promise(resolve => setTimeout(resolve, ms)), []);
 
   // Load billing data
-  const loadTeamBilling = useCallback(async () => {
+  const loadTeamBilling = useCallback(async (): Promise<TeamPlanInfo | null> => {
     if (isDemoMode) {
       setBillingError(null);
       setIsLoadingBilling(false);
-      return;
+      return null;
     }
 
     if (!currentTeam) {
@@ -144,7 +152,7 @@ export const BillingSettings: React.FC = () => {
       setPaymentMethods([]);
       setTeamPlan(null);
       setSessionUsage(null);
-      return;
+      return null;
     }
     try {
       setIsLoadingBilling(true);
@@ -178,9 +186,12 @@ export const BillingSettings: React.FC = () => {
           setPaymentMethods(pmData.paymentMethods);
         }
       }
+
+      return planData ?? null;
     } catch (err) {
       console.error('Failed to load billing:', err);
       setBillingError(err instanceof Error ? err.message : 'Failed to load billing');
+      return null;
     } finally {
       setIsLoadingBilling(false);
     }
@@ -238,7 +249,28 @@ export const BillingSettings: React.FC = () => {
       }
 
       clearCache();
-      await loadTeamBilling();
+      const refreshedPlan = await loadTeamBilling();
+      if (checkoutSyncResult?.provisioned && sessionId && currentTeam) {
+        const pendingContext = readPendingCheckoutRevenueContext(sessionId);
+        const pendingPlan = pendingContext?.teamId === currentTeam.id ? pendingContext.plan : null;
+        const revenueEvent = buildBillingRevenueEvent({
+          transactionId: sessionId,
+          teamId: currentTeam.id,
+          plan: pendingPlan || refreshedPlan || teamPlan,
+          availablePlans,
+          selectedPlan: pendingContext?.teamId === currentTeam.id ? pendingContext.selectedPlan : undefined,
+          subscriptionId: checkoutSyncResult.subscriptionId,
+          checkoutSessionId: sessionId,
+          source: 'stripe_checkout',
+          changeType: 'new',
+          dedupeKey: `stripe_checkout:${sessionId}`,
+        });
+
+        if (revenueEvent) {
+          trackRejourneyRevenueEvent(revenueEvent);
+        }
+        clearPendingCheckoutRevenueContext(sessionId);
+      }
       if (currentTeam) {
         window.dispatchEvent(new CustomEvent('planChanged', {
           detail: { teamId: currentTeam.id }
@@ -255,8 +287,9 @@ export const BillingSettings: React.FC = () => {
     }
 
     setPlanChangeModal(prev => ({ ...prev, isConfirming: false }));
+    clearPendingCheckoutRevenueContext(sessionId);
     showToast('Checkout canceled.');
-  }, [currentTeam, loadTeamBilling, resetPlanChangeModal, showToast, syncCompletedCheckout]);
+  }, [availablePlans, currentTeam, loadTeamBilling, resetPlanChangeModal, showToast, syncCompletedCheckout, teamPlan]);
 
   // Listen for messages from Stripe return pages
   useEffect(() => {
@@ -349,19 +382,28 @@ export const BillingSettings: React.FC = () => {
 
   // Confirm the plan change
   const handleConfirmPlanChange = async () => {
-    if (!currentTeam || !planChangeModal.selectedPlan || !planChangeModal.preview) return;
+    const selectedPlan = planChangeModal.selectedPlan;
+    const preview = planChangeModal.preview;
+    if (!currentTeam || !selectedPlan || !preview) return;
 
     setPlanChangeModal(prev => ({ ...prev, isConfirming: true }));
 
     try {
-      if (planChangeModal.preview.changeType === 'new') {
+      if (preview.changeType === 'new') {
         const { successUrl, cancelUrl } = buildBillingCheckoutReturnUrls(window.location.origin, pathPrefix);
         const result = await createCheckoutSession(
           currentTeam.id,
-          planChangeModal.selectedPlan,
+          selectedPlan,
           successUrl,
           cancelUrl,
         );
+
+        writePendingCheckoutRevenueContext(result.sessionId, {
+          teamId: currentTeam.id,
+          selectedPlan,
+          plan: mergeRevenuePlan(preview.newPlan, availablePlans, selectedPlan),
+          createdAt: new Date().toISOString(),
+        });
 
         const launchMode = launchBillingCheckout(result.url, {
           openWindow: (url, target, features) => window.open(url, target, features),
@@ -376,8 +418,34 @@ export const BillingSettings: React.FC = () => {
         return;
       }
 
-      const result = await confirmPlanChange(currentTeam.id, planChangeModal.selectedPlan);
+      const result = await confirmPlanChange(currentTeam.id, selectedPlan);
       if (result.success) {
+        if (result.isImmediate && result.changeType !== 'downgrade') {
+          const subscriptionId = result.subscriptionId || result.plan.subscriptionId || null;
+          const transactionId = [
+            'stripe_plan_change',
+            subscriptionId || currentTeam.id,
+            result.changeType,
+            result.plan.planName || selectedPlan,
+            String(result.effectiveDate),
+          ].join(':');
+          const revenueEvent = buildBillingRevenueEvent({
+            transactionId,
+            teamId: currentTeam.id,
+            plan: result.plan || preview.newPlan,
+            availablePlans,
+            selectedPlan,
+            subscriptionId,
+            source: 'stripe_plan_change',
+            changeType: result.changeType,
+            dedupeKey: transactionId,
+          });
+
+          if (revenueEvent) {
+            trackRejourneyRevenueEvent(revenueEvent);
+          }
+        }
+
         // Clear ALL caches to force fresh data from server
         clearCache();
 

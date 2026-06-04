@@ -1578,6 +1578,8 @@ export interface BillingPlan {
 }
 
 export interface TeamPlanInfo {
+    priceId?: string | null;
+    productId?: string | null;
     planName: string;
     displayName: string;
     sessionLimit: number;
@@ -1586,6 +1588,7 @@ export interface TeamPlanInfo {
     videoRetentionDays: number;
     videoRetentionLabel: string;
     priceCents: number;
+    interval?: 'month' | 'year';
     isCustom: boolean;
     subscriptionId?: string | null; // Stripe subscription ID (null for free plan)
     subscriptionStatus?: string | null; // 'active', 'past_due', 'canceled', etc.
@@ -1665,6 +1668,8 @@ export async function getTeamPlan(teamId: string): Promise<TeamPlanInfo | null> 
  */
 export interface PlanChangePreview {
     currentPlan: {
+        priceId?: string;
+        productId?: string;
         name: string;
         displayName: string;
         sessionLimit: number;
@@ -1672,8 +1677,12 @@ export interface PlanChangePreview {
         videoRetentionDays: number;
         videoRetentionLabel: string;
         priceCents: number;
+        interval?: 'month' | 'year';
+        isCustom?: boolean;
     }; // Always present (free plan if no subscription)
     newPlan: {
+        priceId?: string;
+        productId?: string;
         name: string;
         displayName: string;
         sessionLimit: number;
@@ -1681,6 +1690,8 @@ export interface PlanChangePreview {
         videoRetentionDays: number;
         videoRetentionLabel: string;
         priceCents: number;
+        interval?: 'month' | 'year';
+        isCustom?: boolean;
     };
     changeType: 'upgrade' | 'downgrade' | 'same' | 'new';
     requiresPaymentMethod: boolean;
@@ -1702,6 +1713,7 @@ export interface PlanChangePreview {
  */
 export interface PlanChangeResult {
     success: boolean;
+    subscriptionId?: string | null;
     plan: TeamPlanInfo;
     changeType: 'upgrade' | 'downgrade' | 'new';
     effectiveDate: string;
