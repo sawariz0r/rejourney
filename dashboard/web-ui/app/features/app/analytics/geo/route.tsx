@@ -1,17 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Check, Copy, Globe, Play, ShieldAlert, X } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Globe, GripVertical, Monitor, Play, ShieldAlert, Smartphone, X } from 'lucide-react';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
+import { CountryFlag } from '~/shared/ui/core/CountryFlag';
 import { useSharedRejourneyTimeRange } from '~/shared/hooks/useSharedRejourneyTimeRange';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
-import {
-    getGeoOverview,
-    getSessionsPaginated,
-    type ApiLatencyByLocationResponse,
-    type GeoIssuesSummary,
-} from '~/shared/api/client';
+import { getGeoOverview, getSessionsPaginated, type ApiLatencyByLocationResponse, type GeoIssuesSummary } from '~/shared/api/client';
 import { useSharedPlatformLens, platformLensToSessionPlatform } from '~/shared/hooks/useSharedPlatformLens';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
@@ -22,7 +19,7 @@ import MapGL, { Marker, NavigationControl, Popup } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 const ENABLE_MAPBOX_IN_DEMO = true;
 const MAPBOX_TOKEN = getMapboxToken();
-const GEO_MAP_STYLE = 'mapbox://styles/mapbox/standard';
+const GEO_MAP_STYLE = 'mapbox://styles/mapbox/light-v11';
 const GEO_MAP_CONFIG = {
     basemap: {
         lightPreset: 'day',
@@ -30,13 +27,13 @@ const GEO_MAP_CONFIG = {
         showAdminBoundaries: true,
         showPedestrianRoads: false,
         showPointOfInterestLabels: false,
-        showTransitLabels: true,
-        colorGreenspace: '#8fe39d',
-        colorWater: '#58c9f5',
-        colorLand: '#c8efbf',
-        colorRoads: '#f2a0b6',
-        colorMotorways: '#ef8ba4',
-        colorTrunks: '#e9a06f',
+        showTransitLabels: false,
+        colorGreenspace: '#eef4ef',
+        colorWater: '#c9d2d6',
+        colorLand: '#f7f8f6',
+        colorRoads: '#e4e7eb',
+        colorMotorways: '#d9dde3',
+        colorTrunks: '#d9dde3',
     },
 };
 
@@ -55,7 +52,7 @@ function getMapInstance(mapRef: React.MutableRefObject<any>) {
 function getWeightedMapCenter(markers: GeoMarker[]) {
     const validMarkers = markers.filter((marker) => Number.isFinite(marker.lng) && Number.isFinite(marker.lat));
     if (validMarkers.length === 0) {
-        return { longitude: -28, latitude: 22 };
+        return { longitude: 22, latitude: 28 };
     }
 
     let weightedSin = 0;
@@ -73,7 +70,7 @@ function getWeightedMapCenter(markers: GeoMarker[]) {
     });
 
     const longitude = (Math.atan2(weightedSin / totalWeight, weightedCos / totalWeight) * 180) / Math.PI;
-    const latitude = Math.max(-38, Math.min(52, weightedLat / totalWeight));
+    const latitude = Math.max(-54, Math.min(68, weightedLat / totalWeight));
     return { longitude, latitude };
 }
 
@@ -90,6 +87,7 @@ interface GeoMarker {
     id: string;
     city: string;
     country: string;
+    countryCode?: string | null;
     lat: number;
     lng: number;
     sessions: number;
@@ -99,6 +97,80 @@ interface GeoMarker {
     markerSize: number;
     style: MarkerStyle;
 }
+
+interface GeoMapCluster {
+    id: string;
+    kind: 'cluster' | 'location';
+    markers: GeoMarker[];
+    topMarker: GeoMarker;
+    lat: number;
+    lng: number;
+    sessions: number;
+    uniqueUsers: number;
+    avgLatencyMs?: number;
+    latencyTier: LatencyTier;
+    style: MarkerStyle;
+}
+
+const MAX_RENDERED_GEO_CLUSTERS = 260;
+const GEO_LOCATION_MARKER_LIMIT = 1200;
+const GEO_LATENCY_LOCATION_LOOKUP_LIMIT = 1600;
+const RECENT_GEO_SESSION_LIMIT = 100;
+const GEO_LOCATION_SESSION_LIMIT = 100;
+const GEO_SIDEBAR_DEFAULT_WIDTH = 340;
+const GEO_SIDEBAR_MIN_WIDTH = 300;
+const GEO_SIDEBAR_MAX_WIDTH = 460;
+const GEO_SIDEBAR_COLLAPSED_WIDTH = 56;
+const GEO_SIDEBAR_WIDTH_STORAGE_KEY = 'rejourney:geo-sidebar-width';
+const GEO_SIDEBAR_COLLAPSED_STORAGE_KEY = 'rejourney:geo-sidebar-collapsed';
+const GEO_MAP_OVERVIEW_ZOOM = 2.05;
+const GEO_MAP_OVERVIEW_MAX_ZOOM = 4.2;
+const GEO_MAP_OVERVIEW_FIT_PADDING = 96;
+const LIVE_ANALYTICS_WINDOW_MINUTES = 30;
+const LIVE_ANALYTICS_BUCKET_COUNT = 15;
+const GEO_ICON_BUTTON_CLASS =
+    'dashboard-pill inline-flex h-7 w-7 items-center justify-center text-black transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] disabled:cursor-not-allowed disabled:opacity-40';
+const GEO_CLEAR_SELECTION_BUTTON_CLASS = `${GEO_ICON_BUTTON_CLASS} !border-rose-300 !bg-rose-50 !text-rose-700 hover:!border-rose-500 hover:!bg-[#fecaca] hover:!text-rose-950`;
+const GEO_SIDEBAR_COLLAPSE_BUTTON_CLASS =
+    'flex w-full items-center justify-center gap-2 py-2 text-slate-400 transition-all hover:bg-slate-50 hover:text-slate-700';
+
+const COUNTRY_NAME_TO_CODE: Record<string, string> = {
+    argentina: 'AR',
+    australia: 'AU',
+    brazil: 'BR',
+    canada: 'CA',
+    chile: 'CL',
+    colombia: 'CO',
+    egypt: 'EG',
+    france: 'FR',
+    germany: 'DE',
+    'hong kong': 'HK',
+    india: 'IN',
+    indonesia: 'ID',
+    italy: 'IT',
+    japan: 'JP',
+    kenya: 'KE',
+    malaysia: 'MY',
+    mexico: 'MX',
+    netherlands: 'NL',
+    'new zealand': 'NZ',
+    nigeria: 'NG',
+    palestine: 'PS',
+    'palestine / israel': 'PS/IL',
+    peru: 'PE',
+    philippines: 'PH',
+    singapore: 'SG',
+    'south africa': 'ZA',
+    'south korea': 'KR',
+    spain: 'ES',
+    taiwan: 'TW',
+    thailand: 'TH',
+    turkey: 'TR',
+    'united arab emirates': 'AE',
+    'united kingdom': 'GB',
+    'united states': 'US',
+    vietnam: 'VN',
+};
 
 const EMPTY_ISSUES: GeoIssuesSummary = {
     locations: [],
@@ -160,6 +232,11 @@ function normalizeCountry(value?: string): string {
     return (value || '').trim().toLowerCase();
 }
 
+function getCountryCodeForName(country?: string | null): string | null {
+    const normalizedCountry = normalizeCountry(country || undefined);
+    return normalizedCountry ? COUNTRY_NAME_TO_CODE[normalizedCountry] || null : null;
+}
+
 function normalizeCity(value?: string): string {
     return (value || '').trim().toLowerCase();
 }
@@ -184,74 +261,276 @@ function getMarkerSize(activeUsers: number, maxActiveUsers: number): number {
     return Math.round(12 + normalized * 26);
 }
 
+function clampGeoSidebarWidth(width: number): number {
+    if (!Number.isFinite(width)) return GEO_SIDEBAR_DEFAULT_WIDTH;
+    return Math.round(Math.max(GEO_SIDEBAR_MIN_WIDTH, Math.min(GEO_SIDEBAR_MAX_WIDTH, width)));
+}
+
+function getInitialGeoSidebarWidth(): number {
+    if (typeof window === 'undefined') return GEO_SIDEBAR_DEFAULT_WIDTH;
+    const storedWidth = Number(window.localStorage.getItem(GEO_SIDEBAR_WIDTH_STORAGE_KEY));
+    return clampGeoSidebarWidth(storedWidth || GEO_SIDEBAR_DEFAULT_WIDTH);
+}
+
+function getInitialGeoSidebarCollapsed(): boolean {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(GEO_SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
+}
+
+function selectTopByScore<T>(items: T[], limit: number, getScore: (item: T) => number): T[] {
+    if (items.length <= limit) return items.slice();
+
+    const compactAt = Math.max(limit + 1, limit * 3);
+    const candidates: Array<{ item: T; score: number; index: number }> = [];
+
+    items.forEach((item, index) => {
+        const rawScore = getScore(item);
+        const score = Number.isFinite(rawScore) ? rawScore : 0;
+        candidates.push({ item, score, index });
+
+        if (candidates.length >= compactAt) {
+            candidates.sort((a, b) => b.score - a.score || a.index - b.index);
+            candidates.length = limit;
+        }
+    });
+
+    return candidates
+        .sort((a, b) => b.score - a.score || a.index - b.index)
+        .slice(0, limit)
+        .map((candidate) => candidate.item);
+}
+
+function getGeoLocationScore(location: GeoIssuesSummary['locations'][number]): number {
+    const uniqueUsers = Math.max(0, Number(location.uniqueUsers) || 0);
+    const sessions = Math.max(0, Number(location.sessions) || 0);
+    const issues = Math.max(0, Number(location.issues?.total) || 0);
+    const growth = Math.max(0, Number(location.growthRate) || 0);
+    return uniqueUsers * 12 + sessions * 3 + issues * 24 + growth;
+}
+
 function formatLatency(value?: number): string {
     if (!value || Number.isNaN(value)) return 'N/A';
     return `${Math.round(value)}ms`;
 }
 
-function getZoomMarkerSize(baseSize: number, zoom: number): number {
-    const zoomScale = 1 + Math.max(0, zoom - 1.25) * 0.34;
-    return Math.round(Math.max(18, Math.min(56, baseSize * zoomScale)));
+function getRelativeGeoMarkerSize(cluster: GeoMapCluster, maxUsers: number, zoom: number): number {
+    const safeMax = Math.max(maxUsers, 1);
+    const normalized = Math.sqrt(Math.max(1, cluster.uniqueUsers) / safeMax);
+    const minSize = cluster.kind === 'cluster' ? 46 : 36;
+    const maxSize = cluster.kind === 'cluster' ? 78 : 60;
+    const zoomScale = 0.94 + Math.max(0, Math.min(5, zoom - 2)) * 0.07;
+    return Math.round((minSize + normalized * (maxSize - minSize)) * zoomScale);
 }
 
-function renderLatencyFace(face: MarkerStyle['face']) {
-    const mouthStyle: React.CSSProperties =
-        face === 'happy'
-            ? {
-                left: '29%',
-                top: '47%',
-                width: '42%',
-                height: '26%',
-                borderBottom: '2px solid rgba(3, 7, 18, 0.86)',
-                borderRadius: '0 0 999px 999px',
-            }
-            : face === 'angry'
-                ? {
-                    left: '32%',
-                    top: '62%',
-                    width: '36%',
-                    height: '18%',
-                    borderTop: '2px solid rgba(3, 7, 18, 0.86)',
-                    borderRadius: '999px 999px 0 0',
-                }
-                : {
-                    left: '32%',
-                    top: '59%',
-                    width: '36%',
-                    height: '2px',
-                    backgroundColor: 'rgba(3, 7, 18, 0.82)',
-                    borderRadius: '999px',
-                };
-
-    return (
-        <span className="pointer-events-none absolute inset-0 block">
-            <span
-                className="absolute rounded-full bg-slate-950"
-                style={{ left: '29%', top: '33%', width: '10%', height: '10%' }}
-            />
-            <span
-                className="absolute rounded-full bg-slate-950"
-                style={{ right: '29%', top: '33%', width: '10%', height: '10%' }}
-            />
-            {face === 'angry' && (
-                <>
-                    <span
-                        className="absolute bg-slate-950"
-                        style={{ left: '24%', top: '25%', width: '19%', height: '2px', transform: 'rotate(24deg)' }}
-                    />
-                    <span
-                        className="absolute bg-slate-950"
-                        style={{ right: '24%', top: '25%', width: '19%', height: '2px', transform: 'rotate(-24deg)' }}
-                    />
-                </>
-            )}
-            <span className="absolute block" style={mouthStyle} />
-        </span>
-    );
+function getGeoClusterStep(zoom: number): number {
+    const normalizedZoom = Math.max(1, Math.min(9, zoom));
+    return Math.max(0.18, 18 / Math.pow(2, normalizedZoom - 1));
 }
+
+function getClusterAvatarLimit(cluster: GeoMapCluster, zoom: number): number {
+    if (cluster.kind === 'location') {
+        if (zoom < 4.4) return 1;
+        if (zoom < 5.6) return 2;
+        return 3;
+    }
+
+    if (zoom < 2.6) return 1;
+    if (zoom < 3.6) return 2;
+    if (zoom < 4.8) return 3;
+    if (zoom < 5.8) return 4;
+    return 5;
+}
+
+function getVisibleVisitorLimitForZoom(zoom: number): number {
+    if (zoom < 3.2) return 0;
+    if (zoom < 3.8) return 14;
+    if (zoom < 4.7) return 30;
+    if (zoom < 5.8) return 56;
+    return 88;
+}
+
+function getVisibleVisitorPerLocationLimitForZoom(zoom: number): number {
+    if (zoom < 3.2) return 0;
+    if (zoom < 4.7) return 1;
+    if (zoom < 5.8) return 2;
+    return 4;
+}
+
+function getSessionJitterRadius(zoom: number): number {
+    if (zoom < 3.4) return 0.16;
+    if (zoom < 4.6) return 0.12;
+    if (zoom < 5.8) return 0.085;
+    return 0.055;
+}
+
+function shouldRenderAggregateCluster(cluster: GeoMapCluster, zoom: number): boolean {
+    if (zoom >= 5.15) return false;
+    if (zoom >= 3.75) return cluster.kind === 'cluster';
+    return true;
+}
+
+function buildGeoClusters(markers: GeoMarker[], zoom: number): GeoMapCluster[] {
+    if (markers.length === 0) return [];
+
+    const step = getGeoClusterStep(zoom);
+    const groups = new Map<string, GeoMarker[]>();
+    markers.forEach((marker) => {
+        const latBucket = Math.floor((marker.lat + 90) / step);
+        const lngBucket = Math.floor((marker.lng + 180) / step);
+        const key = `${latBucket}:${lngBucket}`;
+        const group = groups.get(key) || [];
+        group.push(marker);
+        groups.set(key, group);
+    });
+
+    return [...groups.entries()]
+        .map(([key, group]) => {
+            const sortedGroup = [...group].sort((a, b) => b.uniqueUsers - a.uniqueUsers);
+            const topMarker = sortedGroup[0];
+            const kind: GeoMapCluster['kind'] = group.length === 1 ? 'location' : 'cluster';
+            const sessions = group.reduce((sum, marker) => sum + marker.sessions, 0);
+            const uniqueUsers = group.reduce((sum, marker) => sum + marker.uniqueUsers, 0);
+            const totalWeight = group.reduce((sum, marker) => sum + Math.max(marker.sessions, marker.uniqueUsers, 1), 0);
+            const lat = group.reduce((sum, marker) => sum + marker.lat * Math.max(marker.sessions, marker.uniqueUsers, 1), 0) / totalWeight;
+            const lng = group.reduce((sum, marker) => sum + marker.lng * Math.max(marker.sessions, marker.uniqueUsers, 1), 0) / totalWeight;
+            const latencyWeight = group.reduce((sum, marker) => sum + (marker.avgLatencyMs ? Math.max(marker.sessions, 1) : 0), 0);
+            const avgLatencyMs =
+                latencyWeight > 0
+                    ? group.reduce((sum, marker) => sum + (marker.avgLatencyMs || 0) * Math.max(marker.sessions, 1), 0) / latencyWeight
+                    : topMarker.avgLatencyMs;
+            const latencyTier = getLatencyTier(avgLatencyMs);
+
+            return {
+                id: kind === 'location' ? `location:${topMarker.id}` : `cluster:${key}:${group.length}`,
+                kind,
+                markers: sortedGroup,
+                topMarker,
+                lat,
+                lng,
+                sessions,
+                uniqueUsers,
+                avgLatencyMs,
+                latencyTier,
+                style: LATENCY_STYLE[latencyTier],
+            };
+        })
+        .sort((a, b) => b.uniqueUsers - a.uniqueUsers);
+}
+
+const ANIMAL_AVATAR_BASE_PATH = '/images/avatars/animals';
+
+const ANONYMOUS_NAME_ANIMALS = [
+    'Panda',
+    'Otter',
+    'Koala',
+    'Penguin',
+    'Bunny',
+    'Dolphin',
+    'Owl',
+    'Fox',
+    'Bear',
+    'Deer',
+    'Hedgehog',
+    'Hamster',
+    'Kitten',
+    'Puppy',
+    'Squirrel',
+    'Raccoon',
+    'Sloth',
+    'Seal',
+    'Duckling',
+    'Fawn',
+    'Lemur',
+    'Alpaca',
+    'Capybara',
+    'Quokka',
+    'Meerkat',
+    'Chinchilla',
+    'Ferret',
+    'Beaver',
+    'Badger',
+    'Wombat',
+] as const;
+
+type AnonymousAnimal = (typeof ANONYMOUS_NAME_ANIMALS)[number];
+
+interface ClusterAvatarItem {
+    animal: AnonymousAnimal;
+    seed: string;
+    label: string;
+    count: number;
+    latestStartedMs: number;
+}
+
+const ANIMAL_ICON_SLUGS: Record<AnonymousAnimal, string> = {
+    Panda: 'panda',
+    Otter: 'otter',
+    Koala: 'koala',
+    Penguin: 'penguin',
+    Bunny: 'bunny',
+    Dolphin: 'dolphin',
+    Owl: 'owl',
+    Fox: 'fox',
+    Bear: 'bear',
+    Deer: 'deer',
+    Hedgehog: 'hedgehog',
+    Hamster: 'hamster',
+    Kitten: 'kitten',
+    Puppy: 'puppy',
+    Squirrel: 'squirrel',
+    Raccoon: 'raccoon',
+    Sloth: 'sloth',
+    Seal: 'seal',
+    Duckling: 'duckling',
+    Fawn: 'fawn',
+    Lemur: 'lemur',
+    Alpaca: 'alpaca',
+    Capybara: 'capybara',
+    Quokka: 'quokka',
+    Meerkat: 'meerkat',
+    Chinchilla: 'chinchilla',
+    Ferret: 'ferret',
+    Beaver: 'beaver',
+    Badger: 'badger',
+    Wombat: 'wombat',
+};
+
+const AVATAR_TONES = [
+    { bg: '#dbeafe', ring: '#60a5fa' },
+    { bg: '#dcfce7', ring: '#4ade80' },
+    { bg: '#fef3c7', ring: '#fbbf24' },
+    { bg: '#fce7f3', ring: '#f472b6' },
+    { bg: '#ede9fe', ring: '#a78bfa' },
+    { bg: '#cffafe', ring: '#22d3ee' },
+    { bg: '#ffedd5', ring: '#fb923c' },
+    { bg: '#e0e7ff', ring: '#818cf8' },
+];
 
 type GeoSessionRow = {
     id: string;
+    userId?: string | null;
+    anonymousId?: string | null;
+    anonymousDisplayName?: string | null;
+    deviceId?: string | null;
+    startedAt?: string | number | null;
+    platform?: string | null;
+    deviceModel?: string | null;
+    appVersion?: string | null;
+    osVersion?: string | null;
+    sdkVersion?: string | null;
+    networkType?: string | null;
+    cellularGeneration?: string | null;
+    metadata?: Record<string, unknown> | null;
+    webReferral?: string | null;
+    webLandingRoute?: string | null;
+    geoLocation?: {
+        country?: string | null;
+        countryCode?: string | null;
+        region?: string | null;
+        city?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+    } | null;
     durationSeconds?: number;
     isFirstSession?: boolean;
     visitorSessionNumber?: number | null;
@@ -266,6 +545,256 @@ type GeoSessionRow = {
     apiAvgResponseMs?: number;
     appStartupTimeMs?: number;
 };
+
+function isFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function hashString(value: string): number {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function getAvatarTone(seed: string) {
+    return AVATAR_TONES[hashString(seed || 'anonymous') % AVATAR_TONES.length];
+}
+
+function getAnimalFromDisplayName(displayName?: string | null): AnonymousAnimal | null {
+    const normalized = (displayName || '').replace(/[\s_-]+/g, '').toLowerCase();
+    if (!normalized) return null;
+    return [...ANONYMOUS_NAME_ANIMALS].sort((a, b) => b.length - a.length).find((animal) => normalized.includes(animal.toLowerCase())) ?? null;
+}
+
+function getAnimalForSeed(seed: string): AnonymousAnimal {
+    return ANONYMOUS_NAME_ANIMALS[hashString(seed || 'anonymous') % ANONYMOUS_NAME_ANIMALS.length];
+}
+
+function getSessionIdentitySeed(session: GeoSessionRow): string {
+    return session.anonymousDisplayName?.trim() || session.deviceId?.trim() || session.anonymousId?.trim() || session.userId?.trim() || session.id;
+}
+
+function getSessionAnimal(session: GeoSessionRow): AnonymousAnimal {
+    return getAnimalFromDisplayName(session.anonymousDisplayName) ?? getAnimalForSeed(getSessionIdentitySeed(session));
+}
+
+function getAnimalIconSrc(animal: AnonymousAnimal): string {
+    return `${ANIMAL_AVATAR_BASE_PATH}/${ANIMAL_ICON_SLUGS[animal]}.svg`;
+}
+
+function rankVisitorAnimalItems(sessions: GeoSessionRow[], limit: number): ClusterAvatarItem[] {
+    const visitorMap = new Map<string, ClusterAvatarItem>();
+
+    sessions.forEach((session) => {
+        const seed = getSessionIdentitySeed(session);
+        const latestStartedMs = getSessionStartedMs(session);
+        const existing = visitorMap.get(seed);
+
+        if (!existing) {
+            visitorMap.set(seed, {
+                animal: getSessionAnimal(session),
+                seed,
+                label: getVisitorDisplayName(session),
+                count: 1,
+                latestStartedMs,
+            });
+            return;
+        }
+
+        existing.count += 1;
+        if (latestStartedMs >= existing.latestStartedMs) {
+            existing.animal = getSessionAnimal(session);
+            existing.label = getVisitorDisplayName(session);
+            existing.latestStartedMs = latestStartedMs;
+        }
+    });
+
+    return [...visitorMap.values()]
+        .sort((a, b) => b.count - a.count || b.latestStartedMs - a.latestStartedMs || a.label.localeCompare(b.label))
+        .slice(0, limit);
+}
+
+function rankUniqueVisitorSessions(sessions: GeoSessionRow[]): GeoSessionRow[] {
+    const visitorMap = new Map<
+        string,
+        {
+            session: GeoSessionRow;
+            count: number;
+            latestStartedMs: number;
+            label: string;
+        }
+    >();
+
+    sessions.forEach((session) => {
+        const seed = getSessionIdentitySeed(session);
+        const latestStartedMs = getSessionStartedMs(session);
+        const existing = visitorMap.get(seed);
+
+        if (!existing) {
+            visitorMap.set(seed, {
+                session,
+                count: 1,
+                latestStartedMs,
+                label: getVisitorDisplayName(session),
+            });
+            return;
+        }
+
+        existing.count += 1;
+        if (latestStartedMs >= existing.latestStartedMs) {
+            existing.session = session;
+            existing.latestStartedMs = latestStartedMs;
+            existing.label = getVisitorDisplayName(session);
+        }
+    });
+
+    return [...visitorMap.values()]
+        .sort((a, b) => b.count - a.count || b.latestStartedMs - a.latestStartedMs || a.label.localeCompare(b.label))
+        .map((item) => item.session);
+}
+
+function AnimalAvatar({ animal, seed, size = 32, active = false }: { animal: AnonymousAnimal; seed: string; size?: number; active?: boolean }) {
+    const tone = getAvatarTone(seed);
+    const innerSize = Math.max(18, Math.round(size * 0.68));
+
+    return (
+        <span
+            className="inline-flex shrink-0 items-center justify-center rounded-full border border-white transition-transform duration-150"
+            style={{
+                width: size,
+                height: size,
+                backgroundColor: tone.bg,
+                boxShadow: active
+                    ? '0 0 0 2px #ffffff, 0 0 0 5px rgba(15,23,42,0.92), 0 8px 18px rgba(15,23,42,0.24)'
+                    : `0 0 0 2px #ffffff, 0 0 0 4px ${tone.ring}66, 0 4px 10px rgba(15,23,42,0.16)`,
+            }}
+            aria-hidden="true"
+        >
+            <img src={getAnimalIconSrc(animal)} alt="" width={innerSize} height={innerSize} className="block" loading="lazy" />
+        </span>
+    );
+}
+
+function getMarkerLocationKey(marker: GeoMarker): string {
+    return getLocationLatencyKey(marker.country, marker.city);
+}
+
+function getSessionLocationKey(session: GeoSessionRow): string {
+    return getLocationLatencyKey(session.geoLocation?.country || undefined, session.geoLocation?.city || undefined);
+}
+
+function getClusterAvatarItems(cluster: GeoMapCluster, sessionsByLocation: Map<string, GeoSessionRow[]>, limit: number): ClusterAvatarItem[] {
+    const clusterSessions: GeoSessionRow[] = [];
+
+    for (const marker of cluster.markers) {
+        const sessions = sessionsByLocation.get(getMarkerLocationKey(marker)) || [];
+        clusterSessions.push(...sessions);
+    }
+
+    const rankedSessions = rankVisitorAnimalItems(clusterSessions, limit);
+    if (rankedSessions.length >= limit) return rankedSessions;
+
+    const seenSeeds = new Set(rankedSessions.map((item) => item.seed));
+    const fallbackItems = cluster.markers.slice(0, limit).flatMap((marker) => {
+        const seed = `location:${marker.id}`;
+        if (seenSeeds.has(seed)) return [];
+        seenSeeds.add(seed);
+        return {
+            animal: getAnimalForSeed(seed),
+            seed,
+            label: `${marker.city}, ${marker.country}`,
+            count: Math.max(marker.uniqueUsers, marker.sessions, 1),
+            latestStartedMs: 0,
+        };
+    });
+
+    return [...rankedSessions, ...fallbackItems].slice(0, limit);
+}
+
+function GeoClusterAnimalMarker({
+    cluster,
+    sessionsByLocation,
+    size,
+    active,
+    zoom,
+}: {
+    cluster: GeoMapCluster;
+    sessionsByLocation: Map<string, GeoSessionRow[]>;
+    size: number;
+    active: boolean;
+    zoom: number;
+}) {
+    const avatarItems = getClusterAvatarItems(cluster, sessionsByLocation, getClusterAvatarLimit(cluster, zoom));
+    const isCluster = cluster.kind === 'cluster';
+    const avatarSize = isCluster
+        ? Math.max(26, Math.min(36, Math.round(size * 0.46)))
+        : Math.max(28, Math.min(42, Math.round(size * (avatarItems.length > 1 ? 0.58 : 0.72))));
+    const artSize = Math.max(size, avatarSize + 16);
+    const offsets =
+        avatarItems.length === 1
+            ? [{ x: 0, y: 0, z: 5 }]
+            : isCluster
+              ? [
+                    { x: 0, y: -Math.round(size * 0.18), z: 5 },
+                    { x: -Math.round(size * 0.22), y: Math.round(size * 0.08), z: 4 },
+                    { x: Math.round(size * 0.22), y: Math.round(size * 0.08), z: 3 },
+                    { x: -Math.round(size * 0.1), y: Math.round(size * 0.28), z: 2 },
+                    { x: Math.round(size * 0.1), y: Math.round(size * 0.28), z: 1 },
+                ]
+              : [
+                    { x: 0, y: -Math.round(size * 0.16), z: 4 },
+                    { x: -Math.round(size * 0.18), y: Math.round(size * 0.14), z: 3 },
+                    { x: Math.round(size * 0.18), y: Math.round(size * 0.14), z: 2 },
+                ];
+
+    return (
+        <span className="relative inline-flex flex-col items-center justify-start" style={{ width: artSize + 20, minHeight: artSize + 20 }}>
+            <span
+                className="relative inline-flex items-center justify-center rounded-full bg-white/90"
+                style={{
+                    width: artSize,
+                    height: artSize,
+                    boxShadow: active
+                        ? '0 0 0 2px #000000, 0 0 0 5px rgba(15,23,42,0.2), 0 14px 32px rgba(15,23,42,0.24)'
+                        : `0 0 0 2px rgba(0,0,0,0.88), 4px 4px 0 0 rgba(15,23,42,0.18), 0 8px 18px rgba(15,23,42,0.16)`,
+                }}
+            >
+                {avatarItems.map((item, index) => {
+                    const offset = offsets[index] || offsets[0];
+                    return (
+                        <span
+                            key={`${item.seed}:${index}`}
+                            className="absolute"
+                            style={{
+                                transform: `translate(${offset.x}px, ${offset.y}px)`,
+                                zIndex: offset.z,
+                            }}
+                            title={`${item.label}${item.count > 1 ? ` (${item.count} sessions)` : ''}`}
+                        >
+                            <AnimalAvatar animal={item.animal} seed={item.seed} size={avatarSize} active={active && index === 0} />
+                            {item.count > 1 && (
+                                <span className="absolute -bottom-1 -right-1 rounded-full border border-white bg-slate-950 px-1 py-px text-[8px] font-semibold leading-none text-white shadow-sm">
+                                    {formatCompactNumber(item.count)}
+                                </span>
+                            )}
+                        </span>
+                    );
+                })}
+                {isCluster && (
+                    <span className="absolute -left-1.5 -top-1.5 border-2 border-black bg-white px-1.5 py-0.5 text-[9px] font-black leading-none text-black shadow-neo-sm">
+                        {cluster.markers.length}
+                    </span>
+                )}
+            </span>
+            <span className="mt-1 whitespace-nowrap border-2 border-black bg-black px-1.5 py-0.5 text-[8px] font-black leading-none text-white shadow-neo-sm">
+                {formatCompactNumber(cluster.uniqueUsers)}
+            </span>
+        </span>
+    );
+}
 
 function getShortSessionId(id: string): string {
     const compact = id.replace(/-/g, '').trim();
@@ -297,49 +826,380 @@ function getGeoSessionFace(session: GeoSessionRow): MarkerStyle['face'] {
     return hasFriction ? 'neutral' : 'happy';
 }
 
-function MiniGeoFace({ face }: { face: MarkerStyle['face'] }) {
-    const style =
-        face === 'happy'
-            ? LATENCY_STYLE.excellent
-            : face === 'angry'
-                ? LATENCY_STYLE.critical
-                : LATENCY_STYLE.good;
+function getSessionStatusLabel(session: GeoSessionRow): string {
+    const face = getGeoSessionFace(session);
+    if (face === 'angry') return 'Issue';
+    if (face === 'neutral') return 'Watch';
+    return 'Clean';
+}
 
+function getVisitorDisplayName(session: GeoSessionRow): string {
+    const userId = session.userId?.trim();
+    if (userId && userId.toLowerCase() !== 'anonymous') return userId;
+    const anonymousDisplayName = session.anonymousDisplayName?.trim();
+    if (anonymousDisplayName) return anonymousDisplayName;
+    const anonymousId = session.anonymousId?.trim();
+    if (anonymousId && anonymousId.toLowerCase() !== 'anonymous') return anonymousId;
+    return `Visitor ${getShortSessionId(session.id).toUpperCase()}`;
+}
+
+function getVisitorCompactName(session: GeoSessionRow): string {
+    const displayName = getVisitorDisplayName(session);
+    return displayName.length > 24 ? `${displayName.slice(0, 21)}...` : displayName;
+}
+
+function formatLocation(session: GeoSessionRow): string {
+    const city = session.geoLocation?.city?.trim();
+    const country = session.geoLocation?.country?.trim();
+    return [city, country].filter(Boolean).join(', ') || 'Unknown location';
+}
+
+function formatRoute(session: GeoSessionRow): string {
+    const route = session.webLandingRoute?.trim();
+    if (!route) return '/';
+    try {
+        const url = new URL(route);
+        return url.pathname || '/';
+    } catch {
+        return route.startsWith('/') ? route : `/${route}`;
+    }
+}
+
+function formatReferrer(session: GeoSessionRow): string {
+    const referrer = session.webReferral?.trim();
+    if (!referrer) return 'Direct';
+    try {
+        return new URL(referrer).hostname.replace(/^www\./, '');
+    } catch {
+        return (
+            referrer
+                .replace(/^https?:\/\//, '')
+                .replace(/^www\./, '')
+                .split('/')[0] || 'Direct'
+        );
+    }
+}
+
+function formatSessionStarted(value?: string | number | null): string {
+    if (!value) return 'recent';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'recent';
+    return new Intl.DateTimeFormat(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(date);
+}
+
+function formatCompactNumber(value: number): string {
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}m`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+    return value.toLocaleString();
+}
+
+function getJitteredPoint(latitude: number, longitude: number, seed: string, index: number, radiusBase = 0.04) {
+    const hash = hashString(`${seed}:${index}`);
+    const radius = Math.min(radiusBase * 2.45, radiusBase * (0.42 + Math.sqrt(index + 1) * 0.42 + (hash % 7) * 0.035));
+    const angle = (((hash % 360) + index * 137.508) * Math.PI) / 180;
+    return {
+        latitude: latitude + Math.sin(angle) * radius,
+        longitude: longitude + Math.cos(angle) * radius,
+    };
+}
+
+function getSessionPoint(session: GeoSessionRow, index: number, radiusBase = 0.04) {
+    const latitude = session.geoLocation?.latitude;
+    const longitude = session.geoLocation?.longitude;
+    if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return null;
+    return getJitteredPoint(latitude, longitude, getSessionIdentitySeed(session), index, radiusBase);
+}
+
+type GeoCountPill = {
+    label: string;
+    count: number;
+    icon?: React.ReactNode;
+};
+
+type LiveGeoAnalytics = {
+    lastThirtySessions: GeoSessionRow[];
+    userCount: number;
+    sessionCount: number;
+    trendValues: number[];
+    peakCount: number;
+    peakLabel: string;
+    referrers: GeoCountPill[];
+    countries: GeoCountPill[];
+    devices: GeoCountPill[];
+};
+
+function getLastMinutesWindowStart(nowMs: number, minutes = LIVE_ANALYTICS_WINDOW_MINUTES): number {
+    return nowMs - minutes * 60 * 1000;
+}
+
+function getLastMinutesSessions(sessions: GeoSessionRow[], nowMs: number, minutes = LIVE_ANALYTICS_WINDOW_MINUTES): GeoSessionRow[] {
+    const windowStartMs = getLastMinutesWindowStart(nowMs, minutes);
+    return sessions.filter((session) => {
+        const startedMs = getSessionStartedMs(session);
+        return startedMs >= windowStartMs && startedMs <= nowMs;
+    });
+}
+
+function formatClockTime(valueMs: number): string {
+    if (!Number.isFinite(valueMs)) return '--:--';
+    return new Intl.DateTimeFormat(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(new Date(valueMs));
+}
+
+function getTrendCoordinates(values: number[], width: number, height: number, paddingX: number, paddingY: number): Array<{ x: number; y: number }> {
+    if (values.length === 0) return [];
+    const maxValue = Math.max(...values, 1);
+    const innerWidth = width - paddingX * 2;
+    const innerHeight = height - paddingY * 2;
+    const step = values.length > 1 ? innerWidth / (values.length - 1) : innerWidth;
+
+    return values.map((value, index) => ({
+        x: paddingX + index * step,
+        y: paddingY + innerHeight - (value / maxValue) * innerHeight,
+    }));
+}
+
+function buildTrendPolyline(values: number[], width = 300, height = 84): string {
+    return getTrendCoordinates(values, width, height, 10, 12)
+        .map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`)
+        .join(' ');
+}
+
+function buildTrendAreaPath(values: number[], width = 300, height = 84): string {
+    const coordinates = getTrendCoordinates(values, width, height, 10, 12);
+    if (coordinates.length === 0) return '';
+    const baseline = height - 12;
+    const linePath = coordinates.map(({ x, y }) => `L ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+    return `M ${coordinates[0].x.toFixed(1)} ${baseline} ${linePath.replace(/^L /, 'L ')} L ${coordinates[coordinates.length - 1].x.toFixed(1)} ${baseline} Z`;
+}
+
+function countTopBy(sessions: GeoSessionRow[], getLabel: (session: GeoSessionRow) => string, limit = 4): GeoCountPill[] {
+    const counts = new Map<string, number>();
+    sessions.forEach((session) => {
+        const label = getLabel(session).trim() || 'Unknown';
+        counts.set(label, (counts.get(label) || 0) + 1);
+    });
+
+    return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, limit)
+        .map(([label, count]) => ({ label, count }));
+}
+
+function getCountryPillLabel(session: GeoSessionRow): string {
+    return session.geoLocation?.country?.trim() || 'Unknown';
+}
+
+function getDeviceCategory(session: GeoSessionRow): 'Desktop' | 'Mobile' | 'Unknown' {
+    const platform = (session.platform || '').toLowerCase();
+    const metadata = session.metadata || {};
+    const deviceType = String(metadata.deviceType || metadata.device_type || metadata.formFactor || '').toLowerCase();
+    const userAgent = String(metadata.userAgent || metadata.user_agent || '').toLowerCase();
+
+    if (platform === 'ios' || platform === 'android' || platform === 'mobile' || deviceType.includes('mobile') || userAgent.includes('mobile')) {
+        return 'Mobile';
+    }
+    if (platform === 'web' || platform === 'desktop' || deviceType.includes('desktop')) {
+        return 'Desktop';
+    }
+    return 'Unknown';
+}
+
+function getDevicePills(sessions: GeoSessionRow[]): GeoCountPill[] {
+    return countTopBy(sessions, getDeviceCategory, 3).map((pill) => ({
+        ...pill,
+        icon:
+            pill.label === 'Desktop' ? (
+                <Monitor className="h-3.5 w-3.5 text-slate-500" />
+            ) : pill.label === 'Mobile' ? (
+                <Smartphone className="h-3.5 w-3.5 text-slate-500" />
+            ) : undefined,
+    }));
+}
+
+function getLiveGeoAnalytics(sessions: GeoSessionRow[], nowMs: number, useLatestSessionFallback = false): LiveGeoAnalytics {
+    let analyticsNowMs = nowMs;
+    let lastThirtySessions = getLastMinutesSessions(sessions, analyticsNowMs);
+
+    if (useLatestSessionFallback && lastThirtySessions.length === 0 && sessions.length > 0) {
+        const latestStartedMs = Math.max(...sessions.map(getSessionStartedMs).filter((value) => value > 0));
+        if (Number.isFinite(latestStartedMs) && latestStartedMs > 0) {
+            analyticsNowMs = latestStartedMs + 1000;
+            lastThirtySessions = getLastMinutesSessions(sessions, analyticsNowMs);
+        }
+    }
+
+    const windowStartMs = getLastMinutesWindowStart(analyticsNowMs);
+    const bucketDurationMs = (LIVE_ANALYTICS_WINDOW_MINUTES * 60 * 1000) / LIVE_ANALYTICS_BUCKET_COUNT;
+    const bucketUsers = Array.from({ length: LIVE_ANALYTICS_BUCKET_COUNT }, () => new Set<string>());
+
+    lastThirtySessions.forEach((session) => {
+        const startedMs = getSessionStartedMs(session);
+        const bucketIndex = Math.max(0, Math.min(LIVE_ANALYTICS_BUCKET_COUNT - 1, Math.floor((startedMs - windowStartMs) / bucketDurationMs)));
+        bucketUsers[bucketIndex].add(getSessionIdentitySeed(session));
+    });
+
+    const trendValues = bucketUsers.map((bucket) => bucket.size);
+    const peakCount = Math.max(...trendValues, 0);
+    const peakIndex = Math.max(
+        0,
+        trendValues.findIndex((value) => value === peakCount),
+    );
+    const peakLabel = peakCount > 0 ? formatClockTime(windowStartMs + (peakIndex + 1) * bucketDurationMs) : '--:--';
+    const uniqueUsers = new Set(lastThirtySessions.map(getSessionIdentitySeed));
+
+    return {
+        lastThirtySessions,
+        userCount: uniqueUsers.size,
+        sessionCount: lastThirtySessions.length,
+        trendValues,
+        peakCount,
+        peakLabel,
+        referrers: countTopBy(lastThirtySessions, formatReferrer),
+        countries: countTopBy(lastThirtySessions, getCountryPillLabel),
+        devices: getDevicePills(lastThirtySessions),
+    };
+}
+
+function GeoPillList({ label, pills, fallback }: { label: string; pills: GeoCountPill[]; fallback: string }) {
     return (
-        <span
-            className="relative inline-flex h-6 w-6 shrink-0 rounded-full border border-slate-950/60"
-            style={{
-                background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.86) 0, ${style.fill} 36%, ${style.solid} 100%)`,
-                boxShadow: `0 0 0 2px rgba(255,255,255,0.74), 0 0 0 3px ${style.ring}`,
-            }}
-            aria-hidden="true"
-        >
-            {renderLatencyFace(face)}
-        </span>
+        <div className="grid grid-cols-[74px_minmax(0,1fr)] items-start gap-2">
+            <div className="dashboard-label pt-1">{label}</div>
+            <div className="flex min-w-0 flex-wrap gap-1.5">
+                {pills.length > 0 ? (
+                    pills.map((pill) => (
+                        <span
+                            key={`${label}:${pill.label}`}
+                            className="dashboard-pill inline-flex max-w-full items-center gap-1.5 truncate px-2 py-1 text-[11px] font-semibold text-slate-700"
+                        >
+                            {pill.icon}
+                            <span className="truncate">{pill.label}</span>
+                            <span className="font-mono text-[10px] text-slate-500">({pill.count})</span>
+                        </span>
+                    ))
+                ) : (
+                    <span className="dashboard-pill px-2 py-1 text-[11px] font-semibold text-slate-500">{fallback}</span>
+                )}
+            </div>
+        </div>
     );
 }
 
-async function copyTextToClipboard(value: string): Promise<boolean> {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-        return true;
-    }
-    if (typeof document === 'undefined') return false;
+function LiveGeoSidebarPanel({
+    analytics,
+    scopeLabel,
+    scopeDetail,
+    scopeCountryCode,
+    isLoading,
+    actions,
+}: {
+    analytics: LiveGeoAnalytics;
+    scopeLabel: string;
+    scopeDetail: string;
+    scopeCountryCode?: string | null;
+    isLoading: boolean;
+    actions?: React.ReactNode;
+}) {
+    const linePoints = buildTrendPolyline(analytics.trendValues);
+    const areaPath = buildTrendAreaPath(analytics.trendValues);
+    const maxValue = Math.max(...analytics.trendValues, 1);
 
-    const textarea = document.createElement('textarea');
-    textarea.value = value;
-    textarea.setAttribute('readonly', 'true');
-    textarea.style.position = 'fixed';
-    textarea.style.left = '-9999px';
-    textarea.style.top = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
+    return (
+        <div className="border-b border-slate-200 bg-white px-4 py-3">
+            <div className="mb-2 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="dashboard-label">Last 30 min</div>
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-sm font-black text-black">
+                        {scopeCountryCode ? (
+                            <CountryFlag
+                                countryCode={scopeCountryCode}
+                                countryLabel={scopeLabel}
+                                className="h-4"
+                                imageClassName="h-4 w-4"
+                                decorative
+                            />
+                        ) : (
+                            <Globe className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                        )}
+                        <span className="truncate">{scopeLabel}</span>
+                    </div>
+                    <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">{scopeDetail}</div>
+                </div>
+                <div className="flex shrink-0 items-start gap-2">
+                    <div className="text-right text-[11px] font-semibold text-slate-500">
+                        <span className="font-mono text-base font-black text-black">{formatCompactNumber(analytics.userCount)}</span> users
+                        <div>
+                            peak <span className="font-mono font-black text-black">{formatCompactNumber(analytics.peakCount)}</span> @ {analytics.peakLabel}
+                        </div>
+                    </div>
+                    {actions}
+                </div>
+            </div>
 
-    try {
-        return document.execCommand('copy');
-    } finally {
-        document.body.removeChild(textarea);
-    }
+            <div className="relative h-[92px] overflow-hidden rounded-[6px] border border-slate-200 bg-white">
+                <svg viewBox="0 0 300 84" className="h-full w-full" role="img" aria-label={`${scopeLabel} users over the last 30 minutes`}>
+                    <defs>
+                        <linearGradient id="geo-live-trend-fill" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="0%" stopColor="#fb923c" stopOpacity="0.28" />
+                            <stop offset="100%" stopColor="#fb923c" stopOpacity="0.02" />
+                        </linearGradient>
+                    </defs>
+                    <line x1="10" x2="290" y1="72" y2="72" stroke="#e2e8f0" strokeWidth="1" />
+                    <line x1="10" x2="290" y1="42" y2="42" stroke="#f1f5f9" strokeWidth="1" />
+                    <line x1="10" x2="290" y1="12" y2="12" stroke="#f8fafc" strokeWidth="1" />
+                    {analytics.trendValues.map((value, index) => {
+                        const x = 10 + (index * 280) / Math.max(1, analytics.trendValues.length - 1);
+                        const barHeight = Math.max(2, (value / maxValue) * 52);
+                        return (
+                            <rect key={`trend-bar-${index}`} x={x - 3} y={72 - barHeight} width="6" height={barHeight} rx="2" fill="#fed7aa" opacity="0.7" />
+                        );
+                    })}
+                    {areaPath && <path d={areaPath} fill="url(#geo-live-trend-fill)" />}
+                    {linePoints && <polyline points={linePoints} fill="none" stroke="#f97316" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />}
+                    <text x="10" y="81" className="fill-slate-400 text-[8px] font-semibold">
+                        -30m
+                    </text>
+                    <text x="290" y="81" textAnchor="end" className="fill-slate-400 text-[8px] font-semibold">
+                        now
+                    </text>
+                </svg>
+                {isLoading && <div className="absolute inset-0 grid place-items-center bg-white/70 text-xs font-semibold text-slate-500">Loading...</div>}
+            </div>
+
+            <div className="mt-3 space-y-2">
+                <GeoPillList label="Referrers" pills={analytics.referrers} fallback="No referrers" />
+                <GeoPillList label="Countries" pills={analytics.countries} fallback="No countries" />
+                <GeoPillList label="Devices" pills={analytics.devices} fallback="No devices" />
+            </div>
+        </div>
+    );
+}
+
+function getVisitorSearchTerm(session: GeoSessionRow): string {
+    return session.userId?.trim() || session.anonymousDisplayName?.trim() || session.deviceId?.trim() || session.anonymousId?.trim() || session.id;
+}
+
+function getSessionStartedMs(session: GeoSessionRow): number {
+    if (!session.startedAt) return 0;
+    const started = new Date(session.startedAt).getTime();
+    return Number.isNaN(started) ? 0 : started;
+}
+
+function formatDateTime(value?: string | number | null): string {
+    if (!value) return 'Unknown';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown';
+    return new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(date);
 }
 
 export const Geo: React.FC = () => {
@@ -350,9 +1210,12 @@ export const Geo: React.FC = () => {
     const { platformLens } = useSharedPlatformLens(selectedProject?.id, selectedProject?.platforms);
     const platform = platformLensToSessionPlatform(platformLens);
     const mapRef = React.useRef<any>(null);
-    const isHoverPausedRef = React.useRef(false);
-    const isInteractionPausedRef = React.useRef(false);
-    const resumeRotationTimerRef = React.useRef<number | null>(null);
+    const mapWheelHostRef = React.useRef<HTMLElement | null>(null);
+    const [mapWheelHostElement, setMapWheelHostElement] = useState<HTMLElement | null>(null);
+    const setMapWheelHostRef = React.useCallback((node: HTMLElement | null) => {
+        mapWheelHostRef.current = node;
+        setMapWheelHostElement(node);
+    }, []);
 
     const { timeRange, setTimeRange } = useSharedRejourneyTimeRange(selectedProject?.id);
     const [issues, setIssues] = useState<GeoIssuesSummary>(EMPTY_ISSUES);
@@ -361,14 +1224,277 @@ export const Geo: React.FC = () => {
     const [loadError, setLoadError] = useState<string | null>(null);
     const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
     const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+    const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
     const [markerSessions, setMarkerSessions] = useState<GeoSessionRow[]>([]);
     const [markerSessionsState, setMarkerSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
-    const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
-    const [mapZoom, setMapZoom] = useState(1.34);
+    const [recentSessions, setRecentSessions] = useState<GeoSessionRow[]>([]);
+    const [recentSessionsState, setRecentSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
+    const [selectedVisitor, setSelectedVisitor] = useState<GeoSessionRow | null>(null);
+    const [visitorSessions, setVisitorSessions] = useState<GeoSessionRow[]>([]);
+    const [visitorSessionsState, setVisitorSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
+    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+    const [mapZoom, setMapZoom] = useState(2.05);
+    const [geoSidebarWidth, setGeoSidebarWidth] = useState(getInitialGeoSidebarWidth);
+    const [isGeoSidebarCollapsed, setIsGeoSidebarCollapsed] = useState(getInitialGeoSidebarCollapsed);
+    const renderZoom = React.useDeferredValue(mapZoom);
+    const mapZoomFrameRef = React.useRef<number | null>(null);
+    const pendingMapZoomRef = React.useRef(mapZoom);
+    const hoverClearTimeoutRef = React.useRef<number | null>(null);
+
+    const scheduleMapZoom = React.useCallback((zoom: number) => {
+        pendingMapZoomRef.current = zoom;
+        if (mapZoomFrameRef.current !== null) return;
+
+        mapZoomFrameRef.current = window.requestAnimationFrame(() => {
+            mapZoomFrameRef.current = null;
+            setMapZoom(pendingMapZoomRef.current);
+        });
+    }, []);
+
+    const showHoveredMarker = React.useCallback((markerId: string) => {
+        if (hoverClearTimeoutRef.current) {
+            window.clearTimeout(hoverClearTimeoutRef.current);
+            hoverClearTimeoutRef.current = null;
+        }
+        setHoveredMarkerId(markerId);
+    }, []);
+
+    const clearHoveredMarkerSoon = React.useCallback((markerId: string) => {
+        if (hoverClearTimeoutRef.current) {
+            window.clearTimeout(hoverClearTimeoutRef.current);
+        }
+        hoverClearTimeoutRef.current = window.setTimeout(() => {
+            setHoveredMarkerId((prev) => (prev === markerId ? null : prev));
+            hoverClearTimeoutRef.current = null;
+        }, 140);
+    }, []);
+
+    const startGeoSidebarResize = React.useCallback(
+        (event: React.PointerEvent<HTMLButtonElement>) => {
+            if (isGeoSidebarCollapsed) return;
+            event.preventDefault();
+
+            const startX = event.clientX;
+            const startWidth = geoSidebarWidth;
+            const previousCursor = document.body.style.cursor;
+            const previousUserSelect = document.body.style.userSelect;
+
+            const handlePointerMove = (moveEvent: PointerEvent) => {
+                setGeoSidebarWidth(clampGeoSidebarWidth(startWidth + moveEvent.clientX - startX));
+            };
+
+            const stopResize = () => {
+                document.body.style.cursor = previousCursor;
+                document.body.style.userSelect = previousUserSelect;
+                window.removeEventListener('pointermove', handlePointerMove);
+                window.removeEventListener('pointerup', stopResize);
+                window.removeEventListener('pointercancel', stopResize);
+            };
+
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            window.addEventListener('pointermove', handlePointerMove);
+            window.addEventListener('pointerup', stopResize);
+            window.addEventListener('pointercancel', stopResize);
+        },
+        [geoSidebarWidth, isGeoSidebarCollapsed],
+    );
+
+    const focusMapOnMarker = React.useCallback((marker: GeoMarker, zoom = 6.25) => {
+        const map = getMapInstance(mapRef);
+        if (!map || typeof map.easeTo !== 'function') return;
+
+        const currentZoom = typeof map.getZoom === 'function' ? map.getZoom() : zoom;
+        map.easeTo({
+            center: [marker.lng, marker.lat],
+            zoom: Math.max(currentZoom, zoom),
+            duration: 650,
+            essential: true,
+        });
+    }, []);
+
+    const focusMapOnCluster = React.useCallback(
+        (cluster: GeoMapCluster) => {
+            if (cluster.kind === 'location' || cluster.markers.length <= 1) {
+                focusMapOnMarker(cluster.topMarker);
+                return;
+            }
+
+            const map = getMapInstance(mapRef);
+            if (!map) return;
+
+            const lngs = cluster.markers.map((marker) => marker.lng);
+            const lats = cluster.markers.map((marker) => marker.lat);
+            const minLng = Math.min(...lngs);
+            const maxLng = Math.max(...lngs);
+            const minLat = Math.min(...lats);
+            const maxLat = Math.max(...lats);
+            const currentZoom = typeof map.getZoom === 'function' ? map.getZoom() : mapZoom;
+            const targetZoom = Math.max(4.35, Math.min(5.7, currentZoom + 1.35));
+
+            if (typeof map.fitBounds === 'function' && maxLng - minLng > 0.04 && maxLat - minLat > 0.04) {
+                map.fitBounds(
+                    [
+                        [minLng, minLat],
+                        [maxLng, maxLat],
+                    ],
+                    {
+                        padding: 96,
+                        maxZoom: targetZoom,
+                        duration: 650,
+                        essential: true,
+                    },
+                );
+                return;
+            }
+
+            if (typeof map.easeTo === 'function') {
+                map.easeTo({
+                    center: [cluster.lng, cluster.lat],
+                    zoom: targetZoom,
+                    duration: 650,
+                    essential: true,
+                });
+            }
+        },
+        [focusMapOnMarker, mapZoom],
+    );
 
     useEffect(() => {
         disableMapboxTelemetry();
     }, []);
+
+    useEffect(() => {
+        window.localStorage.setItem(GEO_SIDEBAR_WIDTH_STORAGE_KEY, String(geoSidebarWidth));
+    }, [geoSidebarWidth]);
+
+    useEffect(() => {
+        window.localStorage.setItem(GEO_SIDEBAR_COLLAPSED_STORAGE_KEY, String(isGeoSidebarCollapsed));
+    }, [isGeoSidebarCollapsed]);
+
+    useEffect(() => {
+        return () => {
+            if (mapZoomFrameRef.current !== null) {
+                window.cancelAnimationFrame(mapZoomFrameRef.current);
+            }
+            if (hoverClearTimeoutRef.current) {
+                window.clearTimeout(hoverClearTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        const host = mapWheelHostElement;
+        if (!host) return undefined;
+
+        const isInsideMapHost = (event: WheelEvent | (Event & { clientX?: number; clientY?: number })) => {
+            const target = event.target;
+            if (target instanceof Node && host.contains(target)) return true;
+
+            const clientX = Number(event.clientX);
+            const clientY = Number(event.clientY);
+            if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+
+            const rect = host.getBoundingClientRect();
+            return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+        };
+
+        const stopBrowserZoom = (event: Event) => {
+            if (event.cancelable) event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation?.();
+        };
+
+        const getMapHostPoint = (clientX?: number, clientY?: number) => {
+            const rect = host.getBoundingClientRect();
+            const rawX = Number(clientX);
+            const rawY = Number(clientY);
+            const x = Number.isFinite(rawX) ? rawX - rect.left : rect.width / 2;
+            const y = Number.isFinite(rawY) ? rawY - rect.top : rect.height / 2;
+            return [Math.max(0, Math.min(rect.width, x)), Math.max(0, Math.min(rect.height, y))];
+        };
+
+        const zoomMapAroundEvent = (event: WheelEvent | (Event & { clientX?: number; clientY?: number }), deltaZoom: number) => {
+            const map = getMapInstance(mapRef);
+            if (!map || typeof map.getZoom !== 'function' || typeof map.easeTo !== 'function') return;
+            const cursorPoint = getMapHostPoint(event.clientX, event.clientY);
+            const currentZoom = map.getZoom();
+            const nextZoom = Math.max(1.1, Math.min(8.6, currentZoom + deltaZoom));
+            const around = typeof map.unproject === 'function' ? map.unproject(cursorPoint) : undefined;
+
+            map.easeTo({
+                zoom: nextZoom,
+                ...(around ? { around } : {}),
+                duration: 90,
+                essential: true,
+            });
+        };
+
+        let lastGestureScale = 1;
+        const handleWheel = (event: WheelEvent) => {
+            if (!event.ctrlKey && !event.metaKey) return;
+            if (!isInsideMapHost(event)) return;
+
+            stopBrowserZoom(event);
+            const normalizedDelta = Math.max(-2.4, Math.min(2.4, event.deltaY / 100));
+            zoomMapAroundEvent(event, -normalizedDelta * 0.44);
+        };
+        const handleGestureStart = (event: Event & { scale?: number; clientX?: number; clientY?: number }) => {
+            if (!isInsideMapHost(event)) return;
+            stopBrowserZoom(event);
+            lastGestureScale = Number.isFinite(event.scale) ? Number(event.scale) : 1;
+        };
+        const handleGestureChange = (event: Event & { scale?: number; clientX?: number; clientY?: number }) => {
+            if (!isInsideMapHost(event)) return;
+            stopBrowserZoom(event);
+
+            const nextScale = Number.isFinite(event.scale) ? Number(event.scale) : lastGestureScale;
+            const scaleDelta = nextScale / Math.max(lastGestureScale, 0.001);
+            lastGestureScale = nextScale;
+
+            if (!Number.isFinite(scaleDelta) || scaleDelta <= 0) return;
+            const deltaZoom = Math.max(-0.6, Math.min(0.6, Math.log(scaleDelta) * 1.6));
+            zoomMapAroundEvent(event, deltaZoom);
+        };
+        const handleGestureEnd = (event: Event & { clientX?: number; clientY?: number }) => {
+            if (!isInsideMapHost(event)) return;
+            stopBrowserZoom(event);
+            lastGestureScale = 1;
+        };
+
+        const listenerOptions: AddEventListenerOptions = {
+            passive: false,
+            capture: true,
+        };
+
+        window.addEventListener('wheel', handleWheel, listenerOptions);
+        document.addEventListener('wheel', handleWheel, listenerOptions);
+        host.addEventListener('wheel', handleWheel, listenerOptions);
+        host.addEventListener('gesturestart', handleGestureStart as EventListener, listenerOptions);
+        host.addEventListener('gesturechange', handleGestureChange as EventListener, listenerOptions);
+        host.addEventListener('gestureend', handleGestureEnd as EventListener, listenerOptions);
+        window.addEventListener('gesturestart', handleGestureStart as EventListener, listenerOptions);
+        window.addEventListener('gesturechange', handleGestureChange as EventListener, listenerOptions);
+        window.addEventListener('gestureend', handleGestureEnd as EventListener, listenerOptions);
+        document.addEventListener('gesturestart', handleGestureStart as EventListener, listenerOptions);
+        document.addEventListener('gesturechange', handleGestureChange as EventListener, listenerOptions);
+        document.addEventListener('gestureend', handleGestureEnd as EventListener, listenerOptions);
+
+        return () => {
+            window.removeEventListener('wheel', handleWheel, listenerOptions);
+            document.removeEventListener('wheel', handleWheel, listenerOptions);
+            host.removeEventListener('wheel', handleWheel, listenerOptions);
+            host.removeEventListener('gesturestart', handleGestureStart as EventListener, listenerOptions);
+            host.removeEventListener('gesturechange', handleGestureChange as EventListener, listenerOptions);
+            host.removeEventListener('gestureend', handleGestureEnd as EventListener, listenerOptions);
+            window.removeEventListener('gesturestart', handleGestureStart as EventListener, listenerOptions);
+            window.removeEventListener('gesturechange', handleGestureChange as EventListener, listenerOptions);
+            window.removeEventListener('gestureend', handleGestureEnd as EventListener, listenerOptions);
+            document.removeEventListener('gesturestart', handleGestureStart as EventListener, listenerOptions);
+            document.removeEventListener('gesturechange', handleGestureChange as EventListener, listenerOptions);
+            document.removeEventListener('gestureend', handleGestureEnd as EventListener, listenerOptions);
+        };
+    }, [mapWheelHostElement]);
 
     useEffect(() => {
         if (!selectedProject?.id) {
@@ -406,6 +1532,43 @@ export const Geo: React.FC = () => {
         };
     }, [selectedProject?.id, timeRange, platform]);
 
+    useEffect(() => {
+        if (!selectedProject?.id) {
+            setRecentSessions([]);
+            setRecentSessionsState('idle');
+            return;
+        }
+
+        let isCancelled = false;
+        setRecentSessionsState('loading');
+
+        void getSessionsPaginated({
+            projectId: selectedProject.id,
+            timeRange,
+            platform,
+            hasRecording: true,
+            includeTotal: false,
+            limit: RECENT_GEO_SESSION_LIMIT,
+            sort: 'date',
+            sortDir: 'desc',
+        })
+            .then((result) => {
+                if (isCancelled) return;
+                setRecentSessions((result.sessions || []).filter((session) => session.canOpenReplay ?? session.hasSuccessfulRecording ?? true));
+                setRecentSessionsState('idle');
+            })
+            .catch((err) => {
+                console.error('Failed to load geo visitor feed:', err);
+                if (isCancelled) return;
+                setRecentSessions([]);
+                setRecentSessionsState('error');
+            });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [platform, selectedProject?.id, timeRange]);
+
     const latencyByCountry = useMemo(() => {
         const countryToLatency = new Map<string, number>();
         for (const region of latencyByLocation.regions) {
@@ -416,32 +1579,40 @@ export const Geo: React.FC = () => {
 
     const latencyByLocationKey = useMemo(() => {
         const locationToLatency = new Map<string, number>();
-        for (const location of latencyByLocation.locations || []) {
+        const latencyLocations = selectTopByScore(latencyByLocation.locations || [], GEO_LATENCY_LOCATION_LOOKUP_LIMIT, (location) =>
+            Math.max(0, Number(location.totalRequests) || 0),
+        );
+        for (const location of latencyLocations) {
             locationToLatency.set(getLocationLatencyKey(location.country, location.city), location.avgLatencyMs);
         }
         return locationToLatency;
     }, [latencyByLocation.locations]);
 
     const markers = useMemo<GeoMarker[]>(() => {
-        const locations = issues.locations || [];
-        const maxActiveUsers = Math.max(...locations.map((loc) => loc.uniqueUsers || 0), 1);
-        const fallbackLatency = latencyByLocation.summary.avgLatency > 0
-            ? latencyByLocation.summary.avgLatency
-            : undefined;
+        const locations = selectTopByScore(
+            (issues.locations || []).filter((loc) => Number.isFinite(loc.lat) && Number.isFinite(loc.lng)),
+            GEO_LOCATION_MARKER_LIMIT,
+            getGeoLocationScore,
+        );
+        const maxActiveUsers = Math.max(
+            locations.reduce((max, loc) => Math.max(max, loc.uniqueUsers || 0), 0),
+            1,
+        );
+        const fallbackLatency = latencyByLocation.summary.avgLatency > 0 ? latencyByLocation.summary.avgLatency : undefined;
 
         return locations
-            .filter((loc) => Number.isFinite(loc.lat) && Number.isFinite(loc.lng))
             .map((loc, index) => {
                 const avgLatencyMs =
-                    latencyByLocationKey.get(getLocationLatencyKey(loc.country, loc.city))
-                    ?? latencyByCountry.get(normalizeCountry(loc.country))
-                    ?? fallbackLatency;
+                    latencyByLocationKey.get(getLocationLatencyKey(loc.country, loc.city)) ??
+                    latencyByCountry.get(normalizeCountry(loc.country)) ??
+                    fallbackLatency;
                 const latencyTier = getLatencyTier(avgLatencyMs);
 
                 return {
                     id: `${loc.country}:${loc.city}:${index}`,
                     city: loc.city || 'Unknown',
                     country: loc.country,
+                    countryCode: (loc as { countryCode?: string | null }).countryCode || getCountryCodeForName(loc.country),
                     lat: loc.lat,
                     lng: loc.lng,
                     sessions: loc.sessions || 0,
@@ -452,73 +1623,68 @@ export const Geo: React.FC = () => {
                     style: LATENCY_STYLE[latencyTier],
                 };
             })
-            .sort((a, b) => b.uniqueUsers - a.uniqueUsers);
+            .sort((a, b) => b.uniqueUsers - a.uniqueUsers || b.sessions - a.sessions);
     }, [issues.locations, latencyByCountry, latencyByLocation.summary.avgLatency, latencyByLocationKey]);
 
-    const hoveredMarker = useMemo(
-        () => (hoveredMarkerId ? markers.find((marker) => marker.id === hoveredMarkerId) || null : null),
-        [hoveredMarkerId, markers],
-    );
+    const hoveredMarker = useMemo(() => (hoveredMarkerId ? markers.find((marker) => marker.id === hoveredMarkerId) || null : null), [hoveredMarkerId, markers]);
 
     const selectedMarker = useMemo(
         () => (selectedMarkerId ? markers.find((marker) => marker.id === selectedMarkerId) || null : null),
         [selectedMarkerId, markers],
     );
 
-    const initialViewState = useMemo(() => {
-        const center = getWeightedMapCenter(markers);
-        return {
-            longitude: center.longitude,
-            latitude: center.latitude,
-            zoom: 1.34,
-            pitch: 14,
-            bearing: 0,
-        };
-    }, [markers]);
+	    const initialViewState = useMemo(() => {
+	        const center = getWeightedMapCenter(markers);
+	        return {
+	            longitude: center.longitude,
+	            latitude: center.latitude,
+	            zoom: GEO_MAP_OVERVIEW_ZOOM,
+	            pitch: 0,
+	            bearing: 0,
+	        };
+	    }, [markers]);
 
-    useEffect(() => {
-        let animationFrame = 0;
-        let previousTime = performance.now();
+	    const focusMapOnOverview = React.useCallback(() => {
+	        const map = getMapInstance(mapRef);
+	        if (!map) return;
 
-        const rotateGlobe = (time: number) => {
-            const map = getMapInstance(mapRef);
-            if (!map || isHoverPausedRef.current || isInteractionPausedRef.current) return;
+	        const validMarkers = markers.filter((marker) => Number.isFinite(marker.lng) && Number.isFinite(marker.lat));
+	        if (validMarkers.length > 1 && typeof map.fitBounds === 'function') {
+	            const lngs = validMarkers.map((marker) => marker.lng);
+	            const lats = validMarkers.map((marker) => marker.lat);
+	            const minLng = Math.min(...lngs);
+	            const maxLng = Math.max(...lngs);
+	            const minLat = Math.min(...lats);
+	            const maxLat = Math.max(...lats);
 
-            const center = map.getCenter();
-            const deltaSeconds = Math.min((time - previousTime) / 1000, 0.05);
-            previousTime = time;
-            map.setCenter([center.lng + deltaSeconds * 1.8, center.lat]);
-        };
+	            if (maxLng - minLng > 0.08 || maxLat - minLat > 0.08) {
+	                map.fitBounds(
+	                    [
+	                        [minLng, minLat],
+	                        [maxLng, maxLat],
+	                    ],
+	                    {
+	                        padding: GEO_MAP_OVERVIEW_FIT_PADDING,
+	                        maxZoom: GEO_MAP_OVERVIEW_MAX_ZOOM,
+	                        duration: 650,
+	                        essential: true,
+	                    },
+	                );
+	                return;
+	            }
+	        }
 
-        const tick = (time: number) => {
-            rotateGlobe(time);
-            animationFrame = window.requestAnimationFrame(tick);
-        };
-
-        animationFrame = window.requestAnimationFrame(tick);
-
-        return () => {
-            window.cancelAnimationFrame(animationFrame);
-            if (resumeRotationTimerRef.current) {
-                window.clearTimeout(resumeRotationTimerRef.current);
-            }
-        };
-    }, []);
-
-    const pauseRotationBriefly = () => {
-        isInteractionPausedRef.current = true;
-        if (resumeRotationTimerRef.current) {
-            window.clearTimeout(resumeRotationTimerRef.current);
-        }
-        resumeRotationTimerRef.current = window.setTimeout(() => {
-            isInteractionPausedRef.current = false;
-            resumeRotationTimerRef.current = null;
-        }, 2400);
-    };
-
-    const setHoverPaused = (isPaused: boolean) => {
-        isHoverPausedRef.current = isPaused;
-    };
+	        if (typeof map.easeTo === 'function') {
+	            map.easeTo({
+	                center: [initialViewState.longitude, initialViewState.latitude],
+	                zoom: initialViewState.zoom,
+	                pitch: initialViewState.pitch,
+	                bearing: initialViewState.bearing,
+	                duration: 650,
+	                essential: true,
+	            });
+	        }
+	    }, [initialViewState, markers]);
 
     useEffect(() => {
         if (selectedMarkerId && !selectedMarker) {
@@ -543,7 +1709,7 @@ export const Geo: React.FC = () => {
             platform,
             hasRecording: true,
             includeTotal: false,
-            limit: 8,
+            limit: GEO_LOCATION_SESSION_LIMIT,
             sort: 'date',
             sortDir: 'desc',
             geoCountry: selectedMarker.country,
@@ -566,15 +1732,256 @@ export const Geo: React.FC = () => {
         };
     }, [platform, selectedMarker, selectedProject?.id, timeRange]);
 
-    const copySessionId = (event: React.MouseEvent, sessionId: string) => {
-        event.stopPropagation();
-        void copyTextToClipboard(sessionId).then((didCopy) => {
-            if (!didCopy) return;
-            setCopiedSessionId(sessionId);
-            window.setTimeout(() => {
-                setCopiedSessionId((current) => (current === sessionId ? null : current));
-            }, 1200);
+    useEffect(() => {
+        if (!selectedProject?.id || !selectedVisitor) {
+            setVisitorSessions([]);
+            setVisitorSessionsState('idle');
+            return;
+        }
+
+        let isCancelled = false;
+        const visitorSearch = getVisitorSearchTerm(selectedVisitor);
+        setVisitorSessions([]);
+        setVisitorSessionsState('loading');
+
+        void getSessionsPaginated({
+            projectId: selectedProject.id,
+            hasRecording: true,
+            includeTotal: false,
+            limit: 60,
+            sort: 'date',
+            sortDir: 'desc',
+            q: visitorSearch,
+        })
+            .then((result) => {
+                if (isCancelled) return;
+                const selectedSeed = getSessionIdentitySeed(selectedVisitor);
+                const selectedName = getVisitorDisplayName(selectedVisitor);
+                const matchingSessions = (result.sessions || []).filter(
+                    (session) =>
+                        getSessionIdentitySeed(session) === selectedSeed ||
+                        getVisitorDisplayName(session) === selectedName ||
+                        session.id === selectedVisitor.id,
+                );
+                setVisitorSessions(matchingSessions.length > 0 ? matchingSessions : result.sessions || []);
+                setVisitorSessionsState('idle');
+            })
+            .catch((err) => {
+                console.error('Failed to load geo visitor profile:', err);
+                if (isCancelled) return;
+                setVisitorSessions([]);
+                setVisitorSessionsState('error');
+            });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [selectedProject?.id, selectedVisitor]);
+
+    const markerByLocation = useMemo(() => {
+        const locationMap = new Map<string, GeoMarker>();
+        markers.forEach((marker) => {
+            locationMap.set(getMarkerLocationKey(marker), marker);
         });
+        return locationMap;
+    }, [markers]);
+
+    const sessionsByLocation = useMemo(() => {
+        const sessionMap = new Map<string, GeoSessionRow[]>();
+        recentSessions.forEach((session) => {
+            const key = getSessionLocationKey(session);
+            if (!markerByLocation.has(key)) return;
+
+            const existing = sessionMap.get(key) || [];
+            existing.push(session);
+            sessionMap.set(key, existing);
+        });
+        return sessionMap;
+    }, [markerByLocation, recentSessions]);
+
+    const geoClusters = useMemo(() => buildGeoClusters(markers, renderZoom), [markers, renderZoom]);
+    const renderedGeoClusters = useMemo(
+        () =>
+            geoClusters
+                .filter((cluster) => {
+                    if (shouldRenderAggregateCluster(cluster, renderZoom)) return true;
+                    if (cluster.kind !== 'location') return false;
+
+                    const recentLocationSessions = sessionsByLocation.get(getMarkerLocationKey(cluster.topMarker)) || [];
+                    const selectedLocationHasLoadedSessions = selectedMarkerId === cluster.topMarker.id && markerSessions.length > 0;
+                    return recentLocationSessions.length === 0 && !selectedLocationHasLoadedSessions;
+                })
+                .slice(0, MAX_RENDERED_GEO_CLUSTERS),
+        [geoClusters, markerSessions.length, renderZoom, selectedMarkerId, sessionsByLocation],
+    );
+    const maxRenderedClusterUsers = useMemo(() => Math.max(...renderedGeoClusters.map((cluster) => cluster.uniqueUsers), 1), [renderedGeoClusters]);
+    const selectedCluster = useMemo(
+        () => (selectedClusterId ? geoClusters.find((cluster) => cluster.id === selectedClusterId) || null : null),
+        [geoClusters, selectedClusterId],
+    );
+
+    useEffect(() => {
+        if (selectedClusterId && !selectedCluster) {
+            setSelectedClusterId(null);
+        }
+    }, [selectedCluster, selectedClusterId]);
+
+    const totalSessions = useMemo(() => markers.reduce((sum, marker) => sum + marker.sessions, 0), [markers]);
+    const selectedClusterSessions = useMemo(() => {
+        if (!selectedCluster || selectedCluster.kind !== 'cluster') return [];
+
+        const sessionById = new Map<string, GeoSessionRow>();
+        selectedCluster.markers.forEach((marker) => {
+            const markerKey = getMarkerLocationKey(marker);
+            (sessionsByLocation.get(markerKey) || []).forEach((session) => {
+                sessionById.set(session.id, session);
+            });
+        });
+
+        return [...sessionById.values()].sort((a, b) => getSessionStartedMs(b) - getSessionStartedMs(a));
+    }, [selectedCluster, sessionsByLocation]);
+
+    const selectedMapFocusSessions = useMemo(() => {
+        if (selectedMarker) {
+            return markerSessions.length > 0 ? markerSessions : sessionsByLocation.get(getMarkerLocationKey(selectedMarker)) || [];
+        }
+
+        if (selectedCluster) return selectedClusterSessions;
+        return [];
+    }, [markerSessions, selectedCluster, selectedClusterSessions, selectedMarker, sessionsByLocation]);
+
+    const recentSessionPoints = useMemo(() => {
+        const baseVisitorLimit = getVisibleVisitorLimitForZoom(renderZoom);
+        const pinnedSessions =
+            selectedMapFocusSessions.length > 0 ? rankUniqueVisitorSessions(selectedMapFocusSessions).slice(0, GEO_LOCATION_SESSION_LIMIT) : [];
+        const visitorLimit = pinnedSessions.length > 0 ? Math.max(baseVisitorLimit, pinnedSessions.length) : baseVisitorLimit;
+        if (visitorLimit <= 0) return [];
+
+        const rankedRecentSessions = rankUniqueVisitorSessions(recentSessions);
+        const perLocationLimit = getVisibleVisitorPerLocationLimitForZoom(renderZoom);
+        const mapSessions: GeoSessionRow[] = [];
+        const seenVisitors = new Set<string>();
+        const addMapSession = (session: GeoSessionRow) => {
+            const seed = getSessionIdentitySeed(session);
+            if (seenVisitors.has(seed)) return false;
+            seenVisitors.add(seed);
+            mapSessions.push(session);
+            return true;
+        };
+
+        pinnedSessions.forEach(addMapSession);
+
+        if (perLocationLimit > 0) {
+            const perLocationCounts = new Map<string, number>();
+            rankedRecentSessions.forEach((session) => {
+                const locationKey = getSessionLocationKey(session);
+                if (!markerByLocation.has(locationKey)) return;
+
+                const locationCount = perLocationCounts.get(locationKey) || 0;
+                if (locationCount >= perLocationLimit) return;
+                if (addMapSession(session)) {
+                    perLocationCounts.set(locationKey, locationCount + 1);
+                }
+            });
+        }
+
+        rankedRecentSessions.forEach(addMapSession);
+
+        const jitterRadius = getSessionJitterRadius(renderZoom);
+        const locationOrdinals = new Map<string, number>();
+        return mapSessions
+            .slice(0, visitorLimit)
+            .map((session, index) => {
+                const locationKey = getSessionLocationKey(session);
+                const locationIndex = locationOrdinals.get(locationKey) || 0;
+                locationOrdinals.set(locationKey, locationIndex + 1);
+
+                const precisePoint = getSessionPoint(session, locationIndex, jitterRadius);
+                if (precisePoint) return { session, point: precisePoint };
+
+                const fallbackMarker = markerByLocation.get(locationKey);
+                const fallbackPoint = fallbackMarker
+                    ? getJitteredPoint(fallbackMarker.lat, fallbackMarker.lng, getSessionIdentitySeed(session), locationIndex, jitterRadius)
+                    : null;
+                return { session, point: fallbackPoint };
+            })
+            .filter(
+                (
+                    item,
+                ): item is {
+                    session: GeoSessionRow;
+                    point: { latitude: number; longitude: number };
+                } => Boolean(item.point),
+            );
+    }, [markerByLocation, recentSessions, renderZoom, selectedMapFocusSessions]);
+
+    const scopedSessions = selectedMarker ? markerSessions : selectedCluster ? selectedClusterSessions : recentSessions;
+    const scopedSessionsState = selectedMarker ? markerSessionsState : recentSessionsState;
+    const scopedUserRows = useMemo(() => rankUniqueVisitorSessions(scopedSessions), [scopedSessions]);
+    const selectedVisitorSessionRows = useMemo(() => {
+        const rows = visitorSessions.length > 0 ? visitorSessions : selectedVisitor ? [selectedVisitor] : [];
+        return [...rows].sort((a, b) => getSessionStartedMs(b) - getSessionStartedMs(a));
+    }, [selectedVisitor, visitorSessions]);
+    const activeSidebarSessions = selectedVisitor ? selectedVisitorSessionRows : scopedSessions;
+    const activeSidebarState = selectedVisitor ? visitorSessionsState : scopedSessionsState;
+    const activeSidebarLoading = activeSidebarState === 'loading' && activeSidebarSessions.length === 0;
+    const liveAnalytics = useMemo(() => getLiveGeoAnalytics(activeSidebarSessions, Date.now(), isDemoMode), [activeSidebarSessions, isDemoMode]);
+    const scopeLabel = selectedMarker
+        ? `${selectedMarker.city}, ${selectedMarker.country}`
+        : selectedCluster && selectedCluster.kind === 'cluster'
+          ? `${selectedCluster.markers.length} nearby locations`
+          : 'All locations';
+    const scopeCountryCode = selectedMarker?.countryCode || null;
+    const activeScopeLabel = selectedVisitor ? getVisitorDisplayName(selectedVisitor) : scopeLabel;
+	    const scopeDetail = selectedVisitor
+	        ? `${selectedVisitorSessionRows.length.toLocaleString()} sessions · ${formatLocation(selectedVisitor)}`
+	        : selectedMarker
+	          ? `${formatCompactNumber(selectedMarker.uniqueUsers)} users on the map · ${formatCompactNumber(selectedMarker.sessions)} sessions`
+	          : selectedCluster && selectedCluster.kind === 'cluster'
+	            ? `${formatCompactNumber(selectedCluster.uniqueUsers)} users · ${formatCompactNumber(selectedCluster.sessions)} sessions · ${selectedCluster.topMarker.country}`
+	            : `${markers.length.toLocaleString()} cities · ${formatCompactNumber(totalSessions)} sessions`;
+	    const clearGeographicSelection = () => {
+	        setSelectedMarkerId(null);
+	        setSelectedClusterId(null);
+	        setSelectedVisitor(null);
+	        setActiveSessionId(null);
+	        setHoveredMarkerId(null);
+	        focusMapOnOverview();
+	    };
+	    const selectVisitor = (session: GeoSessionRow) => {
+	        setSelectedVisitor(session);
+	        setActiveSessionId(session.id);
+        setSelectedClusterId(null);
+        const marker = markerByLocation.get(getSessionLocationKey(session));
+        if (marker) {
+            setSelectedMarkerId(marker.id);
+        }
+    };
+
+    const selectLocation = (marker: GeoMarker) => {
+        setSelectedMarkerId(marker.id);
+        setSelectedClusterId(null);
+        setSelectedVisitor(null);
+        setActiveSessionId(null);
+        focusMapOnMarker(marker);
+    };
+
+    const selectCluster = (cluster: GeoMapCluster) => {
+        if (cluster.kind === 'location') {
+            selectLocation(cluster.topMarker);
+            return;
+        }
+
+        setSelectedClusterId(cluster.id);
+        setSelectedVisitor(null);
+        setActiveSessionId(null);
+        setSelectedMarkerId(null);
+        focusMapOnCluster(cluster);
+    };
+
+    const openReplay = (session: GeoSessionRow) => {
+        const canOpenReplay = session.canOpenReplay ?? session.hasSuccessfulRecording ?? true;
+        if (canOpenReplay) navigate(`${pathPrefix}/sessions/${session.id}`);
     };
 
     if (isLoading && selectedProject?.id) {
@@ -582,13 +1989,9 @@ export const Geo: React.FC = () => {
     }
 
     return (
-        <div className="flex min-h-screen flex-col bg-transparent font-sans text-slate-900">
+        <div className="flex h-full min-h-0 flex-col bg-transparent font-sans text-slate-900">
             <div className="shrink-0">
-                <DashboardPageHeader
-                    title="Geographic Analysis"
-                    icon={<Globe className="w-6 h-6" />}
-                    iconColor="bg-[#dbeafe]"
-                >
+                <DashboardPageHeader title="Geographic Analysis" {...dashboardPageHeaderProps('geo')}>
                     <DashboardLensControls timeRange={timeRange} onTimeRangeChange={setTimeRange} />
                 </DashboardPageHeader>
             </div>
@@ -597,230 +2000,389 @@ export const Geo: React.FC = () => {
                 {!selectedProject?.id ? (
                     <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">Select a project.</div>
                 ) : !isMapboxConfigured() ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-center text-sm text-rose-500 px-4">
-                        <ShieldAlert className="h-5 w-5 mr-2" />
+                    <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-rose-500">
+                        <ShieldAlert className="mr-2 h-5 w-5" />
                         <span>404 - New World Not Discovered Yet</span>
                     </div>
-                ) : (isDemoMode && !ENABLE_MAPBOX_IN_DEMO) ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-center p-8">
+                ) : isDemoMode && !ENABLE_MAPBOX_IN_DEMO ? (
+                    <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
                         <div className="max-w-md">
-                            <Globe className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-medium text-slate-900 mb-2 font-sans">Mapbox Disabled in Demo</h3>
-                            <p className="text-sm text-slate-500 leading-relaxed">
-                                Geographic maps are disabled during the live demo to focus on privacy and conserve resources.
-                                Full interactive maps are available on the production dashboard.
+                            <Globe className="mx-auto mb-4 h-12 w-12 text-slate-300" />
+                            <h3 className="mb-2 font-sans text-lg font-medium text-slate-900">Mapbox Disabled in Demo</h3>
+                            <p className="text-sm leading-relaxed text-slate-500">
+                                Geographic maps are disabled during the live demo to focus on privacy and conserve resources. Full interactive maps are
+                                available on the production dashboard.
                             </p>
                         </div>
                     </div>
                 ) : (
-                    <div
-                        className="relative h-[calc(100vh-132px)] min-h-[560px] w-full overflow-hidden bg-[#05070d]"
-                        onMouseEnter={() => setHoverPaused(true)}
-                        onMouseLeave={() => setHoverPaused(false)}
-                        onFocus={() => setHoverPaused(true)}
-                        onBlur={() => setHoverPaused(false)}
-                    >
-                        <MapGL
-                            ref={mapRef}
-                            mapboxAccessToken={MAPBOX_TOKEN}
-                            reuseMaps
-                            initialViewState={initialViewState}
-                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-                            mapStyle={GEO_MAP_STYLE}
-                            projection={{ name: 'globe' }}
-                            dragPan
-                            dragRotate
-                            scrollZoom
-                            touchZoomRotate
-                            doubleClickZoom
-                            keyboard
-                            cursor="grab"
-                            onDragStart={pauseRotationBriefly}
-                            onZoomStart={pauseRotationBriefly}
-                            onRotateStart={pauseRotationBriefly}
-                            onZoom={(event: any) => setMapZoom(event.viewState.zoom)}
-                            onLoad={(event: any) => {
-                                mapRef.current = event.target;
-                                applyGeoMapConfig(event.target);
-                            }}
+                    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden border-t border-slate-200 bg-[#f8fafc] lg:flex-row">
+                        <aside
+                            className="geo-side-panel relative z-20 flex max-h-[48vh] w-full shrink-0 flex-col border-b border-slate-200 bg-white transition-[width] duration-200 lg:h-full lg:max-h-none lg:w-[var(--geo-sidebar-width)] lg:border-b-0 lg:border-r"
+                            style={
+                                {
+                                    '--geo-sidebar-width': `${isGeoSidebarCollapsed ? GEO_SIDEBAR_COLLAPSED_WIDTH : geoSidebarWidth}px`,
+                                } as React.CSSProperties
+                            }
                         >
-                            <NavigationControl position="bottom-right" showCompass showZoom />
-
-                            {markers.map((marker) => {
-                                const isHovered = marker.id === hoveredMarkerId;
-                                const isSelected = marker.id === selectedMarkerId;
-                                const markerSize = getZoomMarkerSize(marker.markerSize, mapZoom);
-                                return (
-                                    <Marker
-                                        key={marker.id}
-                                        longitude={marker.lng}
-                                        latitude={marker.lat}
-                                        anchor="center"
-                                        style={{ pointerEvents: 'none' }}
-                                        onClick={(event: any) => {
-                                            event.originalEvent?.stopPropagation?.();
-                                            setSelectedMarkerId(marker.id);
-                                            setHoverPaused(true);
-                                            pauseRotationBriefly();
-                                        }}
-                                    >
+                            {isGeoSidebarCollapsed && (
+                                <div className="hidden h-full min-h-0 flex-col bg-white lg:flex">
+                                    <div className="flex flex-1 flex-col items-center px-2 py-3">
+                                        <div className="grid h-9 w-9 place-items-center border border-black/20 bg-[#f8fafd]">
+                                            <Globe className="h-4 w-4 text-slate-500" />
+                                        </div>
+                                    </div>
+                                    <div className="mt-auto border-t border-[#e8eaed] bg-white p-2">
                                         <button
                                             type="button"
-                                            className="relative rounded-full transition-transform duration-150"
-                                            style={{
-                                                width: `${markerSize}px`,
-                                                height: `${markerSize}px`,
-                                                pointerEvents: 'auto',
-                                                transform: isHovered || isSelected ? 'scale(1.18)' : 'scale(1)',
-                                                background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,0.82) 0, ${marker.style.fill} 27%, ${marker.style.solid} 100%)`,
-                                                border: '1.5px solid rgba(8, 13, 23, 0.62)',
-                                                opacity: isHovered || isSelected ? 1 : 0.9,
-                                                boxShadow: isHovered || isSelected
-                                                    ? `0 0 0 3px rgba(255,255,255,0.86), 0 0 0 6px ${marker.style.ring}, 0 0 20px ${marker.style.ring}, 0 5px 14px rgba(2,6,23,0.32)`
-                                                    : `0 0 0 2px rgba(255,255,255,0.78), 0 0 0 4px ${marker.style.ring}, 0 3px 10px rgba(2,6,23,0.22)`,
-                                            }}
-                                            aria-label={`${marker.city}, ${marker.country}: ${marker.uniqueUsers.toLocaleString()} unique users, ${marker.sessions.toLocaleString()} sessions, ${formatLatency(marker.avgLatencyMs)} avg latency`}
-                                            aria-pressed={isSelected}
-                                            onPointerDown={(event) => event.stopPropagation()}
-                                            onPointerUp={(event) => {
-                                                event.stopPropagation();
-                                                setSelectedMarkerId(marker.id);
-                                                setHoverPaused(true);
-                                                pauseRotationBriefly();
-                                            }}
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                setSelectedMarkerId(marker.id);
-                                                setHoverPaused(true);
-                                                pauseRotationBriefly();
-                                            }}
-                                            onMouseEnter={() => setHoveredMarkerId(marker.id)}
-                                            onMouseLeave={() => setHoveredMarkerId((prev) => (prev === marker.id ? null : prev))}
+                                            className={GEO_SIDEBAR_COLLAPSE_BUTTON_CLASS}
+                                            onClick={() => setIsGeoSidebarCollapsed(false)}
+                                            aria-label="Expand geographic sidebar"
+                                            title="Expand sidebar"
+                                            aria-expanded={!isGeoSidebarCollapsed}
                                         >
-                                            {renderLatencyFace(marker.style.face)}
+                                            <ChevronsRight className="h-4 w-4 shrink-0" />
                                         </button>
-                                    </Marker>
-                                );
-                            })}
-
-                            {hoveredMarker && (
-                                <Popup
-                                    longitude={hoveredMarker.lng}
-                                    latitude={hoveredMarker.lat}
-                                    closeButton={false}
-                                    closeOnClick={false}
-                                    anchor="bottom"
-                                    offset={14}
-                                    className="geo-hover-popup"
-                                >
-                                    <div className="dashboard-surface px-3 py-2 text-[11px] text-slate-700">
-                                        <div className="mb-0.5 font-semibold text-slate-900">
-                                            {hoveredMarker.city}, {hoveredMarker.country}
-                                        </div>
-                                        <div className="flex items-center gap-2 text-slate-600">
-                                            <span>{hoveredMarker.uniqueUsers.toLocaleString()} users</span>
-                                            <span className="h-1 w-1 rounded-full bg-slate-300" />
-                                            <span>{hoveredMarker.sessions.toLocaleString()} sessions</span>
-                                            <span className="h-1 w-1 rounded-full bg-slate-300" />
-                                            <span style={{ color: hoveredMarker.style.solid }}>{formatLatency(hoveredMarker.avgLatencyMs)}</span>
-                                        </div>
                                     </div>
-                                </Popup>
+                                </div>
                             )}
-                        </MapGL>
-                        {loadError && (
-                            <div className="absolute left-4 top-4 z-20 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-900 shadow-sm">
-                                {loadError}
-                            </div>
-                        )}
-                        {selectedMarker && (
-                            <div className="absolute right-4 top-4 z-30 w-[min(360px,calc(100%-2rem))] overflow-hidden border-2 border-black bg-white text-slate-900 shadow-neo">
-                                <div className="flex items-start justify-between gap-3 border-b-2 border-black bg-[#cffafe] px-3 py-2">
-                                    <div className="min-w-0">
-                                        <div className="truncate text-xs font-black uppercase tracking-wide text-black">
-                                            {selectedMarker.city}, {selectedMarker.country}
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
-                                        onClick={() => setSelectedMarkerId(null)}
-                                        aria-label="Close replay sessions"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                </div>
 
-                                <div className="grid grid-cols-[26px_minmax(0,1fr)_68px_86px] items-center gap-2 border-b border-black/15 bg-slate-50 px-3 py-1.5 text-[9px] font-black uppercase tracking-wide text-slate-500">
-                                    <span />
-                                    <span>UUID</span>
-                                    <span className="text-right">Duration</span>
-                                    <span className="text-right">Return</span>
-                                </div>
+                            <div className={`flex min-h-0 flex-1 flex-col ${isGeoSidebarCollapsed ? 'lg:hidden' : ''}`}>
+                                <LiveGeoSidebarPanel
+                                    analytics={liveAnalytics}
+                                    scopeLabel={activeScopeLabel}
+                                    scopeDetail={scopeDetail}
+                                    scopeCountryCode={selectedVisitor ? null : scopeCountryCode}
+                                    isLoading={activeSidebarLoading}
+                                />
 
-                                <div className="max-h-[244px] overflow-y-auto">
-                                    {markerSessionsState === 'loading' && (
-                                        <div className="px-3 py-5 text-center text-xs font-semibold text-slate-500">
-                                            Loading replay rows...
-                                        </div>
-                                    )}
-                                    {markerSessionsState === 'error' && (
-                                        <div className="px-3 py-5 text-center text-xs font-semibold text-rose-700">
-                                            Could not load replay sessions.
-                                        </div>
-                                    )}
-                                    {markerSessionsState === 'idle' && markerSessions.length === 0 && (
-                                        <div className="px-3 py-5 text-center text-xs font-semibold text-slate-500">
-                                            No replay-ready sessions for this location.
-                                        </div>
-                                    )}
-                                    {markerSessionsState === 'idle' && markerSessions.map((session) => {
-                                        const face = getGeoSessionFace(session);
-                                        const canOpenReplay = session.canOpenReplay ?? session.hasSuccessfulRecording ?? true;
-                                        const visitorLabel = getVisitorLabel(session);
-                                        return (
-                                            <div
-                                                key={session.id}
-                                                className={`grid grid-cols-[26px_minmax(0,1fr)_68px_86px] items-center gap-2 border-b border-black/10 px-3 py-2 text-left transition-colors last:border-b-0 ${canOpenReplay ? 'cursor-pointer hover:bg-[#ecfeff]' : 'cursor-not-allowed opacity-50'}`}
-                                                onClick={() => {
-                                                    if (canOpenReplay) navigate(`${pathPrefix}/sessions/${session.id}`);
-                                                }}
-                                                title={canOpenReplay ? `Open replay ${session.id}` : 'Replay unavailable'}
-                                            >
-                                                <MiniGeoFace face={face} />
-                                                <button
-                                                    type="button"
-                                                    className="inline-flex min-w-0 items-center gap-1 justify-self-start font-mono text-xs font-black text-slate-900 transition-colors hover:text-[#2563eb]"
-                                                    onClick={(event) => copySessionId(event, session.id)}
-                                                    title={`Copy ${session.id}`}
-                                                >
-                                                    <span className="truncate">{getShortSessionId(session.id)}</span>
-                                                    {copiedSessionId === session.id ? (
-                                                        <Check className="h-3 w-3 shrink-0 text-emerald-600" />
-                                                    ) : (
-                                                        <Copy className="h-3 w-3 shrink-0 text-slate-400" />
-                                                    )}
-                                                </button>
-                                                <span className="justify-self-end border border-black bg-[#ecfeff] px-1.5 py-0.5 font-mono text-[11px] font-black text-black">
-                                                    {formatSessionDuration(session.durationSeconds)}
-                                                </span>
-                                                <span className={`justify-self-end border px-1.5 py-0.5 text-[10px] font-black uppercase ${visitorLabel === 'New' ? 'border-emerald-700 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-slate-50 text-slate-700'}`}>
-                                                    {visitorLabel}
-                                                </span>
+                                <div className="min-h-0 flex-1 overflow-y-auto">
+                                    <div>
+                                        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
+                                            <div className="min-w-0">
+                                                <div className="dashboard-label">{selectedVisitor ? 'Sessions' : 'Users'}</div>
+                                                <div className="mt-0.5 truncate text-xs font-semibold text-slate-500">
+                                                    {selectedVisitor
+                                                        ? `${selectedVisitorSessionRows.length.toLocaleString()} for ${getVisitorDisplayName(selectedVisitor)}`
+                                                        : `${scopedUserRows.length.toLocaleString()} shown for ${scopeLabel}`}
+                                                </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
+	                                            {(selectedMarker || selectedCluster || selectedVisitor) && (
+	                                                <button
+	                                                    type="button"
+	                                                    className={`${GEO_CLEAR_SELECTION_BUTTON_CLASS} h-8 w-8`}
+	                                                    onClick={clearGeographicSelection}
+	                                                    aria-label="Clear geographic selection"
+	                                                    title="Clear selection"
+	                                                >
+	                                                    <X className="h-4 w-4" />
+	                                                </button>
+                                            )}
+                                        </div>
 
-                                <div className="flex items-center justify-between border-t border-black/15 bg-white px-3 py-2 text-[10px] font-semibold text-slate-500">
-                                    <span>{markerSessions.length} watchable</span>
-                                    <span className="inline-flex items-center gap-1 text-slate-700">
-                                        <Play className="h-3 w-3" />
-                                        Click a row to watch
-                                    </span>
+                                        {selectedVisitor && (
+                                            <div className="flex items-start gap-3 border-b border-slate-200 bg-[#f8fafc] px-4 py-3">
+                                                <AnimalAvatar
+                                                    animal={getSessionAnimal(selectedVisitor)}
+                                                    seed={getSessionIdentitySeed(selectedVisitor)}
+                                                    size={42}
+                                                    active
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="truncate text-sm font-black text-black">{getVisitorDisplayName(selectedVisitor)}</div>
+                                                    <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+                                                        {formatLocation(selectedVisitor)} · via {formatReferrer(selectedVisitor)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {!selectedVisitor && scopedSessionsState === 'loading' && (
+                                            <div className="px-4 py-8 text-center text-xs font-semibold text-slate-500">Loading users...</div>
+                                        )}
+                                        {!selectedVisitor && scopedSessionsState === 'error' && (
+                                            <div className="px-4 py-8 text-center text-xs font-semibold text-rose-700">Could not load users.</div>
+                                        )}
+                                        {selectedVisitor && visitorSessionsState === 'loading' && (
+                                            <div className="border-b border-slate-100 px-4 py-2 text-xs font-semibold text-slate-500">
+                                                Loading session history...
+                                            </div>
+                                        )}
+                                        {selectedVisitor && visitorSessionsState === 'error' && (
+                                            <div className="border-b border-slate-100 px-4 py-2 text-xs font-semibold text-rose-700">
+                                                Could not load full history.
+                                            </div>
+                                        )}
+                                        {!selectedVisitor && scopedSessionsState === 'idle' && scopedUserRows.length === 0 && (
+                                            <div className="px-4 py-8 text-center text-xs font-semibold text-slate-500">
+                                                No replay-ready users for this scope.
+                                            </div>
+                                        )}
+                                        {selectedVisitor && visitorSessionsState === 'idle' && selectedVisitorSessionRows.length === 0 && (
+                                            <div className="px-4 py-8 text-center text-xs font-semibold text-slate-500">No sessions found for this user.</div>
+                                        )}
+                                        {!selectedVisitor &&
+                                            scopedSessionsState === 'idle' &&
+                                            scopedUserRows.map((session) => {
+                                                const animal = getSessionAnimal(session);
+                                                const seed = getSessionIdentitySeed(session);
+                                                const isActive = activeSessionId === session.id;
+                                                const canOpenReplay = session.canOpenReplay ?? session.hasSuccessfulRecording ?? true;
+
+                                                return (
+                                                    <div
+                                                        key={session.id}
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        className={`grid w-full grid-cols-[42px_minmax(0,1fr)_34px] items-center gap-2 border-b border-slate-100 px-4 py-3 text-left transition-colors last:border-b-0 ${isActive ? 'bg-[#f8fafc] shadow-[inset_3px_0_0_#111827]' : 'hover:bg-[#f8fafc]'} ${canOpenReplay ? '' : 'opacity-60'}`}
+                                                        onClick={() => selectVisitor(session)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === 'Enter' || event.key === ' ') selectVisitor(session);
+                                                        }}
+                                                        title={getVisitorDisplayName(session)}
+                                                    >
+                                                        <AnimalAvatar animal={animal} seed={seed} size={34} active={isActive} />
+                                                        <span className="min-w-0">
+                                                            <span className="flex min-w-0 items-center gap-2">
+                                                                <span className="truncate font-mono text-[13px] font-black text-black">
+                                                                    {formatRoute(session)}
+                                                                </span>
+                                                                <span className="dashboard-pill shrink-0 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                                                                    {formatSessionStarted(session.startedAt)}
+                                                                </span>
+                                                            </span>
+                                                            <span className="mt-1 block truncate text-[11px] font-semibold text-slate-500">
+                                                                {formatLocation(session)} · {getDeviceCategory(session).toLowerCase()} · via{' '}
+                                                                {formatReferrer(session)}
+                                                            </span>
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            className={GEO_ICON_BUTTON_CLASS}
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                openReplay(session);
+                                                            }}
+                                                            disabled={!canOpenReplay}
+                                                            aria-label={`Open replay for ${getVisitorDisplayName(session)}`}
+                                                        >
+                                                            <Play className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        {selectedVisitor &&
+                                            selectedVisitorSessionRows.map((session) => {
+                                                const isActive = activeSessionId === session.id;
+                                                const canOpenReplay = session.canOpenReplay ?? session.hasSuccessfulRecording ?? true;
+
+                                                return (
+                                                    <button
+                                                        key={session.id}
+                                                        type="button"
+                                                        className={`grid w-full grid-cols-[minmax(0,1fr)_58px] items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition-colors last:border-b-0 ${isActive ? 'bg-[#f8fafc] shadow-[inset_3px_0_0_#111827]' : 'hover:bg-[#f8fafc]'} ${canOpenReplay ? '' : 'opacity-60'}`}
+                                                        onClick={() => openReplay(session)}
+                                                        disabled={!canOpenReplay}
+                                                    >
+                                                        <span className="min-w-0">
+                                                            <span className="flex min-w-0 items-center gap-2">
+                                                                <span className="truncate font-mono text-[13px] font-black text-black">
+                                                                    {formatRoute(session)}
+                                                                </span>
+                                                                <span className="dashboard-pill shrink-0 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                                                                    {formatSessionStarted(session.startedAt)}
+                                                                </span>
+                                                            </span>
+                                                            <span className="mt-1 block truncate text-[11px] font-semibold text-slate-500">
+                                                                {formatLocation(session)} · {formatSessionDuration(session.durationSeconds)} ·{' '}
+                                                                {getSessionStatusLabel(session)}
+                                                            </span>
+                                                        </span>
+                                                        <span className="dashboard-pill inline-flex items-center justify-center gap-1.5 px-2 py-1 text-[10px] font-black text-black">
+                                                            <Play className="h-3 w-3" />
+                                                            Play
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                    </div>
                                 </div>
+                                {!isGeoSidebarCollapsed && (
+                                    <div className="hidden border-t border-[#e8eaed] bg-white p-2 lg:block">
+                                        <button
+                                            type="button"
+                                            className={GEO_SIDEBAR_COLLAPSE_BUTTON_CLASS}
+                                            onClick={() => setIsGeoSidebarCollapsed(true)}
+                                            aria-label="Collapse geographic sidebar"
+                                            title="Collapse sidebar"
+                                            aria-expanded={!isGeoSidebarCollapsed}
+                                        >
+                                            <ChevronsLeft className="h-4 w-4 shrink-0" />
+                                            <span className="text-xs font-medium">Collapse</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                        )}
+                            {!isGeoSidebarCollapsed && (
+                                <button
+                                    type="button"
+                                    className="group absolute -right-1 top-0 z-30 hidden h-full w-2 cursor-col-resize items-center justify-center bg-transparent transition-colors hover:bg-slate-200/70 lg:flex"
+                                    onPointerDown={startGeoSidebarResize}
+                                    onDoubleClick={() => setGeoSidebarWidth(GEO_SIDEBAR_DEFAULT_WIDTH)}
+                                    aria-label="Resize geographic sidebar"
+                                    title="Resize sidebar"
+                                >
+                                    <GripVertical className="pointer-events-none h-5 w-5 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100" />
+                                </button>
+                            )}
+                        </aside>
+
+                        <section
+                            ref={setMapWheelHostRef}
+                            className="relative min-h-0 flex-1 overflow-hidden bg-[#d5dde1]"
+                            style={{ touchAction: 'none', overscrollBehavior: 'contain' }}
+                        >
+                            <MapGL
+                                ref={mapRef}
+                                mapboxAccessToken={MAPBOX_TOKEN}
+                                reuseMaps
+                                initialViewState={initialViewState}
+                                style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                }}
+                                mapStyle={GEO_MAP_STYLE}
+                                projection={{ name: 'mercator' }}
+                                dragPan
+                                dragRotate={false}
+                                scrollZoom
+                                touchZoomRotate={false}
+                                doubleClickZoom
+                                keyboard
+                                cursor="grab"
+                                onMove={(event: any) => scheduleMapZoom(event.viewState.zoom)}
+                                onLoad={(event: any) => {
+                                    mapRef.current = event.target;
+                                    applyGeoMapConfig(event.target);
+                                }}
+                            >
+                                <NavigationControl position="bottom-right" showCompass={false} showZoom />
+
+                                {renderedGeoClusters.map((cluster) => {
+                                    const isSelected = selectedClusterId === cluster.id || selectedMarkerId === cluster.topMarker.id;
+                                    const size = getRelativeGeoMarkerSize(cluster, maxRenderedClusterUsers, renderZoom);
+                                    const hitWidth = size + 30;
+                                    const hitHeight = size + 32;
+
+                                    return (
+                                        <Marker
+                                            key={cluster.id}
+                                            longitude={cluster.lng}
+                                            latitude={cluster.lat}
+                                            anchor="center"
+                                            style={{ pointerEvents: 'none' }}
+                                        >
+                                            <button
+                                                type="button"
+                                                className="grid place-items-center text-center transition-transform duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
+                                                style={{
+                                                    width: hitWidth,
+                                                    height: hitHeight,
+                                                    pointerEvents: 'auto',
+                                                    transform: isSelected ? 'scale(1.16)' : 'scale(1)',
+                                                }}
+                                                aria-label={`${cluster.kind === 'cluster' ? `${cluster.markers.length} locations` : `${cluster.topMarker.city}, ${cluster.topMarker.country}`}: ${cluster.uniqueUsers.toLocaleString()} users, ${cluster.sessions.toLocaleString()} sessions`}
+                                                onPointerDown={(event) => event.stopPropagation()}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    selectCluster(cluster);
+                                                }}
+                                                onMouseEnter={() => showHoveredMarker(cluster.topMarker.id)}
+                                                onMouseLeave={() => clearHoveredMarkerSoon(cluster.topMarker.id)}
+                                            >
+                                                <GeoClusterAnimalMarker
+                                                    cluster={cluster}
+                                                    sessionsByLocation={sessionsByLocation}
+                                                    size={size}
+                                                    active={isSelected}
+                                                    zoom={renderZoom}
+                                                />
+                                            </button>
+                                        </Marker>
+                                    );
+                                })}
+
+                                {recentSessionPoints.map(({ session, point }, index) => {
+                                    const animal = getSessionAnimal(session);
+                                    const seed = getSessionIdentitySeed(session);
+                                    const isActive = activeSessionId === session.id;
+                                    const marker = markerByLocation.get(getSessionLocationKey(session));
+
+                                    return (
+                                        <Marker
+                                            key={`visitor-${session.id}`}
+                                            longitude={point.longitude}
+                                            latitude={point.latitude}
+                                            anchor="center"
+                                            style={{ pointerEvents: 'none' }}
+                                        >
+                                            <button
+                                                type="button"
+                                                className="rounded-full transition-transform duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
+                                                style={{
+                                                    pointerEvents: 'auto',
+                                                    transform: isActive ? 'scale(1.16)' : 'scale(1)',
+                                                }}
+                                                aria-label={`${getVisitorDisplayName(session)} in ${formatLocation(session)}`}
+                                                onPointerDown={(event) => event.stopPropagation()}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    selectVisitor(session);
+                                                }}
+                                                onMouseEnter={() => marker && showHoveredMarker(marker.id)}
+                                                onMouseLeave={() => marker && clearHoveredMarkerSoon(marker.id)}
+                                            >
+                                                <AnimalAvatar animal={animal} seed={`${seed}:${index}`} size={isActive ? 46 : 40} active={isActive} />
+                                            </button>
+                                        </Marker>
+                                    );
+                                })}
+
+                                {hoveredMarker && (
+                                    <Popup
+                                        longitude={hoveredMarker.lng}
+                                        latitude={hoveredMarker.lat}
+                                        closeButton={false}
+                                        closeOnClick={false}
+                                        anchor="bottom"
+                                        offset={14}
+                                        className="geo-hover-popup"
+                                        style={{ pointerEvents: 'none' }}
+                                    >
+                                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-700 shadow-lg">
+                                            <div className="mb-0.5 font-semibold text-slate-900">
+                                                {hoveredMarker.city}, {hoveredMarker.country}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-slate-600">
+                                                <span>{hoveredMarker.uniqueUsers.toLocaleString()} users</span>
+                                                <span className="h-1 w-1 rounded-full bg-slate-300" />
+                                                <span>{hoveredMarker.sessions.toLocaleString()} sessions</span>
+                                                <span className="h-1 w-1 rounded-full bg-slate-300" />
+                                                <span style={{ color: hoveredMarker.style.solid }}>{formatLatency(hoveredMarker.avgLatencyMs)}</span>
+                                            </div>
+                                        </div>
+                                    </Popup>
+                                )}
+                            </MapGL>
+
+                            {loadError && (
+                                <div className="absolute left-4 top-4 z-20 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-900 shadow-sm">
+                                    {loadError}
+                                </div>
+                            )}
+                        </section>
                     </div>
                 )}
             </div>

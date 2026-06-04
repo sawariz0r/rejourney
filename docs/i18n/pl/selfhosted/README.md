@@ -174,7 +174,7 @@ Instalator generuje ten plik. Typowe zmienne obejmują:
 - **Składowanie:** `STORAGE_BACKEND`, `S3_*` i opcjonalnie `MINIO_*`
 - **Bezpieczeństwo:** `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY`
 
-Opcjonalne integracje (pozostaw puste, jeśli nieużywane): Stripe, SMTP, GitHub OAuth, Turnstile itp.
+Opcjonalne integracje (pozostaw puste, jeśli nieużywane): Stripe, SMTP, GitHub OAuth itp.
 
 **Zmiana wartości związanych z pamięcią lub domeną:** edytuj `.env.selfhosted`, a następnie uruchom:
 

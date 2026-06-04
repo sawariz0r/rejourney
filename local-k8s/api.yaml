@@ -162,7 +162,36 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
-
+            - name: PUBLIC_DASHBOARD_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: PUBLIC_DASHBOARD_URL
+                  optional: true
+            - name: PUBLIC_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: PUBLIC_API_URL
+                  optional: true
+            - name: PUBLIC_INGEST_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: PUBLIC_INGEST_URL
+                  optional: true
+            - name: DASHBOARD_ORIGIN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: DASHBOARD_ORIGIN
+                  optional: true
+            - name: ADDITIONAL_DASHBOARD_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ADDITIONAL_DASHBOARD_ORIGINS
+                  optional: true
 ---
 apiVersion: batch/v1
 kind: Job

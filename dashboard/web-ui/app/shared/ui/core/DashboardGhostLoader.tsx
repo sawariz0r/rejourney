@@ -71,8 +71,46 @@ const GA4CardGhost: React.FC<{ className?: string; minHeight?: string; children:
   </div>
 );
 
+const RevenueImpactGhost: React.FC = () => (
+  <section className="rejourney-general-card flex min-w-0 flex-col overflow-hidden border border-[#dadce0] bg-white shadow-none">
+    <div className="h-1 bg-[#67e8f9]" />
+    <div className="flex min-h-0 flex-col p-4 sm:p-5">
+      <div className="mb-4 flex flex-col gap-3 border-b border-[#e8eaed] pb-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <GhostBlock className="h-4 w-32 rounded-none" />
+            <GhostBlock className="h-5 w-20 rounded-none" />
+          </div>
+          <GhostBlock className="h-3 w-44 max-w-full rounded-none" />
+        </div>
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
+          <GhostBlock className="h-7 w-16 rounded-none" />
+          <GhostBlock className="h-7 w-7 rounded-none" />
+          <GhostBlock className="h-7 w-7 rounded-none" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={`revenue-impact-ghost-${index}`} className="space-y-2">
+            <GhostBlock className="h-3 w-24 rounded-none" />
+            <GhostBlock className="h-7 w-28 rounded-none" />
+          </div>
+        ))}
+      </div>
+      <GhostBlock className="mt-4 h-[260px] w-full rounded-none" />
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#e8eaed] pt-3">
+        <GhostBlock className="h-3 w-72 max-w-full rounded-none" />
+        <GhostBlock className="h-7 w-20 rounded-none" />
+      </div>
+    </div>
+  </section>
+);
+
 export const GeneralGhostBody: React.FC = () => (
   <div className="mx-auto w-full max-w-[1560px] space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-6">
+    <RevenueImpactGhost />
+
     {/* Momentum KPI cards — matches grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4 */}
     <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, index) => (

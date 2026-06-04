@@ -38,18 +38,6 @@ const router = Router();
 const OTP_EXPIRY_MINUTES = 10;
 const SESSION_EXPIRY_DAYS = 30;
 
-/**
- * Public auth runtime configuration.
- * GET /api/auth/config
- */
-router.get('/config', (_req, res) => {
-    res.setHeader('Cache-Control', 'no-store');
-    res.json({
-        turnstileRequired: Boolean(config.TURNSTILE_SECRET_KEY),
-        turnstileSiteKey: config.TURNSTILE_SITE_KEY || '',
-    });
-});
-
 async function auditAuthEvent(
     req: Request,
     params: {
@@ -83,59 +71,6 @@ async function hasPriorSuccessfulLogin(userId: string): Promise<boolean> {
 }
 
 /**
- * Verify Cloudflare Turnstile token
- */
-async function verifyTurnstileToken(token: string, remoteIp?: string): Promise<boolean> {
-    const secretKey = config.TURNSTILE_SECRET_KEY;
-
-    // If no secret key configured, skip verification (for development/self-hosted)
-    if (!secretKey) {
-        logger.warn('Turnstile secret key not configured, skipping verification');
-        return true;
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-
-    try {
-        const params = new URLSearchParams({
-            secret: secretKey,
-            response: token,
-            ...(remoteIp ? { remoteip: remoteIp } : {}),
-        });
-        const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString(),
-            signal: controller.signal,
-        });
-
-        if (!response.ok) {
-            logger.warn({ status: response.status }, 'Turnstile verification service returned an error');
-            throw new ApiError('Security check temporarily unavailable. Please try again shortly.', 503);
-        }
-
-        const result = await response.json() as { success: boolean; 'error-codes'?: string[] };
-
-        if (!result.success) {
-            logger.warn({ errorCodes: result['error-codes'] }, 'Turnstile verification failed');
-            return false;
-        }
-
-        return true;
-    } catch (err) {
-        if (err instanceof ApiError) {
-            throw err;
-        }
-
-        logger.error({ err }, 'Turnstile verification error');
-        throw new ApiError('Security check temporarily unavailable. Please try again shortly.', 503);
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
-/**
  * Send OTP email
  * POST /api/auth/otp/send
  */
@@ -145,7 +80,7 @@ router.post(
     otpSendRateLimiter,
     validate(sendOtpSchema),
     asyncHandler(async (req, res) => {
-        const { email, fingerprint, turnstileToken } = req.body;
+        const { email, fingerprint } = req.body;
         const normalizedEmail = email.toLowerCase().trim();
         const accountFingerprint =
             fingerprint?.browserFingerprint ||
@@ -153,18 +88,6 @@ router.post(
                 .filter(Boolean)
                 .join('|') ||
             null;
-
-        // Verify Turnstile token (if configured)
-        if (config.TURNSTILE_SECRET_KEY) {
-            if (!turnstileToken) {
-                throw new ApiError('Security verification is required. Please complete the prompt and try again.', 400);
-            }
-
-            const isValid = await verifyTurnstileToken(turnstileToken, req.ip);
-            if (!isValid) {
-                throw new ApiError('Bot verification failed. Please try again.', 400);
-            }
-        }
 
         // Generate OTP code (10-character alphanumeric)
         // Exclude confusing characters: 0, O, I, 1

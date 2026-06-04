@@ -23,6 +23,19 @@ export const networkGroupBySchema = z.object({
     groupBy: z.enum(['host', 'path']).optional(),
 });
 
+export const replayShareVisibilitySchema = z.enum(['replay_only', 'full_workbench']);
+export const replayShareExpirationPresetSchema = z.enum(['24h', '7d', '30d', '90d', 'never']);
+
+export const createReplayShareLinkSchema = z.object({
+    visibility: replayShareVisibilitySchema.default('replay_only'),
+    expiresIn: replayShareExpirationPresetSchema.default('7d'),
+});
+
+export const replayShareIdParamSchema = z.object({
+    id: z.string({ required_error: 'Session ID is required' }),
+    shareId: z.string().uuid({ message: 'Share ID must be a UUID' }),
+});
+
 export const dashboardStatsQuerySchema = z.object({
     timeRange: timeRangeSchema,
     projectId: z.string().uuid().optional(),
@@ -30,3 +43,5 @@ export const dashboardStatsQuerySchema = z.object({
 
 export type SessionsQuery = z.infer<typeof sessionsQuerySchema>;
 export type DashboardStatsQuery = z.infer<typeof dashboardStatsQuerySchema>;
+export type ReplayShareVisibility = z.infer<typeof replayShareVisibilitySchema>;
+export type ReplayShareExpirationPreset = z.infer<typeof replayShareExpirationPresetSchema>;

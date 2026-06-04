@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTabs } from '~/shared/providers/TabContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { stripDashboardPathPrefix } from '~/shell/routing/dashboardRouteAliases';
 import {
     Plus,
     X,
@@ -175,18 +176,14 @@ function compactLabel(value?: string | null, fallback: string = 'Unknown'): stri
     return value.length > 22 ? `${value.slice(0, 20)}...` : value;
 }
 
-function stripPathPrefix(pathname: string): string {
-    return pathname.replace(/^\/(dashboard|demo)/, '');
-}
-
 function getTabThemeKey(path: string, tabId: string): TabThemeKey {
-    const normalizedPath = stripPathPrefix(path);
+    const normalizedPath = stripDashboardPathPrefix(path);
 
-    if (normalizedPath.startsWith('/analytics/api')) return 'api';
-    if (normalizedPath.startsWith('/analytics/journeys')) return 'journeys';
-    if (normalizedPath.startsWith('/analytics/heatmaps')) return 'heatmaps';
-    if (normalizedPath.startsWith('/analytics/devices')) return 'devices';
-    if (normalizedPath.startsWith('/analytics/geo')) return 'geo';
+    if (normalizedPath.startsWith('/api')) return 'api';
+    if (normalizedPath.startsWith('/journeys')) return 'journeys';
+    if (normalizedPath.startsWith('/heatmaps')) return 'heatmaps';
+    if (normalizedPath.startsWith('/devices')) return 'devices';
+    if (normalizedPath.startsWith('/geo')) return 'geo';
     if (normalizedPath.startsWith('/sessions')) return 'sessions';
     if (normalizedPath.startsWith('/alerts')) return 'alerts';
     if (normalizedPath === '/stability') return 'stability';

@@ -20,7 +20,10 @@ describe('web session environment labels', () => {
     });
 
     expect(environment.browserLabel).toBe('Chrome 136');
+    expect(environment.browserName).toBe('Chrome');
+    expect(environment.browserVersion).toBe('136.0.7103.114');
     expect(environment.osLabel).toBe('macOS 15.6.1');
+    expect(environment.formFactor).toBe('desktop');
     expect(environment.sdkVersionLabel).toBe('SDK 0.0.0');
     expect(environment.networkLabel).toBe('Fast');
     expect(environment.networkTitle).toContain('not Wi-Fi vs cellular');
@@ -37,7 +40,9 @@ describe('web session environment labels', () => {
     });
 
     expect(environment.browserLabel).toBe('Safari');
+    expect(environment.browserName).toBe('Safari');
     expect(environment.osLabel).toBe('iOS');
+    expect(environment.formFactor).toBe('mobile');
     expect(environment.sdkVersionLabel).toBeNull();
   });
 

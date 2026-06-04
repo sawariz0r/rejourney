@@ -174,7 +174,7 @@ cd rejourney
 - **Хранилище:** `STORAGE_BACKEND`, `S3_*` и дополнительно `MINIO_*`
 - **Безопасность:** `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY`
 
-Дополнительные интеграции (оставьте пустыми, если не используется): Stripe, SMTP, GitHub OAuth, Turnstile и т. д.
+Дополнительные интеграции (оставьте пустыми, если не используется): Stripe, SMTP, GitHub OAuth и т. д.
 
 **Изменение значений, связанных с хранилищем или доменом:** отредактируйте `.env.selfhosted`, затем запустите:
 

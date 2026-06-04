@@ -107,6 +107,7 @@ const envSchema = z.object({
     JWT_SECRET: z.string().min(32),
     JWT_REFRESH_SECRET: z.string().optional(),
     INGEST_HMAC_SECRET: z.string().min(32),
+    SHARE_LINK_SECRET: z.string().min(32).optional(),
 
     // SMTP (optional in dev)
     SMTP_HOST: z.string().optional(),
@@ -128,6 +129,7 @@ const envSchema = z.object({
     // Stripe (optional)
     STRIPE_SECRET_KEY: z.string().optional(),
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
+    SUPERWALL_API_BASE_URL: z.string().default('https://api.superwall.com'),
 
     // AI query builder (optional)
     QUERY_BUILDER_KEY: z.string().optional(),

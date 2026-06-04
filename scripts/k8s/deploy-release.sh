@@ -1023,6 +1023,7 @@ main() {
   wait_for_deployment session-lifecycle-worker
   wait_for_deployment retention-worker
   wait_for_deployment alert-worker
+  wait_for_deployment revenue-sync-worker
   # Monitoring stack — not user-facing, standard timeout.
   wait_for_deployment postgres-exporter
   wait_for_deployment kube-state-metrics

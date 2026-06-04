@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import { eq, and, or, inArray, gte, lt, isNull, desc, asc, sql, getTableColumns, type SQL } from 'drizzle-orm';
 
-import { db, sessions, sessionMetrics, recordingArtifacts, projects, teamMembers, crashes, anrs, errors } from '../db/client.js';
+import { db, sessions, sessionMetrics, recordingArtifacts, projects, teamMembers, crashes, anrs, errors, replayShareLinks } from '../db/client.js';
 import { gunzipSync } from 'zlib';
 
 import {
@@ -28,11 +28,28 @@ import {
 } from '../services/screenshotFrames.js';
 import { sessionAuth, asyncHandler, ApiError } from '../middleware/index.js';
 import { validate } from '../middleware/validation.js';
-import { dashboardRateLimiter, networkRateLimiter } from '../middleware/rateLimit.js';
-import { sessionIdParamSchema, networkGroupBySchema } from '../validation/sessions.js';
+import { dashboardRateLimiter, networkRateLimiter, replayShareRateLimiter, writeApiRateLimiter } from '../middleware/rateLimit.js';
+import {
+    sessionIdParamSchema,
+    networkGroupBySchema,
+    createReplayShareLinkSchema,
+    replayShareIdParamSchema,
+} from '../validation/sessions.js';
 import { generateAnonymousName } from '../utils/anonymousName.js';
 import { logger } from '../logger.js';
+import { config } from '../config.js';
 import { getRedis } from '../db/redis.js';
+import { auditFromRequest } from '../services/auditLog.js';
+import {
+    buildReplayShareUrl,
+    createOrReuseReplayShareLink,
+    listReplayShareLinksForSession,
+    resolveReplayShareLink,
+    serializeReplayShareLink,
+    touchReplayShareLink,
+    type ReplayShareLinkRow,
+    type ReplayShareVisibility,
+} from '../services/replayShareLinks.js';
 import {
     getSessionArchiveIssueFilterCondition,
     normalizeSessionArchiveIssueFilter,
@@ -834,7 +851,10 @@ async function getAuthorizedSession(userId: string, sessionId: string) {
         throw ApiError.forbidden('No access to this session');
     }
 
-    return sessionResult;
+    return {
+        ...sessionResult,
+        membership,
+    };
 }
 
 async function getAuthorizedSessionForFrames(userId: string, sessionId: string) {
@@ -877,6 +897,202 @@ async function getAuthorizedSessionForFrames(userId: string, sessionId: string) 
     }
 
     return sessionResult;
+}
+
+function canManageReplayShares(role?: string | null): boolean {
+    return role === 'owner' || role === 'admin';
+}
+
+function getDashboardOrigin(req: any): string {
+    const configuredOrigin = config.PUBLIC_DASHBOARD_URL?.trim();
+    if (configuredOrigin) {
+        try {
+            return new URL(configuredOrigin).origin;
+        } catch {
+            return configuredOrigin.replace(/\/dashboard\/?$/i, '').replace(/\/+$/, '');
+        }
+    }
+
+    const forwardedProto = typeof req.headers['x-forwarded-proto'] === 'string'
+        ? req.headers['x-forwarded-proto'].split(',')[0].trim()
+        : '';
+    const proto = forwardedProto || req.protocol || 'https';
+    const host = req.get?.('host') || req.headers.host || 'rejourney.co';
+    return `${proto}://${host}`.replace(/\/+$/, '');
+}
+
+function setPublicReplayHeaders(res: any): void {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+}
+
+function buildPublicShareApiBase(shareToken: string): string {
+    return `/api/session/share/replay/${encodeURIComponent(shareToken)}`;
+}
+
+function rewriteScreenshotFramesForShare(frames: ScreenshotFramePayload[] | undefined, shareToken: string): ScreenshotFramePayload[] {
+    const apiBase = buildPublicShareApiBase(shareToken);
+    return (frames || []).map((frame) => {
+        const timestamp = Math.round(Number(frame.timestamp || 0));
+        const url = `${apiBase}/frame/${timestamp}.jpg`;
+        return {
+            ...frame,
+            url,
+            proxyUrl: url,
+        };
+    });
+}
+
+function rewriteRrwebReplayForShare(rrwebReplay: RrwebReplayPayload | undefined, shareToken: string): RrwebReplayPayload {
+    const apiBase = buildPublicShareApiBase(shareToken);
+    const baseReplay = rrwebReplay || emptyRrwebReplayPayload();
+    return {
+        ...baseReplay,
+        segments: (baseReplay.segments || []).map((segment) => {
+            const artifactId = segment.artifactId;
+            return {
+                ...segment,
+                url: null,
+                proxyUrl: artifactId ? `${apiBase}/rrweb-segment/${artifactId}.json.gz` : null,
+            };
+        }),
+    };
+}
+
+function rewriteVisualAssetsForShare<T extends { screenshotFrames?: ScreenshotFramePayload[]; rrwebReplay?: RrwebReplayPayload }>(
+    payload: T,
+    shareToken: string,
+): T {
+    return {
+        ...payload,
+        screenshotFrames: rewriteScreenshotFramesForShare(payload.screenshotFrames, shareToken),
+        rrwebReplay: rewriteRrwebReplayForShare(payload.rrwebReplay, shareToken),
+    };
+}
+
+function isReplayOnlyTimelineEvent(event: any): boolean {
+    const type = String(event?.type || '').toLowerCase();
+    if (!type) return false;
+    if (
+        type.includes('network') ||
+        type.includes('console') ||
+        type.includes('log') ||
+        type.includes('error') ||
+        type.includes('exception') ||
+        type.includes('crash') ||
+        type.includes('anr')
+    ) {
+        return false;
+    }
+    return (
+        type.includes('navigation') ||
+        type.includes('screen') ||
+        type.includes('route') ||
+        type.includes('touch') ||
+        type.includes('tap') ||
+        type.includes('gesture') ||
+        type.includes('click') ||
+        type.includes('scroll') ||
+        type === 'app_foreground' ||
+        type === 'app_background'
+    );
+}
+
+function sanitizeReplayOnlyTimelineEvent(event: any): any {
+    return {
+        id: event?.id,
+        type: event?.type,
+        name: event?.name,
+        label: event?.label,
+        timestamp: event?.timestamp,
+        screen: event?.screen,
+        screenName: event?.screenName,
+        path: event?.path,
+        urlPath: event?.urlPath,
+        gestureType: event?.gestureType,
+        frustrationKind: event?.frustrationKind,
+        targetLabel: event?.targetLabel,
+        x: event?.x,
+        y: event?.y,
+        count: event?.count,
+        touches: event?.touches,
+    };
+}
+
+function filterTimelineForShareVisibility(timeline: any, visibility: ReplayShareVisibility): any {
+    if (visibility === 'full_workbench') return timeline;
+    return {
+        events: (timeline.events || [])
+            .filter(isReplayOnlyTimelineEvent)
+            .map(sanitizeReplayOnlyTimelineEvent),
+        networkRequests: [],
+        crashes: [],
+        anrs: [],
+        deviceInfo: timeline.deviceInfo ?? null,
+    };
+}
+
+function applyCoreShareVisibility(core: any, link: ReplayShareLinkRow): any {
+    const visibility = link.visibility as ReplayShareVisibility;
+    const sharedCore = {
+        ...core,
+        projectId: undefined,
+        share: {
+            visibility,
+            expiresAt: link.expiresAt?.toISOString() ?? null,
+        },
+    };
+
+    if (visibility === 'full_workbench') return sharedCore;
+
+    return {
+        ...sharedCore,
+        userId: null,
+        anonymousId: null,
+        metadata: undefined,
+        networkRequests: [],
+        hierarchySnapshots: [],
+        crashes: [],
+        anrs: [],
+    };
+}
+
+async function resolvePublicReplayShareContext(shareToken: string, options: { markAccess?: boolean } = {}) {
+    const link = await resolveReplayShareLink(shareToken);
+    if (!link) throw ApiError.notFound('Replay share not found');
+
+    const [sessionResult] = await db
+        .select({
+            session: sessions,
+            metrics: sessionMetrics,
+            teamId: projects.teamId,
+        })
+        .from(sessions)
+        .leftJoin(sessionMetrics, eq(sessions.id, sessionMetrics.sessionId))
+        .innerJoin(projects, eq(sessions.projectId, projects.id))
+        .where(and(
+            eq(sessions.id, link.sessionId),
+            eq(sessions.projectId, link.projectId),
+            eq(projects.teamId, link.teamId),
+        ))
+        .limit(1);
+
+    if (!sessionResult) throw ApiError.notFound('Replay share not found');
+    if (sessionResult.session.recordingDeleted || sessionResult.session.isReplayExpired || !sessionResult.session.replayAvailable) {
+        throw ApiError.notFound('Replay share not found');
+    }
+
+    if (options.markAccess) {
+        void touchReplayShareLink(link.id).catch((err) => {
+            logger.warn({ err, shareId: link.id }, '[sessions] Failed to update replay share access metadata');
+        });
+    }
+
+    return {
+        link,
+        ...sessionResult,
+    };
 }
 
 async function getReadyArtifacts(sessionId: string) {
@@ -1224,7 +1440,7 @@ function buildSessionBasePayload(
         projectId: session.projectId,
         userId: session.userDisplayId || null,
         anonymousId: session.anonymousDisplayId || session.anonymousHash,
-        anonymousDisplayName: session.deviceId && !session.userDisplayId ? generateAnonymousName(session.deviceId) : null,
+        anonymousDisplayName: session.deviceId ? generateAnonymousName(session.deviceId) : null,
         platform: session.platform,
         appVersion: session.appVersion,
         sdkVersion: session.sdkVersion,
@@ -2107,6 +2323,599 @@ async function loadHierarchyPayload(session: any, artifactsList: any[]) {
         .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 }
 
+async function sendRrwebSegmentForSession(res: any, session: any, sessionId: string, rawArtifactId: string, cacheControl = 'private, max-age=300') {
+    const artifactId = rawArtifactId
+        .replace(/\.json\.gz$/i, '')
+        .replace(/\.json$/i, '');
+    const redis = getRedis();
+    const cacheKey = `rrweb_segment_data:${sessionId}:${artifactId}`;
+
+    const sendSegmentData = (data: Buffer, s3ObjectKey?: string | null) => {
+        const isGzipped = (data.length > 2 && data[0] === 0x1f && data[1] === 0x8b) ||
+            Boolean(s3ObjectKey?.endsWith('.gz'));
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        if (isGzipped) res.setHeader('Content-Encoding', 'gzip');
+        res.setHeader('Cache-Control', cacheControl);
+        res.setHeader('Content-Length', String(data.length));
+        return res.send(data);
+    };
+
+    const readCachedSegment = async (): Promise<Buffer | null> => {
+        try {
+            return await redis.getBuffer(cacheKey);
+        } catch (err) {
+            logger.warn({ err, sessionId, artifactId }, '[sessions] Failed to read rrweb segment from Redis cache');
+            return null;
+        }
+    };
+
+    const cachedSegment = await readCachedSegment();
+    if (cachedSegment) return sendSegmentData(cachedSegment);
+
+    const [artifact] = await db
+        .select()
+        .from(recordingArtifacts)
+        .where(and(
+            eq(recordingArtifacts.id, artifactId),
+            eq(recordingArtifacts.sessionId, sessionId),
+            eq(recordingArtifacts.kind, 'rrweb'),
+            eq(recordingArtifacts.status, 'ready'),
+        ))
+        .limit(1);
+
+    if (!artifact) throw ApiError.notFound('Replay segment not found');
+
+    const lockKey = `rrweb_segment_data_lock:${sessionId}:${artifactId}`;
+    const lockToken = randomUUID();
+    let lockAcquired = false;
+
+    try {
+        const result = await redis.set(lockKey, lockToken, 'EX', SESSION_REPLAY_MANIFEST_LOCK_TTL_SECONDS, 'NX');
+        lockAcquired = result === 'OK';
+    } catch (err) {
+        logger.warn({ err, sessionId, artifactId }, '[sessions] Failed to acquire rrweb segment cache lock');
+    }
+
+    if (!lockAcquired) {
+        const waitUntil = Date.now() + 5000;
+        while (Date.now() < waitUntil) {
+            await sleepMs(100);
+            const waitedSegment = await readCachedSegment();
+            if (waitedSegment) return sendSegmentData(waitedSegment, artifact.s3ObjectKey);
+        }
+    }
+
+    try {
+        const data = await downloadRawFromS3ForArtifact(session.projectId, artifact.s3ObjectKey, artifact.endpointId);
+        if (!data) throw ApiError.notFound('Replay segment data not found in storage');
+
+        if (data.length <= RRWEB_SEGMENT_DATA_CACHE_MAX_BYTES) {
+            try {
+                await redis.setex(cacheKey, RRWEB_SEGMENT_DATA_CACHE_TTL_SECONDS, data);
+            } catch (err) {
+                logger.warn({ err, sessionId, artifactId }, '[sessions] Failed to cache rrweb segment data');
+            }
+        }
+
+        return sendSegmentData(data, artifact.s3ObjectKey);
+    } finally {
+        if (lockAcquired) {
+            try {
+                const currentToken = await redis.get(lockKey);
+                if (currentToken === lockToken) {
+                    await redis.del(lockKey);
+                }
+            } catch (err) {
+                logger.warn({ err, sessionId, artifactId }, '[sessions] Failed to release rrweb segment cache lock');
+            }
+        }
+    }
+}
+
+async function sendScreenshotFrameForSession(res: any, session: any, sessionId: string, rawArtifactId: string, cacheControl = 'private, max-age=300') {
+    const isTimestamp = /^\d+(\.jpg)?$/.test(rawArtifactId);
+    const targetTimestampMs = isTimestamp ? parseInt(rawArtifactId.replace(/\.jpg$/, ''), 10) : NaN;
+    const redis = getRedis();
+    let cacheKey = '';
+
+    const sendFrameData = (data: Buffer) => {
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', cacheControl);
+        res.setHeader('Content-Length', String(data.length));
+        return res.send(data);
+    };
+
+    const readCachedFrame = async (): Promise<Buffer | null> => {
+        if (!cacheKey) return null;
+        try {
+            return await redis.getBuffer(cacheKey);
+        } catch (err) {
+            logger.warn({ err, sessionId }, '[sessions] Failed to read frame from Redis cache');
+            return null;
+        }
+    };
+
+    if (isTimestamp && !isNaN(targetTimestampMs)) {
+        cacheKey = `screenshot_frame_data:${sessionId}:${targetTimestampMs}`;
+        const cachedFrame = await readCachedFrame();
+        if (cachedFrame) return sendFrameData(cachedFrame);
+    }
+
+    const [replayEndRow] = await db
+        .select({ maxEnd: sql<number | null>`max(${recordingArtifacts.endTime})` })
+        .from(recordingArtifacts)
+        .where(and(
+            eq(recordingArtifacts.sessionId, sessionId),
+            inArray(recordingArtifacts.kind, ['screenshots', 'hierarchy', 'rrweb']),
+            eq(recordingArtifacts.status, 'ready'),
+        ));
+
+    const sessionStartMs = session.startedAt.getTime();
+    const replayEndMs = replayEndRow?.maxEnd ?? null;
+    const effectiveSessionEnd = session.endedAt
+        ?? (replayEndMs != null && replayEndMs > 0 ? new Date(replayEndMs) : null)
+        ?? (session.lastIngestActivityAt && session.lastIngestActivityAt > session.startedAt ? session.lastIngestActivityAt : null);
+    const sessionEndMs = effectiveSessionEnd ? effectiveSessionEnd.getTime() : Number.MAX_SAFE_INTEGER;
+    const lowerBoundMs = Math.max(0, sessionStartMs - 30_000);
+    const upperBoundMs = sessionEndMs + 120_000;
+
+    if (!isTimestamp || isNaN(targetTimestampMs)) {
+        const artifactId = rawArtifactId.replace(/\.json\.gz$/, '').replace(/\.jpg$/, '');
+        const [artifact] = await db
+            .select()
+            .from(recordingArtifacts)
+            .where(and(eq(recordingArtifacts.id, artifactId), eq(recordingArtifacts.sessionId, sessionId), eq(recordingArtifacts.kind, 'frames')))
+            .limit(1);
+
+        if (!artifact) throw ApiError.notFound('Frame not found');
+
+        const data = await downloadFromS3ForArtifact(session.projectId, artifact.s3ObjectKey, artifact.endpointId);
+        if (!data) throw ApiError.notFound('Frame data not found in storage');
+        return sendFrameData(data);
+    }
+
+    const artifacts = await db
+        .select({
+            id: recordingArtifacts.id,
+            s3ObjectKey: recordingArtifacts.s3ObjectKey,
+            endpointId: recordingArtifacts.endpointId,
+            startTime: recordingArtifacts.startTime,
+            endTime: recordingArtifacts.endTime,
+            timestamp: recordingArtifacts.timestamp,
+        })
+        .from(recordingArtifacts)
+        .where(and(
+            eq(recordingArtifacts.sessionId, sessionId),
+            eq(recordingArtifacts.kind, 'screenshots'),
+            eq(recordingArtifacts.status, 'ready'),
+        ))
+        .orderBy(recordingArtifacts.startTime, recordingArtifacts.timestamp, recordingArtifacts.createdAt);
+
+    if (artifacts.length === 0) throw ApiError.notFound('No ready screenshot artifacts found for session');
+
+    let bestArtifact = artifacts[0];
+    for (const artifact of artifacts) {
+        const artifactStartMs = artifact.startTime ?? artifact.timestamp ?? sessionStartMs;
+        const artifactEndMs = artifact.endTime ?? artifactStartMs + 10_000;
+
+        if (targetTimestampMs >= artifactStartMs && targetTimestampMs <= artifactEndMs) {
+            bestArtifact = artifact;
+            break;
+        }
+        if (artifactStartMs > targetTimestampMs) break;
+        bestArtifact = artifact;
+    }
+
+    const archiveLockKey = `screenshot_frame_archive_lock:${sessionId}:${bestArtifact.id}`;
+    const archiveLockToken = randomUUID();
+    let archiveLockAcquired = false;
+
+    const tryAcquireArchiveLock = async () => {
+        try {
+            const result = await redis.set(
+                archiveLockKey,
+                archiveLockToken,
+                'EX',
+                SCREENSHOT_FRAME_ARCHIVE_LOCK_TTL_SECONDS,
+                'NX',
+            );
+            return result === 'OK';
+        } catch (err) {
+            logger.warn({ err, sessionId, artifactId: bestArtifact.id }, '[sessions] Failed to acquire screenshot archive extraction lock');
+            return false;
+        }
+    };
+
+    const releaseArchiveLock = async () => {
+        if (!archiveLockAcquired) return;
+        try {
+            const currentToken = await redis.get(archiveLockKey);
+            if (currentToken === archiveLockToken) {
+                await redis.del(archiveLockKey);
+            }
+        } catch (err) {
+            logger.warn({ err, sessionId, artifactId: bestArtifact.id }, '[sessions] Failed to release screenshot archive extraction lock');
+        }
+    };
+
+    const extractArchiveAndCacheFrames = async (): Promise<Buffer | null> => {
+        const archiveData = await downloadFromS3ForArtifact(session.projectId, bestArtifact.s3ObjectKey, bestArtifact.endpointId);
+        if (!archiveData) return null;
+
+        const { extractFramesFromArchive } = await import('../services/screenshotFrames.js');
+        const frames = await extractFramesFromArchive(archiveData, sessionStartMs);
+
+        let targetFrameData: Buffer | null = null;
+        let minDiff = Number.MAX_SAFE_INTEGER;
+
+        for (const frame of frames) {
+            if (frame.timestamp < lowerBoundMs || frame.timestamp > upperBoundMs) {
+                continue;
+            }
+            const frameCacheKey = `screenshot_frame_data:${sessionId}:${frame.timestamp}`;
+            try {
+                await redis.setex(frameCacheKey, SCREENSHOT_FRAME_DATA_CACHE_TTL_SECONDS, frame.data);
+            } catch (err) {
+                logger.warn({ err, sessionId }, '[sessions] Failed to write extracted frame to Redis cache');
+            }
+
+            const diff = Math.abs(frame.timestamp - targetTimestampMs);
+            if (diff < minDiff) {
+                minDiff = diff;
+                targetFrameData = frame.data;
+            }
+        }
+
+        return targetFrameData;
+    };
+
+    archiveLockAcquired = await tryAcquireArchiveLock();
+    if (!archiveLockAcquired) {
+        const waitUntil = Date.now() + SCREENSHOT_FRAME_ARCHIVE_LOCK_WAIT_MS;
+        while (Date.now() < waitUntil) {
+            await sleepMs(100);
+            const cachedFrame = await readCachedFrame();
+            if (cachedFrame) return sendFrameData(cachedFrame);
+        }
+        archiveLockAcquired = await tryAcquireArchiveLock();
+    }
+
+    try {
+        const cachedAfterWait = await readCachedFrame();
+        if (cachedAfterWait) return sendFrameData(cachedAfterWait);
+
+        const targetFrameData = await extractArchiveAndCacheFrames();
+        if (!targetFrameData) throw ApiError.notFound('Frame data not found inside archive');
+        return sendFrameData(targetFrameData);
+    } finally {
+        await releaseArchiveLock();
+    }
+}
+
+/**
+ * GET /api/session/share/replay/:shareToken/core
+ */
+router.get(
+    '/share/replay/:shareToken/core',
+    replayShareRateLimiter,
+    asyncHandler(async (req, res) => {
+        setPublicReplayHeaders(res);
+        const shareToken = req.params.shareToken;
+        const { link, session, metrics } = await resolvePublicReplayShareContext(shareToken, { markAccess: true });
+        const includeReplay = shouldIncludeReplayFromQuery(req.query.includeReplay);
+
+        const [artifactsList, aggregate, successorStartedAt] = await Promise.all([
+            getReadyArtifacts(session.id),
+            loadSessionWorkAggregate(session.id),
+            loadSuccessorSessionStartedAt({
+                sessionId: session.id,
+                projectId: session.projectId,
+                deviceId: session.deviceId,
+                startedAt: session.startedAt,
+            }),
+        ]);
+        const supersededByNewerVisitorSession = shouldTreatSessionAsSuperseded(session, aggregate, successorStartedAt);
+        const screenshotArtifacts = artifactsList.filter((a) => a.kind === 'screenshots');
+        const rrwebArtifacts = artifactsList.filter((a) => a.kind === 'rrweb');
+        const [replayBootstrap, stats] = await Promise.all([
+            includeReplay
+                ? loadVisualReplayBootstrap(session, screenshotArtifacts.length, rrwebArtifacts, 'none')
+                : Promise.resolve(buildDeferredVisualReplayBootstrap(session, screenshotArtifacts.length, rrwebArtifacts)),
+            computeSessionStats(session, metrics, artifactsList, false),
+        ]);
+
+        const basePayload = buildSessionBasePayload(
+            session,
+            metrics,
+            replayBootstrap.screenshotFrames,
+            screenshotArtifacts.length > 0,
+            deriveSessionPresentationState({
+                status: session.status,
+                platform: session.platform,
+                replayAvailable: session.replayAvailable,
+                recordingDeleted: session.recordingDeleted,
+                isReplayExpired: session.isReplayExpired,
+                lastIngestActivityAt: session.lastIngestActivityAt,
+                startedAt: session.startedAt,
+                endedAt: session.endedAt,
+                hasPendingWork: aggregate.hasPendingWork,
+                hasPendingProcessingWork: aggregate.hasPendingProcessingWork,
+                hasPendingReplayWork: aggregate.hasPendingReplayWork,
+                supersededByNewerVisitorSession,
+            }),
+            aggregate.latestReplayArtifactEndMs,
+        );
+
+        const responseBody = rewriteVisualAssetsForShare({
+            ...basePayload,
+            hasRecording: replayBootstrap.hasRecording,
+            playbackMode: replayBootstrap.playbackMode,
+            screenshotFrames: replayBootstrap.screenshotFrames,
+            screenshotFramesStatus: replayBootstrap.screenshotFramesStatus,
+            screenshotFrameCount: replayBootstrap.screenshotFrameCount,
+            screenshotFramesProcessedSegments: replayBootstrap.processedSegments,
+            screenshotFramesTotalSegments: replayBootstrap.totalSegments,
+            rrwebReplay: replayBootstrap.rrwebReplay,
+            stats,
+        }, shareToken);
+
+        res.json(applyCoreShareVisibility(responseBody, link));
+    }),
+);
+
+/**
+ * GET /api/session/share/replay/:shareToken/replay-manifest
+ */
+router.get(
+    '/share/replay/:shareToken/replay-manifest',
+    replayShareRateLimiter,
+    asyncHandler(async (req, res) => {
+        setPublicReplayHeaders(res);
+        const shareToken = req.params.shareToken;
+        const { link, session } = await resolvePublicReplayShareContext(shareToken);
+        const { payload } = await buildReplayManifestPayload(session, 'none');
+        res.json({
+            ...rewriteVisualAssetsForShare(payload, shareToken),
+            share: {
+                visibility: link.visibility,
+                expiresAt: link.expiresAt?.toISOString() ?? null,
+            },
+        });
+    }),
+);
+
+/**
+ * GET /api/session/share/replay/:shareToken/frames
+ */
+router.get(
+    '/share/replay/:shareToken/frames',
+    replayShareRateLimiter,
+    asyncHandler(async (req, res) => {
+        setPublicReplayHeaders(res);
+        const shareToken = req.params.shareToken;
+        const { session } = await resolvePublicReplayShareContext(shareToken);
+        const { payload } = await buildScreenshotFramesPayload(session, 'none');
+        res.json({
+            ...payload,
+            screenshotFrames: rewriteScreenshotFramesForShare(payload.screenshotFrames, shareToken),
+        });
+    }),
+);
+
+/**
+ * GET /api/session/share/replay/:shareToken/timeline
+ */
+router.get(
+    '/share/replay/:shareToken/timeline',
+    replayShareRateLimiter,
+    asyncHandler(async (req, res) => {
+        setPublicReplayHeaders(res);
+        const { link, session } = await resolvePublicReplayShareContext(req.params.shareToken);
+        const artifactsList = await getReadyArtifacts(session.id);
+        const timeline = await loadTimelinePayload(session, artifactsList);
+        res.json(filterTimelineForShareVisibility(timeline, link.visibility as ReplayShareVisibility));
+    }),
+);
+
+/**
+ * GET /api/session/share/replay/:shareToken/hierarchy
+ */
+router.get(
+    '/share/replay/:shareToken/hierarchy',
+    replayShareRateLimiter,
+    asyncHandler(async (req, res) => {
+        setPublicReplayHeaders(res);
+        const { link, session } = await resolvePublicReplayShareContext(req.params.shareToken);
+        if (link.visibility !== 'full_workbench') {
+            res.json({ hierarchySnapshots: [] });
+            return;
+        }
+        const artifactsList = await getReadyArtifacts(session.id);
+        res.json({ hierarchySnapshots: await loadHierarchyPayload(session, artifactsList) });
+    }),
+);
+
+/**
+ * GET /api/session/share/replay/:shareToken/stats
+ */
+router.get(
+    '/share/replay/:shareToken/stats',
+    replayShareRateLimiter,
+    asyncHandler(async (req, res) => {
+        setPublicReplayHeaders(res);
+        const { session, metrics } = await resolvePublicReplayShareContext(req.params.shareToken);
+        const artifactsList = await getReadyArtifacts(session.id);
+        res.json({ stats: await computeSessionStats(session, metrics, artifactsList, false) });
+    }),
+);
+
+/**
+ * GET /api/session/share/replay/:shareToken/rrweb-segment/:artifactId
+ */
+router.get(
+    '/share/replay/:shareToken/rrweb-segment/:artifactId',
+    replayShareRateLimiter,
+    asyncHandler(async (req, res) => {
+        setPublicReplayHeaders(res);
+        const { session } = await resolvePublicReplayShareContext(req.params.shareToken);
+        return sendRrwebSegmentForSession(res, session, session.id, req.params.artifactId, 'no-store');
+    }),
+);
+
+/**
+ * GET /api/session/share/replay/:shareToken/frame/:artifactId
+ */
+router.get(
+    '/share/replay/:shareToken/frame/:artifactId',
+    replayShareRateLimiter,
+    asyncHandler(async (req, res) => {
+        setPublicReplayHeaders(res);
+        const { session } = await resolvePublicReplayShareContext(req.params.shareToken);
+        return sendScreenshotFrameForSession(res, session, session.id, req.params.artifactId, 'no-store');
+    }),
+);
+
+/**
+ * GET /api/session/:id/shares
+ */
+router.get(
+    '/:id/shares',
+    sessionAuth,
+    validate(sessionIdParamSchema, 'params'),
+    dashboardRateLimiter,
+    asyncHandler(async (req, res) => {
+        const { session, teamId, membership } = await getAuthorizedSession(req.user!.id, req.params.id);
+        const canManage = canManageReplayShares(membership.role);
+        const shares = canManage
+            ? await listReplayShareLinksForSession(session.id, getDashboardOrigin(req))
+            : [];
+
+        res.json({
+            canManage,
+            teamId,
+            shares,
+        });
+    }),
+);
+
+/**
+ * POST /api/session/:id/shares
+ */
+router.post(
+    '/:id/shares',
+    sessionAuth,
+    validate(sessionIdParamSchema, 'params'),
+    validate(createReplayShareLinkSchema, 'body'),
+    writeApiRateLimiter,
+    dashboardRateLimiter,
+    asyncHandler(async (req, res) => {
+        const { session, teamId, membership } = await getAuthorizedSession(req.user!.id, req.params.id);
+        if (!canManageReplayShares(membership.role)) {
+            throw ApiError.forbidden('Only team owners and admins can create unlisted replay links');
+        }
+        if (session.recordingDeleted || session.isReplayExpired || !session.replayAvailable) {
+            throw ApiError.badRequest('This replay is not available for sharing');
+        }
+
+        const visibility = req.body.visibility as ReplayShareVisibility;
+        const expirationPreset = req.body.expiresIn;
+        const result = await createOrReuseReplayShareLink({
+            sessionId: session.id,
+            projectId: session.projectId,
+            teamId,
+            createdByUserId: req.user!.id,
+            visibility,
+            expirationPreset,
+        });
+        const origin = getDashboardOrigin(req);
+        const share = serializeReplayShareLink(result.link, origin);
+
+        if (!result.reused) {
+            await auditFromRequest(req, 'replay_share_created', {
+                targetType: 'replay_share',
+                targetId: result.link.id,
+                teamId,
+                newValue: {
+                    sessionId: session.id,
+                    projectId: session.projectId,
+                    visibility,
+                    expirationPreset,
+                    expiresAt: result.link.expiresAt,
+                },
+            });
+        }
+
+        res.status(result.reused ? 200 : 201).json({
+            share,
+            reused: result.reused,
+            url: buildReplayShareUrl(origin, result.link.publicId),
+        });
+    }),
+);
+
+/**
+ * DELETE /api/session/:id/shares/:shareId
+ */
+router.delete(
+    '/:id/shares/:shareId',
+    sessionAuth,
+    validate(replayShareIdParamSchema, 'params'),
+    writeApiRateLimiter,
+    dashboardRateLimiter,
+    asyncHandler(async (req, res) => {
+        const { session, teamId, membership } = await getAuthorizedSession(req.user!.id, req.params.id);
+        if (!canManageReplayShares(membership.role)) {
+            throw ApiError.forbidden('Only team owners and admins can revoke unlisted replay links');
+        }
+
+        const [existing] = await db
+            .select()
+            .from(replayShareLinks)
+            .where(and(
+                eq(replayShareLinks.id, req.params.shareId),
+                eq(replayShareLinks.sessionId, session.id),
+                eq(replayShareLinks.teamId, teamId),
+            ))
+            .limit(1);
+
+        if (!existing) throw ApiError.notFound('Replay share link not found');
+
+        const revokedAt = existing.revokedAt ?? new Date();
+        const [revoked] = await db
+            .update(replayShareLinks)
+            .set({
+                revokedAt,
+                updatedAt: revokedAt,
+            })
+            .where(and(
+                eq(replayShareLinks.id, existing.id),
+                eq(replayShareLinks.sessionId, session.id),
+                eq(replayShareLinks.teamId, teamId),
+            ))
+            .returning();
+
+        if (!existing.revokedAt) {
+            await auditFromRequest(req, 'replay_share_revoked', {
+                targetType: 'replay_share',
+                targetId: existing.id,
+                teamId,
+                previousValue: {
+                    sessionId: session.id,
+                    projectId: session.projectId,
+                    visibility: existing.visibility,
+                    expirationPreset: existing.expirationPreset,
+                    expiresAt: existing.expiresAt,
+                },
+                newValue: { revokedAt },
+            });
+        }
+
+        res.json({
+            share: serializeReplayShareLink(revoked ?? { ...existing, revokedAt }, getDashboardOrigin(req)),
+        });
+    }),
+);
+
 /**
  * Export sessions as CSV
  * GET /api/sessions/export
@@ -2258,7 +3067,7 @@ router.get(
                 hasPendingReplayWork: false,
                 supersededByNewerVisitorSession: Boolean(hasNewerSessionOnVisitor),
             });
-            const anonymousDisplayName = s.deviceId && !s.userDisplayId ? generateAnonymousName(s.deviceId) : null;
+            const anonymousDisplayName = s.deviceId ? generateAnonymousName(s.deviceId) : null;
 
             res.write(`${encodeCsvRow(buildSessionExportCsvRow({
                 session: s,
@@ -2504,7 +3313,7 @@ router.get(
                 userId: s.userDisplayId || null,
                 anonymousId: s.anonymousDisplayId || s.anonymousHash,
                 deviceId: s.deviceId,
-                anonymousDisplayName: s.deviceId && !s.userDisplayId ? generateAnonymousName(s.deviceId) : null,
+                anonymousDisplayName: s.deviceId ? generateAnonymousName(s.deviceId) : null,
                 platform: s.platform,
                 appVersion: s.appVersion,
                 sdkVersion: s.sdkVersion,
@@ -2974,7 +3783,7 @@ router.get(
             projectId: session.projectId,
             userId: session.userDisplayId || null,
             anonymousId: session.anonymousDisplayId || session.anonymousHash,
-            anonymousDisplayName: session.deviceId && !session.userDisplayId ? generateAnonymousName(session.deviceId) : null,
+            anonymousDisplayName: session.deviceId ? generateAnonymousName(session.deviceId) : null,
             platform: session.platform,
             appVersion: session.appVersion,
             sdkVersion: session.sdkVersion,

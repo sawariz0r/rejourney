@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '~/shared/providers/AuthContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
 import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
@@ -92,7 +93,7 @@ export const AccountSettings: React.FC = () => {
 
   if (!user) {
     return (
-      <SettingsLayout className="rejourney-settings-page rejourney-account-settings-page" title="Account" description="Manage your personal settings" icon={<UserCircle className="w-6 h-6" />} iconColor="bg-[#f4f4f5]">
+      <SettingsLayout className="rejourney-settings-page rejourney-account-settings-page" title="Account" description="Manage your personal settings" {...dashboardPageHeaderProps('account')}>
         <div className="p-8 text-center border-2 border-dashed border-slate-300 bg-slate-50">
           <p className="text-sm font-bold uppercase text-slate-400">Not logged in</p>
         </div>
@@ -109,7 +110,7 @@ export const AccountSettings: React.FC = () => {
   const freeTierReplayPercentUsed = freeTierStatus?.sessionReplayPercentUsed ?? freeTierStatus?.percentUsed ?? 0;
 
   return (
-    <SettingsLayout className="rejourney-settings-page rejourney-account-settings-page" title="Account" description="Manage your personal settings" icon={<UserCircle className="w-6 h-6" />} iconColor="bg-[#f4f4f5]">
+    <SettingsLayout className="rejourney-settings-page rejourney-account-settings-page" title="Account" description="Manage your personal settings" {...dashboardPageHeaderProps('account')}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Profile Card */}
         <section className="space-y-4">

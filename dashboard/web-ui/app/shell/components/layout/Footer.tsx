@@ -133,6 +133,7 @@ export const Footer: React.FC = () => {
                 <Link to="/terms-of-service" className={linkClass}>{copy.terms}</Link>
                 <Link to="/dpa" className={linkClass}>{copy.dpa}</Link>
                 <Link to="/privacy-policy" className={linkClass}>{copy.privacy}</Link>
+                <Link to="/attributions" className={linkClass}>Attributions</Link>
                 <button onClick={handleCopyEmail} className={`${linkClass} text-left`}>
                   {copy.contact}
                 </button>

@@ -26,6 +26,7 @@ import workspaceRoutes from './uiWorkspace.js';
 import demoRoutes from './demo.js';
 import alertsRoutes from './alerts.js';
 import roadmapRoutes from './roadmap.js';
+import { revenueProjectRouter } from './revenueSources.js';
 
 const router = Router();
 
@@ -42,6 +43,7 @@ router.use('/demo', demoRoutes);
 router.use('/roadmap', roadmapRoutes);
 
 // Dashboard routes
+router.use('/projects/:projectId/revenue', revenueProjectRouter);
 router.use('/projects', projectsRoutes);
 router.use('/teams', teamsRoutes);
 router.use('/teams', billingRoutes); // /api/teams/:teamId/billing/*

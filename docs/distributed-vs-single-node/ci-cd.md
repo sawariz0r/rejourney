@@ -54,7 +54,7 @@ On `main`, after `backend`, `web`, and `k8s-config` pass, CI builds and pushes t
 | `web` | `dashboard/web-ui/Dockerfile` | `latest`, `${github.sha}` |
 | `migration` | `backend/Dockerfile.migration` | `latest`, `${github.sha}` |
 
-The web image receives production build args for the dashboard URL, API URL, docs URL, Stripe publishable key, and Turnstile site key.
+The web image receives production build args for the dashboard URL, API URL, docs URL, and Stripe publishable key.
 
 ### Deploy Gate
 
@@ -233,7 +233,6 @@ The local parity runner uses the production-style migration path, not a schema p
 | `GITHUB_TOKEN` | release and package workflows | GitHub-provided token for tags/releases/packages |
 | `NPM_TOKEN` | React Native and Web SDK publish jobs | npm publish token |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | web image build | Dashboard Stripe public key |
-| `TURNSTILE_SITE_KEY` | web image build | Dashboard Cloudflare Turnstile site key |
 
 ---
 

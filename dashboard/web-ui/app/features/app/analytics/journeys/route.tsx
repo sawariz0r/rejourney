@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
     Check,
+    ChevronDown,
+    ChevronUp,
     Copy,
     Filter,
     Play,
@@ -10,19 +12,31 @@ import {
     X,
 } from 'lucide-react';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
+import { AnimalAvatar, getAnimalAvatarSeed, getAnimalForIdentity } from '~/shared/ui/core/AnimalAvatar';
 import { useSharedPlatformLens, platformLensToSessionPlatform } from '~/shared/hooks/useSharedPlatformLens';
 import { useSharedRejourneyTimeRange } from '~/shared/hooks/useSharedRejourneyTimeRange';
 import { SankeyJourney, type SankeyEvidenceSession, type SankeyFlow } from '~/features/app/analytics/journeys/components/SankeyJourney';
 import { KpiCardItem, KpiCardsGrid, computePeriodDeltaFromSeries } from '~/features/app/shared/dashboard/KpiCardsGrid';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import {
+    getSessionCore,
     getJourneysOverview,
     InsightsTrends,
     ObservabilityJourneySummary,
+    transformToRecordingSession,
 } from '~/shared/api/client';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
+import type { RecordingSession } from '~/shared/types';
+import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
+import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
+import { getWebSessionEnvironment } from '~/shared/lib/webSessionEnvironment';
+import { BrowserBrandIcon } from '~/shared/ui/core/BrowserBrandIcon';
+import { MobilePlatformBrandIcon } from '~/shared/ui/core/MobilePlatformBrandIcon';
+import { CountryFlag } from '~/shared/ui/core/CountryFlag';
+import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import {
     generateConditionId,
     generateGroupId,
@@ -293,11 +307,53 @@ const getReplayPriorityPillClass = (priority?: SankeyEvidenceSession['priority']
     return 'border-slate-200 bg-slate-50 text-slate-600';
 };
 
-const getReplayPriorityDotClass = (priority?: SankeyEvidenceSession['priority']): string => {
-    if (priority === 'high') return 'bg-[#fb7185]';
-    if (priority === 'medium') return 'bg-[#f9a8d4]';
-    return 'bg-[#86efac]';
+const getReplayPriorityAccent = (priority?: SankeyEvidenceSession['priority']): string => {
+    if (priority === 'high') return '#fb7185';
+    if (priority === 'medium') return '#f9a8d4';
+    return '#86efac';
 };
+
+const hasSuccessfulRecording = (session: RecordingSession | null | undefined): boolean =>
+    Boolean(session?.hasSuccessfulRecording ?? ((session as any)?.stats?.screenshotSegmentCount ?? 0) > 0);
+
+function isWebSession(session: RecordingSession | null | undefined): boolean {
+    return String(session?.platform || '').toLowerCase() === 'web';
+}
+
+function getPlatformLabel(session: RecordingSession | null | undefined): string {
+    const platform = String(session?.platform || '').toLowerCase();
+    if (platform === 'web') return 'Web';
+    if (platform === 'android') return 'Android';
+    if (platform === 'ios') return 'iOS';
+    return 'Mobile';
+}
+
+function formatNativeOsLabel(platformLabel: string, osVersion: unknown): string {
+    const cleanVersion = String(osVersion || '').trim();
+    if (!cleanVersion) return platformLabel;
+    if (cleanVersion.toLowerCase().startsWith(platformLabel.toLowerCase())) {
+        return `${platformLabel}${cleanVersion.slice(platformLabel.length)}`;
+    }
+    return `${platformLabel} ${cleanVersion.replace(/^v/i, '')}`;
+}
+
+function getReplaySessionRowAccent(
+    session: RecordingSession | null | undefined,
+    fallbackPriority?: SankeyEvidenceSession['priority'],
+): string {
+    if (!session) return getReplayPriorityAccent(fallbackPriority);
+    if (!hasSuccessfulRecording(session) && !(session as any).canOpenReplay) return '#cbd5e1';
+    if ((session.crashCount || 0) > 0) return '#fb7185';
+    if (((session as any).anrCount || 0) > 0) return '#c4b5fd';
+    if ((session.rageTapCount || 0) > 0 || ((session as any).deadTapCount || 0) > 0) return '#fbbf24';
+    if (((session as any).errorCount || 0) > 0 || ((session as any).apiAvgResponseMs || 0) > 1000 || ((session as any).appStartupTimeMs || 0) > 3000) return '#f9a8d4';
+    return '#86efac';
+}
+
+function formatReplayDuration(durationSeconds: number): string {
+    const safeDuration = Number.isFinite(durationSeconds) && durationSeconds > 0 ? Math.round(durationSeconds) : 0;
+    return `${Math.floor(safeDuration / 60)}:${String(safeDuration % 60).padStart(2, '0')}`;
+}
 
 const getSessionQueryGroupsStorageKey = (projectId: string): string => `${SESSION_QUERY_GROUPS_STORAGE_PREFIX}:${projectId}`;
 
@@ -359,6 +415,9 @@ export const Journeys: React.FC = () => {
     const [selectedAppVersion, setSelectedAppVersion] = useState<string | null>(null);
     const [hydratedSelectedTransitionsKey, setHydratedSelectedTransitionsKey] = useState<string | null>(null);
     const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
+    const [evidenceSessionDetails, setEvidenceSessionDetails] = useState<Record<string, RecordingSession>>({});
+    const [isEvidenceHydrating, setIsEvidenceHydrating] = useState(false);
+    const [expandedEvidenceSessionId, setExpandedEvidenceSessionId] = useState<string | null>(null);
     const selectedTransitionsStorageKey = selectedProject?.id
         ? `${JOURNEY_SELECTED_TRANSITIONS_STORAGE_PREFIX}${selectedProject.id}`
         : null;
@@ -704,6 +763,65 @@ export const Journeys: React.FC = () => {
         });
     }, [selectedTransitionOptions]);
 
+    const selectedQuerySessionRows = useMemo(
+        () => selectedQuerySessions.slice(0, 12),
+        [selectedQuerySessions],
+    );
+    const selectedQuerySessionIdsKey = useMemo(
+        () => selectedQuerySessionRows.map((row) => row.sessionId).join('|'),
+        [selectedQuerySessionRows],
+    );
+
+    useEffect(() => {
+        const sessionIds = selectedQuerySessionRows.map((row) => row.sessionId);
+        if (sessionIds.length === 0) {
+            setEvidenceSessionDetails({});
+            setIsEvidenceHydrating(false);
+            setExpandedEvidenceSessionId(null);
+            return;
+        }
+
+        const sessionIdSet = new Set(sessionIds);
+        setEvidenceSessionDetails((current) => Object.fromEntries(
+            Object.entries(current).filter(([sessionId]) => sessionIdSet.has(sessionId)),
+        ));
+        setExpandedEvidenceSessionId((current) => (current && sessionIdSet.has(current) ? current : null));
+
+        let isCancelled = false;
+        const controller = new AbortController();
+        setIsEvidenceHydrating(true);
+
+        void Promise.all(sessionIds.map(async (sessionId) => {
+            try {
+                const core = await getSessionCore(sessionId, {
+                    frameUrlMode: 'none',
+                    includeReplay: false,
+                    signal: controller.signal,
+                });
+                return [sessionId, transformToRecordingSession(core) as RecordingSession] as const;
+            } catch (err) {
+                if ((err as Error)?.name !== 'AbortError') {
+                    console.warn('Journey evidence session hydrate failed:', sessionId, err);
+                }
+                return [sessionId, null] as const;
+            }
+        }))
+            .then((entries) => {
+                if (isCancelled) return;
+                setEvidenceSessionDetails(Object.fromEntries(
+                    entries.filter((entry): entry is readonly [string, RecordingSession] => Boolean(entry[1])),
+                ));
+            })
+            .finally(() => {
+                if (!isCancelled) setIsEvidenceHydrating(false);
+            });
+
+        return () => {
+            isCancelled = true;
+            controller.abort();
+        };
+    }, [selectedProject?.id, selectedQuerySessionIdsKey, selectedQuerySessionRows]);
+
     const selectedQuerySessionCount = selectedQuerySessions.length;
     const totalReplayEvidenceSessionCount = useMemo(
         () => new Set(transitionReplayOptions.flatMap((option) => option.evidenceRows.map((row) => row.sessionId))).size,
@@ -847,36 +965,38 @@ export const Journeys: React.FC = () => {
     }
 
     return (
-        <div className="rejourney-journeys-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-slate-900">
+        <div className="rejourney-journeys-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-[#202124]">
             <DashboardPageHeader
-                title="User Journeys"
-                icon={<Route className="w-6 h-6" />}
-                iconColor="bg-[#fce7f3]"
+                title="User Journey"
+                {...dashboardPageHeaderProps('journeys')}
             >
-                <DashboardLensControls timeRange={timeRange} onTimeRangeChange={setTimeRange} />
+                <DashboardLensControls
+                    timeRange={timeRange}
+                    onTimeRangeChange={setTimeRange}
+                />
             </DashboardPageHeader>
 
-            <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 sm:px-6">
+            <div className="journey-page-main mx-auto w-full max-w-[1560px] space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-6">
                 {!selectedProject?.id && (
-                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900">
+                    <div className="dashboard-surface border-[#fbcfe8] bg-[#fdf2f8] p-4 text-sm font-semibold text-[#9d174d]">
                         Select a project to load journey analytics.
                     </div>
                 )}
 
                 {!isLoading && selectedProject?.id && !hasData && (
-                    <div className="dashboard-surface p-6 text-sm text-slate-600">
+                    <div className="dashboard-surface p-6 text-sm font-medium text-slate-600">
                         No journey activity matched this filter yet.
                     </div>
                 )}
 
                 {!isLoading && partialError && (
-                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+                    <div className="dashboard-surface border-[#fecdd3] bg-[#fff1f2] p-4 text-sm font-semibold text-rose-800">
                         {partialError}
                     </div>
                 )}
 
                 {!isLoading && hasData && data && (
-                    <>
+                    <div className="soft-border-scope space-y-5 sm:space-y-6">
                         <KpiCardsGrid
                             cards={kpiCards}
                             timeRange={timeRange}
@@ -896,26 +1016,27 @@ export const Journeys: React.FC = () => {
                             onAppVersionChange={setSelectedAppVersion}
                         />
 
-                        <section className="dashboard-surface overflow-hidden">
-                            <div className="border-b-2 border-black bg-[#f8fafc] px-5 py-4">
+                        <section className="rejourney-general-card overflow-hidden border border-[#dadce0] bg-white shadow-none">
+                            <div className="h-1 bg-[#db2777]" />
+                            <div className="border-b border-[#e8eaed] bg-white px-5 py-4">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                     <div>
-                                        <h2 className="text-lg font-semibold uppercase tracking-wide text-black">Replay Evidence</h2>
-                                        <p className="mt-1 text-sm text-slate-500">Select map ribbons to find matching replay samples.</p>
+                                        <h2 className="text-[15px] font-medium text-[#202124] underline decoration-dotted decoration-[#bdc1c6] underline-offset-4">Replay Evidence</h2>
+                                        <p className="mt-1 text-sm font-medium text-slate-600">Select map ribbons to find matching replay samples.</p>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
-                                        <span className="journey-count-pill inline-flex h-9 items-center gap-1.5 border-2 border-black bg-white px-3 text-xs font-black uppercase text-black shadow-neo-sm">
+                                        <span className="journey-count-pill inline-flex h-9 items-center gap-1.5 rounded-full border border-[#dadce0] bg-white px-3 text-xs font-semibold text-[#3c4043] shadow-sm">
                                             <Filter className="h-3.5 w-3.5" />
                                             {formatCompact(selectedTransitionOptions.length)}
                                         </span>
-                                        <span className="journey-count-pill inline-flex h-9 items-center border-2 border-black bg-white px-3 text-xs font-black uppercase text-black shadow-neo-sm">
+                                        <span className="journey-count-pill inline-flex h-9 items-center rounded-full border border-[#dadce0] bg-white px-3 text-xs font-semibold text-[#3c4043] shadow-sm">
                                             {formatCompact(selectedQuerySessionCount)} evidence replays
                                         </span>
                                         {selectedTransitionIds.length > 0 && (
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedTransitionIds([])}
-                                                className="inline-flex h-9 items-center gap-1.5 border-2 border-black bg-white px-3 text-xs font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#fecaca] hover:shadow-neo"
+                                                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dadce0] bg-white px-3 text-xs font-semibold text-[#3c4043] shadow-sm transition-colors hover:border-[#fbcfe8] hover:bg-[#fdf2f8] hover:text-[#be185d]"
                                             >
                                                 <X className="h-3.5 w-3.5" />
                                                 Clear selection
@@ -925,19 +1046,19 @@ export const Journeys: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="space-y-5 p-5">
+                            <div className="space-y-4 p-4 sm:p-5">
                                 {selectedTransitionOptions.length > 0 ? (
-                                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                    <div className="dashboard-inner-surface p-4">
                                         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                                             <div className="min-w-0 flex-1">
-                                                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Query clauses</div>
+                                                <div className="text-[11px] font-bold uppercase text-slate-500">Query clauses</div>
                                                 <div className="mt-3 flex min-w-0 flex-wrap gap-2">
                                                     {selectedTransitionOptions.map((option, index) => (
                                                         <button
                                                             key={option.id}
                                                             type="button"
                                                             onClick={() => setSelectedTransitionIds((current) => current.filter((id) => id !== option.id))}
-                                                            className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-left text-xs font-semibold text-slate-700 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                                                            className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#dadce0] bg-white px-3 py-1.5 text-left text-xs font-semibold text-slate-700 transition-colors hover:border-[#fbcfe8] hover:bg-[#fdf2f8] hover:text-[#be185d]"
                                                             title="Remove clause"
                                                         >
                                                             <span className="shrink-0 text-slate-400">#{index + 1}</span>
@@ -955,7 +1076,7 @@ export const Journeys: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => applyJourneyQuery(selectedContiguousJourneyPath)}
-                                                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-xs font-bold uppercase text-white shadow-sm transition hover:bg-slate-800"
+                                                        className="inline-flex items-center justify-center gap-2 rounded-md bg-[#db2777] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#be185d]"
                                                     >
                                                         <Search className="h-4 w-4" />
                                                         Query Combined
@@ -965,7 +1086,7 @@ export const Journeys: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => applyJourneyQuery(selectedTransitionOptions[0].path)}
-                                                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-xs font-bold uppercase text-white shadow-sm transition hover:bg-slate-800"
+                                                        className="inline-flex items-center justify-center gap-2 rounded-md bg-[#db2777] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#be185d]"
                                                     >
                                                         <Search className="h-4 w-4" />
                                                         Search Replays
@@ -975,11 +1096,11 @@ export const Journeys: React.FC = () => {
                                         </div>
 
                                         {selectedContiguousJourneyPath && selectedTransitionOptions.length > 1 && (
-                                            <div className="mt-4 flex min-w-0 flex-wrap items-center gap-1.5 rounded-lg border border-cyan-100 bg-cyan-50 px-3 py-2">
+                                            <div className="mt-4 flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border border-[#fbcfe8] bg-[#fdf2f8] px-3 py-2">
                                                 {selectedContiguousJourneyPath.map((step, index) => (
                                                     <React.Fragment key={`${step}:${index}`}>
-                                                        {index > 0 && <span className="text-xs font-semibold text-cyan-500">→</span>}
-                                                        <span className="max-w-full truncate rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-cyan-900 ring-1 ring-cyan-100" title={step}>
+                                                        {index > 0 && <span className="text-xs font-semibold text-[#db2777]">→</span>}
+                                                        <span className="max-w-full truncate rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-[#9d174d] ring-1 ring-[#fbcfe8]" title={step}>
                                                             {step}
                                                         </span>
                                                     </React.Fragment>
@@ -988,12 +1109,12 @@ export const Journeys: React.FC = () => {
                                         )}
                                     </div>
                                 ) : (
-                                    <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center shadow-sm">
+                                    <div className="dashboard-inner-surface flex min-h-[180px] items-center justify-center border-dashed p-6 text-center">
                                         <div>
-                                            <div className="mx-auto mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100">
+                                            <div className="mx-auto mb-3 inline-flex h-11 w-11 items-center justify-center rounded-md border border-[#fbcfe8] bg-[#fdf2f8] text-[#db2777]">
                                                 <Route className="h-5 w-5" />
                                             </div>
-                                            <div className="text-sm font-bold uppercase text-slate-900">No paths selected to search replays</div>
+                                            <div className="text-sm font-semibold text-slate-900">No paths selected to search replays</div>
                                             {totalReplayEvidenceSessionCount > 0 && (
                                                 <div className="mt-2 text-xs font-medium text-slate-500">
                                                     {formatCompact(totalReplayEvidenceSessionCount)} evidence replays are available across the map.
@@ -1003,10 +1124,10 @@ export const Journeys: React.FC = () => {
                                     </div>
                                 )}
 
-                                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                                    <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="dashboard-inner-surface overflow-hidden">
+                                    <div className="flex flex-col gap-2 border-b border-[#dadce0] bg-[#f8fafd] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
-                                            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Matching session sample</div>
+                                            <div className="text-[11px] font-bold uppercase text-slate-500">Matching session sample</div>
                                             <div className="mt-0.5 text-sm font-semibold text-slate-900">
                                                 {selectedQuerySessions.length > 0
                                                     ? `${formatCompact(selectedQuerySessions.length)} replay IDs match selected clauses`
@@ -1019,114 +1140,265 @@ export const Journeys: React.FC = () => {
                                     </div>
 
                                     {selectedQuerySessions.length > 0 ? (
-                                        <>
-                                            <div className="divide-y divide-slate-100 md:hidden">
-                                                {selectedQuerySessions.slice(0, 12).map((row, rowIndex) => (
-                                                    <div key={row.sessionId} className={`p-4 ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                                                        <div className="flex min-w-0 items-center gap-2">
-                                                            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${getReplayPriorityDotClass(row.priority)}`} />
-                                                            <div className="min-w-0 truncate font-mono text-xs font-semibold text-slate-950" title={row.sessionId}>
-                                                                {row.sessionId}
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => copySessionId(row.sessionId)}
-                                                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50"
-                                                                title="Copy session ID"
-                                                            >
-                                                                {copiedSessionId === row.sessionId ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                                                            </button>
-                                                        </div>
-                                                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                                                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${getReplayPriorityPillClass(row.priority)}`}>
-                                                                {row.source}
-                                                            </span>
-                                                            <span className="text-[10px] font-semibold uppercase text-slate-500">
-                                                                {row.matchedPaths.length} clause match{row.matchedPaths.length === 1 ? '' : 'es'}
-                                                            </span>
-                                                        </div>
-                                                        <div className="mt-2 text-xs font-medium text-slate-700">
-                                                            {row.signal}
-                                                        </div>
-                                                        <div className="mt-3 flex items-center gap-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => navigate(`${pathPrefix}/sessions/${row.sessionId}`)}
-                                                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-slate-950 px-3 text-[11px] font-bold uppercase text-white transition hover:bg-slate-800"
-                                                                title="Play replay"
-                                                            >
-                                                                <Play className="h-3.5 w-3.5 fill-current" />
-                                                                Play
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            <div className="hidden overflow-x-auto md:block">
-                                                <table className="w-full min-w-[760px] table-fixed border-collapse">
+                                        <div className="rejourney-replays-page dashboard-mobile-scroll overflow-x-auto">
+                                            <div className="w-full min-w-[1160px] overflow-hidden border-2 border-black bg-white shadow-neo">
+                                                <table className="w-full table-fixed border-collapse">
                                                     <thead>
-                                                        <tr className="border-b border-slate-200 bg-white">
-                                                            <th className="w-10 px-4 py-3" />
-                                                            <th className="px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Session</th>
-                                                            <th className="w-[22%] px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Source</th>
-                                                            <th className="w-[32%] px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Signal</th>
-                                                            <th className="w-[18%] px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Match</th>
-                                                            <th className="w-[72px] px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wide text-slate-500">Replay</th>
+                                                        <tr className="border-b-2 border-black bg-[#cffafe]">
+                                                            <th className="sticky top-0 z-40 w-10 bg-[#cffafe] py-3 pl-4 pr-2" />
+                                                            <th className="sticky top-0 z-40 w-[280px] bg-[#cffafe] px-3 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-600">User</th>
+                                                            <th className="sticky top-0 z-40 w-32 bg-[#cffafe] px-3 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-600">Date</th>
+                                                            <th className="sticky top-0 z-40 w-44 bg-[#cffafe] px-3 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-600">Device</th>
+                                                            <th className="sticky top-0 z-40 w-36 bg-[#cffafe] px-3 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-600">Location</th>
+                                                            <th className="sticky top-0 z-40 w-24 bg-[#cffafe] px-2 py-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-600">Screens</th>
+                                                            <th className="sticky top-0 z-40 w-28 min-w-[7rem] bg-[#cffafe] px-2 py-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-600">Duration</th>
+                                                            <th className="sticky top-0 z-40 w-36 bg-[#cffafe] px-3 py-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-600">Notes</th>
+                                                            <th className="sticky top-0 z-40 w-12 bg-[#cffafe] py-3 pl-2 pr-4" />
+                                                            <th className="sticky top-0 z-40 w-12 bg-[#cffafe] py-3 pl-2 pr-6" />
                                                         </tr>
                                                     </thead>
-                                                    <tbody className="divide-y divide-slate-100">
-                                                        {selectedQuerySessions.slice(0, 12).map((row, rowIndex) => (
-                                                            <tr key={row.sessionId} className={rowIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
-                                                                <td className="px-4 py-3 align-middle">
-                                                                    <span className={`block h-2.5 w-2.5 rounded-full ${getReplayPriorityDotClass(row.priority)}`} />
-                                                                </td>
-                                                                <td className="min-w-0 px-3 py-3 align-middle">
-                                                                    <div className="flex min-w-0 items-center gap-2">
-                                                                        <div className="min-w-0 truncate font-mono text-xs font-semibold text-slate-950" title={row.sessionId}>
-                                                                            {row.sessionId}
-                                                                        </div>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => copySessionId(row.sessionId)}
-                                                                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50"
-                                                                            title="Copy session ID"
-                                                                        >
-                                                                            {copiedSessionId === row.sessionId ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-3 py-3 align-middle">
-                                                                    <span className={`inline-flex max-w-full rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${getReplayPriorityPillClass(row.priority)}`}>
-                                                                        <span className="truncate">{row.source}</span>
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-3 py-3 align-middle">
-                                                                    <div className="truncate text-xs font-medium text-slate-700" title={row.signal}>
-                                                                        {row.signal}
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-4 py-3 align-middle text-xs font-semibold text-slate-600">
-                                                                    {row.matchedPaths.length} clause{row.matchedPaths.length === 1 ? '' : 's'}
-                                                                </td>
-                                                                <td className="px-4 py-3 align-middle">
-                                                                    <div className="flex items-center justify-end gap-1.5">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => navigate(`${pathPrefix}/sessions/${row.sessionId}`)}
-                                                                            className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-950 text-white transition hover:bg-slate-800"
-                                                                            title="Play replay"
-                                                                        >
-                                                                            <Play className="h-3.5 w-3.5 fill-current" />
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
+                                                    <tbody className="divide-y-2 divide-black/15">
+                                                        {selectedQuerySessionRows.map((row, rowIndex) => {
+                                                            const session = evidenceSessionDetails[row.sessionId];
+                                                            const isExpanded = expandedEvidenceSessionId === row.sessionId;
+                                                            const isZebraEven = rowIndex % 2 === 0;
+                                                            const userId = session?.userId || (session as any)?.anonymousDisplayName || row.sessionId;
+                                                            const displayUserId = userId.length > 20 ? `${userId.slice(0, 20)}…` : userId;
+                                                            const avatarIdentity = {
+                                                                id: row.sessionId,
+                                                                anonymousDisplayName: (session as any)?.anonymousDisplayName || row.sessionId,
+                                                            };
+                                                            const replayAvatarSeed = getAnimalAvatarSeed(avatarIdentity);
+                                                            const replayAvatar = getAnimalForIdentity(avatarIdentity);
+                                                            const geoDisplay = formatGeoDisplay(session?.geoLocation);
+                                                            const platformLabel = session ? getPlatformLabel(session) : 'Replay';
+                                                            const displayDeviceModel = session ? formatDeviceModel(session.deviceModel) : 'Loading';
+                                                            const webSession = isWebSession(session);
+                                                            const webEnvironment = webSession && session ? getWebSessionEnvironment(session) : null;
+                                                            const screensCount = session?.screensVisited?.length || row.matchedPaths.length;
+                                                            const hasDeadTaps = ((session as any)?.deadTapCount || 0) > 0;
+                                                            const hasSlowStart = ((session as any)?.appStartupTimeMs || 0) > 3000;
+                                                            const hasSlowApi = ((session as any)?.apiAvgResponseMs || 0) > 1000;
+                                                            const hasIssues = Boolean(session && (
+                                                                (session.crashCount || 0) > 0 ||
+                                                                ((session as any).anrCount || 0) > 0 ||
+                                                                ((session as any).errorCount || 0) > 0 ||
+                                                                (session.rageTapCount || 0) > 0 ||
+                                                                hasDeadTaps ||
+                                                                hasSlowStart ||
+                                                                hasSlowApi
+                                                            ));
+                                                            const rowAccent = getReplaySessionRowAccent(session, row.priority);
+                                                            const canOpenReplay = session ? ((session as any).canOpenReplay ?? hasSuccessfulRecording(session)) : true;
+                                                            const date = session ? new Date(session.startedAt) : null;
+
+                                                            return (
+                                                                <React.Fragment key={row.sessionId}>
+                                                                    <tr
+                                                                        className={`cursor-pointer transition-colors ${isExpanded ? 'bg-[#f8fafc]' : isZebraEven ? 'bg-white hover:bg-[#f8fafc]' : 'bg-[#f8fafc] hover:bg-[#ecfeff]/45'}`}
+                                                                        style={{ boxShadow: `inset 3px 0 0 ${rowAccent}` }}
+                                                                        onClick={() => setExpandedEvidenceSessionId((current) => current === row.sessionId ? null : row.sessionId)}
+                                                                    >
+                                                                        <td className="w-10 py-2.5 pl-4 pr-2 align-middle text-center">
+                                                                            <div className="mx-auto inline-flex h-7 w-7 items-center justify-center" title={`${row.sessionId} replay evidence`}>
+                                                                                <AnimalAvatar animal={replayAvatar} seed={replayAvatarSeed} size={24} active={isExpanded} neutral />
+                                                                            </div>
+                                                                        </td>
+
+                                                                        <td className="w-[280px] min-w-0 overflow-hidden px-3 py-2.5 align-middle">
+                                                                            <div className="flex min-w-0 items-center gap-2">
+                                                                                <h3
+                                                                                    className="min-w-0 shrink truncate font-mono text-sm font-bold text-slate-900"
+                                                                                    title={userId}
+                                                                                >
+                                                                                    {displayUserId}
+                                                                                </h3>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(event) => {
+                                                                                        event.stopPropagation();
+                                                                                        void copySessionId(row.sessionId);
+                                                                                    }}
+                                                                                    className="text-slate-400 transition-colors hover:text-slate-900"
+                                                                                    title="Copy session ID"
+                                                                                >
+                                                                                    {copiedSessionId === row.sessionId ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                                                                                </button>
+                                                                            </div>
+                                                                        </td>
+
+                                                                        <td className="w-32 px-3 py-2.5 align-middle">
+                                                                            {date ? (
+                                                                                <>
+                                                                                    <div className="text-xs font-black text-slate-900">{date.toLocaleDateString()}</div>
+                                                                                    <div className="font-mono text-[10px] tracking-tight text-slate-400">{date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                                                </>
+                                                                            ) : (
+                                                                                <span className="text-xs font-medium text-slate-400">{isEvidenceHydrating ? 'Loading' : '—'}</span>
+                                                                            )}
+                                                                        </td>
+
+                                                                        <td className="w-44 px-3 py-2.5 align-middle text-left">
+                                                                            {session ? (
+                                                                                <div
+                                                                                    className="flex min-w-0 items-center gap-2"
+                                                                                    title={webEnvironment ? `${webEnvironment.browserTitle} · ${webEnvironment.osTitle}` : `${displayDeviceModel}${session.osVersion ? ` · ${session.osVersion}` : ''}`}
+                                                                                >
+                                                                                    {webEnvironment ? (
+                                                                                        <BrowserBrandIcon browserName={webEnvironment.browserName} className="h-4 w-4 shrink-0" />
+                                                                                    ) : (
+                                                                                        <MobilePlatformBrandIcon platformName={platformLabel} className="h-4 w-4 shrink-0 text-slate-500" />
+                                                                                    )}
+                                                                                    <div className="min-w-0 leading-tight">
+                                                                                        <div className="truncate text-sm font-bold text-slate-900">
+                                                                                            {webEnvironment ? webEnvironment.browserLabel : formatNativeOsLabel(platformLabel, session.osVersion)}
+                                                                                        </div>
+                                                                                        <div className="truncate text-[10px] font-bold tracking-tight text-slate-500">
+                                                                                            {webEnvironment ? webEnvironment.osLabel : displayDeviceModel}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="leading-tight">
+                                                                                    <div className="text-sm font-bold text-slate-400">{isEvidenceHydrating ? 'Loading' : 'Replay'}</div>
+                                                                                    <div className="text-[10px] font-bold tracking-tight text-slate-400">Evidence</div>
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+
+                                                                        <td className="w-36 overflow-hidden px-3 py-2.5 align-middle">
+                                                                            {geoDisplay.hasLocation ? (
+                                                                                <div className="leading-tight">
+                                                                                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                                                                                        <CountryFlag countryCode={geoDisplay.countryCode} countryLabel={geoDisplay.countryLabel} decorative />
+                                                                                        <span className="truncate">{geoDisplay.countryLabel}</span>
+                                                                                    </div>
+                                                                                    <div className="truncate pl-5 text-[10px] font-bold text-slate-500">
+                                                                                        {geoDisplay.cityLabel || 'City Unknown'}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <span className="text-xs font-medium text-slate-400">—</span>
+                                                                            )}
+                                                                        </td>
+
+                                                                        <td className="w-24 px-2 py-2.5 text-right align-middle">
+                                                                            {screensCount > 0 ? (
+                                                                                <span className="inline-block border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-xs font-bold text-slate-700">
+                                                                                    {screensCount}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-xs text-slate-300">—</span>
+                                                                            )}
+                                                                        </td>
+
+                                                                        <td className="w-28 min-w-[7rem] px-2 py-2.5 text-right align-middle">
+                                                                            {session ? (
+                                                                                <span className="border border-black bg-[#ecfeff] px-1.5 py-0.5 font-mono text-xs font-bold text-black">
+                                                                                    {formatReplayDuration(session.durationSeconds)}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-xs font-medium text-slate-400">—</span>
+                                                                            )}
+                                                                        </td>
+
+                                                                        <td className="w-36 px-3 py-2.5 text-right align-middle">
+                                                                            <div className="flex min-h-[28px] flex-wrap items-center justify-end gap-1.5">
+                                                                                {session?.isFirstSession && (
+                                                                                    <span
+                                                                                        className="inline-flex items-center border-2 border-black bg-[#86efac] px-2 py-0.5 text-[10px] font-black uppercase text-black shadow-neo-sm"
+                                                                                        title="First recorded session for this visitor in this project"
+                                                                                    >
+                                                                                        NEW USER
+                                                                                    </span>
+                                                                                )}
+                                                                                {row.priority === 'high' && <NeoBadge variant="danger" size="sm">HIGH</NeoBadge>}
+                                                                                {row.priority === 'medium' && <NeoBadge variant="neutral" size="sm">MED</NeoBadge>}
+                                                                                {session && (session.crashCount || 0) > 0 && <NeoBadge variant="danger" size="sm">CRASH</NeoBadge>}
+                                                                                {session && ((session as any).anrCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ANR</NeoBadge>}
+                                                                                {session && ((session as any).errorCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ERR</NeoBadge>}
+                                                                                {session && (session.rageTapCount || 0) > 0 && <NeoBadge variant="danger" size="sm">RAGE</NeoBadge>}
+                                                                                {session && hasDeadTaps && <NeoBadge variant="neutral" size="sm">DEAD</NeoBadge>}
+                                                                                {session && hasSlowStart && <NeoBadge variant="neutral" size="sm">SLOW</NeoBadge>}
+                                                                                {session && hasSlowApi && <NeoBadge variant="neutral" size="sm">API</NeoBadge>}
+                                                                                {!hasIssues && row.priority !== 'high' && row.priority !== 'medium' && (
+                                                                                    <span className="inline-flex items-center border border-[#15803d] bg-[#dcfce7] px-2 py-0.5 text-[10px] font-black uppercase text-[#14532d]">
+                                                                                        HEALTHY
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+
+                                                                        <td className="w-12 py-2.5 pl-2 pr-4 text-center align-middle">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(event) => {
+                                                                                    event.stopPropagation();
+                                                                                    if (canOpenReplay) navigate(`${pathPrefix}/sessions/${row.sessionId}`);
+                                                                                }}
+                                                                                disabled={!canOpenReplay}
+                                                                                className={`group/play inline-flex items-center justify-center border-2 border-transparent p-1.5 transition-all ${canOpenReplay ? 'text-slate-700 hover:border-black hover:bg-[#67e8f9] hover:text-black hover:shadow-neo-sm' : 'cursor-not-allowed text-slate-300 opacity-40'}`}
+                                                                                title={canOpenReplay ? 'Open Replay' : 'Replay unavailable for this session'}
+                                                                            >
+                                                                                <Play size={16} className={canOpenReplay ? 'group-hover/play:fill-current' : ''} />
+                                                                            </button>
+                                                                        </td>
+
+                                                                        <td className="w-12 py-2.5 pl-2 pr-6 align-middle">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(event) => {
+                                                                                    event.stopPropagation();
+                                                                                    setExpandedEvidenceSessionId((current) => current === row.sessionId ? null : row.sessionId);
+                                                                                }}
+                                                                                className={`mx-auto flex items-center justify-center border-2 border-transparent p-1.5 transition-all ${isExpanded ? 'border-black bg-[#67e8f9] text-black shadow-neo-sm' : 'text-slate-600 hover:border-black hover:bg-[#ecfeff] hover:text-black hover:shadow-neo-sm'}`}
+                                                                                title={isExpanded ? 'Hide journey match details' : 'Show journey match details'}
+                                                                            >
+                                                                                {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+
+                                                                    {isExpanded && (
+                                                                        <tr>
+                                                                            <td colSpan={10} className="border-b-2 border-black bg-[#f8fafc] p-0 align-top">
+                                                                                <div className="space-y-3 px-5 pb-5 pt-3 sm:px-7">
+                                                                                    <div className="grid gap-2 text-xs md:grid-cols-3">
+                                                                                        <div className="border border-black bg-white p-3">
+                                                                                            <div className="mb-1 text-[10px] font-black uppercase text-slate-500">Source</div>
+                                                                                            <div className="font-semibold text-slate-900">{row.source}</div>
+                                                                                        </div>
+                                                                                        <div className="border border-black bg-white p-3">
+                                                                                            <div className="mb-1 text-[10px] font-black uppercase text-slate-500">Signal</div>
+                                                                                            <div className="font-semibold text-slate-900">{row.signal}</div>
+                                                                                        </div>
+                                                                                        <div className="border border-black bg-white p-3">
+                                                                                            <div className="mb-1 text-[10px] font-black uppercase text-slate-500">Matched Paths</div>
+                                                                                            <div className="font-semibold text-slate-900">{row.matchedPaths.length}</div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex flex-wrap gap-2">
+                                                                                        {row.matchedPaths.map((path) => (
+                                                                                            <span
+                                                                                                key={path}
+                                                                                                className="max-w-full truncate border border-[#dadce0] bg-white px-2 py-1 text-[11px] font-semibold text-slate-700"
+                                                                                                title={path}
+                                                                                            >
+                                                                                                {path}
+                                                                                            </span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+                                                                </React.Fragment>
+                                                            );
+                                                        })}
                                                     </tbody>
                                                 </table>
                                             </div>
-                                        </>
+                                        </div>
                                     ) : (
                                         <div className="flex min-h-[180px] items-center justify-center p-6 text-center text-sm font-medium text-slate-500">
                                             Select one or more ribbons in the journey map to populate the replay table.
@@ -1136,7 +1408,7 @@ export const Journeys: React.FC = () => {
                             </div>
                         </section>
 
-                    </>
+                    </div>
                 )}
             </div>
         </div>

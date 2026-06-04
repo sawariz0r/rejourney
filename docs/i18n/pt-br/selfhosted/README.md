@@ -174,7 +174,7 @@ O instalador gera este arquivo. Variáveis ​​típicas incluem:
 - **Armazenar:** `STORAGE_BACKEND`, `S3_*` e opcionalmente `MINIO_*`
 - **Segurança:** `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY`
 
-Integrações opcionais (deixe em branco se não forem utilizadas): Stripe, SMTP, GitHub OAuth, Turnstile, etc.
+Integrações opcionais (deixe em branco se não forem utilizadas): Stripe, SMTP, GitHub OAuth, etc.
 
 **Alterando valores relacionados ao armazenamento ou ao domínio:** edite `.env.selfhosted` e execute:
 

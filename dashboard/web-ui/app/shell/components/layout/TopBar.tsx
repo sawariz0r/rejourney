@@ -7,7 +7,7 @@ import { useTeam } from '~/shared/providers/TeamContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { clearCache, getTeamBillingUsage, getTeamPlan, TeamUsage } from '~/features/app/billing/api';
 import { clearCacheMatching } from '~/shared/api/client';
-import { RefreshCw, User as UserIcon, LogOut, ChevronDown, CreditCard, Copy, BookOpen, Check, Menu, Mail } from 'lucide-react';
+import { RefreshCw, User as UserIcon, LogOut, ChevronDown, CreditCard, Copy, BookOpen, Check, Menu, Mail, Home } from 'lucide-react';
 import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
 import { DASHBOARD_MANUAL_REFRESH_COMPLETE, DASHBOARD_MANUAL_REFRESH_START } from '~/shared/constants/events';
 
@@ -163,12 +163,16 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
     ? (userName.length > 20 ? `${userName.substring(0, 18)}...` : userName)
     : (userEmail.length > 20 ? `${userEmail.substring(0, 18)}...` : userEmail);
 
+  const isDemoDashboard = pathPrefix === '/demo';
   const sessionReplaysUsed = teamUsage?.sessionReplaysUsed ?? teamUsage?.sessionsUsed ?? 0;
   const sessionsCaptured = teamUsage?.sessionsCaptured ?? sessionReplaysUsed;
 
   const planLabel = user?.isSelfHosted
     ? 'Self-Hosted'
     : (teamPlan?.planName ? teamPlan.planName.charAt(0).toUpperCase() + teamPlan.planName.slice(1) : 'Free');
+  const usageChipTitle = isDemoDashboard
+    ? `${currentTeam?.name ?? 'Demo team'} - demo plan - ${sessionReplaysUsed.toLocaleString()} session replays, ${sessionsCaptured.toLocaleString()} analytics sessions / ∞ this period. Open Plan & Billing.`
+    : `${currentTeam?.name ?? 'Team'} - ${planLabel} plan - ${sessionReplaysUsed.toLocaleString()} session replays, ${sessionsCaptured.toLocaleString()} sessions captured this period. Open Plan & Billing.`;
 
   const compactRetentionLabel = teamPlan?.videoRetentionLabel
     ?.replace(/\s+days?$/i, 'd')
@@ -217,6 +221,17 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         >
           <Menu className="h-4 w-4 stroke-[3]" />
         </button>
+
+        {pathPrefix === '/demo' && (
+          <Link
+            to="/"
+            className="flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 bg-white shadow-sm transition-colors hover:bg-slate-50 sm:hidden"
+            aria-label="Back to Rejourney home"
+            title="Back to Rejourney home"
+          >
+            <Home className="h-4 w-4 stroke-[3]" />
+          </Link>
+        )}
 
         {/* Logo */}
         <Link to="/" className="hidden shrink-0 transition-opacity hover:opacity-80 sm:block">
@@ -316,11 +331,13 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
           <Link
             to={`${pathPrefix}/billing`}
             className="hidden h-8 min-w-8 shrink-0 items-center justify-center border border-emerald-100 bg-emerald-50 px-2 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-100 active:shadow-none lg:flex"
-            title={`${currentTeam.name} - ${planLabel} plan - ${sessionReplaysUsed.toLocaleString()} session replays, ${sessionsCaptured.toLocaleString()} sessions captured this period. Open Plan & Billing.`}
+            title={usageChipTitle}
             aria-label={`Open Plan & Billing for ${currentTeam.name}`}
           >
             <span className="text-xs font-black text-black">
-              R {sessionReplaysUsed.toLocaleString()} / S {sessionsCaptured.toLocaleString()}
+              {isDemoDashboard
+                ? <>R {sessionReplaysUsed.toLocaleString()} / A {sessionsCaptured.toLocaleString()} / ∞</>
+                : <>R {sessionReplaysUsed.toLocaleString()} / S {sessionsCaptured.toLocaleString()}</>}
             </span>
           </Link>
         )}

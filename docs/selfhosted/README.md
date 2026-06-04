@@ -319,7 +319,6 @@ Optional integrations can stay blank until you need them:
 - Stripe
 - SMTP
 - GitHub OAuth
-- Turnstile
 
 After changing domain or storage settings, run:
 

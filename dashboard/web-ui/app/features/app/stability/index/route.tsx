@@ -41,6 +41,7 @@ import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
 import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
 import { useSharedRejourneyTimeRange } from '~/shared/hooks/useSharedRejourneyTimeRange';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 
 type StabilityIssueKind = 'crashes' | 'errors' | 'anrs' | 'api_spikes';
@@ -1037,8 +1038,7 @@ export const Stability: React.FC = () => {
       <DashboardPageHeader
         title="Stability"
         subtitle="Crashes, runtime errors, and ANRs ordered by latest event"
-        icon={<AlertTriangle className="h-5 w-5" />}
-        iconColor="bg-[#ffe4e6]"
+        {...dashboardPageHeaderProps('stability')}
       >
         <DashboardLensControls timeRange={timeRange} onTimeRangeChange={setTimeRange} />
       </DashboardPageHeader>

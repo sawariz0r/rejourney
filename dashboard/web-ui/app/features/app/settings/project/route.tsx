@@ -12,6 +12,7 @@ import { Input } from '~/shared/ui/core/Input';
 import { Modal } from '~/shared/ui/core/Modal';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { SettingsLayout } from '~/shell/components/layout/SettingsLayout';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { InfoTooltip } from '~/shared/ui/core/InfoTooltip';
 import { formatWebAllowedDomainsInput, getAndroidPackageError, getIosBundleIdError, getWebAllowedDomainsError, parseWebAllowedDomainsInput } from '~/shared/lib/validation';
 import {
@@ -1071,7 +1072,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
         className="rejourney-project-settings-page"
         title="Project Settings"
         description="Configure project"
-        iconColor="bg-[#f4f4f5]"
+        {...dashboardPageHeaderProps('project')}
       >
         <NeoCard className="p-6 border-rose-600 bg-rose-50">
           <div className="flex gap-4 items-center">
@@ -1141,7 +1142,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
       className="rejourney-project-settings-page"
       title="Project Settings"
       description={`Configure ${project.name}`}
-      iconColor="bg-[#f4f4f5]"
+      {...dashboardPageHeaderProps('project')}
       headerAction={!canEdit ? <NeoBadge variant="warning">View Only</NeoBadge> : undefined}
     >
       <div className="project-settings-console grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">

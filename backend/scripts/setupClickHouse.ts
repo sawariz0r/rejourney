@@ -71,6 +71,13 @@ function prepareClusterStatement(statement: string): string {
         );
     }
 
+    if (/\brevenue_events\b/i.test(prepared)) {
+        prepared = prepared.replace(
+            /\bENGINE\s*=\s*ReplacingMergeTree\s*\(\s*updated_at\s*\)/i,
+            "ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/{database}/revenue_events', '{replica}', updated_at)",
+        );
+    }
+
     return prepared;
 }
 

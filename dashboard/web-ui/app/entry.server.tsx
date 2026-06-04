@@ -17,17 +17,17 @@ import {
 
 const ABORT_DELAY = 5000;
 
-// Content Security Policy that allows Cloudflare Turnstile, Stripe, Rejourney ingest, and Mapbox
+// Content Security Policy that allows Stripe, Rejourney ingest, Mapbox, and Zaraz-managed Google Ads.
 const CSP_POLICY = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://js.stripe.com https://m.stripe.network",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://m.stripe.network https://static.cloudflareinsights.com https://www.googletagmanager.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://www.google.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     // Session replay images/screenshots are served from MinIO/S3 (http for local dev)
     "img-src 'self' data: http: https: blob:",
     // Session replay media is served from MinIO/S3 in self-hosted/local setups
     "media-src 'self' blob: data: http: https:",
-    "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com",
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://www.googletagmanager.com",
     // Replay URLs are generated from operator-managed S3-compatible storage
     // endpoints, so allow HTTPS dynamically instead of hardcoding providers.
     // Local dev also needs HTTP for MinIO/LAN endpoints.

@@ -6,7 +6,7 @@ export interface GeoLocationLike {
 }
 
 export interface GeoDisplay {
-  flagEmoji: string;
+  countryCode: string | null;
   cityLabel: string | null;
   countryLabel: string | null;
   fullLabel: string;
@@ -44,35 +44,21 @@ function normalizeCountry(
   };
 }
 
-function isoCountryCodeToFlagEmoji(countryCode: string): string {
-  const normalized = countryCode.toUpperCase();
-  if (!/^[A-Z]{2}$/.test(normalized)) return '🌐';
-  const base = 127397;
-  return String.fromCodePoint(
-    normalized.charCodeAt(0) + base,
-    normalized.charCodeAt(1) + base
-  );
+function getIsoCountryCodes(countryCode: string | null | undefined): string[] {
+  if (!countryCode) return [];
+  return countryCode
+    .toUpperCase()
+    .split('/')
+    .map((code) => code.trim())
+    .filter((code) => /^[A-Z]{2}$/.test(code));
 }
 
-export function countryCodeToFlagEmoji(countryCode: string | null | undefined): string {
-  if (!countryCode) return '🌐';
-  const normalized = countryCode.toUpperCase();
-
-  if (normalized === 'PS/IL') {
-    return '🇵🇸/🇮🇱';
-  }
-
-  if (normalized.includes('/')) {
-    const flags = normalized
-      .split('/')
-      .map((code) => code.trim())
-      .filter(Boolean)
-      .map(isoCountryCodeToFlagEmoji);
-
-    return flags.length > 0 ? flags.join('/') : '🌐';
-  }
-
-  return isoCountryCodeToFlagEmoji(normalized);
+export function countryCodeToTwemojiFlagAssetNames(countryCode: string | null | undefined): string[] {
+  return getIsoCountryCodes(countryCode).map((code) =>
+    Array.from(code)
+      .map((char) => (0x1f1e6 + char.charCodeAt(0) - 65).toString(16))
+      .join('-')
+  );
 }
 
 export function formatGeoDisplay(geoLocation: GeoLocationLike | null | undefined): GeoDisplay {
@@ -92,7 +78,7 @@ export function formatGeoDisplay(geoLocation: GeoLocationLike | null | undefined
   const hasLocation = fullLabel !== UNKNOWN_LOCATION_LABEL;
 
   return {
-    flagEmoji: hasLocation ? countryCodeToFlagEmoji(normalized.countryCode) : '🌐',
+    countryCode: hasLocation ? normalized.countryCode : null,
     cityLabel: city,
     countryLabel,
     fullLabel,

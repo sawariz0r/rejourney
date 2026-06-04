@@ -222,7 +222,7 @@ interface AuthContextValue {
   loginWithGitHub: () => void;
   logout: () => Promise<void>;
   refreshUser: () => Promise<User | null>;
-  sendOtp: (email: string, turnstileToken?: string | null) => Promise<AuthActionResult>;
+  sendOtp: (email: string) => Promise<AuthActionResult>;
 }
 
 export interface AuthActionResult {
@@ -393,7 +393,7 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
   }, [initialHydrated, refreshUser]);
 
   // Send OTP to email
-  const sendOtp = useCallback(async (email: string, turnstileToken?: string | null): Promise<AuthActionResult> => {
+  const sendOtp = useCallback(async (email: string): Promise<AuthActionResult> => {
     try {
       setError(null);
       const headers = withDefaultHeaders({ 'Content-Type': 'application/json' });
@@ -409,7 +409,6 @@ export function AuthProvider({ children, initialHydrated = false, initialUser = 
         body: JSON.stringify({
           email,
           fingerprint,
-          ...(turnstileToken ? { turnstileToken } : {}),
         }),
       }, 'Failed to send verification code');
 

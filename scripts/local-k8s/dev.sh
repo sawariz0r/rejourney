@@ -350,6 +350,7 @@ suspend_k8s_app_deployments() {
         session-lifecycle-worker
         retention-worker
         alert-worker
+        revenue-sync-worker
     )
 
     local existing=()
@@ -382,6 +383,7 @@ start_host_services() {
     start_process "worker-lifecycle" "" "cd '$ROOT_DIR/backend' && set -a && source '$ENV_FILE' && set +a && node --import tsx src/worker/sessionLifecycleWorker.ts"
     start_process "worker-retention" "" "cd '$ROOT_DIR/backend' && set -a && source '$ENV_FILE' && set +a && node --import tsx src/worker/retentionWorker.ts"
     start_process "worker-alerts" "" "cd '$ROOT_DIR/backend' && set -a && source '$ENV_FILE' && set +a && node --import tsx src/worker/alertWorker.ts"
+    start_process "worker-revenue-sync" "" "cd '$ROOT_DIR/backend' && set -a && source '$ENV_FILE' && set +a && node --import tsx src/worker/revenueSyncWorker.ts"
     start_process "web" "$DASHBOARD_HOST_PORT" "cd '$ROOT_DIR/dashboard/web-ui' && set -a && source '$ENV_FILE' && set +a && npm run dev -- --host 0.0.0.0 --port $DASHBOARD_HOST_PORT"
 }
 

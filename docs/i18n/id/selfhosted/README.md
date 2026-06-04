@@ -174,7 +174,7 @@ Penginstal menghasilkan file ini. Variabel umum meliputi:
 - **Penyimpanan:** `STORAGE_BACKEND`, `S3_*`, dan opsional `MINIO_*`
 - **Keamanan:** `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY`
 
-Integrasi opsional (biarkan kosong jika tidak digunakan): Stripe, SMTP, GitHub OAuth, Turnstile, dll.
+Integrasi opsional (biarkan kosong jika tidak digunakan): Stripe, SMTP, GitHub OAuth, dll.
 
 **Mengubah nilai penyimpanan atau terkait domain:** edit `.env.selfhosted`, lalu jalankan:
 

@@ -153,9 +153,12 @@ Rejourney.logEvent(name: string, properties?: Record<string, unknown>)
 ```javascript
 // E-commerce
 Rejourney.logEvent('purchase_completed', {
+  transactionId: order.id,
   plan: 'pro',
   amount: 29.99,
-  currency: 'USD'
+  currency: 'USD',
+  paymentProvider: 'stripe',
+  isRenewal: false
 });
 
 // Onboarding
@@ -177,6 +180,22 @@ Rejourney.logEvent('payment_failed', {
   retryCount: 2
 });
 ```
+
+### Revenue Mapping
+
+The Revenue impact Custom events source uses the same `logEvent` payload. Use a real money-collected event such as `purchase_completed`; do not map setup or device events such as `device_info`, `app_initialized`, or screen-view events as revenue.
+
+For the e-commerce example above, choose:
+
+| Dashboard field | Value |
+|---|---|
+| Purchase event | `purchase_completed` |
+| Amount property | `amount` |
+| Currency property | `currency` |
+| Default currency | `USD` |
+| Amount unit | Dollars / major units |
+
+`transactionId` is strongly recommended so retries and duplicate client/backend sends collapse into one revenue fact. If your event sends cents, for example `{ amount: 2999, currency: 'USD' }`, choose Cents / minor units. Refund and lifecycle events are optional; leave them unset unless you log separate events such as `refund_completed` or `subscription_cancelled`.
 
 ### How Events Appear in the Dashboard
 
@@ -223,7 +242,7 @@ Rejourney.setMetadata({
 | User's subscription plan |  `setMetadata('plan', 'pro')` | |
 | User clicked a button | |  `logEvent('button_clicked', { buttonName: 'signup' })` |
 | A/B test variant |  `setMetadata('ab_variant', 'v2')` | |
-| Purchase completed | |  `logEvent('purchase', { amount: 29 })` |
+| Purchase completed | |  `logEvent('purchase_completed', { transactionId: order.id, amount: 29.99, currency: 'USD' })` |
 | User's role |  `setMetadata('role', 'admin')` | |
 | Onboarding step reached | |  `logEvent('onboarding_step', { step: 3 })` |
 

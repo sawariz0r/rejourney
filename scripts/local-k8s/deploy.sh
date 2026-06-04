@@ -207,6 +207,7 @@ wait_full() {
     kubectl wait --for=condition=available deployment/session-lifecycle-worker -n "$NAMESPACE" --timeout=240s
     kubectl wait --for=condition=available deployment/retention-worker -n "$NAMESPACE" --timeout=240s
     kubectl wait --for=condition=available deployment/alert-worker -n "$NAMESPACE" --timeout=240s
+    kubectl wait --for=condition=available deployment/revenue-sync-worker -n "$NAMESPACE" --timeout=240s
     wait_for_db_setup
     wait_for_clickhouse_setup
 }
@@ -227,6 +228,7 @@ apply_apps() {
     kubectl rollout restart deployment/session-lifecycle-worker -n "$NAMESPACE" >/dev/null 2>&1 || true
     kubectl rollout restart deployment/retention-worker -n "$NAMESPACE" >/dev/null 2>&1 || true
     kubectl rollout restart deployment/alert-worker -n "$NAMESPACE" >/dev/null 2>&1 || true
+    kubectl rollout restart deployment/revenue-sync-worker -n "$NAMESPACE" >/dev/null 2>&1 || true
 
     wait_full
 }
@@ -291,7 +293,7 @@ logs() {
         postgres)
             kubectl logs -f statefulset/postgres -n "$NAMESPACE" --tail=100
             ;;
-        redis|minio|web|api|ingest-upload|ingest-worker|replay-worker|session-lifecycle-worker|retention-worker|alert-worker)
+        redis|minio|web|api|ingest-upload|ingest-worker|replay-worker|session-lifecycle-worker|retention-worker|alert-worker|revenue-sync-worker)
             kubectl logs -f deployment/"$target" -n "$NAMESPACE" --tail=100
             ;;
         clickhouse)

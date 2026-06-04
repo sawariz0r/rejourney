@@ -1,14 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    AlertTriangle,
     Bug,
     Clock,
     Cpu,
-    Flame,
     Gauge,
     Layers,
     ListChecks,
-    Smartphone,
     Timer,
     TrendingDown,
     TrendingUp,
@@ -22,6 +19,7 @@ import {
     DeviceSummary,
 } from '~/shared/api/client';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
 import { useSharedPlatformLens, platformLensToSessionPlatform } from '~/shared/hooks/useSharedPlatformLens';
 import { useSharedRejourneyTimeRange } from '~/shared/hooks/useSharedRejourneyTimeRange';
@@ -581,8 +579,7 @@ export const Devices: React.FC = () => {
         <div className="rejourney-devices-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-slate-900">
             <DashboardPageHeader
                 title="Devices"
-                icon={<Smartphone className="h-6 w-6" />}
-                iconColor="bg-[#e0e7ff]"
+                {...dashboardPageHeaderProps('devices')}
             >
                 <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
                     <DashboardLensControls timeRange={timeRange} onTimeRangeChange={setTimeRange} />

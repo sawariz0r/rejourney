@@ -68,7 +68,6 @@ export function archiveAnonymousDisplayNameSql(): SQL<string | null> {
 
     return sql<string | null>`case
         when nullif(trim(${sessions.deviceId}), '') is not null
-          and nullif(trim(${sessions.userDisplayId}), '') is null
         then ${adjectiveSql} || ${animalSql} || upper(substring(${hashSql} from 9 for 6))
         else null
     end`;

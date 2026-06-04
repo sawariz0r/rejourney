@@ -30,6 +30,7 @@ import {
     InsightsTrends,
 } from '~/shared/api/client';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { type TimeRange } from '~/shared/ui/core/TimeFilter';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
 import { useSharedPlatformLens, platformLensToSessionPlatform } from '~/shared/hooks/useSharedPlatformLens';
@@ -1033,8 +1034,7 @@ export const ApiAnalytics: React.FC = () => {
         <div className="rejourney-api-page min-h-screen bg-[#f8fafd] font-sans text-slate-900 pb-12">
             <DashboardPageHeader
                 title="API Endpoint Database"
-                icon={<Database className="w-6 h-6" />}
-                iconColor="bg-[#e8f0fe]"
+                {...dashboardPageHeaderProps('api')}
             >
                 <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
                     <DashboardLensControls timeRange={timeRange} onTimeRangeChange={setTimeRange} />

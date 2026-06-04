@@ -25,7 +25,6 @@ This doc owns the CI, image-build, deploy, `db-setup`, and local parity flow.
 | `VPS_HOST` | check-version, deploy | VPS host / IP (can be Tailscale IP if SSH is locked to tailnet) |
 | `GITHUB_TOKEN` | deploy | Auto-provided by Actions |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | build-images | Stripe publishable key |
-| `TURNSTILE_SITE_KEY` | build-images | Cloudflare Turnstile site key |
 
 ## [C1] GitHub Actions Pipeline
 

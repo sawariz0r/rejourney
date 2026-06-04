@@ -6,7 +6,6 @@ import {
   Smartphone,
   ChevronUp,
   ChevronDown,
-  Layers,
   Download,
   ChevronLeft,
   ChevronRight,
@@ -23,9 +22,9 @@ import {
   Gauge,
   User,
   X,
-  MonitorSmartphone,
 } from 'lucide-react';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
 
@@ -43,6 +42,10 @@ import { formatDeviceModel, getDeviceModelSearchText } from '~/shared/lib/device
 import { getWebNetworkDisplay, getWebSessionEnvironment } from '~/shared/lib/webSessionEnvironment';
 import { formatWebReferralLabel, getWebReferral, getWebUtmAttribution } from '~/shared/lib/webAttributionMetadata';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
+import { AnimalAvatar, getAnimalAvatarSeed, getAnimalForIdentity } from '~/shared/ui/core/AnimalAvatar';
+import { BrowserBrandIcon } from '~/shared/ui/core/BrowserBrandIcon';
+import { MobilePlatformBrandIcon } from '~/shared/ui/core/MobilePlatformBrandIcon';
+import { CountryFlag } from '~/shared/ui/core/CountryFlag';
 import { matchesSessionArchiveIssueFilter } from './sessionArchiveFilters';
 import { QueryBuilder } from './QueryBuilder';
 import {
@@ -103,13 +106,13 @@ function getPlatformLabel(session: any): string {
   return 'Mobile';
 }
 
-const SessionPlatformIcon: React.FC<{ session: any; className?: string }> = ({ session, className }) =>
-  isWebSession(session) ? <MonitorSmartphone className={className} /> : <Smartphone className={className} />;
-
-function getPlatformIndicatorClass(isReplayBlocked: boolean, hasIssues: boolean): string {
-  if (isReplayBlocked) return 'border-slate-500 bg-slate-100 text-slate-500 animate-pulse';
-  if (hasIssues) return 'border-black bg-[#fecaca] text-black';
-  return 'border-black bg-[#dcfce7] text-[#14532d]';
+function formatNativeOsLabel(platformLabel: string, osVersion: unknown): string {
+  const cleanVersion = String(osVersion || '').trim();
+  if (!cleanVersion) return platformLabel;
+  if (cleanVersion.toLowerCase().startsWith(platformLabel.toLowerCase())) {
+    return `${platformLabel}${cleanVersion.slice(platformLabel.length)}`;
+  }
+  return `${platformLabel} ${cleanVersion.replace(/^v/i, '')}`;
 }
 
 function getRowAccentColor(session: any, hasIssues: boolean, isReplayBlocked: boolean, hasSlowStart: boolean, hasSlowApi: boolean): string {
@@ -599,8 +602,7 @@ export const RecordingsList: React.FC = () => {
         <DashboardPageHeader
           title="Replays"
           subtitle={selectedProjectId ? archiveCountLabel : 'Browse, filter & replay user sessions'}
-          icon={<Layers className="w-6 h-6" />}
-          iconColor="bg-[#cffafe]"
+          {...dashboardPageHeaderProps('sessions')}
         >
           <button
             onClick={() => {
@@ -724,18 +726,17 @@ export const RecordingsList: React.FC = () => {
       {/* List Content — table header sticks when scrolling */}
       <div className="flex-1 w-full max-w-full px-4 sm:px-6 pt-4 pb-24">
         <div className="dashboard-mobile-scroll overflow-x-auto">
-        <div className="w-full min-w-[540px] overflow-hidden border-2 border-black bg-white shadow-neo md:min-w-0">
+        <div className="w-full min-w-[1160px] overflow-hidden border-2 border-black bg-white shadow-neo">
           <table className="w-full table-fixed border-collapse">
             <thead>
               <tr className="border-b-2 border-black bg-[#cffafe]">
                 <th className="sticky top-0 z-40 bg-[#cffafe] w-10 py-3 pl-4 pr-2" />
-                <th className="sticky top-0 z-40 bg-[#cffafe] text-left py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest min-w-[140px]">User & Device</th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] text-left py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[280px]">User</th>
                 <th className="sticky top-0 z-40 bg-[#cffafe] hidden lg:table-cell text-left py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-32"><SortableHeader label="Date" sortKey="date" /></th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] hidden xl:table-cell text-left py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-44">Device</th>
                 <th className="sticky top-0 z-40 bg-[#cffafe] hidden lg:table-cell text-left py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-36">Location</th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] hidden md:table-cell text-right py-3 px-2 text-[10px] font-black text-slate-600 uppercase tracking-widest w-28 min-w-[7rem]"><SortableHeader label="Duration" sortKey="duration" align="right" /></th>
                 <th className="sticky top-0 z-40 bg-[#cffafe] hidden lg:table-cell text-right py-3 px-2 text-[10px] font-black text-slate-600 uppercase tracking-widest w-24"><SortableHeader label="Screens" sortKey="screens" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] hidden xl:table-cell text-right py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-20"><SortableHeader label="API Lat." sortKey="apiResponse" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] hidden xl:table-cell text-right py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-20"><SortableHeader label="API Err" sortKey="apiError" align="right" /></th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] hidden md:table-cell text-right py-3 px-2 text-[10px] font-black text-slate-600 uppercase tracking-widest w-28 min-w-[7rem]"><SortableHeader label="Duration" sortKey="duration" align="right" /></th>
                 <th className="sticky top-0 z-40 bg-[#cffafe] text-right py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-36"><SortableHeader label="Notes" sortKey="crashes" align="right" /></th>
                 <th className="sticky top-0 z-40 bg-[#cffafe] w-12 py-3 pl-2 pr-4" />
                 <th className="sticky top-0 z-40 bg-[#cffafe] w-12 py-3 pl-2 pr-6" />
@@ -744,7 +745,7 @@ export const RecordingsList: React.FC = () => {
             <tbody className="divide-y-2 divide-black/15">
             {paginatedSessions.length === 0 && (
               <tr>
-                <td colSpan={11} className="py-16 text-center">
+                <td colSpan={10} className="py-16 text-center">
                   <div className="inline-flex items-center justify-center p-4 bg-[#86efac] border-2 border-black shadow-neo-sm mb-4">
                     <Smartphone className="w-8 h-8 text-black" />
                   </div>
@@ -811,6 +812,24 @@ export const RecordingsList: React.FC = () => {
 	              const webReferral = getWebReferral(session);
 	              const webReferralLabel = formatWebReferralLabel(webReferral);
 	              const webUtm = webSession ? getWebUtmAttribution(session) : null;
+	              const replayAnimalSeed = getAnimalAvatarSeed(session as any);
+	              const replayAnimal = getAnimalForIdentity(session as any);
+	              const fingerprintLabel = ((session as any).anonymousDisplayName as string | undefined)?.trim() || replayAnimal;
+	              const deviceColumn = webSession && webEnvironment
+	                ? {
+	                    kind: 'web' as const,
+	                    primary: webEnvironment.browserLabel,
+	                    secondary: webEnvironment.osLabel,
+	                    iconName: webEnvironment.browserName,
+	                    title: `${webEnvironment.browserTitle} · ${webEnvironment.osTitle}`,
+	                  }
+	                : {
+	                    kind: 'native' as const,
+	                    primary: formatNativeOsLabel(platformLabel, session.osVersion),
+	                    secondary: displayDeviceModel,
+	                    iconName: platformLabel,
+	                    title: `${displayDeviceModel}${session.osVersion ? ` · ${session.osVersion}` : ''}`,
+	                  };
 
 	              const hasIssues = (session.crashCount || 0) > 0 ||
                 ((session as any).anrCount || 0) > 0 ||
@@ -831,15 +850,15 @@ export const RecordingsList: React.FC = () => {
 	                    {/* Visual Indicator */}
 	                    <td className="w-10 py-2.5 pl-4 pr-2 align-middle text-center">
 	                      <div
-	                        className={`mx-auto inline-flex h-6 w-6 items-center justify-center border ${getPlatformIndicatorClass(isReplayBlocked, hasIssues)}`}
-	                        title={`${platformLabel} session${hasIssues ? ' with issues' : ''}`}
+	                        className={`mx-auto inline-flex h-7 w-7 items-center justify-center ${isReplayBlocked ? 'opacity-60' : ''}`}
+	                        title={`${fingerprintLabel} fingerprint · ${platformLabel} session${hasIssues ? ' with issues' : ''}`}
 	                      >
-	                        <SessionPlatformIcon session={session} className="h-3.5 w-3.5" />
+	                        <AnimalAvatar animal={replayAnimal} seed={replayAnimalSeed} size={24} active={isExpanded} neutral />
 	                      </div>
 	                    </td>
 
-                    {/* User & Device */}
-                    <td className="py-2.5 px-3 align-middle overflow-hidden min-w-0">
+                    {/* User */}
+                    <td className="w-[280px] py-2.5 px-3 align-middle overflow-hidden min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <h3
                           className={`font-bold text-sm text-slate-900 font-mono truncate shrink min-w-0 ${isReplayBlocked ? 'opacity-50' : ''}`}
@@ -856,21 +875,6 @@ export const RecordingsList: React.FC = () => {
                           </button>
                         )}
                       </div>
-	                      {webSession ? (
-	                        <div className={`mt-0.5 space-y-0.5 text-[10px] font-medium uppercase tracking-tight text-slate-600 ${isReplayBlocked ? 'opacity-50' : ''}`}>
-	                          <div className="flex flex-wrap items-center gap-2">
-	                            <span title={webEnvironment?.browserTitle}>{webEnvironment?.browserLabel}</span>
-	                            <span className="h-1 w-1 bg-black"></span>
-	                            <span title={webEnvironment?.osTitle}>{webEnvironment?.osLabel}</span>
-	                          </div>
-	                        </div>
-	                      ) : (
-	                        <div className={`mt-0.5 flex min-w-0 items-center gap-2 overflow-hidden text-[10px] font-medium uppercase tracking-tight text-slate-600 ${isReplayBlocked ? 'opacity-50' : ''}`}>
-	                          <span className="min-w-0 truncate" title={session.deviceModel}>{displayDeviceModel}</span>
-	                          <span className="h-1 w-1 bg-black"></span>
-	                          <span>v{session.appVersion || '?.?.?'}</span>
-	                        </div>
-	                      )}
 	                    </td>
 
                     {/* Date (Desktop) */}
@@ -879,13 +883,28 @@ export const RecordingsList: React.FC = () => {
                       <div className="text-[10px] text-slate-400 font-mono tracking-tight">{new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                     </td>
 
+                    {/* Device */}
+                    <td className="hidden xl:table-cell py-2.5 px-3 align-middle text-left w-44">
+                      <div className={`flex min-w-0 items-center gap-2 ${isReplayBlocked ? 'opacity-50' : ''}`} title={deviceColumn.title}>
+                        {deviceColumn.kind === 'web' ? (
+                          <BrowserBrandIcon browserName={deviceColumn.iconName} className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <MobilePlatformBrandIcon platformName={deviceColumn.iconName} className="h-4 w-4 shrink-0 text-slate-500" />
+                        )}
+                        <div className="min-w-0 leading-tight">
+                          <div className="truncate text-sm font-bold text-slate-900">{deviceColumn.primary}</div>
+                          <div className="truncate text-[10px] font-bold tracking-tight text-slate-500">{deviceColumn.secondary}</div>
+                        </div>
+                      </div>
+                    </td>
+
                     {/* Location */}
                     <td className="hidden lg:table-cell py-2.5 px-3 align-middle w-36 overflow-hidden">
                       <div className={`leading-tight ${isReplayBlocked ? 'opacity-50' : ''}`}>
                         {geoDisplay.hasLocation ? (
                           <>
                             <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                              <span className="text-sm leading-none">{geoDisplay.flagEmoji}</span>
+                              <CountryFlag countryCode={geoDisplay.countryCode} countryLabel={geoDisplay.countryLabel} decorative />
                               <span className="truncate">{geoDisplay.countryLabel}</span>
                             </div>
                             <div className="pl-5 text-[10px] font-bold text-slate-500 truncate">
@@ -896,6 +915,15 @@ export const RecordingsList: React.FC = () => {
                           <span className="text-xs font-medium text-slate-400">—</span>
                         )}
                       </div>
+                    </td>
+
+                    {/* Screens */}
+                    <td className="hidden lg:table-cell py-2.5 px-2 align-middle text-right w-24">
+                      {screensCount > 0 ? (
+                        <span className="inline-block border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs font-mono font-bold text-slate-700">{screensCount}</span>
+                      ) : (
+                        <span className="text-slate-300 text-xs">—</span>
+                      )}
                     </td>
 
                     {/* Duration: LIVE REPLAY while ingest / replay preparing; MM:SS once replay is playable (or session ended) and not live-ingesting */}
@@ -909,31 +937,6 @@ export const RecordingsList: React.FC = () => {
                           {Math.floor(session.durationSeconds / 60)}:{String(session.durationSeconds % 60).padStart(2, '0')}
                         </span>
                       )}
-                    </td>
-
-                    {/* Screens */}
-                    <td className="hidden lg:table-cell py-2.5 px-2 align-middle text-right w-24">
-                      {screensCount > 0 ? (
-                        <span className="inline-block border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs font-mono font-bold text-slate-700">{screensCount}</span>
-                      ) : (
-                        <span className="text-slate-300 text-xs">—</span>
-                      )}
-                    </td>
-
-                    {/* API Metrics */}
-                    <td className="hidden xl:table-cell py-2.5 px-3 align-middle text-right w-20">
-                      {(session.apiAvgResponseMs || 0) > 0 ? (
-                        <span className={`text-xs font-mono font-medium ${session.apiAvgResponseMs > 1000 ? 'text-pink-700' : session.apiAvgResponseMs > 500 ? 'text-slate-600' : 'text-slate-700'}`}>
-                          {Math.round(session.apiAvgResponseMs)}ms
-                        </span>
-                      ) : <span className="text-slate-300 text-xs">-</span>}
-                    </td>
-                    <td className="hidden xl:table-cell py-2.5 px-3 align-middle text-right w-20">
-                      {(session.apiErrorCount || 0) > 0 ? (
-                        <span className="inline-block border border-black bg-[#fecaca] px-1.5 py-0.5 text-xs font-mono font-bold text-black">
-                          {session.apiErrorCount}
-                        </span>
-                      ) : <span className="text-slate-300 text-xs">-</span>}
                     </td>
 
                     {/* Notes */}
@@ -1003,7 +1006,7 @@ export const RecordingsList: React.FC = () => {
                   {/* Expanded Details - full-width row */}
                   {isExpanded && (
                     <tr>
-                      <td colSpan={11} className="border-b-2 border-black bg-[#f8fafc] p-0 align-top">
+                      <td colSpan={10} className="border-b-2 border-black bg-[#f8fafc] p-0 align-top">
                         <div className="px-5 sm:px-7 pb-5 pt-3 space-y-3">
 
                           {/* ── Top stats strip ── */}
@@ -1138,8 +1141,19 @@ export const RecordingsList: React.FC = () => {
                                 </div>
                                 <div className="flex justify-between items-center gap-1">
                                   <span className="text-[10px] text-slate-500 font-semibold uppercase shrink-0">Location</span>
-                                  <span className="font-bold text-slate-800 text-[10px] truncate max-w-[110px] text-right">
-                                    {geoDisplay.hasLocation ? `${geoDisplay.flagEmoji} ${geoDisplay.cityLabel || geoDisplay.countryLabel}` : '—'}
+                                  <span className="inline-flex max-w-[110px] items-center justify-end gap-1 text-right text-[10px] font-bold text-slate-800">
+                                    {geoDisplay.hasLocation ? (
+                                      <>
+                                        <CountryFlag
+                                          countryCode={geoDisplay.countryCode}
+                                          countryLabel={geoDisplay.countryLabel}
+                                          className="h-3.5"
+                                          imageClassName="h-3.5 w-3.5"
+                                          decorative
+                                        />
+                                        <span className="truncate">{geoDisplay.cityLabel || geoDisplay.countryLabel}</span>
+                                      </>
+                                    ) : '—'}
                                   </span>
                                 </div>
                               </div>
@@ -1173,7 +1187,7 @@ export const RecordingsList: React.FC = () => {
 	                            {/* Replay — compact */}
 	                            <div className={`flex flex-col gap-2 border-2 border-black p-3 shadow-neo-sm ${webSession ? 'bg-[#ecfeff]' : 'bg-white'}`}>
 	                              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-600">
-	                                {webSession ? <MonitorSmartphone className="h-3 w-3" /> : <Smartphone className="h-3 w-3" />}
+	                                <AnimalAvatar animal={replayAnimal} seed={replayAnimalSeed} size={18} active={isExpanded} neutral />
 	                                {webSession ? 'Browser Replay' : 'Replay'}
 	                              </div>
 	                              <NeoButton

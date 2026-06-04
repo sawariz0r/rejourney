@@ -98,8 +98,23 @@ async function migrationJournalRowCount(pool: pg.Pool): Promise<number | null> {
     }
 }
 
+function drizzleKitCommand(): string {
+    const candidates = [
+        './node_modules/.bin/drizzle-kit',
+        '../node_modules/.bin/drizzle-kit',
+    ];
+
+    for (const candidate of candidates) {
+        if (existsSync(join(process.cwd(), candidate))) {
+            return candidate;
+        }
+    }
+
+    return 'drizzle-kit';
+}
+
 function runDrizzleMigrate(): void {
-    execSync('./node_modules/.bin/drizzle-kit migrate', {
+    execSync(`${drizzleKitCommand()} migrate`, {
         stdio: 'inherit',
         cwd: process.cwd(),
         env: process.env,
@@ -107,7 +122,7 @@ function runDrizzleMigrate(): void {
 }
 
 function runDrizzlePushForce(): void {
-    execSync('./node_modules/.bin/drizzle-kit push --force', {
+    execSync(`${drizzleKitCommand()} push --force`, {
         stdio: 'inherit',
         cwd: process.cwd(),
         env: process.env,

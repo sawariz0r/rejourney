@@ -174,7 +174,7 @@ AWS S3, Cloudflare R2, Hetzner Object Storage, Wasabi 또는 모든 S3-compatibl
 - **저장:** `STORAGE_BACKEND`, `S3_*` 및 선택적으로 `MINIO_*`
 - **보안:** `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY`
 
-선택적 통합(사용하지 않는 경우 공백으로 남겨두기): Stripe, SMTP, GitHub OAuth, Turnstile 등
+선택적 통합(사용하지 않는 경우 공백으로 남겨두기): Stripe, SMTP, GitHub OAuth 등
 
 **저장소 또는 도메인 관련 값 변경:** `.env.selfhosted`를 편집한 후 다음을 실행합니다.
 

@@ -85,7 +85,7 @@ services:
       - traefik.http.middlewares.rejourney-security.headers.contentTypeNosniff=true
       - traefik.http.middlewares.rejourney-security.headers.browserXssFilter=true
       - traefik.http.middlewares.rejourney-security.headers.referrerPolicy=strict-origin-when-cross-origin
-      - "traefik.http.middlewares.rejourney-security.headers.contentSecurityPolicy=default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://js.stripe.com https://m.stripe.network https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://${API_DOMAIN} wss://${API_DOMAIN} https://${INGEST_DOMAIN} https://api.stripe.com https://m.stripe.network https://cloudflareinsights.com https://api.mapbox.com https://events.mapbox.com https://*.tiles.mapbox.com; media-src 'self' https: blob:; worker-src 'self' blob:; frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self';"
+      - "traefik.http.middlewares.rejourney-security.headers.contentSecurityPolicy=default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://m.stripe.network https://static.cloudflareinsights.com https://www.googletagmanager.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://www.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://${API_DOMAIN} wss://${API_DOMAIN} https://${INGEST_DOMAIN} https://api.stripe.com https://m.stripe.network https://cloudflareinsights.com https://api.mapbox.com https://events.mapbox.com https://*.tiles.mapbox.com https://www.googletagmanager.com https://pagead2.googlesyndication.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://ad.doubleclick.net https://www.google.com https://google.com; media-src 'self' https: blob:; worker-src 'self' blob:; frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://www.googletagmanager.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self';"
       - traefik.http.middlewares.rejourney-security.headers.permissionsPolicy=geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()
       - traefik.http.middlewares.rejourney-security.headers.customResponseHeaders.X-Powered-By=
       - traefik.http.middlewares.rejourney-security.headers.customResponseHeaders.Server=
@@ -373,6 +373,24 @@ services:
     image: *api-image
     restart: unless-stopped
     command: ["node", "dist/worker/alertWorker.js"]
+    healthcheck:
+      disable: true
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+    networks:
+      - rejourney-network
+
+  revenue-sync-worker:
+    image: *api-image
+    restart: unless-stopped
+    command: ["node", "dist/worker/revenueSyncWorker.js"]
     healthcheck:
       disable: true
     environment:

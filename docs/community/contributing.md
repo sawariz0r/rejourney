@@ -48,7 +48,7 @@ done
 ```
 
 Most optional integrations can stay blank locally, including Stripe, OAuth,
-Turnstile, Mapbox, and SMTP.
+Mapbox, and SMTP.
 
 Then run the local CI-parity bootstrap:
 

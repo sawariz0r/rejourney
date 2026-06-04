@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
@@ -755,8 +756,7 @@ export const AlertEmails: React.FC = () => {
             <DashboardPageHeader
                 title="Email Alerts"
                 subtitle="Choose which signals send email and who receives them"
-                icon={<Mail className="h-6 w-6" />}
-                iconColor="bg-[#f4f4f5]"
+                {...dashboardPageHeaderProps('emails')}
             >
                 <div className="flex flex-wrap items-center gap-2">
                     {isRulesDirty && (

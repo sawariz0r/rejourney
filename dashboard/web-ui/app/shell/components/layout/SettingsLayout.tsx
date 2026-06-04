@@ -9,6 +9,7 @@ interface SettingsLayoutProps {
     headerAction?: React.ReactNode;
     icon?: React.ReactNode;
     iconColor?: string;
+    iconAccent?: string;
     className?: string;
 }
 
@@ -19,10 +20,11 @@ export const SettingsLayout: React.FC<SettingsLayoutProps> = ({
     headerAction,
     icon = <Settings className="w-6 h-6" />,
     iconColor = 'bg-[#f4f4f5]',
+    iconAccent,
     className = '',
 }) => (
     <div className={`flex min-h-screen flex-col bg-transparent font-sans text-slate-900 ${className}`.trim()}>
-        <DashboardPageHeader title={title} subtitle={description} icon={icon} iconColor={iconColor}>
+        <DashboardPageHeader title={title} subtitle={description} icon={icon} iconColor={iconColor} iconAccent={iconAccent}>
             {headerAction}
         </DashboardPageHeader>
         <div className="settings-layout-content mx-auto w-full max-w-[1600px] flex-1 space-y-12 px-4 py-6 sm:px-6">

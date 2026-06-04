@@ -9,9 +9,13 @@ import {
     Globe2,
     Info,
     Mail,
-    MessageSquareWarning,
+    Pencil,
+    Plus,
+    RefreshCw,
     Search,
-    User,
+    Settings,
+    Trash2,
+    Unplug,
     X,
 } from 'lucide-react';
 import {
@@ -20,6 +24,7 @@ import {
     Bar,
     BarChart,
     CartesianGrid,
+    ComposedChart,
     Line,
     LineChart,
     ReferenceLine,
@@ -31,24 +36,39 @@ import {
 import { Link, useNavigate } from 'react-router';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import {
+    createManualRevenueEntry,
     getDashboardOverviewHeavy,
     getGeoSummary,
     getGrowthObservability,
     getInsightsTrends,
     getObservabilityDeepMetrics,
+    getRevenueOverview,
     getRetentionCohorts,
     getSessionsPaginated,
     getUserEngagementTrends,
+    configureCustomEventRevenue,
+    CustomRevenueEventConfig,
+    connectSuperwallRevenue,
+    deleteManualRevenueEntry,
+    disconnectRevenueSource,
     GeoSummary,
     GrowthObservability,
     InsightsTrends,
     ObservabilityDeepMetrics,
+    RevenueOverview,
+    RevenueProvider,
+    RevenueManualEntry,
     RetentionCohortRow,
+    setRevenueSource,
+    syncRevenueSource,
     TopUserEntry,
+    updateManualRevenueEntry,
     UserEngagementTrends,
 } from '~/shared/api/client';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
+import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { useSharedRejourneyTimeRange } from '~/shared/hooks/useSharedRejourneyTimeRange';
 import { useSharedPlatformLens, platformLensToSessionPlatform } from '~/shared/hooks/useSharedPlatformLens';
@@ -56,6 +76,8 @@ import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
 import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { MiniSessionCard } from '~/shared/ui/core/MiniSessionCard';
+import { AnimalAvatar, getAnimalAvatarSeed, getAnimalForIdentity } from '~/shared/ui/core/AnimalAvatar';
+import { CountryFlag } from '~/shared/ui/core/CountryFlag';
 import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
 import { RecordingSession } from '~/shared/types';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
@@ -80,6 +102,197 @@ const formatCompact = (value: number): string => {
     return value.toLocaleString();
 };
 
+const formatCurrencyMinor = (amountMinor: number, currency: string | null | undefined, compact = false): string => {
+    const currencyCode = (currency || 'usd').toUpperCase();
+    const amount = amountMinor / 100;
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currencyCode,
+            notation: compact ? 'compact' : 'standard',
+            maximumFractionDigits: compact ? 1 : 2,
+        }).format(amount);
+    } catch {
+        return `${currencyCode} ${amount.toLocaleString(undefined, {
+            maximumFractionDigits: compact ? 1 : 2,
+        })}`;
+    }
+};
+
+const formatManualAmountInput = (amountCents: number): string => {
+    const amount = amountCents / 100;
+    return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+};
+
+const parseManualAmountInput = (value: string): number | null => {
+    const normalized = value.trim().replace(/,/g, '');
+    if (!normalized || !/^-?\d+(\.\d{1,2})?$/.test(normalized)) return null;
+    const amount = Number(normalized);
+    if (!Number.isFinite(amount)) return null;
+    return Math.round(amount * 100);
+};
+
+const formatRevenueChange = (value: number | null): string => {
+    if (value === null || !Number.isFinite(value)) return 'No previous window';
+    return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+};
+
+const formatSyncTime = (value: string | null | undefined): string => {
+    if (!value) return 'Not synced yet';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not synced yet';
+    return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+};
+
+function buildDemoRevenueOverview(trendRows: TrendChartRow[]): RevenueOverview | null {
+    if (!trendRows.length) return null;
+
+    const daily = trendRows.map((row, index) => {
+        const grossAmountCents = Math.max(0, Math.round(row.sessions * 260 + row.dau * 35 + index * 120));
+        const refundAmountCents = index % 7 === 0 ? Math.round(grossAmountCents * 0.08) : 0;
+        const feeAmountCents = Math.round(grossAmountCents * 0.032);
+        const netAmountCents = grossAmountCents - refundAmountCents - feeAmountCents;
+
+        return {
+            date: row.dateKey,
+            currency: 'usd',
+            grossAmountCents,
+            refundAmountCents,
+            feeAmountCents,
+            netAmountCents,
+            transactionCount: Math.max(1, Math.round(row.sessions / 18)),
+            refundCount: refundAmountCents > 0 ? 1 : 0,
+            subscriberCount: index % 3 === 0 ? 2 : 1,
+            trialCount: index % 4 === 0 ? 3 : 0,
+            subscriptionStartCount: index % 3 === 0 ? 2 : 1,
+            cancellationCount: index % 8 === 0 ? 1 : 0,
+            conversionCount: index % 5 === 0 ? 2 : 1,
+            customEventCounts: {},
+        };
+    });
+    const startingRevenueCents = 249900;
+    if (daily[0]) {
+        daily[0] = {
+            ...daily[0],
+            grossAmountCents: daily[0].grossAmountCents + startingRevenueCents,
+            netAmountCents: daily[0].netAmountCents + startingRevenueCents,
+            transactionCount: daily[0].transactionCount + 1,
+            customEventCounts: {
+                ...daily[0].customEventCounts,
+                initial_revenue: 1,
+            },
+        };
+    }
+
+    const summary = daily.reduce(
+        (acc, row) => {
+            acc.grossAmountCents += row.grossAmountCents;
+            acc.refundAmountCents += row.refundAmountCents;
+            acc.feeAmountCents += row.feeAmountCents;
+            acc.netAmountCents += row.netAmountCents;
+            acc.transactionCount += row.transactionCount;
+            acc.refundCount += row.refundCount;
+            acc.subscriberCount += row.subscriberCount;
+            acc.trialCount += row.trialCount;
+            acc.subscriptionStartCount += row.subscriptionStartCount;
+            acc.cancellationCount += row.cancellationCount;
+            acc.conversionCount += row.conversionCount;
+            return acc;
+        },
+        {
+            grossAmountCents: 0,
+            refundAmountCents: 0,
+            feeAmountCents: 0,
+            netAmountCents: 0,
+            transactionCount: 0,
+            refundCount: 0,
+            subscriberCount: 0,
+            trialCount: 0,
+            subscriptionStartCount: 0,
+            cancellationCount: 0,
+            conversionCount: 0,
+        },
+    );
+    const previousGrossAmountCents = Math.round(summary.grossAmountCents / 1.186);
+
+    return {
+        configured: true,
+        activeProvider: 'custom_events',
+        providers: [
+            {
+                provider: 'custom_events',
+                label: 'Custom events',
+                configured: true,
+                status: 'connected',
+                accountId: 'demo_custom_events',
+                accountName: 'Rejourney custom events',
+                connectedAt: '2026-05-01T00:00:00.000Z',
+                lastSyncStartedAt: null,
+                lastSyncCompletedAt: '2026-06-03T08:00:00.000Z',
+                lastSyncError: null,
+            },
+            {
+                provider: 'superwall',
+                label: 'Superwall',
+                configured: true,
+                status: 'not_connected',
+                accountId: null,
+                accountName: null,
+                connectedAt: null,
+                lastSyncStartedAt: null,
+                lastSyncCompletedAt: null,
+                lastSyncError: null,
+            },
+        ],
+        connection: {
+            provider: 'custom_events',
+            label: 'Custom events',
+            configured: true,
+            status: 'connected',
+            accountId: 'demo_custom_events',
+            accountName: 'Rejourney custom events',
+            connectedAt: '2026-05-01T00:00:00.000Z',
+            lastSyncStartedAt: null,
+            lastSyncCompletedAt: '2026-06-03T08:00:00.000Z',
+            lastSyncError: null,
+            canManage: true,
+        },
+        customEventConfig: DEFAULT_CUSTOM_REVENUE_CONFIG,
+        syncPreview: {
+            provider: 'custom_events',
+            scannedSessionCount: 240,
+            matchedSessionCount: 86,
+            matchedEventCount: 112,
+            revenueEventCount: 86,
+        },
+        manualEntries: daily.slice(0, 1).map((row) => ({
+            id: 'demo-starting-revenue',
+            date: row.date,
+            currency: 'usd',
+            amountCents: startingRevenueCents,
+            transactionCount: 1,
+            note: 'Initial revenue before Rejourney tracking',
+            createdAt: '2026-05-01T00:00:00.000Z',
+            updatedAt: '2026-06-03T08:00:00.000Z',
+        })),
+        currencies: [{ currency: 'usd', grossAmountCents: summary.grossAmountCents }],
+        selectedCurrency: 'usd',
+        summary: {
+            ...summary,
+            previousGrossAmountCents,
+            grossChangePercent: previousGrossAmountCents > 0
+                ? ((summary.grossAmountCents - previousGrossAmountCents) / previousGrossAmountCents) * 100
+                : null,
+        },
+        daily,
+    };
+}
+
 const isKnownVersion = (value: string): boolean => {
     const normalized = value.trim().toLowerCase();
     return Boolean(normalized) && normalized !== 'unknown' && normalized !== 'n/a' && normalized !== 'na';
@@ -93,17 +306,6 @@ const formatDuration = (seconds: number): string => {
     return `${m}m ${s.toString().padStart(2, '0')}s`;
 };
 
-const percentChange = (current: number, previous: number): number | null => {
-    if (!Number.isFinite(current) || !Number.isFinite(previous) || previous <= 0) return null;
-    return ((current - previous) / previous) * 100;
-};
-
-const pointChange = (current: number, previous: number): number | null => {
-    if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
-    return current - previous;
-};
-
-const formatSigned = (value: number, digits: number = 1): string => `${value > 0 ? '+' : ''}${value.toFixed(digits)}`;
 const RETENTION_COHORT_WEEKS = 6;
 function formatWeekRange(weekStartKey: string): string {
     const start = new Date(`${weekStartKey}T00:00:00Z`);
@@ -145,32 +347,6 @@ function formatLastSeen(dateIso: string): string {
     return `${Math.floor(days / 7)}w ago`;
 }
 
-function issueSignalsForSession(session: RecordingSession): number {
-    return (
-        (session.errorCount || 0)
-        + (session.crashCount || 0)
-        + (session.anrCount || 0)
-        + (session.rageTapCount || 0)
-        + (session.deadTapCount || 0)
-        + (session.apiErrorCount || 0)
-    );
-}
-
-function sessionUserKey(session: RecordingSession): string {
-    if (session.userId) return session.userId;
-    if (session.anonymousId) return session.anonymousId;
-    if (session.anonymousDisplayName) return session.anonymousDisplayName;
-    if (session.deviceId) return session.deviceId;
-    return session.id;
-}
-
-interface RecommendedSession {
-    session: RecordingSession;
-    category: string;
-    priority: 'critical' | 'high' | 'watch' | 'baseline';
-    reason: string;
-}
-
 interface TopUserRecommendation {
     userKey: string;
     displayName: string;
@@ -183,51 +359,7 @@ interface TopUserRecommendation {
     userFirstSeenAt?: string;
 }
 
-const RECOMMENDED_SESSION_PRIORITY_STYLES: Record<RecommendedSession['priority'], string> = {
-    critical: 'bg-rose-50 text-rose-700',
-    high: 'bg-pink-50 text-pink-700',
-    watch: 'bg-sky-50 text-sky-700',
-    baseline: 'bg-slate-50 text-slate-700',
-};
-
-const MAX_RECOMMENDED_SESSIONS = 8;
-const MIN_RECOMMENDED_SESSION_SCORE = 70;
-const MAX_RECOMMENDATIONS_PER_CATEGORY = 2;
 const DEMO_REPLAY_SESSION_ID_SET = new Set(DEMO_REPLAY_SESSION_IDS);
-
-const ANONYMOUS_NICKNAME_STYLES = [
-    'border-emerald-200 bg-emerald-100 text-emerald-800',
-    'border-teal-200 bg-teal-100 text-teal-800',
-    'border-cyan-200 bg-cyan-100 text-cyan-800',
-    'border-sky-200 bg-sky-100 text-sky-800',
-    'border-blue-200 bg-blue-100 text-blue-800',
-    'border-indigo-200 bg-indigo-100 text-indigo-800',
-    'border-violet-200 bg-violet-100 text-violet-800',
-    'border-purple-200 bg-purple-100 text-purple-800',
-    'border-fuchsia-200 bg-fuchsia-100 text-fuchsia-800',
-    'border-pink-200 bg-pink-100 text-pink-800',
-    'border-lime-200 bg-lime-100 text-lime-800',
-    'border-green-200 bg-green-100 text-green-800',
-];
-
-const TOP_USER_ICON_STYLES = [
-    'border-rose-200 bg-rose-100 text-rose-700',
-    'border-pink-200 bg-pink-100 text-pink-700',
-    'border-emerald-200 bg-emerald-100 text-emerald-700',
-    'border-cyan-200 bg-cyan-100 text-cyan-700',
-    'border-blue-200 bg-blue-100 text-blue-700',
-    'border-indigo-200 bg-indigo-100 text-indigo-700',
-    'border-fuchsia-200 bg-fuchsia-100 text-fuchsia-700',
-    'border-lime-200 bg-lime-100 text-lime-700',
-];
-
-function hashString(input: string): number {
-    let hash = 0;
-    for (let i = 0; i < input.length; i++) {
-        hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
-    }
-    return Math.abs(hash);
-}
 
 function getAnonymousNickname(session: RecordingSession): string | null {
     const displayName = session.anonymousDisplayName?.trim();
@@ -236,30 +368,6 @@ function getAnonymousNickname(session: RecordingSession): string | null {
     const anonymousId = session.anonymousId?.trim();
     if (!anonymousId || anonymousId.toLowerCase() === 'anonymous') return null;
     return anonymousId.length > 22 ? `${anonymousId.slice(0, 22)}...` : anonymousId;
-}
-
-function getAnonymousNicknameStyle(nickname: string): string {
-    const idx = hashString(nickname) % ANONYMOUS_NICKNAME_STYLES.length;
-    return ANONYMOUS_NICKNAME_STYLES[idx];
-}
-
-function getTopUserIconStyle(value: string): string {
-    const idx = hashString(value) % TOP_USER_ICON_STYLES.length;
-    return TOP_USER_ICON_STYLES[idx];
-}
-
-function getSessionLocationLabel(session: RecordingSession): string {
-    const city = session.geoLocation?.city?.trim();
-    const region = session.geoLocation?.region?.trim();
-    const country = session.geoLocation?.country?.trim();
-
-    if (city && country) return `${city}, ${country}`;
-    if (city && region) return `${city}, ${region}`;
-    if (city) return city;
-    if (region && country) return `${region}, ${country}`;
-    if (region) return region;
-    if (country) return country;
-    return 'Unknown location';
 }
 
 function hasSuccessfulRecording(session: RecordingSession): boolean {
@@ -346,361 +454,6 @@ function buildTopUsers(sessions: RecordingSession[]): TopUserRecommendation[] {
         .slice(0, 20);
 }
 
-function buildRecommendedSessions(sessions: RecordingSession[]): RecommendedSession[] {
-    if (sessions.length === 0) return [];
-
-    const pool = sessions.filter((s) => hasSuccessfulRecording(s) && !s.isReplayExpired);
-    if (pool.length === 0) return [];
-
-    type RecommendationCandidate = RecommendedSession & {
-        categoryKey: string;
-        score: number;
-    };
-
-    const candidates: RecommendationCandidate[] = [];
-    const byMostRecent = (a: RecordingSession, b: RecordingSession) =>
-        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
-
-    const userSessionCounts = new Map<string, { count: number; sessions: RecordingSession[] }>();
-    for (const s of pool) {
-        const key = sessionUserKey(s);
-        const existing = userSessionCounts.get(key);
-        if (!existing) {
-            userSessionCounts.set(key, { count: 1, sessions: [s] });
-        } else {
-            existing.count += 1;
-            existing.sessions.push(s);
-        }
-    }
-
-    const startedAtMs = (session: RecordingSession) => {
-        const value = new Date(session.startedAt).getTime();
-        return Number.isFinite(value) ? value : 0;
-    };
-
-    const recencyBonus = (session: RecordingSession): number => {
-        const ageHours = (Date.now() - startedAtMs(session)) / 36e5;
-        if (!Number.isFinite(ageHours) || ageHours < 0) return 6;
-        if (ageHours <= 1) return 6;
-        if (ageHours <= 24) return 4;
-        if (ageHours <= 168) return 2;
-        return 0;
-    };
-
-    const issueWeight = (session: RecordingSession): number => (
-        ((session.crashCount || 0) * 45)
-        + ((session.anrCount || 0) * 42)
-        + ((session.errorCount || 0) * 14)
-        + ((session.apiErrorCount || 0) * 9)
-        + ((session.rageTapCount || 0) * 16)
-        + ((session.deadTapCount || 0) * 12)
-    );
-
-    const activityCount = (session: RecordingSession): number => (
-        (session.touchCount || 0)
-        + (session.scrollCount || 0)
-        + (session.gestureCount || 0)
-        + (session.inputCount || 0)
-    );
-
-    const screenCount = (session: RecordingSession): number => (
-        Array.isArray(session.screensVisited) ? session.screensVisited.length : 0
-    );
-
-    const engagementWatchScore = (session: RecordingSession): number => {
-        const duration = session.durationSeconds || 0;
-        const interactions = activityCount(session);
-        const screens = screenCount(session);
-        const interactionScore = session.interactionScore || 0;
-        const explorationScore = session.explorationScore || 0;
-
-        if (duration < 120) return 0;
-        if (interactionScore < 45 && interactions < 20 && screens < 4 && explorationScore < 6) return 0;
-
-        return Math.min(34, duration / 18)
-            + Math.min(28, interactionScore / 3)
-            + Math.min(18, interactions / 3)
-            + Math.min(14, screens * 3)
-            + Math.min(12, explorationScore * 1.5);
-    };
-
-    const recommendationPriority = (score: number): RecommendedSession['priority'] => {
-        if (score >= 112) return 'critical';
-        if (score >= 82) return 'high';
-        return 'watch';
-    };
-
-    const addCandidate = (
-        session: RecordingSession,
-        category: string,
-        reason: string,
-        rawScore: number,
-        priority?: RecommendedSession['priority'],
-    ) => {
-        const score = Math.round(rawScore + recencyBonus(session));
-        if (score < MIN_RECOMMENDED_SESSION_SCORE) return;
-        candidates.push({
-            session,
-            category,
-            categoryKey: category.toLowerCase(),
-            priority: priority || recommendationPriority(score),
-            reason,
-            score,
-        });
-    };
-
-    for (const session of pool) {
-        const signals = issueSignalsForSession(session);
-        const weightedIssues = issueWeight(session);
-        const duration = session.durationSeconds || 0;
-        const apiTotal = session.apiTotalCount || 0;
-        const apiErrors = session.apiErrorCount || 0;
-        const apiAvgMs = session.apiAvgResponseMs || 0;
-        const apiErrorRate = apiTotal > 0 ? apiErrors / apiTotal : 0;
-        const interactions = activityCount(session);
-        const screens = screenCount(session);
-        const network = String(session.networkType || '').toLowerCase();
-        const constrainedNetwork =
-            Boolean(session.isConstrained)
-            || Boolean(session.isExpensive)
-            || session.cellularGeneration === '2G'
-            || session.cellularGeneration === '3G'
-            || network.includes('2g')
-            || network.includes('3g');
-        const userGroup = userSessionCounts.get(sessionUserKey(session));
-        const isFirstKnownSession = Boolean(session.isFirstSession) || (userGroup?.count || 0) <= 1;
-
-        if ((session.crashCount || 0) > 0) {
-            addCandidate(
-                session,
-                isFirstKnownSession ? 'First Session Crash' : 'Crash Impact',
-                isFirstKnownSession
-                    ? 'Crash detected on a first-time user session'
-                    : `${session.crashCount} crash signal${session.crashCount === 1 ? '' : 's'} in this replay`,
-                104 + (session.crashCount || 0) * 34 + Math.min(12, duration / 30),
-                'critical',
-            );
-        }
-
-        if ((session.anrCount || 0) > 0) {
-            addCandidate(
-                session,
-                'ANR Freeze Session',
-                `${session.anrCount} freeze signal${session.anrCount === 1 ? '' : 's'} captured`,
-                100 + (session.anrCount || 0) * 32 + Math.min(10, duration / 45),
-                'critical',
-            );
-        }
-
-        if (signals >= 3 || weightedIssues >= 50) {
-            addCandidate(
-                session,
-                'High Friction Journey',
-                `${signals} issue signal${signals === 1 ? '' : 's'} detected in this replay`,
-                56 + weightedIssues + Math.min(12, duration / 45),
-            );
-        }
-
-        if (apiErrors > 0 && (apiErrors >= 2 || apiErrorRate >= 0.1 || weightedIssues >= 50)) {
-            addCandidate(
-                session,
-                'API Failure Spike',
-                `${apiErrors} failing API call${apiErrors === 1 ? '' : 's'}${apiTotal > 0 ? ` across ${apiTotal} request${apiTotal === 1 ? '' : 's'}` : ''}`,
-                68 + apiErrors * 12 + Math.min(28, apiErrorRate * 100),
-            );
-        }
-
-        if ((session.rageTapCount || 0) >= 2) {
-            addCandidate(
-                session,
-                'Rage Input Pattern',
-                `${session.rageTapCount} rage tap signal${session.rageTapCount === 1 ? '' : 's'} found`,
-                66 + (session.rageTapCount || 0) * 18 + Math.min(10, interactions / 5),
-            );
-        }
-
-        if ((session.deadTapCount || 0) >= 2) {
-            addCandidate(
-                session,
-                'Dead Tap Pattern',
-                `${session.deadTapCount} dead tap signal${session.deadTapCount === 1 ? '' : 's'} found`,
-                62 + (session.deadTapCount || 0) * 15 + Math.min(10, interactions / 5),
-            );
-        }
-
-        if (
-            apiAvgMs > 0
-            && (
-                (apiTotal >= 3 && apiAvgMs >= 1200)
-                || (apiTotal >= 10 && apiAvgMs >= 800)
-                || apiAvgMs >= 2500
-            )
-        ) {
-            addCandidate(
-                session,
-                'API Latency Outlier',
-                `${Math.round(apiAvgMs).toLocaleString()}ms average API response time`,
-                54 + Math.min(48, apiAvgMs / 65) + Math.min(14, apiTotal / 2) + Math.min(14, duration / 30),
-            );
-        }
-
-        if ((session.appStartupTimeMs || 0) >= 3000) {
-            addCandidate(
-                session,
-                'Slow Startup',
-                `${Math.round((session.appStartupTimeMs || 0) / 100) / 10}s startup time`,
-                60 + Math.min(55, (session.appStartupTimeMs || 0) / 120),
-            );
-        }
-
-        if (constrainedNetwork && (apiAvgMs >= 1000 || apiErrors > 0 || signals > 0 || duration >= 120)) {
-            addCandidate(
-                session,
-                'Constrained Network User',
-                'Slow or constrained network coincides with replay-worthy behavior',
-                58 + Math.min(30, apiAvgMs / 100) + Math.min(24, weightedIssues / 2) + Math.min(12, duration / 45),
-            );
-        }
-
-        if (isFirstKnownSession && (signals > 0 || apiErrors > 0)) {
-            addCandidate(
-                session,
-                'New User Friction',
-                'First-known user session includes friction signals',
-                62 + weightedIssues + Math.min(12, duration / 40),
-            );
-        }
-
-        if (duration <= 45 && (signals > 0 || apiErrors > 0) && (interactions > 0 || apiTotal > 0)) {
-            addCandidate(
-                session,
-                'Frustrated Exit',
-                'Short replay ended after observable friction',
-                62 + weightedIssues + Math.max(0, 45 - duration) / 2,
-            );
-        }
-
-        if ((session.explorationScore || 0) >= 8 && (session.interactionScore || 0) <= 10 && duration >= 45) {
-            addCandidate(
-                session,
-                'Navigation Confusion',
-                'High exploration with little interaction suggests a confusing path',
-                58 + Math.min(34, (session.explorationScore || 0) * 3) + Math.min(12, screens * 2),
-            );
-        }
-
-        if (apiTotal >= 100 || (apiTotal >= 50 && (apiAvgMs >= 500 || apiErrors > 0))) {
-            addCandidate(
-                session,
-                'High API Volume',
-                `${apiTotal} API request${apiTotal === 1 ? '' : 's'} in one replay`,
-                54 + Math.min(32, apiTotal / 6) + Math.min(20, apiAvgMs / 100) + apiErrors * 4,
-                'watch',
-            );
-        }
-
-        const engagementScore = engagementWatchScore(session);
-        if (engagementScore >= 70 && signals === 0) {
-            addCandidate(
-                session,
-                'Deep Engagement',
-                `${formatDuration(duration)} replay with ${interactions} interaction event${interactions === 1 ? '' : 's'}${screens > 0 ? ` across ${screens} screen${screens === 1 ? '' : 's'}` : ''}`,
-                engagementScore,
-                'watch',
-            );
-        }
-    }
-
-    for (const [, group] of userSessionCounts) {
-        if (group.count < 3) continue;
-
-        const best = [...group.sessions]
-            .map((session) => ({
-                session,
-                score: issueWeight(session) + engagementWatchScore(session) + Math.min(32, (session.apiAvgResponseMs || 0) / 90),
-            }))
-            .filter((entry) => entry.score >= MIN_RECOMMENDED_SESSION_SCORE)
-            .sort((a, b) => {
-                if (b.score !== a.score) return b.score - a.score;
-                return byMostRecent(a.session, b.session);
-            })[0];
-
-        if (!best) continue;
-
-        const signals = issueSignalsForSession(best.session);
-        addCandidate(
-            best.session,
-            signals > 0 ? 'Returning User With Friction' : 'Power Returning User',
-            signals > 0
-                ? `${group.count} sessions from this user; this replay has the strongest friction`
-                : `${group.count} sessions from this user; this is their most informative replay`,
-            best.score + Math.min(18, group.count),
-            signals > 0 ? 'high' : 'watch',
-        );
-    }
-
-    const usedSessionIds = new Set<string>();
-    const categoryCounts = new Map<string, number>();
-    const picks: RecommendedSession[] = [];
-
-    for (const candidate of candidates.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return byMostRecent(a.session, b.session);
-    })) {
-        if (usedSessionIds.has(candidate.session.id)) continue;
-        const categoryCount = categoryCounts.get(candidate.categoryKey) || 0;
-        if (categoryCount >= MAX_RECOMMENDATIONS_PER_CATEGORY) continue;
-
-        usedSessionIds.add(candidate.session.id);
-        categoryCounts.set(candidate.categoryKey, categoryCount + 1);
-        picks.push({
-            session: candidate.session,
-            category: candidate.category,
-            priority: candidate.priority,
-            reason: candidate.reason,
-        });
-
-        if (picks.length >= MAX_RECOMMENDED_SESSIONS) break;
-    }
-
-    return picks;
-}
-
-function getRecordedDemoSessions(sessions: RecordingSession[]): RecordingSession[] {
-    const byId = new Map(sessions.map((session) => [session.id, session]));
-    return DEMO_REPLAY_SESSION_IDS
-        .map((sessionId) => byId.get(sessionId))
-        .filter((session): session is RecordingSession => Boolean(session));
-}
-
-function buildDemoRecommendedSessions(sessions: RecordingSession[]): RecommendedSession[] {
-    const recordedSessions = getRecordedDemoSessions(sessions);
-    const scoredRecommendations = new Map(
-        buildRecommendedSessions(recordedSessions).map((recommendation) => [recommendation.session.id, recommendation]),
-    );
-
-    return recordedSessions.map((session) => {
-        const scored = scoredRecommendations.get(session.id);
-        if (scored) return scored;
-
-        if (session.platform === 'web') {
-            return {
-                session,
-                category: 'Web SDK Replay',
-                priority: 'watch',
-                reason: 'Docs path replay shows the Web SDK setup flow and custom-event section',
-            };
-        }
-
-        return {
-            session,
-            category: 'Recorded Demo Replay',
-            priority: 'watch',
-            reason: 'Recorded replay with visual artifacts available for inspection',
-        };
-    });
-}
-
 const EmptyStateCard: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => (
     <div className="border-2 border-dashed border-black bg-[#f8fafc] px-6 py-10 text-center shadow-neo-sm">
         <p className="text-sm font-extrabold text-black">{title}</p>
@@ -760,20 +513,6 @@ const GhostBlock: React.FC<{ className?: string }> = ({ className = '' }) => (
         aria-hidden="true"
         className={`animate-pulse rounded-none border border-white/80 bg-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] ${className}`.trim()}
     />
-);
-
-const MomentumCardGhostGrid: React.FC = () => (
-    <section aria-busy="true">
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-                <div key={`momentum-ghost-${index}`} className="min-w-0 rounded-xl border border-[#dadce0] bg-white p-4 sm:p-5">
-                    <GhostBlock className="h-3 w-28" />
-                    <GhostBlock className="mt-3 h-8 w-20" />
-                    <GhostBlock className="mt-4 h-6 w-24 rounded-full" />
-                </div>
-            ))}
-        </div>
-    </section>
 );
 
 const GA4CardGhost: React.FC<{
@@ -864,6 +603,30 @@ type CustomEventTrendRow = {
     dateKey: string;
 } & Record<string, string | number>;
 
+type RevenueImpactChartRow = {
+    dateKey: string;
+    grossAmountCents: number;
+    refundAmountCents: number;
+    netAmountCents: number;
+    transactionCount: number;
+    refundCount: number;
+    subscriberCount: number;
+    trialCount: number;
+    subscriptionStartCount: number;
+    cancellationCount: number;
+    conversionCount: number;
+    customEventCounts: Record<string, number>;
+};
+
+type RevenueTooltipPayloadItem = {
+    payload?: RevenueImpactChartRow;
+};
+
+type RevenueCustomEventOption = {
+    name: string;
+    count: number;
+};
+
 const ENGAGEMENT_SEGMENTS: Array<{ key: EngagementSegmentKey; label: string; color: string }> = [
     { key: 'bouncers', label: 'Bouncers', color: '#ef4444' },
     { key: 'casuals', label: 'Casuals', color: '#f9a8d4' },
@@ -873,19 +636,264 @@ const ENGAGEMENT_SEGMENTS: Array<{ key: EngagementSegmentKey; label: string; col
 
 const CUSTOM_EVENT_TREND_COLORS = ['#1a73e8', '#1e8e3e', '#9334e6', '#f9a8d4', '#0f766e', '#f59e0b'];
 
-type MomentumCard = {
-    label: string;
-    value: string;
-    delta: string;
-    positiveIsGood: boolean;
-    deltaValue: number | null;
-};
-
 const RETRO_CARD_ACCENTS = ['#67e8f9', '#86efac', '#f9a8d4', '#c4b5fd'];
 const DIRECT_REFERRAL_LABEL = 'Direct / none';
 const NO_UTM_LABEL = 'No UTM tag';
 const CUSTOM_EVENT_SELECTION_STORAGE_PREFIX = 'rejourney.general.customEventSelection';
+const REVENUE_IMPACT_COLLAPSED_STORAGE_PREFIX = 'rejourney.general.revenueImpactCollapsed';
 const MAX_VERSION_RELEASE_MARKERS = 6;
+
+const REVENUE_PROVIDER_META: Record<RevenueProvider, {
+    label: string;
+    shortLabel: string;
+    description: string;
+    logo?: string;
+}> = {
+    custom_events: {
+        label: 'Custom Events',
+        shortLabel: 'Custom events',
+        description: 'Map Rejourney purchase and lifecycle events.',
+        logo: '/rejourneyIcon-removebg-preview.png',
+    },
+    superwall: {
+        label: 'Superwall',
+        shortLabel: 'Superwall',
+        description: 'Use a scoped read-only Superwall API key.',
+        logo: '/brands/superwall/superwall-logo.svg',
+    },
+};
+
+const DEFAULT_CUSTOM_REVENUE_CONFIG: CustomRevenueEventConfig = {
+    revenueEventName: 'purchase_completed',
+    revenueAmountProperty: 'amount',
+    revenueCurrencyProperty: 'currency',
+    defaultCurrency: 'USD',
+    amountUnit: 'major',
+    refundEventName: '',
+    subscriberEventName: '',
+    trialStartedEventName: '',
+    subscriptionStartedEventName: '',
+    cancellationEventName: '',
+    conversionEventName: '',
+};
+
+type RevenueProviderStatusView = RevenueOverview['providers'][number];
+type RevenueConnectionView = RevenueOverview['connection'];
+type RevenueStatus = RevenueConnectionView['status'];
+
+type RevenueActionState = {
+    kind:
+        | 'select_provider'
+        | 'sync'
+        | 'connect_superwall'
+        | 'save_custom_events'
+        | 'save_manual'
+        | 'delete_manual'
+        | 'disconnect';
+    provider?: RevenueProvider;
+    entryId?: string;
+} | null;
+
+type ManualRevenueEntryInput = {
+    entryId?: string;
+    date: string;
+    amountCents: number;
+    currency: string;
+    transactionCount: number;
+    note?: string | null;
+};
+
+function fallbackRevenueProviderStatus(provider: RevenueProvider): RevenueProviderStatusView {
+    return {
+        provider,
+        label: REVENUE_PROVIDER_META[provider].shortLabel,
+        configured: true,
+        status: 'not_connected',
+        accountId: null,
+        accountName: null,
+        connectedAt: null,
+        lastSyncStartedAt: null,
+        lastSyncCompletedAt: null,
+        lastSyncError: null,
+    };
+}
+
+function patchRevenueProviderStatus(
+    overview: RevenueOverview | null,
+    provider: RevenueProvider,
+    patch: Partial<RevenueProviderStatusView>,
+    options: { activeProvider?: RevenueProvider | null; updateConnection?: boolean } = {},
+): RevenueOverview | null {
+    if (!overview) return overview;
+    const existing = overview.providers.find((item) => item.provider === provider) ?? fallbackRevenueProviderStatus(provider);
+    const nextStatus: RevenueProviderStatusView = {
+        ...existing,
+        ...patch,
+        provider,
+        label: existing.label || REVENUE_PROVIDER_META[provider].shortLabel,
+        configured: patch.configured ?? existing.configured,
+    };
+    const providers = overview.providers.some((item) => item.provider === provider)
+        ? overview.providers.map((item) => item.provider === provider ? nextStatus : item)
+        : [...overview.providers, nextStatus];
+    const hasActiveProviderOverride = Object.prototype.hasOwnProperty.call(options, 'activeProvider');
+    const activeProvider = hasActiveProviderOverride ? options.activeProvider ?? null : overview.activeProvider;
+    const shouldUpdateConnection = options.updateConnection ?? (
+        overview.connection.provider === provider
+        || overview.activeProvider === provider
+        || activeProvider === provider
+    );
+
+    return {
+        ...overview,
+        configured: true,
+        activeProvider,
+        providers,
+        connection: shouldUpdateConnection
+            ? {
+                ...nextStatus,
+                canManage: overview.connection.canManage,
+            }
+            : overview.connection,
+    };
+}
+
+function normalizeManualEntryForUi(input: ManualRevenueEntryInput, existing?: RevenueManualEntry | null): RevenueManualEntry {
+    const now = new Date().toISOString();
+    return {
+        id: input.entryId || existing?.id || 'optimistic-starting-revenue',
+        date: input.date,
+        currency: input.currency.toLowerCase(),
+        amountCents: input.amountCents,
+        transactionCount: Math.max(1, Math.round(input.transactionCount || 1)),
+        note: input.note ?? null,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+    };
+}
+
+function patchDailyRowForManualEntry(
+    rows: RevenueOverview['daily'],
+    entry: RevenueManualEntry,
+    previousEntry: RevenueManualEntry | null,
+): RevenueOverview['daily'] {
+    const deltaAmount = entry.amountCents - (previousEntry?.amountCents ?? 0);
+    const deltaTransactions = entry.transactionCount - (previousEntry?.transactionCount ?? 0);
+    if (deltaAmount === 0 && deltaTransactions === 0) return rows;
+
+    const rowIndex = rows.findIndex((row) => row.date === entry.date && row.currency === entry.currency);
+    if (rowIndex === -1) {
+        return [
+            ...rows,
+            {
+                date: entry.date,
+                currency: entry.currency,
+                grossAmountCents: Math.max(entry.amountCents, 0),
+                refundAmountCents: entry.amountCents < 0 ? Math.abs(entry.amountCents) : 0,
+                feeAmountCents: 0,
+                netAmountCents: entry.amountCents,
+                transactionCount: entry.transactionCount,
+                refundCount: entry.amountCents < 0 ? entry.transactionCount : 0,
+                subscriberCount: 0,
+                trialCount: 0,
+                subscriptionStartCount: 0,
+                cancellationCount: 0,
+                conversionCount: 0,
+                customEventCounts: {},
+            },
+        ].sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    return rows.map((row, index) => {
+        if (index !== rowIndex) return row;
+        return {
+            ...row,
+            grossAmountCents: Math.max(0, row.grossAmountCents + Math.max(deltaAmount, 0)),
+            refundAmountCents: Math.max(0, row.refundAmountCents + (deltaAmount < 0 ? Math.abs(deltaAmount) : 0)),
+            netAmountCents: row.netAmountCents + deltaAmount,
+            transactionCount: Math.max(0, row.transactionCount + deltaTransactions),
+        };
+    });
+}
+
+function patchRevenueManualEntry(
+    overview: RevenueOverview | null,
+    input: ManualRevenueEntryInput,
+): RevenueOverview | null {
+    if (!overview) return overview;
+    const existing = input.entryId
+        ? overview.manualEntries.find((entry) => entry.id === input.entryId) ?? overview.manualEntries[0] ?? null
+        : overview.manualEntries[0] ?? null;
+    const entry = normalizeManualEntryForUi(input, existing);
+    const previousAmount = overview.manualEntries.reduce((sum, item) => sum + item.amountCents, 0);
+    const previousTransactions = overview.manualEntries.reduce((sum, item) => sum + item.transactionCount, 0);
+    const amountDelta = entry.amountCents - previousAmount;
+    const transactionDelta = entry.transactionCount - previousTransactions;
+    const selectedCurrency = overview.selectedCurrency ?? entry.currency;
+    const currencies = overview.currencies.some((row) => row.currency === entry.currency)
+        ? overview.currencies.map((row) => row.currency === entry.currency
+            ? { ...row, grossAmountCents: Math.max(0, row.grossAmountCents + amountDelta) }
+            : row)
+        : [...overview.currencies, { currency: entry.currency, grossAmountCents: Math.max(entry.amountCents, 0) }];
+
+    return patchRevenueProviderStatus({
+        ...overview,
+        selectedCurrency,
+        manualEntries: [entry],
+        currencies,
+        summary: {
+            ...overview.summary,
+            grossAmountCents: Math.max(0, overview.summary.grossAmountCents + Math.max(amountDelta, 0)),
+            netAmountCents: overview.summary.netAmountCents + amountDelta,
+            transactionCount: Math.max(0, overview.summary.transactionCount + transactionDelta),
+        },
+        daily: patchDailyRowForManualEntry(overview.daily, entry, existing),
+    }, 'custom_events', {
+        status: 'connected',
+        connectedAt: overview.connection.connectedAt ?? new Date().toISOString(),
+        lastSyncError: null,
+    }, { activeProvider: 'custom_events', updateConnection: true });
+}
+
+function removeRevenueManualEntry(
+    overview: RevenueOverview | null,
+    entryId: string,
+): RevenueOverview | null {
+    if (!overview) return overview;
+    const entry = overview.manualEntries.find((item) => item.id === entryId) ?? overview.manualEntries[0] ?? null;
+    if (!entry) return overview;
+
+    return {
+        ...overview,
+        manualEntries: overview.manualEntries.filter((item) => item.id !== entry.id),
+        summary: {
+            ...overview.summary,
+            grossAmountCents: Math.max(0, overview.summary.grossAmountCents - Math.max(entry.amountCents, 0)),
+            netAmountCents: overview.summary.netAmountCents - entry.amountCents,
+            transactionCount: Math.max(0, overview.summary.transactionCount - entry.transactionCount),
+        },
+        daily: overview.daily.map((row) => {
+            if (row.date !== entry.date || row.currency !== entry.currency) return row;
+            return {
+                ...row,
+                grossAmountCents: Math.max(0, row.grossAmountCents - Math.max(entry.amountCents, 0)),
+                refundAmountCents: Math.max(0, row.refundAmountCents - (entry.amountCents < 0 ? Math.abs(entry.amountCents) : 0)),
+                netAmountCents: row.netAmountCents - entry.amountCents,
+                transactionCount: Math.max(0, row.transactionCount - entry.transactionCount),
+            };
+        }),
+    };
+}
+
+const CUSTOM_REVENUE_OPTIONAL_EVENT_FIELDS = [
+    ['refundEventName', 'Refund event'],
+    ['subscriberEventName', 'Subscriber event'],
+    ['trialStartedEventName', 'Trial started event'],
+    ['subscriptionStartedEventName', 'Subscription event'],
+    ['cancellationEventName', 'Cancellation event'],
+    ['conversionEventName', 'Conversion event'],
+] as const;
+
 const VERSION_RELEASE_TOOLTIP_WINDOW_MS = 36 * 60 * 60 * 1000;
 const VERSION_TOOLTIP_WRAPPER_STYLE: React.CSSProperties = { zIndex: 40 };
 const VERSION_TOOLTIP_ALLOW_ESCAPE = { x: true, y: true };
@@ -1229,6 +1237,1450 @@ function VersionAwareChartTooltip({
     );
 }
 
+function RevenueImpactTooltip({
+    active,
+    label,
+    payload,
+    currency,
+    releaseMarkers,
+}: {
+    active?: boolean;
+    label?: string | number;
+    payload?: RevenueTooltipPayloadItem[];
+    currency: string | null;
+    releaseMarkers: VersionReleaseMarker[];
+}) {
+    if (!active || label === undefined || label === null) return null;
+
+    const dateKey = String(label);
+    const row = payload?.find((item) => item.payload)?.payload;
+    if (!row) return null;
+
+    const dateTime = dateKeyTime(dateKey);
+    const nearbyVersions = dateTime === null
+        ? releaseMarkers.filter((marker) => marker.dateKey === dateKey)
+        : releaseMarkers.filter((marker) => {
+            const markerTime = dateKeyTime(marker.dateKey);
+            return markerTime !== null && Math.abs(markerTime - dateTime) <= VERSION_RELEASE_TOOLTIP_WINDOW_MS;
+        });
+
+    return (
+        <div className="pointer-events-none max-w-[280px] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+            <div className="mb-2 font-semibold text-slate-800">{formatDateLabel(dateKey)}</div>
+            <div className="space-y-1">
+                <div className="flex justify-between gap-4">
+                    <span className="text-slate-500">Gross revenue</span>
+                    <span className="font-semibold text-slate-950">{formatCurrencyMinor(row.grossAmountCents, currency)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                    <span className="text-slate-500">Transactions</span>
+                    <span className="font-semibold text-slate-950">{formatCompact(row.transactionCount)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                    <span className="text-slate-500">Refunds</span>
+                    <span className="font-semibold text-slate-950">{formatCurrencyMinor(row.refundAmountCents, currency)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                    <span className="text-slate-500">Net</span>
+                    <span className="font-semibold text-slate-950">{formatCurrencyMinor(row.netAmountCents, currency)}</span>
+                </div>
+                {row.subscriberCount > 0 && (
+                    <div className="flex justify-between gap-4">
+                        <span className="text-slate-500">Subscribers</span>
+                        <span className="font-semibold text-slate-950">{formatCompact(row.subscriberCount)}</span>
+                    </div>
+                )}
+                {row.trialCount > 0 && (
+                    <div className="flex justify-between gap-4">
+                        <span className="text-slate-500">Trials</span>
+                        <span className="font-semibold text-slate-950">{formatCompact(row.trialCount)}</span>
+                    </div>
+                )}
+                {row.cancellationCount > 0 && (
+                    <div className="flex justify-between gap-4">
+                        <span className="text-slate-500">Cancellations</span>
+                        <span className="font-semibold text-slate-950">{formatCompact(row.cancellationCount)}</span>
+                    </div>
+                )}
+            </div>
+
+            {nearbyVersions.length > 0 && (
+                <div className="mt-2 border-t border-slate-100 pt-2">
+                    <div className="mb-1 text-[10px] font-semibold uppercase text-slate-400">Nearby versions</div>
+                    <div className="space-y-1">
+                        {nearbyVersions.map((marker) => (
+                            <div key={`${marker.version}-${marker.dateKey}`} className="flex items-center justify-between gap-3">
+                                <span className="break-all font-mono font-semibold text-slate-800">v{marker.version}</span>
+                                <span className="text-slate-500">{formatDateLabel(marker.dateKey)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function dedupeRevenueEventOptions(events: RevenueCustomEventOption[]): RevenueCustomEventOption[] {
+    const byName = new Map<string, RevenueCustomEventOption>();
+    for (const event of events) {
+        const name = event.name.trim();
+        if (!name) continue;
+        const existing = byName.get(name);
+        if (!existing || event.count > existing.count) {
+            byName.set(name, { name, count: Math.max(0, event.count || 0) });
+        }
+    }
+    return Array.from(byName.values()).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+function pickSuggestedRevenueEventName(events: RevenueCustomEventOption[], patterns: RegExp[], fallbackToFirst = true): string {
+    const options = dedupeRevenueEventOptions(events);
+    for (const pattern of patterns) {
+        const match = options.find((event) => pattern.test(event.name));
+        if (match) return match.name;
+    }
+    return fallbackToFirst ? options[0]?.name || '' : '';
+}
+
+function normalizeCustomRevenueFieldName(value: string | null | undefined, fallback: string): string {
+    const trimmed = value?.trim();
+    return trimmed || fallback;
+}
+
+function isLikelyNonRevenueEventName(value: string): boolean {
+    return /^(device_info|app_initialized|screen_view|page_view|route_changed|session_started|log|console\.)/i.test(value.trim());
+}
+
+function formatJsObjectKey(value: string): string {
+    return /^[A-Za-z_$][\w$]*$/.test(value) ? value : JSON.stringify(value);
+}
+
+function buildCustomRevenueEventSnippet(config: CustomRevenueEventConfig): string {
+    const eventName = normalizeCustomRevenueFieldName(config.revenueEventName, 'purchase_completed');
+    const amountProperty = normalizeCustomRevenueFieldName(config.revenueAmountProperty, 'amount');
+    const currencyProperty = normalizeCustomRevenueFieldName(config.revenueCurrencyProperty, 'currency');
+    const currency = normalizeCustomRevenueFieldName(config.defaultCurrency, 'USD').toUpperCase();
+    const amount = config.amountUnit === 'minor' ? '2999' : '29.99';
+
+    return [
+        `Rejourney.logEvent(${JSON.stringify(eventName)}, {`,
+        `  ${formatJsObjectKey(amountProperty)}: ${amount},`,
+        `  ${formatJsObjectKey(currencyProperty)}: ${JSON.stringify(currency)}`,
+        '});',
+    ].join('\n');
+}
+
+function buildCustomRevenueAiSetupPrompt(config: CustomRevenueEventConfig, detectedEvents: RevenueCustomEventOption[]): string {
+    const purchaseEventName = normalizeCustomRevenueFieldName(config.revenueEventName, 'purchase_completed');
+    const recommendedPurchaseEventName = isLikelyNonRevenueEventName(purchaseEventName) ? 'purchase_completed' : purchaseEventName;
+    const amountProperty = normalizeCustomRevenueFieldName(config.revenueAmountProperty, 'amount');
+    const currencyProperty = normalizeCustomRevenueFieldName(config.revenueCurrencyProperty, 'currency');
+    const defaultCurrency = normalizeCustomRevenueFieldName(config.defaultCurrency, 'USD').toUpperCase();
+    const amountUnit = config.amountUnit === 'minor' ? 'minor currency units, like cents' : 'major currency units, like dollars';
+    const amountExample = config.amountUnit === 'minor' ? '2999' : '29.99';
+    const optionalEvents = CUSTOM_REVENUE_OPTIONAL_EVENT_FIELDS
+        .map(([key, label]) => {
+            const value = normalizeCustomRevenueFieldName(config[key], '');
+            return value ? `- ${label}: ${value}` : null;
+        })
+        .filter((value): value is string => Boolean(value));
+    const detectedEventList = detectedEvents.length > 0
+        ? detectedEvents.slice(0, 20).map((event) => `- ${event.name} (${event.count} captured)`).join('\n')
+        : '- No detected events yet.';
+    const webExample = [
+        "import { Rejourney } from '@rejourneyco/browser';",
+        '',
+        'Rejourney.setUserIdentity(currentUser.id);',
+        `Rejourney.logEvent(${JSON.stringify(recommendedPurchaseEventName)}, {`,
+        `  ${formatJsObjectKey(amountProperty)}: ${amountExample},`,
+        `  ${formatJsObjectKey(currencyProperty)}: ${JSON.stringify(defaultCurrency)},`,
+        '  transactionId: order.id,',
+        '  orderId: order.id,',
+        '  productId: item.productId,',
+        '  planId: subscription?.planId,',
+        '  priceId: subscription?.priceId,',
+        '  subscriptionId: subscription?.id,',
+        '  paymentProvider: "your_provider",',
+        '  platform: "web",',
+        '  couponCode: order.couponCode,',
+        '  isTrialConversion: Boolean(subscription?.convertedFromTrial),',
+        '  isRenewal: Boolean(order.isRenewal)',
+        '});',
+    ].join('\n');
+    const reactNativeExample = [
+        "import { Platform } from 'react-native';",
+        "import { Rejourney } from '@rejourneyco/react-native';",
+        '',
+        'Rejourney.setUserIdentity(currentUser.id);',
+        `Rejourney.logEvent(${JSON.stringify(recommendedPurchaseEventName)}, {`,
+        `  ${formatJsObjectKey(amountProperty)}: ${amountExample},`,
+        `  ${formatJsObjectKey(currencyProperty)}: ${JSON.stringify(defaultCurrency)},`,
+        '  transactionId: order.id,',
+        '  orderId: order.id,',
+        '  productId: item.productId,',
+        '  planId: subscription?.planId,',
+        '  priceId: subscription?.priceId,',
+        '  subscriptionId: subscription?.id,',
+        '  paymentProvider: "your_provider",',
+        '  platform: Platform.OS,',
+        '  couponCode: order.couponCode,',
+        '  isTrialConversion: Boolean(subscription?.convertedFromTrial),',
+        '  isRenewal: Boolean(order.isRenewal)',
+        '});',
+    ].join('\n');
+    const swiftExample = [
+        'Rejourney.identify(currentUser.id)',
+        `Rejourney.logEvent(${JSON.stringify(recommendedPurchaseEventName)}, properties: [`,
+        `    ${JSON.stringify(amountProperty)}: ${amountExample},`,
+        `    ${JSON.stringify(currencyProperty)}: ${JSON.stringify(defaultCurrency)},`,
+        '    "transactionId": order.id,',
+        '    "orderId": order.id,',
+        '    "productId": item.productId,',
+        '    "planId": subscription?.planId ?? "",',
+        '    "priceId": subscription?.priceId ?? "",',
+        '    "subscriptionId": subscription?.id ?? "",',
+        '    "paymentProvider": "your_provider",',
+        '    "platform": "ios",',
+        '    "couponCode": order.couponCode ?? "",',
+        '    "isTrialConversion": subscription?.convertedFromTrial ?? false,',
+        '    "isRenewal": order.isRenewal',
+        '])',
+    ].join('\n');
+
+    return [
+        'You are helping me instrument Rejourney custom revenue and conversion events in my app.',
+        '',
+        'Goal:',
+        '- Implement a complete, future-proof Rejourney event tracking setup for revenue analytics, conversion funnels, per-user attribution, cohort analysis, LTV analysis, refunds, trials, subscriptions, cancellations, and feature-to-revenue correlation.',
+        '- Use Rejourney custom events as the source of truth for revenue analytics. Do not send card numbers, raw emails, phone numbers, secrets, access tokens, or other sensitive PII.',
+        '',
+        'Current Rejourney revenue mapping from the dashboard:',
+        `- Purchase/revenue event name: ${purchaseEventName}`,
+        `- Amount property: ${amountProperty}`,
+        `- Currency property: ${currencyProperty}`,
+        `- Default currency: ${defaultCurrency}`,
+        `- Amount unit: ${amountUnit}`,
+        optionalEvents.length > 0 ? optionalEvents.join('\n') : '- Optional lifecycle events are not mapped yet. Add sensible event names where the app has those lifecycle moments.',
+        isLikelyNonRevenueEventName(purchaseEventName)
+            ? `- IMPORTANT: ${purchaseEventName} looks like a setup/device/session event, not a money-collected event. Create a dedicated ${recommendedPurchaseEventName} event and update the Rejourney dashboard mapping to use it. Do not overload device_info/app_initialized/screen_view/page_view events with revenue.`
+            : '- The purchase/revenue event should fire only when money is actually collected or a renewal is confirmed.',
+        '',
+        'Expected purchase event shape:',
+        isLikelyNonRevenueEventName(purchaseEventName)
+            ? buildCustomRevenueEventSnippet({ ...config, revenueEventName: recommendedPurchaseEventName })
+            : buildCustomRevenueEventSnippet(config),
+        '',
+        'Use these platform patterns:',
+        '',
+        'Web:',
+        '```ts',
+        webExample,
+        '```',
+        '',
+        'React Native:',
+        '```ts',
+        reactNativeExample,
+        '```',
+        '',
+        'Swift/iOS:',
+        '```swift',
+        swiftExample,
+        '```',
+        '',
+        'Detected Rejourney events in this project:',
+        detectedEventList,
+        '',
+        'Implementation requirements:',
+        '- Find the app code paths for signup, login, checkout start, purchase success, subscription start, trial start, renewal, refund, cancellation, payment failure, onboarding milestones, paywall exposure, pricing-plan selection, coupon use, entitlement activation, and important product feature usage.',
+        '- On login or account creation, set a stable internal user identity before tracking revenue events. For web and React Native use Rejourney.setUserIdentity("internal_user_id"). For iOS/Swift use Rejourney.identify("internal_user_id"). Prefer an internal database ID, not raw email.',
+        `- On every successful purchase or renewal, call Rejourney.logEvent(${JSON.stringify(recommendedPurchaseEventName)}, properties) with ${amountProperty}, ${currencyProperty}, a stable transactionId/orderId, productId/sku, planId, priceId if available, subscriptionId if available, paymentProvider, platform, country/region if already available, coupon/discount fields if available, isTrialConversion, isRenewal, and entitlement fields.`,
+        '- Make transactionId/orderId stable and idempotent so retries do not create duplicate revenue facts.',
+        '- Track refunds with a separate refund event if the app/backend has refund callbacks. Include the original transactionId/orderId, refundId, amount, currency, reason, productId, subscriptionId, and user identity.',
+        '- Track lifecycle events for trial started, subscription started, cancellation, conversion, payment failed, checkout started, pricing viewed, paywall viewed, plan selected, onboarding completed, key feature used, and activation milestone reached.',
+        '- Add session/user metadata when useful for segmentation, such as plan, account type, acquisition campaign, app surface, experiment/variant, locale, and platform. Keep metadata values primitive: strings, numbers, or booleans.',
+        '- Ensure events fire on backend-confirmed payment success where possible, not only on client button clicks. If tracking from both client and backend, use unique event names or stable IDs to prevent duplicate revenue.',
+        '- Add tests or smoke checks proving purchase success, refund, cancellation, trial, conversion, and login identity events are emitted with the exact property names above.',
+        '',
+        'Please inspect the app codebase, identify the right files, implement the tracking calls, avoid PII/secrets, and summarize exactly which events and properties were added.',
+    ].join('\n');
+}
+
+function RevenueEventSelectField({
+    label,
+    value,
+    events,
+    onChange,
+    required = false,
+    placeholder = 'Select event',
+    description,
+}: {
+    label: string;
+    value?: string | null;
+    events: RevenueCustomEventOption[];
+    onChange: (value: string) => void;
+    required?: boolean;
+    placeholder?: string;
+    description?: string;
+}) {
+    const normalizedValue = value || '';
+    const options = useMemo(() => dedupeRevenueEventOptions(events), [events]);
+    const hasCurrentCustomValue = Boolean(normalizedValue) && !options.some((event) => event.name === normalizedValue);
+    const currentValueLabel = normalizedValue === DEFAULT_CUSTOM_REVENUE_CONFIG.revenueEventName
+        ? `${normalizedValue} (AI default)`
+        : `${normalizedValue} (custom)`;
+
+    return (
+        <label className="min-w-0 space-y-1">
+            <span className="dashboard-label">{label}</span>
+            <div className="relative">
+                <select
+                    required={required}
+                    value={normalizedValue}
+                    onChange={(event) => onChange(event.target.value)}
+                    className="h-9 w-full appearance-none border border-[#dadce0] bg-white py-0 pl-2 pr-8 text-sm font-semibold text-slate-800 outline-none transition hover:border-[#1a73e8] hover:bg-[#f8fafc] focus:border-black focus:ring-2 focus:ring-cyan-100"
+                >
+                    <option value="">{options.length > 0 ? placeholder : 'No captured events yet'}</option>
+                    {hasCurrentCustomValue && (
+                        <option value={normalizedValue}>{currentValueLabel}</option>
+                    )}
+                    {options.map((event) => (
+                        <option key={event.name} value={event.name}>
+                            {event.name} ({formatCompact(event.count)})
+                        </option>
+                    ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+            </div>
+            {description && (
+                <span className="block text-[11px] font-semibold leading-4 text-slate-500">{description}</span>
+            )}
+        </label>
+    );
+}
+
+const RevenueImpactSection: React.FC<{
+    revenue: RevenueOverview | null;
+    isLoading: boolean;
+    error: string | null;
+    selectedCurrency: string | null;
+    onCurrencyChange: (currency: string | null) => void;
+    onSync: (provider: RevenueProvider) => void;
+    onDisconnect: (provider: RevenueProvider) => void;
+    onSelectProvider: (provider: RevenueProvider) => void;
+    onSaveSuperwall: (input: { apiKey: string; organizationId?: string; applicationId?: string }) => void;
+    onSaveCustomEvents: (input: typeof DEFAULT_CUSTOM_REVENUE_CONFIG) => void;
+    onSaveManualEntry: (input: { entryId?: string; date: string; amountCents: number; currency: string; transactionCount: number; note?: string | null }) => void;
+    onDeleteManualEntry: (entryId: string) => void;
+    isActionLoading: boolean;
+    actionState: RevenueActionState;
+    customEvents: RevenueCustomEventOption[];
+    chartData: RevenueImpactChartRow[];
+    releaseMarkers: VersionReleaseMarker[];
+    collapseStorageKey: string;
+}> = ({
+    revenue,
+    isLoading,
+    error,
+    selectedCurrency,
+    onCurrencyChange,
+    onSync,
+    onDisconnect,
+    onSelectProvider,
+    onSaveSuperwall,
+    onSaveCustomEvents,
+    onSaveManualEntry,
+    onDeleteManualEntry,
+    isActionLoading,
+    actionState,
+    customEvents,
+    chartData,
+    releaseMarkers,
+    collapseStorageKey,
+}) => {
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        try {
+            return window.localStorage.getItem(collapseStorageKey) === '1';
+        } catch {
+            return false;
+        }
+    });
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [settingsProvider, setSettingsProvider] = useState<RevenueProvider>('custom_events');
+    const [superwallApiKey, setSuperwallApiKey] = useState('');
+    const [superwallOrganizationId, setSuperwallOrganizationId] = useState('');
+    const [superwallApplicationId, setSuperwallApplicationId] = useState('');
+    const [customConfig, setCustomConfig] = useState(DEFAULT_CUSTOM_REVENUE_CONFIG);
+    const [copiedCustomSetupPrompt, setCopiedCustomSetupPrompt] = useState(false);
+    const [isManualFormOpen, setIsManualFormOpen] = useState(false);
+    const [editingManualEntryId, setEditingManualEntryId] = useState<string | null>(null);
+    const [manualEntryDate, setManualEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [manualEntryAmount, setManualEntryAmount] = useState('');
+    const [manualEntryCurrency, setManualEntryCurrency] = useState('usd');
+    const [manualEntryTransactionCount, setManualEntryTransactionCount] = useState('1');
+    const [manualEntryNote, setManualEntryNote] = useState('');
+    const [manualEntryError, setManualEntryError] = useState<string | null>(null);
+    const customEventOptions = useMemo(() => dedupeRevenueEventOptions(customEvents), [customEvents]);
+    const connection = revenue?.connection;
+    const activeProvider = revenue?.activeProvider ?? null;
+    const status = connection?.status ?? 'not_connected';
+    const canManage = Boolean(connection?.canManage);
+    const hasActiveConnection = status === 'connected' || status === 'syncing' || status === 'error';
+    const currency = revenue?.selectedCurrency ?? selectedCurrency ?? null;
+    const manualEntries = revenue?.manualEntries ?? [];
+    const startingRevenueEntry = manualEntries[0] ?? null;
+    const startingRevenueAmountCents = manualEntries.reduce((sum, entry) => sum + entry.amountCents, 0);
+    const startingRevenueCurrency = (startingRevenueEntry?.currency || currency || 'usd').toUpperCase();
+    const startingRevenueDate = startingRevenueEntry?.date || chartData[0]?.dateKey || new Date().toISOString().slice(0, 10);
+    const grossChange = revenue?.summary.grossChangePercent ?? null;
+    const hasRevenueData = Boolean(
+        chartData.length > 0
+        || manualEntries.length > 0
+        || (revenue?.summary.grossAmountCents ?? 0) > 0
+        || (revenue?.summary.refundAmountCents ?? 0) > 0
+        || (revenue?.summary.transactionCount ?? 0) > 0
+    );
+    const showRevenueDataView = hasActiveConnection || hasRevenueData;
+    const actionProvider = actionState?.provider ?? null;
+    const isActiveProviderAction = Boolean(activeProvider && actionProvider === activeProvider);
+    const isSyncPending = actionState?.kind === 'sync' && isActiveProviderAction;
+    const isDisconnectPending = actionState?.kind === 'disconnect' && isActiveProviderAction;
+    const isSavingSource = actionState?.kind === 'connect_superwall' || actionState?.kind === 'save_custom_events' || actionState?.kind === 'select_provider';
+    const actionMessage = actionState?.kind === 'sync'
+        ? 'Syncing revenue now...'
+        : actionState?.kind === 'disconnect'
+            ? 'Disconnecting revenue source...'
+            : actionState?.kind === 'connect_superwall'
+                ? 'Connecting Superwall and starting sync...'
+                : actionState?.kind === 'save_custom_events'
+                    ? 'Saving custom event mapping and syncing...'
+                    : actionState?.kind === 'save_manual'
+                        ? 'Saving starting revenue...'
+                        : actionState?.kind === 'delete_manual'
+                            ? 'Clearing starting revenue...'
+                            : actionState?.kind === 'select_provider'
+                                ? 'Changing revenue source...'
+                                : null;
+    const syncPreview = revenue?.syncPreview ?? null;
+    const syncPreviewLabel = syncPreview
+        ? `${formatCompact(syncPreview.revenueEventCount)} revenue-shaped events across ${formatCompact(syncPreview.matchedSessionCount)} matching sessions`
+        : null;
+    const syncScanLabel = syncPreview
+        ? `${formatCompact(syncPreview.scannedSessionCount)} total sessions scanned from this project`
+        : null;
+    const isRevenueSyncInProgress = status === 'syncing'
+        || actionState?.kind === 'sync'
+        || actionState?.kind === 'connect_superwall'
+        || actionState?.kind === 'save_custom_events';
+    const changeClass = grossChange === null || grossChange === 0
+        ? 'text-slate-600'
+        : grossChange > 0
+            ? 'text-emerald-700'
+            : 'text-rose-700';
+
+    const statusLabel = isLoading
+        ? 'Loading'
+        : isDisconnectPending
+        ? 'Disconnecting'
+        : isSyncPending
+            ? 'Syncing'
+            : isSavingSource && actionProvider === activeProvider
+                ? 'Saving'
+        : status === 'syncing'
+        ? 'Syncing'
+        : status === 'error'
+            ? 'Sync error'
+            : status === 'disconnected'
+                ? 'Disconnected'
+                : status === 'connected'
+                    ? 'Connected'
+                    : 'Not connected';
+
+    const activeProviderMeta = activeProvider ? REVENUE_PROVIDER_META[activeProvider] : null;
+    const accountLabel = connection?.accountName || connection?.accountId || activeProviderMeta?.shortLabel || 'Revenue source';
+    const statusClass = isLoading
+        ? 'border-cyan-300 bg-[#cffafe] text-slate-950'
+        : isDisconnectPending
+        ? 'border-amber-300 bg-[#fef3c7] text-amber-950'
+        : actionMessage
+            ? 'border-cyan-300 bg-[#cffafe] text-slate-950'
+        : status === 'error'
+        ? 'border-rose-300 bg-[#fecaca] text-rose-950'
+        : status === 'syncing'
+            ? 'border-cyan-300 bg-[#cffafe] text-slate-950'
+            : status === 'connected'
+                ? 'border-emerald-300 bg-[#dcfce7] text-slate-950'
+                : 'border-[#dadce0] bg-[#f8fafc] text-slate-700';
+    const revenueBodyId = 'general-revenue-impact-body';
+    const providerStatuses = revenue?.providers?.length
+        ? revenue.providers
+        : (Object.keys(REVENUE_PROVIDER_META) as RevenueProvider[]).map((provider) => ({
+            provider,
+            label: REVENUE_PROVIDER_META[provider].shortLabel,
+            configured: true,
+            status: 'not_connected' as const,
+            accountId: null,
+            accountName: null,
+            connectedAt: null,
+            lastSyncStartedAt: null,
+            lastSyncCompletedAt: null,
+            lastSyncError: null,
+        }));
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            setIsCollapsed(window.localStorage.getItem(collapseStorageKey) === '1');
+        } catch {
+            setIsCollapsed(false);
+        }
+    }, [collapseStorageKey]);
+
+    const handleToggleCollapsed = useCallback(() => {
+        setIsCollapsed((current) => {
+            const next = !current;
+            if (typeof window !== 'undefined') {
+                try {
+                    window.localStorage.setItem(collapseStorageKey, next ? '1' : '0');
+                } catch {
+                    // Local persistence is a convenience; keep the in-memory toggle working if storage is blocked.
+                }
+            }
+            return next;
+        });
+    }, [collapseStorageKey]);
+
+    useEffect(() => {
+        if (activeProvider) setSettingsProvider(activeProvider);
+    }, [activeProvider]);
+
+    useEffect(() => {
+        if (!revenue?.customEventConfig) return;
+        const savedRevenueEventName = revenue.customEventConfig.revenueEventName || DEFAULT_CUSTOM_REVENUE_CONFIG.revenueEventName;
+        setCustomConfig({
+            revenueEventName: isLikelyNonRevenueEventName(savedRevenueEventName)
+                ? DEFAULT_CUSTOM_REVENUE_CONFIG.revenueEventName
+                : savedRevenueEventName,
+            revenueAmountProperty: revenue.customEventConfig.revenueAmountProperty || 'amount',
+            revenueCurrencyProperty: revenue.customEventConfig.revenueCurrencyProperty || 'currency',
+            defaultCurrency: revenue.customEventConfig.defaultCurrency || DEFAULT_CUSTOM_REVENUE_CONFIG.defaultCurrency,
+            amountUnit: revenue.customEventConfig.amountUnit || 'major',
+            refundEventName: revenue.customEventConfig.refundEventName || '',
+            subscriberEventName: revenue.customEventConfig.subscriberEventName || '',
+            trialStartedEventName: revenue.customEventConfig.trialStartedEventName || '',
+            subscriptionStartedEventName: revenue.customEventConfig.subscriptionStartedEventName || '',
+            cancellationEventName: revenue.customEventConfig.cancellationEventName || '',
+            conversionEventName: revenue.customEventConfig.conversionEventName || '',
+        });
+    }, [revenue?.customEventConfig]);
+
+    useEffect(() => {
+        if (settingsProvider !== 'custom_events' || customEventOptions.length === 0) return;
+
+        setCustomConfig((current) => {
+            return {
+                ...current,
+                refundEventName: current.refundEventName || pickSuggestedRevenueEventName(customEventOptions, [/refund/i], false),
+                subscriberEventName: current.subscriberEventName || pickSuggestedRevenueEventName(customEventOptions, [/subscriber/i, /subscribed/i], false),
+                trialStartedEventName: current.trialStartedEventName || pickSuggestedRevenueEventName(customEventOptions, [/trial/i], false),
+                subscriptionStartedEventName: current.subscriptionStartedEventName || pickSuggestedRevenueEventName(customEventOptions, [/subscription[_\s-]*(started|created)/i, /subscribed/i], false),
+                cancellationEventName: current.cancellationEventName || pickSuggestedRevenueEventName(customEventOptions, [/cancel/i, /churn/i], false),
+                conversionEventName: current.conversionEventName || pickSuggestedRevenueEventName(customEventOptions, [/conversion/i, /signup[_\s-]*completed/i], false),
+            };
+        });
+    }, [customEventOptions, settingsProvider]);
+
+    const getProviderStatus = useCallback((provider: RevenueProvider) => (
+        providerStatuses.find((item) => item.provider === provider)
+    ), [providerStatuses]);
+
+    const customRevenueAiSetupPrompt = useMemo(
+        () => buildCustomRevenueAiSetupPrompt(customConfig, customEventOptions),
+        [customConfig, customEventOptions],
+    );
+
+    const handleCopyCustomRevenueAiPrompt = useCallback(async () => {
+        try {
+            await navigator.clipboard.writeText(customRevenueAiSetupPrompt);
+            setCopiedCustomSetupPrompt(true);
+            window.setTimeout(() => setCopiedCustomSetupPrompt(false), 1600);
+        } catch (error) {
+            console.error('Failed to copy custom revenue AI setup prompt:', error);
+        }
+    }, [customRevenueAiSetupPrompt]);
+
+    const handleProviderClick = useCallback((provider: RevenueProvider) => {
+        const providerStatus = getProviderStatus(provider);
+        const configured = providerStatus?.configured !== false;
+        if (!canManage) return;
+        if (providerStatus?.status && providerStatus.status !== 'not_connected' && providerStatus.status !== 'disconnected') {
+            setIsSettingsOpen(false);
+            onSelectProvider(provider);
+            return;
+        }
+        if (!configured) {
+            setSettingsProvider(provider);
+            setIsSettingsOpen(true);
+            return;
+        }
+        setSettingsProvider(provider);
+        setIsSettingsOpen(true);
+    }, [canManage, getProviderStatus, onSelectProvider]);
+
+    const resetManualEntryForm = useCallback(() => {
+        setEditingManualEntryId(null);
+        setManualEntryDate(startingRevenueDate);
+        setManualEntryAmount('');
+        setManualEntryCurrency(startingRevenueCurrency);
+        setManualEntryTransactionCount('1');
+        setManualEntryNote('');
+        setManualEntryError(null);
+    }, [startingRevenueCurrency, startingRevenueDate]);
+
+    const handleOpenManualEntryForm = useCallback((entry?: RevenueManualEntry) => {
+        if (entry) {
+            setEditingManualEntryId(entry.id);
+            setManualEntryDate(entry.date);
+            setManualEntryAmount(formatManualAmountInput(entry.amountCents));
+            setManualEntryCurrency(entry.currency.toUpperCase());
+            setManualEntryTransactionCount(String(Math.max(1, entry.transactionCount || 1)));
+            setManualEntryNote(entry.note || '');
+        } else {
+            setEditingManualEntryId(null);
+            setManualEntryDate(startingRevenueDate);
+            setManualEntryAmount('');
+            setManualEntryCurrency(startingRevenueCurrency);
+            setManualEntryTransactionCount('1');
+            setManualEntryNote('Initial revenue before Rejourney tracking');
+        }
+        setManualEntryError(null);
+        setIsManualFormOpen(true);
+    }, [startingRevenueCurrency, startingRevenueDate]);
+
+    const handleCancelManualEntry = useCallback(() => {
+        resetManualEntryForm();
+        setIsManualFormOpen(false);
+    }, [resetManualEntryForm]);
+
+    const handleSubmitManualEntry = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const amountCents = parseManualAmountInput(manualEntryAmount);
+        const transactionCount = Number(manualEntryTransactionCount);
+        const normalizedCurrency = manualEntryCurrency.trim().toLowerCase();
+        if (!manualEntryDate) {
+            setManualEntryError('Choose a revenue date.');
+            return;
+        }
+        if (amountCents === null || amountCents <= 0) {
+            setManualEntryError('Enter a starting revenue amount greater than 0, for example 1299.00.');
+            return;
+        }
+        if (!/^[a-z]{3}$/i.test(normalizedCurrency)) {
+            setManualEntryError('Use a three-letter currency code like USD.');
+            return;
+        }
+        if (!Number.isFinite(transactionCount) || transactionCount < 1) {
+            setManualEntryError('Transaction count must be at least 1.');
+            return;
+        }
+
+        onSaveManualEntry({
+            entryId: editingManualEntryId || undefined,
+            date: manualEntryDate,
+            amountCents,
+            currency: normalizedCurrency,
+            transactionCount: Math.round(transactionCount),
+            note: manualEntryNote.trim() || null,
+        });
+        setIsManualFormOpen(false);
+        resetManualEntryForm();
+    }, [
+        editingManualEntryId,
+        manualEntryAmount,
+        manualEntryCurrency,
+        manualEntryDate,
+        manualEntryNote,
+        manualEntryTransactionCount,
+        onSaveManualEntry,
+        resetManualEntryForm,
+    ]);
+
+    const handleDeleteManualEntry = useCallback((entry: RevenueManualEntry) => {
+        const confirmed = window.confirm('Clear the starting revenue baseline?');
+        if (!confirmed) return;
+        setIsManualFormOpen(false);
+        onDeleteManualEntry(entry.id);
+    }, [onDeleteManualEntry]);
+
+    const renderProviderMark = (provider: RevenueProvider) => {
+        const meta = REVENUE_PROVIDER_META[provider];
+        if (meta.logo) {
+            return (
+                <img
+                    src={meta.logo}
+                    alt={meta.shortLabel}
+                    className={provider === 'custom_events' ? 'h-14 w-14 object-contain' : 'h-auto w-full'}
+                />
+            );
+        }
+        return (
+            <span className="text-[15px] font-black tracking-tight text-[#202124]">
+                {meta.shortLabel}
+            </span>
+        );
+    };
+
+    const renderProviderGrid = (compact = false) => (
+        <div className={`grid gap-3 ${compact ? 'md:grid-cols-4' : 'md:grid-cols-2 xl:grid-cols-4'}`}>
+            {(Object.keys(REVENUE_PROVIDER_META) as RevenueProvider[]).map((provider) => {
+                const meta = REVENUE_PROVIDER_META[provider];
+                const providerStatus = getProviderStatus(provider);
+                const providerConnected = Boolean(providerStatus && providerStatus.status !== 'not_connected' && providerStatus.status !== 'disconnected');
+                const selected = activeProvider === provider;
+                const configured = providerStatus?.configured !== false;
+                const isProviderPending = actionProvider === provider;
+                const setupLabel = isProviderPending && actionState?.kind === 'sync'
+                    ? 'Syncing'
+                    : isProviderPending && actionState?.kind === 'disconnect'
+                        ? 'Disconnecting'
+                        : isProviderPending && (actionState?.kind === 'connect_superwall' || actionState?.kind === 'save_custom_events' || actionState?.kind === 'select_provider')
+                            ? 'Saving'
+                            : !configured
+                    ? 'Unavailable'
+                    : providerConnected
+                        ? selected ? 'Active' : 'Linked'
+                        : 'Set up';
+                const setupLabelClass = isProviderPending
+                    ? 'border-cyan-300 bg-[#cffafe] text-slate-950'
+                    : !configured
+                    ? 'border-amber-300 bg-[#fef3c7] text-amber-950'
+                    : providerConnected
+                        ? 'border-emerald-300 bg-[#dcfce7] text-slate-950'
+                        : 'border-[#dadce0] bg-[#f8fafc] text-slate-600';
+                const markSurfaceClass = provider === 'superwall'
+                    ? 'border-[#111827] bg-[#111827]'
+                    : 'border-[#dadce0] bg-white';
+                const markSizeClass = provider === 'custom_events'
+                    ? 'w-16'
+                    : provider === 'superwall'
+                        ? 'w-36'
+                        : 'w-24';
+                const markHeightClass = provider === 'custom_events' ? 'h-14' : 'h-10';
+                const markPaddingClass = provider === 'custom_events' ? 'px-0' : 'px-2';
+                return (
+                    <button
+                        key={provider}
+                        type="button"
+                        onClick={() => handleProviderClick(provider)}
+                        disabled={!canManage || isActionLoading}
+                        className={`min-h-[116px] border p-3 text-left transition ${
+                            selected
+                                ? 'border-[#1a73e8] bg-[#eff6ff]'
+                                : 'border-[#dadce0] bg-white hover:border-[#1a73e8] hover:bg-[#f8fafc]'
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                        <div className="flex items-start justify-between gap-3">
+                            <div className={`flex shrink-0 items-center justify-center border ${markPaddingClass} ${markSurfaceClass} ${markSizeClass} ${markHeightClass}`}>
+                                {renderProviderMark(provider)}
+                            </div>
+                            <span className={`border px-1.5 py-0.5 text-[9px] font-bold uppercase ${setupLabelClass}`}>
+                                {isProviderPending && <RefreshCw className="mr-1 inline h-2.5 w-2.5 animate-spin align-[-1px]" />}
+                                {setupLabel}
+                            </span>
+                        </div>
+                        <div className="mt-3 text-xs font-semibold text-[#202124]">{meta.label}</div>
+                        <div className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">{meta.description}</div>
+                        {!configured && (
+                            <div className="mt-2 text-[10px] font-bold uppercase text-amber-700">Deployment setup required</div>
+                        )}
+                    </button>
+                );
+            })}
+        </div>
+    );
+
+    const renderSettingsPanel = (showProviderPicker = true) => {
+        const selectedMeta = REVENUE_PROVIDER_META[settingsProvider];
+        const customRevenueSnippet = buildCustomRevenueEventSnippet(customConfig);
+        const customRevenueAmountExample = customConfig.amountUnit === 'minor' ? '2999' : '29.99';
+        const customRevenueAmountField = normalizeCustomRevenueFieldName(customConfig.revenueAmountProperty, 'amount');
+
+        return (
+            <div className="mb-4 border border-[#dadce0] bg-[#f8fafc] p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <div className="text-xs font-bold uppercase text-slate-500">Revenue source</div>
+                        <div className="mt-1 text-sm font-semibold text-[#202124]">{selectedMeta.label}</div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setIsSettingsOpen(false)}
+                        className="inline-flex h-7 w-7 items-center justify-center border border-[#dadce0] bg-white text-slate-600 transition hover:border-black hover:text-black"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                        <span className="sr-only">Close revenue source settings</span>
+                    </button>
+                </div>
+
+                {showProviderPicker && renderProviderGrid(true)}
+
+                <div className={`${showProviderPicker ? 'mt-4' : ''} border-t border-[#e8eaed] pt-4`}>
+                    {settingsProvider === 'superwall' && (
+                        <form
+                            className="grid gap-3 md:grid-cols-2"
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                setIsSettingsOpen(false);
+                                setIsManualFormOpen(false);
+                                onSaveSuperwall({
+                                    apiKey: superwallApiKey,
+                                    organizationId: superwallOrganizationId || undefined,
+                                    applicationId: superwallApplicationId || undefined,
+                                });
+                            }}
+                        >
+                            <div className="md:col-span-2 border border-[#dadce0] bg-white p-3 text-[11px] font-semibold leading-5 text-slate-600">
+                                <div className="text-xs font-bold uppercase text-slate-700">Superwall setup checklist</div>
+                                <div className="mt-1">
+                                    Create a scoped read-only Superwall API key for reporting or analytics access, then paste it here. Avoid SDK keys, admin keys, unrestricted keys, or keys that can mutate paywalls, products, users, or campaigns.
+                                </div>
+                                <div className="mt-2">
+                                    Application ID narrows syncs to one app. Organization ID helps identify the account when your Superwall workspace has multiple apps.
+                                </div>
+                            </div>
+                            <label className="space-y-1">
+                                <span className="dashboard-label">Read-only API key</span>
+                                <input
+                                    value={superwallApiKey}
+                                    onChange={(event) => setSuperwallApiKey(event.target.value)}
+                                    type="password"
+                                    required
+                                    className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none focus:border-black focus:ring-2 focus:ring-cyan-100"
+                                />
+                                <span className="block text-[11px] font-semibold leading-4 text-slate-500">
+                                    Use a key scoped to read/reporting access only.
+                                </span>
+                            </label>
+                            <label className="space-y-1">
+                                <span className="dashboard-label">Application ID</span>
+                                <input
+                                    value={superwallApplicationId}
+                                    onChange={(event) => setSuperwallApplicationId(event.target.value)}
+                                    className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none focus:border-black focus:ring-2 focus:ring-cyan-100"
+                                />
+                                <span className="block text-[11px] font-semibold leading-4 text-slate-500">
+                                    Optional, but recommended for one-app syncs.
+                                </span>
+                            </label>
+                            <label className="space-y-1">
+                                <span className="dashboard-label">Organization ID</span>
+                                <input
+                                    value={superwallOrganizationId}
+                                    onChange={(event) => setSuperwallOrganizationId(event.target.value)}
+                                    className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none focus:border-black focus:ring-2 focus:ring-cyan-100"
+                                />
+                                <span className="block text-[11px] font-semibold leading-4 text-slate-500">
+                                    Optional account label for audits and support.
+                                </span>
+                            </label>
+                            <div className="md:col-span-2">
+                                <button
+                                    type="submit"
+                                    disabled={isActionLoading}
+                                    className="inline-flex h-8 items-center gap-1.5 border border-black bg-black px-3 text-[10px] font-black uppercase text-white transition hover:bg-[#1a73e8] disabled:cursor-wait disabled:opacity-70"
+                                >
+                                    <Check className="h-3.5 w-3.5" />
+                                    Connect Superwall
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    {settingsProvider === 'custom_events' && (
+                        <form
+                            className="space-y-4"
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                setIsSettingsOpen(false);
+                                setIsManualFormOpen(false);
+                                onSaveCustomEvents(customConfig);
+                            }}
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <div className="text-xs font-bold uppercase text-slate-500">Custom revenue mapping</div>
+                                    <div className="mt-1 text-xs font-semibold text-slate-500">
+                                        Match the purchase event from your SDK docs example to the fields below.
+                                    </div>
+                                </div>
+                                <span className="border border-[#dadce0] bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500">
+                                    {customEventOptions.length} detected
+                                </span>
+                            </div>
+
+                            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+                                <div className="space-y-3">
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                        <RevenueEventSelectField
+                                            label="Purchase event"
+                                            value={customConfig.revenueEventName}
+                                            onChange={(value) => setCustomConfig((current) => ({ ...current, revenueEventName: value }))}
+                                            events={customEventOptions}
+                                            required
+                                            placeholder="Select purchase event"
+                                            description="Defaults to the AI setup prompt. Change this only if your app already emits a different money-collected event."
+                                        />
+                                        <label className="space-y-1">
+                                            <span className="dashboard-label">Amount property</span>
+                                            <input
+                                                value={customConfig.revenueAmountProperty}
+                                                onChange={(event) => setCustomConfig((current) => ({ ...current, revenueAmountProperty: event.target.value }))}
+                                                required
+                                                placeholder="amount"
+                                                className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none placeholder:text-slate-400 focus:border-black focus:ring-2 focus:ring-cyan-100"
+                                            />
+                                            <span className="block text-[11px] font-semibold leading-4 text-slate-500">
+                                                The numeric property on that event, usually amount.
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    <div className="grid gap-3 md:grid-cols-3">
+                                    <label className="space-y-1">
+                                        <span className="dashboard-label">Currency property</span>
+                                        <input
+                                            value={customConfig.revenueCurrencyProperty}
+                                            onChange={(event) => setCustomConfig((current) => ({ ...current, revenueCurrencyProperty: event.target.value }))}
+                                            required
+                                            placeholder="currency"
+                                            className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none placeholder:text-slate-400 focus:border-black focus:ring-2 focus:ring-cyan-100"
+                                        />
+                                        <span className="block text-[11px] font-semibold leading-4 text-slate-500">
+                                            Leave as currency if your event sends USD, EUR, etc.
+                                        </span>
+                                    </label>
+                                    <label className="space-y-1">
+                                        <span className="dashboard-label">Default currency</span>
+                                        <input
+                                            value={customConfig.defaultCurrency}
+                                            onChange={(event) => setCustomConfig((current) => ({ ...current, defaultCurrency: event.target.value }))}
+                                            required
+                                            placeholder="usd"
+                                            className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold uppercase outline-none placeholder:text-slate-400 focus:border-black focus:ring-2 focus:ring-cyan-100"
+                                        />
+                                        <span className="block text-[11px] font-semibold leading-4 text-slate-500">
+                                            Used when the event has no currency property.
+                                        </span>
+                                    </label>
+                                    <label className="space-y-1">
+                                        <span className="dashboard-label">Amount unit</span>
+                                        <div className="relative">
+                                            <select
+                                                value={customConfig.amountUnit}
+                                                onChange={(event) => setCustomConfig((current) => ({ ...current, amountUnit: event.target.value === 'minor' ? 'minor' : 'major' }))}
+                                                className="h-9 w-full appearance-none border border-[#dadce0] bg-white py-0 pl-2 pr-8 text-sm font-semibold outline-none focus:border-black focus:ring-2 focus:ring-cyan-100"
+                                            >
+                                                <option value="major">Dollars (29.99)</option>
+                                                <option value="minor">Cents (2999)</option>
+                                            </select>
+                                            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+                                        </div>
+                                        <span className="block text-[11px] font-semibold leading-4 text-slate-500">
+                                            Use dollars for 29.99, cents for 2999.
+                                        </span>
+                                    </label>
+                                    </div>
+                                </div>
+
+                                <div className="border border-[#dadce0] bg-white p-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="text-xs font-bold uppercase text-slate-500">Expected event shape</div>
+                                    </div>
+                                    <div className="mt-2 border border-[#1a73e8] bg-[#eff6ff] p-2">
+                                        <div className="text-[11px] font-bold uppercase text-[#174ea6]">Need help wiring this into your app?</div>
+                                        <div className="mt-1 text-[11px] font-semibold leading-5 text-slate-600">
+                                            Copy a setup prompt for an AI coding tool. It includes Web, React Native, and Swift examples plus purchase, refund, trial, subscription, cancellation, and per-user conversion events.
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyCustomRevenueAiPrompt}
+                                            className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 border border-[#1a73e8] bg-[#1a73e8] px-3 text-[10px] font-black uppercase text-white transition hover:border-black hover:bg-black disabled:cursor-wait disabled:opacity-70"
+                                            title="Copy a setup prompt for AI coding tools"
+                                        >
+                                            <Copy className="h-3.5 w-3.5" />
+                                            {copiedCustomSetupPrompt ? 'Prompt copied' : 'Copy setup prompt for Web, React Native, Swift'}
+                                        </button>
+                                    </div>
+                                    <pre className="mt-2 overflow-x-auto whitespace-pre rounded-none border border-[#e8eaed] bg-[#f8fafc] p-3 font-mono text-[11px] font-semibold leading-5 text-slate-800">
+                                        {customRevenueSnippet}
+                                    </pre>
+                                    <div className="mt-2 text-[11px] font-semibold leading-5 text-slate-500">
+                                        Revenue reads {customRevenueAmountField} from event properties or payload. With the selected unit, the example amount is {customRevenueAmountExample}.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <details className="border-t border-[#e8eaed] pt-3">
+                                <summary className="cursor-pointer select-none text-xs font-bold uppercase text-slate-500">
+                                    Optional refund and lifecycle counters
+                                </summary>
+                                <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                    {CUSTOM_REVENUE_OPTIONAL_EVENT_FIELDS.map(([key, label]) => (
+                                        <RevenueEventSelectField
+                                            key={key}
+                                            label={label}
+                                            value={customConfig[key] || ''}
+                                            onChange={(value) => setCustomConfig((current) => ({ ...current, [key]: value }))}
+                                            events={customEventOptions}
+                                            placeholder="Not tracked"
+                                        />
+                                    ))}
+                                </div>
+                            </details>
+
+                            <div className="border border-[#dadce0] bg-white px-3 py-2 text-[11px] font-semibold leading-5 text-slate-600">
+                                Matching is case-insensitive for event names. Property names must match your SDK event payload exactly.
+                            </div>
+
+                            <div>
+                                <button
+                                    type="submit"
+                                    disabled={isActionLoading}
+                                    className="inline-flex h-8 items-center gap-1.5 border border-black bg-black px-3 text-[10px] font-black uppercase text-white transition hover:bg-[#1a73e8] disabled:cursor-wait disabled:opacity-70"
+                                >
+                                    <Check className="h-3.5 w-3.5" />
+                                    Save revenue mapping
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderManualRevenuePanel = () => {
+        if (!canManage && manualEntries.length === 0) return null;
+
+        return (
+            <div className="border-t border-[#e8eaed] pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-slate-500">
+                    <div className="min-w-0">
+                        <span className="font-bold uppercase text-slate-600">Starting revenue</span>
+                        <span className="mx-2 text-slate-300">/</span>
+                        {startingRevenueEntry ? (
+                            <span className="text-slate-700">
+                                {formatCurrencyMinor(startingRevenueAmountCents, startingRevenueCurrency)}
+                                <span className="ml-1 text-slate-400">baseline before Rejourney tracking</span>
+                            </span>
+                        ) : (
+                            <span>Add one baseline amount if you already had revenue before tracking.</span>
+                        )}
+                    </div>
+                    {canManage && (
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => handleOpenManualEntryForm(startingRevenueEntry ?? undefined)}
+                                disabled={isActionLoading}
+                                className="inline-flex h-7 items-center gap-1 border border-[#dadce0] bg-white px-2 text-[10px] font-black uppercase text-slate-700 transition hover:border-black hover:text-black disabled:cursor-wait disabled:opacity-70"
+                            >
+                                {startingRevenueEntry ? <Pencil className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                                {startingRevenueEntry ? 'Adjust' : 'Set'}
+                            </button>
+                            {startingRevenueEntry && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeleteManualEntry(startingRevenueEntry)}
+                                    disabled={isActionLoading}
+                                    className="inline-flex h-7 items-center gap-1 border border-transparent bg-white px-2 text-[10px] font-black uppercase text-slate-400 transition hover:border-rose-300 hover:text-rose-700 disabled:cursor-wait disabled:opacity-70"
+                                >
+                                    <Trash2 className="h-3 w-3" />
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {isManualFormOpen && canManage && (
+                    <form className="mt-3 grid gap-3 border border-[#dadce0] bg-[#f8fafc] p-3 md:grid-cols-[minmax(0,1fr)_120px] lg:grid-cols-[minmax(0,220px)_120px_minmax(0,1fr)_auto]" onSubmit={handleSubmitManualEntry}>
+                        <label className="space-y-1">
+                            <span className="dashboard-label">Starting revenue</span>
+                            <input
+                                value={manualEntryAmount}
+                                onChange={(event) => setManualEntryAmount(event.target.value)}
+                                placeholder="1299.00"
+                                inputMode="decimal"
+                                required
+                                className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none placeholder:text-slate-400 focus:border-black focus:ring-2 focus:ring-cyan-100"
+                            />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="dashboard-label">Currency</span>
+                            <input
+                                value={manualEntryCurrency}
+                                onChange={(event) => setManualEntryCurrency(event.target.value.toUpperCase())}
+                                maxLength={3}
+                                required
+                                className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold uppercase outline-none focus:border-black focus:ring-2 focus:ring-cyan-100"
+                            />
+                        </label>
+                        <label className="space-y-1 md:col-span-2 lg:col-span-1">
+                            <span className="dashboard-label">Note</span>
+                            <input
+                                value={manualEntryNote}
+                                onChange={(event) => setManualEntryNote(event.target.value)}
+                                placeholder="Initial revenue before Rejourney tracking"
+                                className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none placeholder:text-slate-400 focus:border-black focus:ring-2 focus:ring-cyan-100"
+                            />
+                        </label>
+                        {manualEntryError && (
+                            <div className="border border-rose-300 bg-[#fecaca] px-3 py-2 text-xs font-bold text-rose-950 md:col-span-2 lg:col-span-4">
+                                {manualEntryError}
+                            </div>
+                        )}
+                        <div className="flex flex-wrap items-end gap-2 md:col-span-2 lg:col-span-1">
+                            <button
+                                type="submit"
+                                disabled={isActionLoading}
+                                className="inline-flex h-8 items-center gap-1.5 border border-black bg-black px-3 text-[10px] font-black uppercase text-white transition hover:bg-[#1a73e8] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                <Check className="h-3.5 w-3.5" />
+                                Save baseline
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCancelManualEntry}
+                                className="inline-flex h-8 items-center gap-1.5 border border-[#dadce0] bg-white px-3 text-[10px] font-black uppercase text-slate-700 transition hover:border-black hover:text-black"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <section className="rejourney-general-card flex min-w-0 flex-col overflow-hidden border border-[#dadce0] bg-white shadow-none">
+            <div className="h-1 bg-[#67e8f9]" />
+            <div className="flex min-h-0 flex-col p-4 sm:p-5">
+                <div
+                    className={`flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between ${isCollapsed ? '' : 'mb-4 border-b border-[#e8eaed] pb-3'}`}
+                >
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="min-w-0 break-words text-[15px] font-medium text-[#202124] underline decoration-dotted decoration-[#bdc1c6] underline-offset-4">
+                                Revenue impact
+                            </h2>
+                            {activeProviderMeta && (
+                                <span className="border border-[#dadce0] bg-[#f8fafc] px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">
+                                    {activeProviderMeta.shortLabel}
+                                </span>
+                            )}
+                            <span className={`border px-2 py-0.5 text-[10px] font-bold uppercase leading-none ${statusClass}`}>
+                                {statusLabel}
+                            </span>
+                        </div>
+                        {showRevenueDataView && (
+                            <div className="mt-1 truncate text-[11px] font-semibold text-slate-500" title={accountLabel}>
+                                {accountLabel}
+                            </div>
+                        )}
+                    </div>
+
+                    <div
+                        className="flex w-full shrink-0 flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        {hasActiveConnection && activeProvider && (
+                            <>
+                                {revenue?.currencies && revenue.currencies.length > 1 && (
+                                    <select
+                                        value={currency ?? ''}
+                                        onChange={(event) => onCurrencyChange(event.target.value || null)}
+                                        aria-label="Revenue currency"
+                                        className="min-h-7 border border-black bg-white px-2 text-[10px] font-black uppercase text-black outline-none transition hover:bg-[#f8fafc] focus:ring-2 focus:ring-black"
+                                    >
+                                        {revenue.currencies.map((row) => (
+                                            <option key={row.currency} value={row.currency}>
+                                                {row.currency.toUpperCase()}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+
+                                {canManage && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsSettingsOpen(false);
+                                                setIsManualFormOpen(false);
+                                                onSync(activeProvider);
+                                            }}
+                                            disabled={isActionLoading || status === 'syncing' || isSyncPending}
+                                            className="inline-flex min-h-7 items-center gap-1.5 border border-black bg-white px-2.5 text-[10px] font-black uppercase text-black transition hover:bg-[#ecfeff] disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            <RefreshCw className={`h-3.5 w-3.5 ${status === 'syncing' || isSyncPending ? 'animate-spin' : ''}`} />
+                                            {status === 'syncing' || isSyncPending ? 'Syncing' : 'Sync'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsSettingsOpen(false);
+                                                setIsManualFormOpen(false);
+                                                onDisconnect(activeProvider);
+                                            }}
+                                            disabled={isActionLoading || isDisconnectPending}
+                                            className="inline-flex min-h-7 items-center gap-1.5 border border-black bg-white px-2.5 text-[10px] font-black uppercase text-black transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            {isDisconnectPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
+                                            {isDisconnectPending ? 'Disconnecting' : 'Disconnect'}
+                                        </button>
+                                    </>
+                                )}
+                            </>
+                        )}
+                        {canManage && (
+                            <button
+                                type="button"
+                                onClick={() => setIsSettingsOpen((current) => !current)}
+                                aria-pressed={isSettingsOpen}
+                                title="Revenue source settings"
+                                className="inline-flex h-7 w-7 items-center justify-center border border-black bg-white text-black transition hover:bg-[#ecfeff]"
+                            >
+                                <Settings className="h-3.5 w-3.5" aria-hidden />
+                                <span className="sr-only">Revenue source settings</span>
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleToggleCollapsed}
+                            aria-expanded={!isCollapsed}
+                            aria-controls={revenueBodyId}
+                            title={isCollapsed ? 'Expand revenue impact' : 'Collapse revenue impact'}
+                            className="inline-flex h-7 w-7 items-center justify-center border border-black bg-white text-black transition hover:bg-[#ecfeff]"
+                        >
+                            <ChevronDown className={`h-4 w-4 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} aria-hidden />
+                            <span className="sr-only">{isCollapsed ? 'Expand revenue impact' : 'Collapse revenue impact'}</span>
+                        </button>
+                    </div>
+                </div>
+
+                {!isCollapsed && (
+                    <div id={revenueBodyId}>
+                        {isLoading ? (
+                            <div aria-busy="true">
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                                    {Array.from({ length: 6 }).map((_, index) => (
+                                        <div key={`revenue-kpi-ghost-${index}`} className="space-y-2">
+                                            <GhostBlock className="h-3 w-24" />
+                                            <GhostBlock className="h-7 w-28" />
+                                        </div>
+                                    ))}
+                                </div>
+                                <GhostBlock className="mt-4 h-[260px]" />
+                                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#e8eaed] pt-3">
+                                    <GhostBlock className="h-3 w-72 max-w-full" />
+                                    <GhostBlock className="h-7 w-20" />
+                                </div>
+                            </div>
+                        ) : error ? (
+                            <div className="border-2 border-black bg-[#fecaca] px-3 py-2 text-sm font-bold text-black">
+                                {error}
+                            </div>
+                        ) : !showRevenueDataView ? (
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <div className="text-sm font-semibold text-[#202124]">Revenue tracking is not connected</div>
+                                        <div className="mt-1 text-xs font-semibold text-slate-500">
+                                            {canManage ? 'Choose one source for the General revenue chart.' : 'Ask an admin to connect revenue tracking.'}
+                                        </div>
+                                    </div>
+                                </div>
+                                {canManage ? renderProviderGrid() : null}
+                                {isSettingsOpen && canManage ? renderSettingsPanel(false) : null}
+                                {renderManualRevenuePanel()}
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {actionMessage && (
+                                    <div className="flex items-center gap-2 border border-cyan-300 bg-[#cffafe] px-3 py-2 text-xs font-bold text-slate-950" aria-live="polite">
+                                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                        {actionMessage}
+                                    </div>
+                                )}
+                                {isSettingsOpen && canManage && renderSettingsPanel()}
+
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-b border-[#e8eaed] pb-4 sm:grid-cols-3 lg:grid-cols-6">
+                                    <div className="col-span-2 min-w-0 sm:col-span-1">
+                                        <span className="dashboard-label">Gross revenue</span>
+                                        <div className="mt-1 whitespace-nowrap text-2xl font-medium leading-tight text-[#202124]">
+                                            {formatCurrencyMinor(revenue?.summary.grossAmountCents ?? 0, currency)}
+                                        </div>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <span className="dashboard-label">Change</span>
+                                        <div className={`mt-1 break-words text-[1.35rem] font-medium leading-tight ${changeClass}`}>
+                                            {formatRevenueChange(grossChange)}
+                                        </div>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <span className="dashboard-label">Transactions</span>
+                                        <div className="dashboard-value-md mt-1">{formatCompact(revenue?.summary.transactionCount ?? 0)}</div>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <span className="dashboard-label">Refunds</span>
+                                        <div className="dashboard-value-md mt-1 break-words">
+                                            {formatCurrencyMinor(revenue?.summary.refundAmountCents ?? 0, currency)}
+                                        </div>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <span className="dashboard-label">Subscribers</span>
+                                        <div className="dashboard-value-md mt-1">{formatCompact(revenue?.summary.subscriberCount ?? 0)}</div>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <span className="dashboard-label">Synced</span>
+                                        <div className="mt-1 break-words text-sm font-semibold text-[#202124]">
+                                            {formatSyncTime(revenue?.connection.lastSyncCompletedAt ?? revenue?.connection.lastSyncStartedAt)}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {status === 'syncing' && (
+                                    <div className="border border-cyan-300 bg-[#cffafe] px-3 py-2 text-xs font-bold text-slate-950">
+                                        Revenue sync is running in the background. You can refresh, switch pages, or leave this page; the import will continue.
+                                        {syncPreviewLabel && (
+                                            <span className="mt-1 block text-slate-700">{syncPreviewLabel}. {syncScanLabel}.</span>
+                                        )}
+                                    </div>
+                                )}
+
+                                {status === 'disconnected' && (
+                                    <div className="border border-amber-300 bg-[#fef3c7] px-3 py-2 text-xs font-bold text-amber-950">
+                                        Revenue source is disconnected. Historical revenue remains visible.
+                                    </div>
+                                )}
+
+                                {status === 'error' && revenue?.connection.lastSyncError && (
+                                    <div className="border-2 border-black bg-[#fecaca] px-3 py-2 text-sm font-bold text-black">
+                                        {revenue.connection.lastSyncError}
+                                    </div>
+                                )}
+
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span className="text-sm font-semibold text-[#202124] underline decoration-dotted decoration-[#bdc1c6] underline-offset-4">Revenue trend</span>
+                                        {currency && (
+                                            <span className="border border-[#dadce0] bg-[#f8fafc] px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500">
+                                                {currency}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-500">
+                                        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#1a73e8]" /> Gross</span>
+                                        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#34a853]" /> Net</span>
+                                        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#f9a8d4]" /> Refunds</span>
+                                    </div>
+                                </div>
+
+                                <div className="h-[260px] sm:h-[310px]">
+                                    {chartData.length > 0 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <ComposedChart data={chartData} margin={{ top: 28, right: 8, left: -4, bottom: 0 }}>
+                                                <CartesianGrid stroke="#edf0f3" strokeDasharray="3 3" vertical={false} />
+                                                <XAxis
+                                                    dataKey="dateKey"
+                                                    tick={{ fontSize: 10 }}
+                                                    tickFormatter={formatDateLabel}
+                                                    minTickGap={40}
+                                                    tickLine={false}
+                                                />
+                                                <YAxis
+                                                    tick={{ fontSize: 10 }}
+                                                    width={64}
+                                                    tickFormatter={(value) => formatCurrencyMinor(Number(value), currency, true)}
+                                                    tickLine={false}
+                                                />
+                                                <Tooltip
+                                                    allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
+                                                    wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
+                                                    cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
+                                                    content={<RevenueImpactTooltip currency={currency} releaseMarkers={releaseMarkers} />}
+                                                />
+                                                <Bar dataKey="refundAmountCents" name="Refunds" fill="#f9a8d4" barSize={8} isAnimationActive={false} />
+                                                <Area
+                                                    type="monotone"
+                                                    dataKey="grossAmountCents"
+                                                    name="Gross revenue"
+                                                    stroke="#1a73e8"
+                                                    fill="#dbeafe"
+                                                    strokeWidth={2.4}
+                                                    dot={false}
+                                                    activeDot={{ r: 4, stroke: '#ffffff', strokeWidth: 2, fill: '#1a73e8' }}
+                                                    isAnimationActive={false}
+                                                />
+                                                <Line
+                                                    type="monotone"
+                                                    dataKey="netAmountCents"
+                                                    name="Net"
+                                                    stroke="#34a853"
+                                                    strokeWidth={2}
+                                                    dot={false}
+                                                    activeDot={{ r: 4, stroke: '#ffffff', strokeWidth: 2, fill: '#34a853' }}
+                                                    isAnimationActive={false}
+                                                />
+                                                {releaseMarkers.map((marker, index) => (
+                                                    <ReferenceLine
+                                                        key={`revenue-version-${marker.version}-${marker.dateKey}`}
+                                                        x={marker.dateKey}
+                                                        stroke="#334155"
+                                                        strokeDasharray="4 4"
+                                                        strokeWidth={1.4}
+                                                        ifOverflow="extendDomain"
+                                                        label={buildVersionReleaseLineLabel(marker.version, index)}
+                                                    />
+                                                ))}
+                                            </ComposedChart>
+                                        </ResponsiveContainer>
+                                    ) : isRevenueSyncInProgress ? (
+                                        <div className="flex h-full items-center justify-center border-2 border-dashed border-cyan-300 bg-[#ecfeff] p-4 text-center">
+                                            <div className="max-w-lg">
+                                                <RefreshCw className="mx-auto h-6 w-6 animate-spin text-[#1a73e8]" />
+                                                <div className="mt-3 text-sm font-bold text-slate-950">Syncing revenue data</div>
+                                                <div className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+                                                    {syncPreviewLabel || 'Looking for mapped purchase events in your sessions.'}
+                                                </div>
+                                                {syncScanLabel && (
+                                                    <div className="mt-1 text-[11px] font-semibold text-slate-500">{syncScanLabel}.</div>
+                                                )}
+                                                <div className="mt-2 text-[11px] font-bold text-slate-700">
+                                                    Safe to refresh, switch projects, or leave this page. Sync continues in the background.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex h-full items-center justify-center border-2 border-dashed border-[#dadce0] bg-[#f8fafc] p-4 text-center text-sm font-semibold text-slate-500">
+                                            No synced revenue data yet. Save the mapping and run Sync when your app is sending purchase events.
+                                        </div>
+                                    )}
+                                </div>
+
+                                {renderManualRevenuePanel()}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </section>
+    );
+};
+
 export const GeneralOverview: React.FC = () => {
     const { selectedProject } = useSessionData();
     const { isDemoMode } = useDemoMode();
@@ -1240,6 +2692,10 @@ export const GeneralOverview: React.FC = () => {
     const customEventSelectionStorageKey = useMemo(
         () => selectedProject?.id ? `${CUSTOM_EVENT_SELECTION_STORAGE_PREFIX}:${selectedProject.id}:${platformLens}` : null,
         [platformLens, selectedProject?.id],
+    );
+    const revenueImpactCollapsedStorageKey = useMemo(
+        () => `${REVENUE_IMPACT_COLLAPSED_STORAGE_PREFIX}:${selectedProject?.id || 'global'}`,
+        [selectedProject?.id],
     );
 
     const [sectionStatus, setSectionStatus] = useState<Record<GeneralSectionKey, LoadStatus>>(
@@ -1258,6 +2714,12 @@ export const GeneralOverview: React.FC = () => {
     const [webReferralSessions, setWebReferralSessions] = useState<RecordingSession[]>([]);
     const [isReferralLoading, setIsReferralLoading] = useState(false);
     const [retentionCohortRows, setRetentionCohortRows] = useState<RetentionCohortRow[]>([]);
+    const [revenueOverview, setRevenue] = useState<RevenueOverview | null>(null);
+    const [isRevenueLoading, setIsRevenueLoading] = useState(false);
+    const [revenueOverviewError, setRevenueError] = useState<string | null>(null);
+    const [revenueOverviewCurrency, setRevenueCurrency] = useState<string | null>(null);
+    const [revenueActionState, setRevenueActionState] = useState<RevenueActionState>(null);
+    const isRevenueActionLoading = revenueActionState !== null;
     const [copiedTopUserKey, setCopiedTopUserKey] = useState<string | null>(null);
     const [copiedPublicKey, setCopiedPublicKey] = useState(false);
     const [copiedDocsPrompt, setCopiedDocsPrompt] = useState(false);
@@ -1268,6 +2730,73 @@ export const GeneralOverview: React.FC = () => {
     const [customEventSelectionTouched, setCustomEventSelectionTouched] = useState(false);
     const [customEventSearchQuery, setCustomEventSearchQuery] = useState('');
     const [hydratedCustomEventSelectionKey, setHydratedCustomEventSelectionKey] = useState<string | null>(null);
+
+    useEffect(() => {
+        setRevenueCurrency(null);
+    }, [selectedProject?.id]);
+
+    const loadRevenue = useCallback(async () => {
+        if (!selectedProject?.id || isDemoMode) {
+            setRevenue(null);
+            setRevenueError(null);
+            setIsRevenueLoading(false);
+            return;
+        }
+
+        setIsRevenueLoading(true);
+        setRevenueError(null);
+        try {
+            const data = await getRevenueOverview(selectedProject.id, timeRange, revenueOverviewCurrency);
+            setRevenue(data);
+        } catch (error) {
+            setRevenue(null);
+            setRevenueError(error instanceof Error ? error.message : 'Unable to load revenue.');
+        } finally {
+            setIsRevenueLoading(false);
+        }
+    }, [isDemoMode, selectedProject?.id, timeRange, revenueOverviewCurrency]);
+
+    useEffect(() => {
+        let isCancelled = false;
+
+        if (!selectedProject?.id || isDemoMode) {
+            setRevenue(null);
+            setRevenueError(null);
+            setIsRevenueLoading(false);
+            return;
+        }
+
+        setIsRevenueLoading(true);
+        setRevenueError(null);
+
+        getRevenueOverview(selectedProject.id, timeRange, revenueOverviewCurrency)
+            .then((data) => {
+                if (isCancelled) return;
+                setRevenue(data);
+            })
+            .catch((error) => {
+                if (isCancelled) return;
+                setRevenue(null);
+                setRevenueError(error instanceof Error ? error.message : 'Unable to load revenue.');
+            })
+            .finally(() => {
+                if (!isCancelled) {
+                    setIsRevenueLoading(false);
+                }
+            });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [isDemoMode, selectedProject?.id, timeRange, revenueOverviewCurrency]);
+
+    useEffect(() => {
+        if (!selectedProject?.id || isDemoMode || revenueOverview?.connection.status !== 'syncing') return;
+        const timeout = window.setTimeout(() => {
+            void loadRevenue();
+        }, 2500);
+        return () => window.clearTimeout(timeout);
+    }, [isDemoMode, loadRevenue, revenueOverview?.connection.status, selectedProject?.id]);
 
     useEffect(() => {
         if (!selectedProject?.id) {
@@ -1592,6 +3121,57 @@ export const GeneralOverview: React.FC = () => {
         [trendChartData, versionChartData, versionKeys],
     );
 
+    const demoRevenue = useMemo(
+        () => isDemoMode ? buildDemoRevenueOverview(trendChartData) : null,
+        [isDemoMode, trendChartData],
+    );
+
+    const displayRevenue = isDemoMode ? demoRevenue : revenueOverview;
+
+    const revenueChartData = useMemo<RevenueImpactChartRow[]>(() => {
+        if (!displayRevenue?.daily?.length) return [];
+        const startingRevenueByDate = new Map<string, { amountCents: number; transactionCount: number }>();
+        for (const entry of displayRevenue.manualEntries || []) {
+            if (entry.amountCents <= 0) continue;
+            const current = startingRevenueByDate.get(entry.date) ?? { amountCents: 0, transactionCount: 0 };
+            current.amountCents += entry.amountCents;
+            current.transactionCount += Math.max(1, entry.transactionCount || 1);
+            startingRevenueByDate.set(entry.date, current);
+        }
+
+        return displayRevenue.daily
+            .map((row) => {
+                const startingRevenue = startingRevenueByDate.get(row.date);
+                const startingAmountCents = startingRevenue?.amountCents ?? 0;
+                const startingTransactionCount = startingRevenue?.transactionCount ?? 0;
+
+                return {
+                    dateKey: row.date,
+                    grossAmountCents: Math.max(0, Number(row.grossAmountCents || 0) - startingAmountCents),
+                    refundAmountCents: Number(row.refundAmountCents || 0),
+                    netAmountCents: Number(row.netAmountCents || 0) - startingAmountCents,
+                    transactionCount: Math.max(0, Number(row.transactionCount || 0) - startingTransactionCount),
+                    refundCount: Number(row.refundCount || 0),
+                    subscriberCount: Number(row.subscriberCount || 0),
+                    trialCount: Number(row.trialCount || 0),
+                    subscriptionStartCount: Number(row.subscriptionStartCount || 0),
+                    cancellationCount: Number(row.cancellationCount || 0),
+                    conversionCount: Number(row.conversionCount || 0),
+                    customEventCounts: row.customEventCounts || {},
+                };
+            })
+            .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+    }, [displayRevenue]);
+
+    const revenueVersionMarkers = useMemo(
+        () => buildVersionReleaseMarkersForDateKeys(
+            versionChartData,
+            versionKeys,
+            revenueChartData.map((row) => row.dateKey),
+        ),
+        [revenueChartData, versionChartData, versionKeys],
+    );
+
     const topCountries = useMemo(() => {
         if (!geoSummary?.countries?.length) return [];
 
@@ -1739,160 +3319,6 @@ export const GeneralOverview: React.FC = () => {
         }));
     }, [retentionCohortRows]);
 
-    const trendComparison = useMemo(() => {
-        if (!trendChartData.length) return null;
-
-        const windowSize = Math.max(1, Math.min(14, Math.floor(trendChartData.length / 2) || 1));
-        const currentWindow = trendChartData.slice(-windowSize);
-        const previousWindow = trendChartData.slice(-windowSize * 2, -windowSize);
-
-        const sum = (rows: TrendChartRow[], selector: (row: TrendChartRow) => number) =>
-            rows.reduce((total, row) => total + selector(row), 0);
-        const average = (rows: TrendChartRow[], selector: (row: TrendChartRow) => number) =>
-            rows.length > 0 ? sum(rows, selector) / rows.length : 0;
-        const averageRetention = (rows: TrendChartRow[]) =>
-            average(rows, (row) => (row.mau > 0 ? (row.dau / row.mau) * 100 : 0));
-        const weightedApiErrorRate = (rows: TrendChartRow[]) => {
-            const totalCalls = sum(rows, (row) => row.totalApiCalls);
-            if (totalCalls > 0) {
-                return rows.reduce((total, row) => total + (row.apiErrorRate * row.totalApiCalls), 0) / totalCalls;
-            }
-            return average(rows, (row) => row.apiErrorRate);
-        };
-        const crashRate = (rows: TrendChartRow[]) => {
-            const totalSessions = sum(rows, (row) => row.sessions);
-            return totalSessions > 0 ? (sum(rows, (row) => row.crashes) / totalSessions) * 100 : 0;
-        };
-        const averageDuration = (rows: TrendChartRow[]) => {
-            const totalSessions = sum(rows, (row) => row.sessions);
-            if (totalSessions <= 0) return 0;
-            return rows.reduce((total, row) => total + (row.avgDurationSeconds * row.sessions), 0) / totalSessions;
-        };
-
-        const current = {
-            sessions: sum(currentWindow, (row) => row.sessions),
-            avgDau: average(currentWindow, (row) => row.dau),
-            avgRetention: averageRetention(currentWindow),
-            apiErrorRate: weightedApiErrorRate(currentWindow),
-            crashRate: crashRate(currentWindow),
-            avgDurationSeconds: averageDuration(currentWindow),
-        };
-
-        if (!previousWindow.length) {
-            return {
-                windowSize,
-                current,
-                sessionDeltaPct: null,
-                dauDeltaPct: null,
-                retentionDeltaPts: null,
-                apiErrorDeltaPts: null,
-                crashRateDeltaPts: null,
-                durationDeltaPct: null,
-            };
-        }
-
-        const previous = {
-            sessions: sum(previousWindow, (row) => row.sessions),
-            avgDau: average(previousWindow, (row) => row.dau),
-            avgRetention: averageRetention(previousWindow),
-            apiErrorRate: weightedApiErrorRate(previousWindow),
-            crashRate: crashRate(previousWindow),
-            avgDurationSeconds: averageDuration(previousWindow),
-        };
-
-        return {
-            windowSize,
-            current,
-            sessionDeltaPct: percentChange(current.sessions, previous.sessions),
-            dauDeltaPct: percentChange(current.avgDau, previous.avgDau),
-            retentionDeltaPts: pointChange(current.avgRetention, previous.avgRetention),
-            apiErrorDeltaPts: pointChange(current.apiErrorRate, previous.apiErrorRate),
-            crashRateDeltaPts: pointChange(current.crashRate, previous.crashRate),
-            durationDeltaPct: percentChange(current.avgDurationSeconds, previous.avgDurationSeconds),
-        };
-    }, [trendChartData]);
-
-    const healthShift = useMemo(() => {
-        const daily = overviewObs?.dailyHealth || [];
-        if (!daily.length) return null;
-
-        const sorted = [...daily].sort((a, b) => a.date.localeCompare(b.date));
-        const windowSize = Math.max(1, Math.min(14, Math.floor(sorted.length / 2) || 1));
-        const currentWindow = sorted.slice(-windowSize);
-        const previousWindow = sorted.slice(-windowSize * 2, -windowSize);
-
-        const toDegradedRate = (rows: typeof sorted) => {
-            const totals = rows.reduce((agg, row) => {
-                agg.total += row.clean + row.error + row.rage + row.slow + row.crash;
-                agg.degraded += row.error + row.rage + row.slow + row.crash;
-                return agg;
-            }, { total: 0, degraded: 0 });
-
-            return totals.total > 0 ? (totals.degraded / totals.total) * 100 : 0;
-        };
-
-        const currentRate = toDegradedRate(currentWindow);
-        const previousRate = previousWindow.length > 0 ? toDegradedRate(previousWindow) : null;
-
-        return {
-            currentRate,
-            deltaPts: previousRate === null ? null : pointChange(currentRate, previousRate),
-        };
-    }, [overviewObs]);
-
-    const momentumCards = useMemo<MomentumCard[]>(() => {
-        if (!trendComparison) return [];
-
-        const qualityCard: MomentumCard = healthShift
-            ? {
-                label: 'Degraded Sessions',
-                value: `${healthShift.currentRate.toFixed(1)}%`,
-                delta: healthShift.deltaPts === null ? 'No prior window' : `${formatSigned(healthShift.deltaPts)} pts`,
-                positiveIsGood: false,
-                deltaValue: healthShift.deltaPts,
-            }
-            : deepMetrics?.reliability?.degradedSessionRate !== undefined
-                ? {
-                    label: 'Degraded Sessions',
-                    value: `${deepMetrics.reliability.degradedSessionRate.toFixed(1)}%`,
-                    delta: 'Current window',
-                    positiveIsGood: false,
-                    deltaValue: null,
-                }
-                : {
-                    label: 'API Error Rate',
-                    value: `${trendComparison.current.apiErrorRate.toFixed(2)}%`,
-                    delta: trendComparison.apiErrorDeltaPts === null ? 'No prior window' : `${formatSigned(trendComparison.apiErrorDeltaPts)} pts`,
-                    positiveIsGood: false,
-                    deltaValue: trendComparison.apiErrorDeltaPts,
-                };
-
-        return [
-            {
-                label: 'Active Users',
-                value: formatCompact(Math.round(trendComparison.current.avgDau)),
-                delta: trendComparison.dauDeltaPct === null ? 'No prior window' : `${formatSigned(trendComparison.dauDeltaPct)}%`,
-                positiveIsGood: true,
-                deltaValue: trendComparison.dauDeltaPct,
-            },
-            {
-                label: 'Session Volume',
-                value: formatCompact(trendComparison.current.sessions),
-                delta: trendComparison.sessionDeltaPct === null ? 'No prior window' : `${formatSigned(trendComparison.sessionDeltaPct)}%`,
-                positiveIsGood: true,
-                deltaValue: trendComparison.sessionDeltaPct,
-            },
-            {
-                label: 'Retention',
-                value: `${trendComparison.current.avgRetention.toFixed(1)}%`,
-                delta: trendComparison.retentionDeltaPts === null ? 'No prior window' : `${formatSigned(trendComparison.retentionDeltaPts)} pts`,
-                positiveIsGood: true,
-                deltaValue: trendComparison.retentionDeltaPts,
-            },
-            qualityCard,
-        ];
-    }, [trendComparison, healthShift, deepMetrics]);
-
     const customEvents = useMemo(() => {
         return overviewObs?.customEvents || [];
     }, [overviewObs]);
@@ -2028,11 +3454,6 @@ export const GeneralOverview: React.FC = () => {
         setSelectedCustomEventNames([]);
     }, []);
 
-    const recommendedSessions = useMemo(
-        () => isDemoMode ? buildDemoRecommendedSessions(sessions) : buildRecommendedSessions(sessions),
-        [isDemoMode, sessions],
-    );
-
     // Prefer backend-aggregated top users (accurate all-window counts).
     // Fall back to session-pool computation only in demo mode.
     const topUsers = useMemo(() => {
@@ -2102,21 +3523,181 @@ export const GeneralOverview: React.FC = () => {
         }
     }, []);
 
-    const anonymousNicknameStyleMap = useMemo(() => {
-        const styleMap: Record<string, string> = {};
-        let paletteIndex = 0;
-
-        for (const rec of recommendedSessions) {
-            const nickname = getAnonymousNickname(rec.session);
-            if (!nickname || styleMap[nickname]) continue;
-            styleMap[nickname] = ANONYMOUS_NICKNAME_STYLES[paletteIndex % ANONYMOUS_NICKNAME_STYLES.length];
-            paletteIndex += 1;
+    const handleSelectRevenueProvider = useCallback(async (provider: RevenueProvider) => {
+        if (!selectedProject?.id) return;
+        if (isDemoMode) return;
+        const previousRevenue = revenueOverview;
+        const now = new Date().toISOString();
+        setRevenueActionState({ kind: 'select_provider', provider });
+        setRevenueError(null);
+        setRevenue((current) => patchRevenueProviderStatus(current, provider, {
+            status: 'connected',
+            connectedAt: now,
+            lastSyncError: null,
+        }, { activeProvider: provider, updateConnection: true }));
+        try {
+            await setRevenueSource(selectedProject.id, provider);
+            await loadRevenue();
+        } catch (error) {
+            setRevenue(previousRevenue);
+            setRevenueError(error instanceof Error ? error.message : 'Unable to change revenue source.');
+        } finally {
+            setRevenueActionState(null);
         }
+    }, [isDemoMode, loadRevenue, revenueOverview, selectedProject?.id]);
 
-        return styleMap;
-    }, [recommendedSessions]);
+    const handleSyncRevenue = useCallback(async (provider: RevenueProvider) => {
+        if (!selectedProject?.id) return;
+        if (isDemoMode) return;
+        const previousRevenue = revenueOverview;
+        const now = new Date().toISOString();
+        setRevenueActionState({ kind: 'sync', provider });
+        setRevenueError(null);
+        setRevenue((current) => patchRevenueProviderStatus(current, provider, {
+            status: 'syncing',
+            lastSyncStartedAt: now,
+            lastSyncError: null,
+        }, { activeProvider: provider, updateConnection: true }));
+        try {
+            await syncRevenueSource(selectedProject.id, provider);
+            await loadRevenue();
+        } catch (error) {
+            setRevenue(previousRevenue);
+            setRevenueError(error instanceof Error ? error.message : 'Unable to sync revenue.');
+        } finally {
+            setRevenueActionState(null);
+        }
+    }, [isDemoMode, loadRevenue, revenueOverview, selectedProject?.id]);
 
-    const hasData = useMemo(() => {
+    const handleSaveSuperwallRevenue = useCallback(async (input: { apiKey: string; organizationId?: string; applicationId?: string }) => {
+        if (!selectedProject?.id) return;
+        if (isDemoMode) return;
+        const previousRevenue = revenueOverview;
+        const now = new Date().toISOString();
+        setRevenueActionState({ kind: 'connect_superwall', provider: 'superwall' });
+        setRevenueError(null);
+        setRevenue((current) => patchRevenueProviderStatus(current, 'superwall', {
+            status: 'syncing',
+            accountId: input.applicationId || input.organizationId || null,
+            accountName: input.applicationId || input.organizationId || 'Superwall',
+            connectedAt: now,
+            lastSyncStartedAt: now,
+            lastSyncError: null,
+        }, { activeProvider: 'superwall', updateConnection: true }));
+        try {
+            await connectSuperwallRevenue(selectedProject.id, input);
+            await loadRevenue();
+        } catch (error) {
+            setRevenue(previousRevenue);
+            setRevenueError(error instanceof Error ? error.message : 'Unable to connect Superwall revenue.');
+        } finally {
+            setRevenueActionState(null);
+        }
+    }, [isDemoMode, loadRevenue, revenueOverview, selectedProject?.id]);
+
+    const handleSaveCustomEventRevenue = useCallback(async (input: typeof DEFAULT_CUSTOM_REVENUE_CONFIG) => {
+        if (!selectedProject?.id) return;
+        if (isDemoMode) return;
+        const previousRevenue = revenueOverview;
+        const now = new Date().toISOString();
+        setRevenueActionState({ kind: 'save_custom_events', provider: 'custom_events' });
+        setRevenueError(null);
+        setRevenue((current) => {
+            const patched = patchRevenueProviderStatus(current, 'custom_events', {
+                status: 'syncing',
+                accountId: 'custom_events',
+                accountName: 'Rejourney custom events',
+                connectedAt: now,
+                lastSyncStartedAt: now,
+                lastSyncError: null,
+            }, { activeProvider: 'custom_events', updateConnection: true });
+            return patched ? { ...patched, customEventConfig: input } : patched;
+        });
+        try {
+            await configureCustomEventRevenue(selectedProject.id, input);
+            await loadRevenue();
+        } catch (error) {
+            setRevenue(previousRevenue);
+            setRevenueError(error instanceof Error ? error.message : 'Unable to configure custom event revenue.');
+        } finally {
+            setRevenueActionState(null);
+        }
+    }, [isDemoMode, loadRevenue, revenueOverview, selectedProject?.id]);
+
+    const handleSaveManualRevenueEntry = useCallback(async (input: ManualRevenueEntryInput) => {
+        if (!selectedProject?.id) return;
+        if (isDemoMode) return;
+        const previousRevenue = revenueOverview;
+        setRevenueActionState({ kind: 'save_manual', provider: 'custom_events', entryId: input.entryId });
+        setRevenueError(null);
+        setRevenue((current) => patchRevenueManualEntry(current, input));
+        try {
+            const payload = {
+                date: input.date,
+                amountCents: input.amountCents,
+                currency: input.currency,
+                transactionCount: input.transactionCount,
+                note: input.note ?? null,
+            };
+            if (input.entryId) {
+                const result = await updateManualRevenueEntry(selectedProject.id, input.entryId, payload);
+                setRevenue((current) => current ? { ...current, manualEntries: [result.entry] } : current);
+            } else {
+                const result = await createManualRevenueEntry(selectedProject.id, payload);
+                setRevenue((current) => current ? { ...current, manualEntries: [result.entry] } : current);
+            }
+            await loadRevenue();
+        } catch (error) {
+            setRevenue(previousRevenue);
+            setRevenueError(error instanceof Error ? error.message : 'Unable to save historical revenue.');
+        } finally {
+            setRevenueActionState(null);
+        }
+    }, [isDemoMode, loadRevenue, revenueOverview, selectedProject?.id]);
+
+    const handleDeleteManualRevenueEntry = useCallback(async (entryId: string) => {
+        if (!selectedProject?.id) return;
+        if (isDemoMode) return;
+        const previousRevenue = revenueOverview;
+        setRevenueActionState({ kind: 'delete_manual', provider: 'custom_events', entryId });
+        setRevenueError(null);
+        setRevenue((current) => removeRevenueManualEntry(current, entryId));
+        try {
+            await deleteManualRevenueEntry(selectedProject.id, entryId);
+            await loadRevenue();
+        } catch (error) {
+            setRevenue(previousRevenue);
+            setRevenueError(error instanceof Error ? error.message : 'Unable to delete historical revenue.');
+        } finally {
+            setRevenueActionState(null);
+        }
+    }, [isDemoMode, loadRevenue, revenueOverview, selectedProject?.id]);
+
+    const handleDisconnectRevenue = useCallback(async (provider: RevenueProvider) => {
+        if (!selectedProject?.id) return;
+        if (isDemoMode) return;
+        const confirmed = window.confirm(`Disconnect ${REVENUE_PROVIDER_META[provider].shortLabel} revenue for this project? Historical synced revenue will stay visible.`);
+        if (!confirmed) return;
+
+        const previousRevenue = revenueOverview;
+        setRevenueActionState({ kind: 'disconnect', provider });
+        setRevenueError(null);
+        setRevenue((current) => patchRevenueProviderStatus(current, provider, {
+            status: 'disconnected',
+            lastSyncError: null,
+        }, { activeProvider: provider, updateConnection: true }));
+        try {
+            await disconnectRevenueSource(selectedProject.id, provider);
+            await loadRevenue();
+        } catch (error) {
+            setRevenue(previousRevenue);
+            setRevenueError(error instanceof Error ? error.message : 'Unable to disconnect revenue.');
+        } finally {
+            setRevenueActionState(null);
+        }
+    }, [isDemoMode, loadRevenue, revenueOverview, selectedProject?.id]);
+
+    const hasAnalyticsData = useMemo(() => {
         return (
             trendChartData.length > 0
             || (overviewObs?.dailyHealth?.length ?? 0) > 0
@@ -2135,30 +3716,55 @@ export const GeneralOverview: React.FC = () => {
         () => GENERAL_SECTION_KEYS.some((key) => sectionStatus[key] === 'idle' || sectionStatus[key] === 'loading'),
         [sectionStatus],
     );
+    const areAllOverviewSectionsPending = useMemo(
+        () => GENERAL_SECTION_KEYS.every((key) => sectionStatus[key] === 'idle' || sectionStatus[key] === 'loading'),
+        [sectionStatus],
+    );
     const isTopUsersSectionLoading = isDemoMode ? isSessionsLoading : isTopUsersLoading;
-    const isAnyCardLoading = isAnyOverviewSectionPending
+    const isRevenueImpactLoading = Boolean(selectedProject?.id) && !isDemoMode && isRevenueLoading && !revenueOverview;
+    const isAnyAnalyticsCardLoading = isAnyOverviewSectionPending
         || isReferralLoading
         || isSessionsLoading
-        || isTopUsersSectionLoading;
+        || isTopUsersSectionLoading
+        || isRevenueImpactLoading;
     const isTrendsLoading = isSectionLoading('trends');
     const isObservabilityLoading = isSectionLoading('observability');
     const isDeepMetricsLoading = isSectionLoading('deepMetrics');
     const isEngagementLoading = isSectionLoading('engagement');
     const isGeoLoading = isSectionLoading('geo');
     const isRetentionLoading = isSectionLoading('retention');
-    const isMomentumLoading = isTrendsLoading || isObservabilityLoading || isDeepMetricsLoading;
-    const partialError = failedSections.length > 0
-        ? `Some widgets unavailable (${failedSections.join(', ')}).`
+    const hasRevenuePartialIssue = Boolean(selectedProject?.id && !isDemoMode && revenueOverviewError);
+    const partialSections = hasRevenuePartialIssue
+        ? [...failedSections, 'revenue impact']
+        : failedSections;
+    const hasPartialIssues = partialSections.length > 0;
+    const partialError = hasPartialIssues
+        ? `Some widgets unavailable (${partialSections.join(', ')}).`
         : null;
-    const showSetupEmptyState = Boolean(selectedProject?.id) && !isAnyCardLoading && !hasData;
+    const showSetupEmptyState = Boolean(selectedProject?.id) && !isAnyAnalyticsCardLoading && !hasAnalyticsData && !hasPartialIssues;
     const showDashboardCards = Boolean(selectedProject?.id) && !showSetupEmptyState;
+    const showRevenueImpact = Boolean(selectedProject?.id) && (hasAnalyticsData || isRevenueImpactLoading || hasRevenuePartialIssue || Boolean(displayRevenue));
+    const hasLoadedAnyGeneralSurface = hasAnalyticsData
+        || Boolean(displayRevenue)
+        || sessions.length > 0
+        || topUsersFromBackend.length > 0
+        || retentionCohortRows.length > 0;
+    const showFullGeneralGhost = Boolean(selectedProject?.id)
+        && !isDemoMode
+        && !hasLoadedAnyGeneralSurface
+        && !hasPartialIssues
+        && areAllOverviewSectionsPending
+        && (isRevenueLoading || isAnyAnalyticsCardLoading);
+
+    if (showFullGeneralGhost) {
+        return <DashboardGhostLoader variant="general" />;
+    }
 
     return (
         <div className="rejourney-general-page min-h-screen bg-[#f8fafd] pb-12 font-sans text-[#202124]">
             <DashboardPageHeader
                 title="General"
-                icon={<MessageSquareWarning className="h-5 w-5" />}
-                iconColor="bg-[#cffafe]"
+                {...dashboardPageHeaderProps('general')}
             >
                 <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                     <DashboardLensControls timeRange={timeRange} onTimeRangeChange={setTimeRange} />
@@ -2176,6 +3782,29 @@ export const GeneralOverview: React.FC = () => {
                     <div className="border-2 border-black bg-[#f9a8d4] p-4 text-sm font-bold text-black shadow-neo-sm">
                         {partialError}
                     </div>
+                )}
+
+                {showRevenueImpact && (
+                    <RevenueImpactSection
+                        revenue={displayRevenue}
+                        isLoading={isRevenueImpactLoading}
+                        error={isDemoMode ? null : revenueOverviewError}
+                        selectedCurrency={revenueOverviewCurrency}
+                        onCurrencyChange={setRevenueCurrency}
+                        onSync={handleSyncRevenue}
+                        onDisconnect={handleDisconnectRevenue}
+                        onSelectProvider={handleSelectRevenueProvider}
+                        onSaveSuperwall={handleSaveSuperwallRevenue}
+                        onSaveCustomEvents={handleSaveCustomEventRevenue}
+                        onSaveManualEntry={handleSaveManualRevenueEntry}
+                        onDeleteManualEntry={handleDeleteManualRevenueEntry}
+                        isActionLoading={isRevenueActionLoading}
+                        actionState={revenueActionState}
+                        customEvents={customEvents}
+                        chartData={revenueChartData}
+                        releaseMarkers={revenueVersionMarkers}
+                        collapseStorageKey={revenueImpactCollapsedStorageKey}
+                    />
                 )}
 
                 {showSetupEmptyState && (
@@ -2262,32 +3891,6 @@ export const GeneralOverview: React.FC = () => {
 
                 {showDashboardCards && (
                     <>
-                        {isMomentumLoading ? (
-                            <MomentumCardGhostGrid />
-                        ) : momentumCards.length > 0 && (
-                            <section>
-                                <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-                                    {momentumCards.map((card, index) => {
-                                        const deltaClass = card.deltaValue === null || card.deltaValue === 0
-                                            ? 'text-slate-600'
-                                            : (card.positiveIsGood ? card.deltaValue > 0 : card.deltaValue < 0)
-                                                ? 'text-emerald-700'
-                                                : 'text-rose-700';
-
-                                        return (
-                                            <div key={card.label} className="rejourney-kpi-card min-w-0 rounded-xl border border-[#dadce0] bg-white p-4 shadow-none transition-colors hover:border-[#bdc1c6] sm:p-5">
-                                                <div className="dashboard-label break-words text-[#5f6368]">{card.label}</div>
-                                                <div className="mt-3 break-words text-[1.6rem] font-normal leading-none text-[#202124] sm:text-[2rem]">{card.value}</div>
-                                                <div className={`mt-4 inline-flex rounded-full border border-[#dadce0] bg-white px-2.5 py-1 text-[11px] font-semibold uppercase sm:text-xs ${deltaClass}`}>
-                                                    {card.delta}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </section>
-                        )}
-
                         <div className="soft-border-scope space-y-4 sm:space-y-5">
                             <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
                                 {isTrendsLoading ? (
@@ -2392,7 +3995,7 @@ export const GeneralOverview: React.FC = () => {
                                 </div>
 
                                 <div className="mt-3 text-right">
-                                    <Link to={`${pathPrefix}/analytics/geo`} className="text-[11px] font-bold text-[#2563eb] transition-colors hover:text-black">
+                                    <Link to={`${pathPrefix}/geo`} className="text-[11px] font-bold text-[#2563eb] transition-colors hover:text-black">
                                         View geographic activity →
                                     </Link>
                                 </div>
@@ -2531,7 +4134,7 @@ export const GeneralOverview: React.FC = () => {
                                 )}
 
                                 <div className="mt-2 text-right">
-                                    <Link to={`${pathPrefix}/analytics/devices`} className="text-[11px] font-bold text-[#2563eb] transition-colors hover:text-black">
+                                    <Link to={`${pathPrefix}/devices`} className="text-[11px] font-bold text-[#2563eb] transition-colors hover:text-black">
                                         View versions →
                                     </Link>
                                 </div>
@@ -2628,7 +4231,7 @@ export const GeneralOverview: React.FC = () => {
                                         </div>
 
                                         <div className="mt-2 text-right">
-                                            <Link to={`${pathPrefix}/analytics/journeys`} className="text-[11px] font-bold text-[#2563eb] transition-colors hover:text-black">
+                                            <Link to={`${pathPrefix}/journeys`} className="text-[11px] font-bold text-[#2563eb] transition-colors hover:text-black">
                                                 View journey analytics →
                                             </Link>
                                         </div>
@@ -3070,7 +4673,8 @@ export const GeneralOverview: React.FC = () => {
                                         const displayName = truncateUserLabel(user.displayName);
                                         const geoDisplay = formatGeoDisplay(session.geoLocation);
                                         const isCopied = copiedTopUserKey === user.userKey;
-                                        const iconStyle = getTopUserIconStyle(user.userKey);
+                                        const animalAvatarSeed = getAnimalAvatarSeed(session);
+                                        const animalAvatar = getAnimalForIdentity(session);
                                         const platforms = [...new Set(user.sessions.map((s) => s.platform).filter(Boolean))];
                                         const appVersions = [...new Set(user.sessions.map((s) => s.appVersion).filter(Boolean))];
                                         const devices = [...new Set(user.sessions.map((s) => s.deviceModel).filter(Boolean).map((model) => formatDeviceModel(model, 'Unknown device')))];
@@ -3087,9 +4691,7 @@ export const GeneralOverview: React.FC = () => {
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-2">
-                                                            <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${iconStyle}`}>
-                                                                <User size={15} className="stroke-[2.4]" />
-                                                            </span>
+                                                            <AnimalAvatar animal={animalAvatar} seed={animalAvatarSeed} size={32} neutral />
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleCopyTopUser(user.copyValue, user.userKey)}
@@ -3119,7 +4721,7 @@ export const GeneralOverview: React.FC = () => {
                                                     <div>
                                                         <div className="text-[10px] font-semibold uppercase text-slate-400">Country</div>
                                                         <div className="mt-0.5 flex items-center gap-2 truncate font-semibold text-slate-800" title={geoDisplay.fullLabel}>
-                                                            <span className="text-base leading-none">{geoDisplay.flagEmoji}</span>
+                                                            <CountryFlag countryCode={geoDisplay.countryCode} countryLabel={geoDisplay.countryLabel} decorative />
                                                             <span className="truncate">{geoDisplay.fullLabel}</span>
                                                         </div>
                                                     </div>
@@ -3200,157 +4802,6 @@ export const GeneralOverview: React.FC = () => {
                             )}
                             </section>
 
-                            <section className="space-y-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <h2 className="border-2 border-black bg-[#67e8f9] px-3 py-1.5 text-base font-extrabold text-black shadow-neo-sm">Recommended Sessions</h2>
-                                    <p className="mt-2 text-xs font-semibold text-slate-600">
-                                        Only sessions with clear friction, performance risk, or unusually informative behavior are shown.
-                                    </p>
-                                </div>
-                                <NeoBadge variant="neutral" size="sm" className="rounded-none border-black bg-white text-black shadow-neo-sm">
-                                    {isSessionsLoading ? '...' : `${recommendedSessions.length} picks`}
-                                </NeoBadge>
-                            </div>
-
-                            {isSessionsLoading ? (
-                                <div className="h-[200px] animate-pulse border-2 border-black bg-white shadow-neo" />
-                            ) : recommendedSessions.length === 0 ? (
-                                <EmptyStateCard
-                                    title="No recommended sessions"
-                                    subtitle="No replay in this time window crossed the recommendation threshold."
-                                />
-                            ) : (
-                                <div className="relative">
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-12 bg-gradient-to-l from-[#f8fafc] via-[#f8fafc]/80 to-transparent sm:block" />
-                                    <div className="overflow-x-auto pb-3">
-                                        <div className="flex min-w-full snap-x snap-mandatory gap-3 pl-1 pr-2 sm:min-w-max sm:pl-3 sm:pr-4">
-                                            {recommendedSessions.map((rec, index) => {
-                                                const anonymousNickname = getAnonymousNickname(rec.session);
-                                                const nicknameStyle = anonymousNickname
-                                                    ? (anonymousNicknameStyleMap[anonymousNickname] || getAnonymousNicknameStyle(anonymousNickname))
-                                                    : '';
-                                                const locationLabel = getSessionLocationLabel(rec.session);
-                                                const audienceLabel = rec.session.userId ? 'Identified user' : 'Device-only user';
-                                                return (
-                                                    <article
-                                                        key={rec.session.id}
-                                                        className="group min-w-[280px] w-[calc(100vw-4rem)] max-w-[360px] snap-start border-2 border-black bg-white p-3 shadow-neo transition-all hover:-translate-y-1 hover:shadow-neo-lg sm:w-[320px] lg:w-[360px]"
-                                                    >
-                                                        <div className="mb-3 h-2 border-2 border-black" style={{ backgroundColor: RETRO_CARD_ACCENTS[(index + 1) % RETRO_CARD_ACCENTS.length] }} />
-                                                        <div className="flex flex-wrap items-start justify-between gap-2">
-                                                            <div className="min-w-0">
-                                                                <span
-                                                                    className={`inline-flex items-center border-2 border-black px-2 py-1 text-[10px] font-bold uppercase shadow-neo-sm ${RECOMMENDED_SESSION_PRIORITY_STYLES[rec.priority]}`}
-                                                                >
-                                                                    {rec.category}
-                                                                </span>
-                                                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                                                    {anonymousNickname ? (
-                                                                        <span
-                                                                            className={`inline-flex max-w-[200px] items-center truncate border px-2 py-0.5 text-[10px] font-bold ${nicknameStyle}`}
-                                                                            title={anonymousNickname}
-                                                                        >
-                                                                            {anonymousNickname}
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
-                                                                            {audienceLabel}
-                                                                        </span>
-                                                                    )}
-                                                                    <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700">
-                                                                        {rec.session.platform.toUpperCase()}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="mt-1 truncate text-[11px] text-slate-500">{locationLabel}</div>
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => navigate(`${pathPrefix}/sessions/${rec.session.id}`)}
-                                                                className="inline-flex items-center gap-1.5 border-2 border-black bg-black px-3 py-2 text-[11px] font-bold text-white shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-neo active:translate-y-0"
-                                                            >
-                                                                Open
-                                                                <ChevronRight size={13} className="shrink-0" />
-                                                            </button>
-                                                        </div>
-
-                                                        <p className="mt-2 min-h-[2rem] text-xs leading-relaxed text-slate-600">
-                                                            {rec.reason}
-                                                        </p>
-
-                                                        <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-3">
-                                                            <div className="border border-black bg-[#f8fafc] px-2 py-1.5">
-                                                                <div className="font-bold text-slate-500">Duration</div>
-                                                                <div className="font-semibold text-slate-700">{formatDuration(rec.session.durationSeconds || 0)}</div>
-                                                            </div>
-                                                            <div className="border border-black bg-[#f8fafc] px-2 py-1.5">
-                                                                <div className="font-bold text-slate-500">Signals</div>
-                                                                <div className="font-black text-black text-xl">{issueSignalsForSession(rec.session)}</div>
-                                                            </div>
-                                                            <div className="border border-black bg-[#f8fafc] px-2 py-1.5">
-                                                                <div className="font-bold text-slate-500">Last Seen</div>
-                                                                <div className="font-black text-black text-xl">{formatLastSeen(rec.session.startedAt)}</div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-3 flex flex-col gap-3 border-t-2 border-black pt-3 sm:flex-row sm:items-start sm:justify-between">
-                                                            <div className="min-w-0 flex-1">
-                                                                <div
-                                                                    className="truncate text-[11px] font-bold text-[#2563eb] hover:underline"
-                                                                    title={rec.session.deviceModel}
-                                                                >
-                                                                    {formatDeviceModel(rec.session.deviceModel, 'Unknown device')}
-                                                                </div>
-                                                                <div className="text-[10px] text-slate-500">
-                                                                    {formatLastSeen(rec.session.startedAt)}
-                                                                </div>
-                                                                <div className="mt-1.5 flex min-w-0 flex-wrap gap-1.5">
-                                                                    {rec.session.appVersion && (
-                                                                        <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
-                                                                            v{rec.session.appVersion}
-                                                                        </span>
-                                                                    )}
-                                                                    {rec.session.networkType && (
-                                                                        <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
-                                                                            {rec.session.networkType}
-                                                                        </span>
-                                                                    )}
-                                                                    <span className="inline-flex items-center border border-black bg-[#f4f4f5] px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-700">
-                                                                        {rec.session.platform}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            <MiniSessionCard
-                                                                session={{
-                                                                    id: rec.session.id,
-                                                                    deviceModel: rec.session.deviceModel,
-                                                                    createdAt: rec.session.startedAt,
-                                                                    platform: rec.session.platform,
-                                                                    appVersion: rec.session.appVersion,
-                                                                    sdkVersion: rec.session.sdkVersion,
-                                                                    osVersion: rec.session.osVersion,
-                                                                    webLandingRoute: rec.session.webLandingRoute,
-                                                                    metadata: rec.session.metadata,
-                                                                    networkType: rec.session.networkType,
-                                                                    coverPhotoUrl:
-                                                                        getMiniSessionCoverPhotoUrl(rec.session, isDemoMode),
-                                                                }}
-                                                                onClick={() =>
-                                                                    navigate(`${pathPrefix}/sessions/${rec.session.id}`)
-                                                                }
-                                                                size="xs"
-                                                                showMeta={false}
-                                                                className="self-end p-0 sm:self-auto"
-                                                            />
-                                                        </div>
-                                                    </article>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            </section>
                         </div>
                     </>
                 )}

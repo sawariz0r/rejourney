@@ -28,10 +28,6 @@ export function getMapboxToken(): string {
   return getRuntimeEnvSnapshot().VITE_MAPBOX_TOKEN || "";
 }
 
-export function getTurnstileSiteKey(): string {
-  return getRuntimeEnvSnapshot().VITE_TURNSTILE_SITE_KEY || "";
-}
-
 export function getPublicRuntimeEnvSnapshot(): RuntimeEnvSnapshot {
   const snapshot = getRuntimeEnvSnapshot();
 

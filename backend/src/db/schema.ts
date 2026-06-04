@@ -229,6 +229,120 @@ export const apiKeys = pgTable(
 );
 
 // =============================================================================
+// Project Revenue Integrations
+// =============================================================================
+
+export const projectRevenueSourceSettings = pgTable(
+    'project_revenue_source_settings',
+    {
+        projectId: uuid('project_id').primaryKey().notNull().references(() => projects.id, { onDelete: 'cascade' }),
+        activeProvider: varchar('active_provider', { length: 32 }),
+        connectedByUserId: uuid('connected_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+        createdAt: timestamp('created_at').defaultNow().notNull(),
+        updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    },
+    (table) => [
+        index('project_revenue_source_settings_active_idx').on(table.activeProvider),
+    ]
+);
+
+export const projectRevenueConnections = pgTable(
+    'project_revenue_connections',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+        teamId: uuid('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
+        connectedByUserId: uuid('connected_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+        provider: varchar('provider', { length: 32 }).notNull(),
+        externalAccountId: varchar('external_account_id', { length: 255 }),
+        externalAccountName: varchar('external_account_name', { length: 255 }),
+        status: varchar('status', { length: 32 }).default('connected').notNull(),
+        scope: text('scope'),
+        accessTokenEncrypted: text('access_token_encrypted'),
+        refreshTokenEncrypted: text('refresh_token_encrypted'),
+        apiKeyEncrypted: text('api_key_encrypted'),
+        apiKeyLast4: varchar('api_key_last4', { length: 16 }),
+        tokenExpiresAt: timestamp('token_expires_at'),
+        connectionConfig: jsonb('connection_config').$type<Record<string, unknown>>().default({}).notNull(),
+        customEventConfig: jsonb('custom_event_config').$type<Record<string, unknown>>().default({}).notNull(),
+        lastSyncStartedAt: timestamp('last_sync_started_at'),
+        lastSyncCompletedAt: timestamp('last_sync_completed_at'),
+        lastSyncError: text('last_sync_error'),
+        oldestSyncedAt: timestamp('oldest_synced_at'),
+        newestSyncedAt: timestamp('newest_synced_at'),
+        cursor: varchar('cursor', { length: 255 }),
+        createdAt: timestamp('created_at').defaultNow().notNull(),
+        updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    },
+    (table) => [
+        uniqueIndex('project_revenue_connections_project_provider_unique').on(table.projectId, table.provider),
+        index('project_revenue_connections_team_idx').on(table.teamId),
+        index('project_revenue_connections_provider_status_idx').on(table.provider, table.status),
+    ]
+);
+
+export const revenueProviderTransactions = pgTable(
+    'revenue_provider_transactions',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        connectionId: uuid('connection_id').notNull().references(() => projectRevenueConnections.id, { onDelete: 'cascade' }),
+        projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+        provider: varchar('provider', { length: 32 }).notNull(),
+        externalTransactionId: varchar('external_transaction_id', { length: 255 }).notNull(),
+        externalSourceId: varchar('external_source_id', { length: 255 }),
+        occurredAt: timestamp('occurred_at').notNull(),
+        amountCents: integer('amount_cents').notNull(),
+        feeCents: integer('fee_cents').default(0).notNull(),
+        netCents: integer('net_cents').notNull(),
+        grossAmountCents: integer('gross_amount_cents').default(0).notNull(),
+        refundAmountCents: integer('refund_amount_cents').default(0).notNull(),
+        currency: varchar('currency', { length: 12 }).notNull(),
+        type: varchar('type', { length: 80 }).notNull(),
+        reportingCategory: varchar('reporting_category', { length: 80 }),
+        metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+        importedAt: timestamp('imported_at').defaultNow().notNull(),
+        updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    },
+    (table) => [
+        uniqueIndex('revenue_provider_transactions_project_provider_tx_unique').on(table.projectId, table.provider, table.externalTransactionId),
+        index('revenue_provider_transactions_project_provider_date_idx').on(table.projectId, table.provider, table.occurredAt),
+        index('revenue_provider_transactions_connection_idx').on(table.connectionId),
+        index('revenue_provider_transactions_manual_revenue_idx')
+            .on(table.projectId, table.currency, table.occurredAt)
+            .where(sql`${table.provider} = 'custom_events' AND ${table.metadata}->>'source' = 'manual_historical'`),
+    ]
+);
+
+export const projectRevenueDaily = pgTable(
+    'project_revenue_daily',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+        sourceProvider: varchar('source_provider', { length: 32 }).default('custom_events').notNull(),
+        date: date('date').notNull(),
+        currency: varchar('currency', { length: 12 }).notNull(),
+        grossAmountCents: integer('gross_amount_cents').default(0).notNull(),
+        refundAmountCents: integer('refund_amount_cents').default(0).notNull(),
+        feeAmountCents: integer('fee_amount_cents').default(0).notNull(),
+        netAmountCents: integer('net_amount_cents').default(0).notNull(),
+        transactionCount: integer('transaction_count').default(0).notNull(),
+        refundCount: integer('refund_count').default(0).notNull(),
+        subscriberCount: integer('subscriber_count').default(0).notNull(),
+        trialCount: integer('trial_count').default(0).notNull(),
+        subscriptionStartCount: integer('subscription_start_count').default(0).notNull(),
+        cancellationCount: integer('cancellation_count').default(0).notNull(),
+        conversionCount: integer('conversion_count').default(0).notNull(),
+        customEventCounts: jsonb('custom_event_counts').$type<Record<string, number>>().default({}).notNull(),
+        updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    },
+    (table) => [
+        uniqueIndex('project_revenue_daily_project_source_date_currency_unique').on(table.projectId, table.sourceProvider, table.date, table.currency),
+        index('project_revenue_daily_project_source_date_idx').on(table.projectId, table.sourceProvider, table.date),
+        index('project_revenue_daily_project_source_currency_idx').on(table.projectId, table.sourceProvider, table.currency),
+    ]
+);
+
+// =============================================================================
 // NOTE: deviceRegistrations table was removed along with the dead ECDSA auth flow.
 // The device_usage table now uses varchar device IDs (SHA-256 fingerprints)
 // scoped per project instead of FK-ing to a registration table.
@@ -574,6 +688,34 @@ export const recordingArtifacts = pgTable(
             .where(sql`${table.status} = 'buffered'`),
         uniqueIndex('recording_artifacts_client_upload_id_unique').on(table.clientUploadId),
     ]
+);
+
+export const replayShareLinks = pgTable(
+    'replay_share_links',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        publicId: varchar('public_id', { length: 64 }).notNull(),
+        sessionId: varchar('session_id', { length: 64 }).notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+        projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+        teamId: uuid('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
+        createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+        visibility: varchar('visibility', { length: 32 }).default('replay_only').notNull(),
+        expirationPreset: varchar('expiration_preset', { length: 16 }).default('7d').notNull(),
+        expiresAt: timestamp('expires_at'),
+        revokedAt: timestamp('revoked_at'),
+        lastAccessedAt: timestamp('last_accessed_at'),
+        accessCount: integer('access_count').default(0).notNull(),
+        createdAt: timestamp('created_at').defaultNow().notNull(),
+        updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    },
+    (table) => [
+        uniqueIndex('replay_share_links_public_id_unique').on(table.publicId),
+        index('replay_share_links_session_idx').on(table.sessionId, table.revokedAt, table.expiresAt),
+        index('replay_share_links_team_created_idx').on(table.teamId, table.createdAt),
+        index('replay_share_links_active_reuse_idx')
+            .on(table.sessionId, table.visibility, table.expirationPreset, table.expiresAt)
+            .where(sql`${table.revokedAt} IS NULL`),
+    ],
 );
 
 
@@ -1321,6 +1463,7 @@ export const teamsRelations = relations(teams, ({ one, many }) => ({
     members: many(teamMembers),
     invitations: many(teamInvitations),
     projects: many(projects),
+    replayShareLinks: many(replayShareLinks),
     billingUsage: many(billingUsage),
 }));
 
@@ -1348,15 +1491,18 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     team: one(teams, { fields: [projects.teamId], references: [teams.id] }),
     apiKeys: many(apiKeys),
     sessions: many(sessions),
+    replayShareLinks: many(replayShareLinks),
     projectUsage: many(projectUsage),
     appDailyStats: many(appDailyStats),
     storageEndpoints: many(storageEndpoints),
+    revenueDaily: many(projectRevenueDaily),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
     project: one(projects, { fields: [sessions.projectId], references: [projects.id] }),
     metrics: one(sessionMetrics, { fields: [sessions.id], references: [sessionMetrics.sessionId] }),
     recordingArtifacts: many(recordingArtifacts),
+    replayShareLinks: many(replayShareLinks),
 }));
 
 export const sessionMetricsRelations = relations(sessionMetrics, ({ one }) => ({
@@ -1369,10 +1515,21 @@ export const recordingArtifactsRelations = relations(recordingArtifacts, ({ one 
     session: one(sessions, { fields: [recordingArtifacts.sessionId], references: [sessions.id] }),
 }));
 
+export const replayShareLinksRelations = relations(replayShareLinks, ({ one }) => ({
+    session: one(sessions, { fields: [replayShareLinks.sessionId], references: [sessions.id] }),
+    project: one(projects, { fields: [replayShareLinks.projectId], references: [projects.id] }),
+    team: one(teams, { fields: [replayShareLinks.teamId], references: [teams.id] }),
+    createdBy: one(users, { fields: [replayShareLinks.createdByUserId], references: [users.id] }),
+}));
+
 
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
     project: one(projects, { fields: [apiKeys.projectId], references: [projects.id] }),
+}));
+
+export const projectRevenueDailyRelations = relations(projectRevenueDaily, ({ one }) => ({
+    project: one(projects, { fields: [projectRevenueDaily.projectId], references: [projects.id] }),
 }));
 
 export const deviceUsageRelations = relations(deviceUsage, ({ one }) => ({

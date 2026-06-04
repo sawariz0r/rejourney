@@ -209,7 +209,7 @@ if [ -n "$GITHUB_CLIENT_ID" ] && [ -n "$GITHUB_CLIENT_SECRET" ]; then
     log "Creating oauth-secret..."
     OAUTH_REDIRECT="${OAUTH_REDIRECT_BASE:-}"
     if [ "$DEPLOYMENT_TYPE" = "prod" ]; then
-        OAUTH_REDIRECT="${OAUTH_REDIRECT_BASE:-https://api.rejourney.co}"
+        OAUTH_REDIRECT="${OAUTH_REDIRECT_BASE:-https://rejourney.co}"
     fi
     
     create_or_update_secret oauth-secret \
@@ -223,11 +223,15 @@ else
 fi
 
 # 6. Stripe Secret (Production only, optional)
-if [ "$DEPLOYMENT_TYPE" = "prod" ] && [ -n "$STRIPE_SECRET_KEY" ] && [ -n "$STRIPE_WEBHOOK_SECRET" ]; then
+if [ "$DEPLOYMENT_TYPE" = "prod" ] && {
+    [ -n "${STRIPE_SECRET_KEY:-}" ] \
+        || [ -n "${STRIPE_WEBHOOK_SECRET:-}" ] \
+        || [ -n "${VITE_STRIPE_PUBLISHABLE_KEY:-}" ];
+}; then
     log "Creating stripe-secret..."
     create_or_update_secret stripe-secret \
-        --from-literal=STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
-        --from-literal=STRIPE_WEBHOOK_SECRET="$STRIPE_WEBHOOK_SECRET" \
+        --from-literal=STRIPE_SECRET_KEY="${STRIPE_SECRET_KEY:-}" \
+        --from-literal=STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET:-}" \
         --from-literal=VITE_STRIPE_PUBLISHABLE_KEY="${VITE_STRIPE_PUBLISHABLE_KEY:-}"
 else
     if [ "$DEPLOYMENT_TYPE" = "selfhosted" ]; then

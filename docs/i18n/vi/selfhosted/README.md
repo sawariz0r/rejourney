@@ -174,7 +174,7 @@ Trình cài đặt tạo ra tập tin này. Các biến điển hình bao gồm:
 - **Kho:** `STORAGE_BACKEND`, `S3_*` và tùy chọn `MINIO_*`
 - **Bảo vệ:** `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY`
 
-Tích hợp tùy chọn (để trống nếu không sử dụng): Stripe, SMTP, GitHub OAuth, Turnstile, v.v.
+Tích hợp tùy chọn (để trống nếu không sử dụng): Stripe, SMTP, GitHub OAuth, v.v.
 
 **Thay đổi giá trị lưu trữ hoặc liên quan đến tên miền:** chỉnh sửa `.env.selfhosted`, sau đó chạy:
 

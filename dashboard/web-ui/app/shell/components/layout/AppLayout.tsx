@@ -57,15 +57,13 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
   const [manualRefreshCycle, setManualRefreshCycle] = useState(0);
 
   const routeWithoutPrefix = useMemo(() => location.pathname.replace(/^\/(dashboard|demo)/, ''), [location.pathname]);
-  const isWarehouseRoute = useMemo(() => routeWithoutPrefix.startsWith('/warehouse'), [routeWithoutPrefix]);
 
   // Changing this forces a remount of routed pages, ensuring all screens reset
   // their local state/effects when switching team/project.
-  const routeScopeKey = useMemo(() => (
-    isWarehouseRoute
-      ? `${currentTeam?.id ?? 'no-team'}:warehouse`
-      : `${currentTeam?.id ?? 'no-team'}:${selectedProject?.id ?? 'no-project'}`
-  ), [isWarehouseRoute, currentTeam?.id, selectedProject?.id]);
+  const routeScopeKey = useMemo(
+    () => `${currentTeam?.id ?? 'no-team'}:${selectedProject?.id ?? 'no-project'}`,
+    [currentTeam?.id, selectedProject?.id],
+  );
   const contentScopeKey = `${routeScopeKey}:refresh-${manualRefreshCycle}`;
   const isProjectDependentRoute = useMemo(() => (
     routeWithoutPrefix.startsWith('/general')
@@ -149,34 +147,32 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
 
   return (
     <div className="dashboard-modern dashboard-shell flex h-dvh min-h-screen min-w-0 font-sans text-black antialiased selection:bg-[#67e8f9] selection:text-black">
-      {!isWarehouseRoute && (
-        <div className="z-20 w-0 shrink-0 overflow-visible bg-white md:w-auto md:shrink-0">
-          <Sidebar
-            currentProject={selectedProject}
-            onProjectChange={handleProjectChange}
-            projects={projects}
-            loading={projectsLoading}
-            onProjectCreated={handleProjectCreated}
-            teams={teams}
-            currentTeam={currentTeam}
-            onTeamChange={setCurrentTeam}
-            teamsLoading={teamsLoading}
-            pathPrefix={pathPrefix}
-          />
-        </div>
-      )}
+      <div className="z-20 w-0 shrink-0 overflow-visible bg-white md:w-auto md:shrink-0">
+        <Sidebar
+          currentProject={selectedProject}
+          onProjectChange={handleProjectChange}
+          projects={projects}
+          loading={projectsLoading}
+          onProjectCreated={handleProjectCreated}
+          teams={teams}
+          currentTeam={currentTeam}
+          onTeamChange={setCurrentTeam}
+          teamsLoading={teamsLoading}
+          pathPrefix={pathPrefix}
+        />
+      </div>
       <div key={routeScopeKey} className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--dashboard-canvas)]">
-        {!isWarehouseRoute && <TopBar currentProject={selectedProject} />}
-        {!isWarehouseRoute && projectsError && (
+        <TopBar currentProject={selectedProject} />
+        {projectsError && (
           <div className="mx-4 mt-4 border-2 border-black bg-[#f9a8d4] px-4 py-3 text-sm font-extrabold text-black shadow-neo-sm sm:mx-6">
             {projectsError}
           </div>
         )}
         <div
           key={contentScopeKey}
-          className={isWarehouseRoute ? 'dashboard-content dashboard-surface-mix min-w-0 flex-1 overflow-hidden' : 'dashboard-content dashboard-surface-mix min-w-0 flex-1 overflow-x-hidden overflow-y-auto'}
+          className="dashboard-content dashboard-surface-mix min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
         >
-          {isWarehouseRoute ? children : hasNoTeam ? (
+          {hasNoTeam ? (
             <div className="mx-auto flex h-full w-full max-w-4xl items-center justify-center p-4 sm:p-8">
               <div className="w-full border-2 border-black bg-white p-5 shadow-neo sm:p-8">
                 <div className="mb-4 inline-flex h-12 w-12 items-center justify-center border-2 border-black bg-[#67e8f9] text-black shadow-neo-sm">

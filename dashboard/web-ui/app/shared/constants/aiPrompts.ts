@@ -59,7 +59,14 @@ Rejourney.logEvent('signup_completed');
 
 // Event with properties — attach context to each occurrence
 Rejourney.logEvent('button_clicked', { buttonName: 'signup', page: 'pricing' });
-Rejourney.logEvent('checkout_completed', { plan: 'pro', amount: 29.99, currency: 'USD' });
+Rejourney.logEvent('purchase_completed', {
+  transactionId: order.id,
+  plan: 'pro',
+  amount: 29.99,
+  currency: 'USD',
+  paymentProvider: 'stripe',
+  isRenewal: false
+});
 Rejourney.logEvent('onboarding_step', { step: 3, stepName: 'profile_setup', skipped: false });
 Rejourney.logEvent('feature_used', { feature: 'dashboard_filter', enabled: true });
 Rejourney.logEvent('api_error_seen', { endpoint: '/api/checkout', status: 500 });
@@ -70,6 +77,28 @@ Rules for events:
 - Focus on actions that matter for debugging or analytics — don't log every click
 - Events appear as markers on the replay timeline AND are filterable in the session archive
 - You can filter by event name, by property key, by property key+value, and by event count
+
+REVENUE TRACKING FOR THE GENERAL REVENUE CHART:
+- If this app has checkout, subscriptions, paid plans, credits, tips, or in-app purchases, instrument a dedicated money-collected event named 'purchase_completed'. Do not map device/setup/screen events such as 'device_info', 'app_initialized', 'page_view', or 'screen_view' as revenue.
+- Fire the revenue event only after payment is confirmed by the backend/payment provider when possible. If client and backend both track it, use the same stable transactionId/orderId so retries do not duplicate revenue.
+- Required revenue properties: transactionId, amount, currency. Strongly recommended properties: orderId, productId/sku, planId, priceId, subscriptionId, paymentProvider, platform, country/region, couponCode, isTrialConversion, isRenewal, entitlement.
+- Also add separate lifecycle events where the app has the signal: checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
+
+Web revenue example:
+Rejourney.setUserIdentity(currentUser.id); // internal non-PII ID
+Rejourney.logEvent('purchase_completed', {
+  transactionId: order.id,
+  amount: order.total,
+  currency: order.currency || 'USD',
+  productId: item.productId,
+  planId: subscription?.planId,
+  priceId: subscription?.priceId,
+  subscriptionId: subscription?.id,
+  paymentProvider: 'stripe',
+  platform: 'web',
+  isTrialConversion: Boolean(subscription?.convertedFromTrial),
+  isRenewal: Boolean(order.isRenewal)
+});
 
 METADATA — Describe who the user is / what state they're in (session-level, one value per key):
 
@@ -93,7 +122,7 @@ Rules for metadata:
 - Setting the same key again overwrites the previous value
 
 WHEN TO USE EVENTS VS METADATA:
-- "User purchased a plan" → logEvent('checkout_completed', { plan: 'pro' })
+- "User purchased a plan" → logEvent('purchase_completed', { transactionId: order.id, amount: 29.99, currency: 'USD', plan: 'pro' })
 - "User is on the pro plan" → setMetadata('plan', 'pro')
 - "User clicked signup" → logEvent('button_clicked', { buttonName: 'signup' })
 - "User is an admin" → setMetadata('role', 'admin')
@@ -167,7 +196,14 @@ Rejourney.logEvent('signup_completed');
 
 // Event with properties — attach context to each occurrence
 Rejourney.logEvent('button_clicked', { buttonName: 'signup', screen: 'onboarding' });
-Rejourney.logEvent('purchase_completed', { plan: 'pro', amount: 29.99, currency: 'USD' });
+Rejourney.logEvent('purchase_completed', {
+  transactionId: order.id,
+  plan: 'pro',
+  amount: 29.99,
+  currency: 'USD',
+  paymentProvider: 'stripe',
+  isRenewal: false
+});
 Rejourney.logEvent('onboarding_step', { step: 3, stepName: 'profile_setup', skipped: false });
 Rejourney.logEvent('feature_used', { feature: 'dark_mode', enabled: true });
 Rejourney.logEvent('payment_failed', { errorCode: 'card_declined', retryCount: 2 });
@@ -178,6 +214,28 @@ Rules for events:
 - Focus on actions that matter for debugging or analytics — don't log every tap
 - Events appear as markers on the replay timeline AND are filterable in the session archive
 - You can filter by event name, by property key, by property key+value, and by event count
+
+REVENUE TRACKING FOR THE GENERAL REVENUE CHART:
+- If this app has checkout, subscriptions, paid plans, credits, tips, or in-app purchases, instrument a dedicated money-collected event named 'purchase_completed'. Do not map device/setup/screen events such as 'device_info', 'app_initialized', or 'screen_view' as revenue.
+- Fire the revenue event only after payment is confirmed by the backend/payment provider when possible. If client and backend both track it, use the same stable transactionId/orderId so retries do not duplicate revenue.
+- Required revenue properties: transactionId, amount, currency. Strongly recommended properties: orderId, productId/sku, planId, priceId, subscriptionId, paymentProvider, platform, country/region, couponCode, isTrialConversion, isRenewal, entitlement.
+- Also add separate lifecycle events where the app has the signal: checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
+
+React Native revenue example:
+Rejourney.setUserIdentity(currentUser.id); // internal non-PII ID
+Rejourney.logEvent('purchase_completed', {
+  transactionId: order.id,
+  amount: order.total,
+  currency: order.currency || 'USD',
+  productId: item.productId,
+  planId: subscription?.planId,
+  priceId: subscription?.priceId,
+  subscriptionId: subscription?.id,
+  paymentProvider: 'revenue_provider',
+  platform: Platform.OS,
+  isTrialConversion: Boolean(subscription?.convertedFromTrial),
+  isRenewal: Boolean(order.isRenewal)
+});
 
 METADATA — Describe who the user is / what state they're in (session-level, one value per key):
 
@@ -201,7 +259,7 @@ Rules for metadata:
 - Setting the same key again overwrites the previous value
 
 WHEN TO USE EVENTS VS METADATA:
-- "User purchased a plan" → logEvent('purchase_completed', { plan: 'pro' })
+- "User purchased a plan" → logEvent('purchase_completed', { transactionId: order.id, amount: 29.99, currency: 'USD', plan: 'pro' })
 - "User is on the pro plan" → setMetadata('plan', 'pro')
 - "User clicked signup" → logEvent('button_clicked', { buttonName: 'signup' })
 - "User is an admin" → setMetadata('role', 'admin')
@@ -312,7 +370,14 @@ Rejourney.logEvent("signup_completed")
 
 // Event with properties — attach context to each occurrence
 Rejourney.logEvent("button_tapped", properties: ["buttonName": "signup", "screen": "onboarding"])
-Rejourney.logEvent("purchase_completed", properties: ["plan": "pro", "amount": 29.99, "currency": "USD"])
+Rejourney.logEvent("purchase_completed", properties: [
+    "transactionId": order.id,
+    "plan": "pro",
+    "amount": 29.99,
+    "currency": "USD",
+    "paymentProvider": "stripe",
+    "isRenewal": false
+])
 Rejourney.logEvent("onboarding_step", properties: ["step": 3, "stepName": "profile_setup", "skipped": false])
 Rejourney.logEvent("feature_used", properties: ["feature": "dark_mode", "enabled": true])
 Rejourney.logEvent("payment_failed", properties: ["errorCode": "card_declined", "retryCount": 2])
@@ -325,6 +390,28 @@ Rules for events:
 - Focus on actions that matter for debugging or analytics — don't log every tap
 - Events appear as markers on the replay timeline AND are filterable in the session archive
 - You can filter by event name and event count
+
+REVENUE TRACKING FOR THE GENERAL REVENUE CHART:
+- If this app has checkout, subscriptions, paid plans, credits, tips, or in-app purchases, instrument a dedicated money-collected event named "purchase_completed". Do not map device/setup/screen events such as "device_info", "app_initialized", or "screen_view" as revenue.
+- Fire the revenue event only after payment is confirmed by the backend/payment provider when possible. If client and backend both track it, use the same stable transactionId/orderId so retries do not duplicate revenue.
+- Required revenue properties: transactionId, amount, currency. Strongly recommended properties: orderId, productId/sku, planId, priceId, subscriptionId, paymentProvider, platform, country/region, couponCode, isTrialConversion, isRenewal, entitlement.
+- Also add separate lifecycle events where the app has the signal: checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
+
+Swift revenue example:
+Rejourney.identify(currentUser.id) // internal non-PII ID
+Rejourney.logEvent("purchase_completed", properties: [
+    "transactionId": order.id,
+    "amount": order.total,
+    "currency": order.currency ?? "USD",
+    "productId": item.productId,
+    "planId": subscription?.planId ?? "",
+    "priceId": subscription?.priceId ?? "",
+    "subscriptionId": subscription?.id ?? "",
+    "paymentProvider": "revenue_provider",
+    "platform": "ios",
+    "isTrialConversion": subscription?.convertedFromTrial ?? false,
+    "isRenewal": order.isRenewal
+])
 
 PRIVACY MASKING (for sensitive UIKit views):
 import UIKit

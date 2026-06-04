@@ -127,7 +127,9 @@ if [ -n "${GITHUB_CLIENT_ID:-}" ] && [ -n "${GITHUB_CLIENT_SECRET:-}" ]; then
         --from-literal=OAUTH_REDIRECT_BASE="${OAUTH_REDIRECT_BASE:-http://127.0.0.1:3000}"
 fi
 
-if [ -n "${STRIPE_SECRET_KEY:-}" ] || [ -n "${STRIPE_WEBHOOK_SECRET:-}" ] || [ -n "${VITE_STRIPE_PUBLISHABLE_KEY:-}" ]; then
+if [ -n "${STRIPE_SECRET_KEY:-}" ] \
+    || [ -n "${STRIPE_WEBHOOK_SECRET:-}" ] \
+    || [ -n "${VITE_STRIPE_PUBLISHABLE_KEY:-}" ]; then
     create_or_update_secret stripe-secret \
         --from-literal=STRIPE_SECRET_KEY="${STRIPE_SECRET_KEY:-}" \
         --from-literal=STRIPE_WEBHOOK_SECRET="${STRIPE_WEBHOOK_SECRET:-}" \

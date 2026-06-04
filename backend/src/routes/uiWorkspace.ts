@@ -16,6 +16,14 @@ import {
 
 const router = Router();
 
+const LEGACY_ANALYTICS_ROUTE_ALIASES: Array<{ from: string; to: string }> = [
+    { from: '/analytics/api', to: '/api' },
+    { from: '/analytics/devices', to: '/devices' },
+    { from: '/analytics/geo', to: '/geo' },
+    { from: '/analytics/journeys', to: '/journeys' },
+    { from: '/analytics/heatmaps', to: '/heatmaps' },
+];
+
 async function assertTeamAccess(teamId: string, userId: string) {
     const [membership] = await db
         .select()
@@ -34,6 +42,30 @@ async function assertProjectAccess(projectId: string, teamId: string) {
     }
 }
 
+function splitPathSuffix(path: string): { pathname: string; suffix: string } {
+    const suffixIndex = path.search(/[?#]/);
+    if (suffixIndex === -1) return { pathname: path, suffix: '' };
+    return {
+        pathname: path.slice(0, suffixIndex),
+        suffix: path.slice(suffixIndex),
+    };
+}
+
+function normalizeLegacyAnalyticsWorkspacePath(path: string): string {
+    const { pathname, suffix } = splitPathSuffix(path);
+    const prefixMatch = pathname.match(/^\/(dashboard|demo)(?=\/|$)/);
+    const prefix = prefixMatch?.[0] ?? '';
+    const pathWithoutPrefix = prefix ? pathname.slice(prefix.length) || '/' : pathname;
+
+    for (const { from, to } of LEGACY_ANALYTICS_ROUTE_ALIASES) {
+        if (pathWithoutPrefix === from || pathWithoutPrefix.startsWith(`${from}/`)) {
+            return `${prefix}${to}${pathWithoutPrefix.slice(from.length)}${suffix}`;
+        }
+    }
+
+    return path;
+}
+
 function normalizeWorkspacePath(path: unknown): string {
     const value = typeof path === 'string' ? path : '';
     if (!value) return value;
@@ -46,7 +78,7 @@ function normalizeWorkspacePath(path: unknown): string {
     if (value === '/demo/issues' || value.startsWith('/demo/issues/')) {
         return value.replace('/demo/issues', '/demo/general');
     }
-    return value;
+    return normalizeLegacyAnalyticsWorkspacePath(value);
 }
 
 function normalizeWorkspaceTabId(tabId: string | null | undefined): string | null {

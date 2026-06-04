@@ -174,7 +174,7 @@ cd rejourney
 - **贮存：** `STORAGE_BACKEND`、`S3_*` 和可选的 `MINIO_*`
 - **安全：** `JWT_SECRET`、`JWT_SIGNING_KEY`、`INGEST_HMAC_SECRET`、`STORAGE_ENCRYPTION_KEY`
 
-可选集成（如果未使用则留空）：Stripe、SMTP、GitHub OAuth、Turnstile 等。
+可选集成（如果未使用则留空）：Stripe、SMTP、GitHub OAuth 等。
 
 **更改存储或域相关值：** 编辑 `.env.selfhosted`，然后运行：
 

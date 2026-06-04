@@ -40,7 +40,6 @@ export const links: Route.LinksFunction = () => [
     // DNS prefetch for external domains
     { rel: "dns-prefetch", href: "https://api.rejourney.co" },
     { rel: "dns-prefetch", href: "https://ingest.rejourney.co" },
-    { rel: "dns-prefetch", href: "https://challenges.cloudflare.com" },
     // Favicon links - using root-relative paths to work on all routes
     { rel: "icon", href: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
     { rel: "icon", type: "image/png", href: "/rejourneyIcon-removebg-preview.png", sizes: "192x192" },

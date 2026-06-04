@@ -38,14 +38,19 @@ import {
     Copy,
     Database,
     UserRound,
+    Share2,
+    Link2,
+    Trash2,
+    X,
 } from 'lucide-react';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
-import { api } from '~/shared/api/client';
+import { api, type ReplayShareExpirationPreset, type ReplayShareLink, type ReplayShareVisibility } from '~/shared/api/client';
 import DOMInspector, { HierarchySnapshot } from '~/shared/ui/core/DOMInspector';
 import { TouchOverlay, TouchEvent as OverlayTouchEvent } from '~/shared/ui/core/TouchOverlay';
 import { MarkerTooltip } from '~/shared/ui/core/MarkerTooltip';
 import { SessionLoadingOverlay } from '~/features/app/sessions/shared/SessionLoadingOverlay';
 import WebReplayPlayer from '~/shared/ui/core/WebReplayPlayer';
+import { CountryFlag } from '~/shared/ui/core/CountryFlag';
 import { useRrwebReplayEvents } from '~/shared/lib/rrwebReplayLoader';
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
 import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
@@ -251,6 +256,10 @@ interface FullSession {
     webReferral?: string | null;
     webLandingRoute?: string | null;
     metadata?: Record<string, unknown>;
+    share?: {
+        visibility?: ReplayShareVisibility;
+        expiresAt?: string | null;
+    };
 }
 
 // ============================================================================
@@ -1220,13 +1229,68 @@ function isAbortError(error: unknown): boolean {
     return (error as { name?: string } | null)?.name === 'AbortError';
 }
 
+const SHARE_EXPIRY_OPTIONS: Array<{ value: ReplayShareExpirationPreset; label: string }> = [
+    { value: '24h', label: '24 hours' },
+    { value: '7d', label: '7 days' },
+    { value: '30d', label: '30 days' },
+    { value: '90d', label: '90 days' },
+    { value: 'never', label: 'Never' },
+];
+
+const SHARE_VISIBILITY_OPTIONS: Array<{ value: ReplayShareVisibility; label: string; description: string }> = [
+    {
+        value: 'replay_only',
+        label: 'Replay only',
+        description: 'Playback, timeline, and basic replay context.',
+    },
+    {
+        value: 'full_workbench',
+        label: 'Full details',
+        description: 'Adds console logs, inspector, and metadata.',
+    },
+];
+
+const SHARE_VISIBILITY_LABELS: Record<ReplayShareVisibility, string> = SHARE_VISIBILITY_OPTIONS.reduce(
+    (labels, option) => ({ ...labels, [option.value]: option.label }),
+    {} as Record<ReplayShareVisibility, string>,
+);
+
+function isShareLinkUsable(share: ReplayShareLink): boolean {
+    if (share.revokedAt) return false;
+    if (!share.expiresAt) return true;
+    return new Date(share.expiresAt).getTime() > Date.now();
+}
+
+function formatShareLinkStatus(share: ReplayShareLink): string {
+    if (share.revokedAt) return 'Revoked';
+    if (!share.expiresAt) return 'Never expires';
+    return `Expires ${new Date(share.expiresAt).toLocaleDateString()}`;
+}
+
+function formatShareLinkPreview(share: ReplayShareLink): string {
+    if (!share.url) return 'Share URL unavailable';
+    try {
+        const url = new URL(share.url);
+        return `${url.host}${url.pathname}`;
+    } catch {
+        return share.url;
+    }
+}
+
+function upsertShareLink(links: ReplayShareLink[], next: ReplayShareLink): ReplayShareLink[] {
+    const filtered = links.filter((link) => link.id !== next.id);
+    return [next, ...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
 // ============================================================================
 // Main Component
 // ============================================================================
 
-export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId }) => {
-    const { sessionId: paramId } = useParams<{ sessionId: string }>();
+export const RecordingDetail: React.FC<{ sessionId?: string; shareToken?: string }> = ({ sessionId, shareToken }) => {
+    const { sessionId: paramId, shareToken: paramShareToken } = useParams<{ sessionId?: string; shareToken?: string }>();
     const id = sessionId || paramId;
+    const activeShareToken = shareToken || paramShareToken;
+    const isPublicShare = Boolean(activeShareToken);
     const navigate = useNavigate();
     const pathPrefix = usePathPrefix();
     const isDemoReplay = pathPrefix === '/demo';
@@ -1287,6 +1351,16 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const [sessionIdCopied, setSessionIdCopied] = useState(false);
     const [replayUrlCopied, setReplayUrlCopied] = useState(false);
     const [showHeaderDetails, setShowHeaderDetails] = useState(false);
+    const [showShareMenu, setShowShareMenu] = useState(false);
+    const [teamLinkCopied, setTeamLinkCopied] = useState(false);
+    const [shareLinks, setShareLinks] = useState<ReplayShareLink[]>([]);
+    const [shareCanManage, setShareCanManage] = useState(false);
+    const [shareLinksLoading, setShareLinksLoading] = useState(false);
+    const [shareActionBusy, setShareActionBusy] = useState(false);
+    const [shareError, setShareError] = useState<string | null>(null);
+    const [selectedShareVisibility, setSelectedShareVisibility] = useState<ReplayShareVisibility>('replay_only');
+    const [selectedShareExpiry, setSelectedShareExpiry] = useState<ReplayShareExpirationPreset>('7d');
+    const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
     const [archiveNeighborSessions, setArchiveNeighborSessions] = useState<any[]>([]);
 
     // DOM Inspector state
@@ -1312,6 +1386,8 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
     const activeReplayAbortRef = useRef<AbortController | null>(null);
     const framePollTimeoutRef = useRef<number | null>(null);
     const replayDeferredTaskCleanupsRef = useRef<Array<() => void>>([]);
+    const shareButtonRef = useRef<HTMLButtonElement>(null);
+    const shareMenuRef = useRef<HTMLDivElement>(null);
 
     // Ref-based playback state to avoid stale closures in animation loop
     const currentPlaybackTimeRef = useRef<number>(0);
@@ -1336,7 +1412,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
     // Fetch full session data
     const fetchFullSession = useCallback(async () => {
-        if (!id) return;
+        if (!id && !activeShareToken) return;
         const requestId = activeReplayRequestRef.current + 1;
         activeReplayRequestRef.current = requestId;
         activeReplayAbortRef.current?.abort();
@@ -1393,7 +1469,12 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                     .sort((a: HierarchySnapshot, b: HierarchySnapshot) => a.timestamp - b.timestamp);
             };
 
-            const coreMark = `replay_core_${id}`;
+            let resolvedSessionId = id || '';
+            const replayRequestLabel = id || activeShareToken || 'shared';
+            const currentMatchesLoadedSession = (prev: FullSession | null): prev is FullSession => (
+                Boolean(prev && (!resolvedSessionId || prev.id === resolvedSessionId))
+            );
+            const coreMark = `replay_core_${replayRequestLabel}`;
             if (typeof performance !== 'undefined') performance.mark(coreMark);
 
             const scheduleFramePoll = (delayMs: number) => {
@@ -1404,11 +1485,13 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                 framePollTimeoutRef.current = window.setTimeout(async () => {
                     if (requestSignal.aborted || activeReplayRequestRef.current !== requestId) return;
                     try {
-                        const framesResult = await api.getSessionFrames(id, { frameUrlMode: 'signed', signal: requestSignal });
+                        const framesResult = activeShareToken
+                            ? await api.getSharedReplayFrames(activeShareToken, { signal: requestSignal })
+                            : await api.getSessionFrames(id!, { frameUrlMode: 'signed', signal: requestSignal });
                         if (activeReplayRequestRef.current !== requestId) return;
 
                         setFullSession((prev) => {
-                            if (!prev || prev.id !== id) return prev;
+                            if (!currentMatchesLoadedSession(prev)) return prev;
                             return {
                                 ...prev,
                                 screenshotFrames: framesResult.screenshotFrames || prev.screenshotFrames || [],
@@ -1437,11 +1520,14 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
             };
 
             try {
-                const coreResult = await api.getSessionCore(id, { frameUrlMode: 'signed', includeReplay: false, signal: requestSignal });
+                const coreResult = activeShareToken
+                    ? await api.getSharedReplayCore(activeShareToken, { includeReplay: false, signal: requestSignal })
+                    : await api.getSessionCore(id!, { frameUrlMode: 'signed', includeReplay: false, signal: requestSignal });
                 if (activeReplayRequestRef.current !== requestId) return;
+                resolvedSessionId = (coreResult as any)?.id || id || '';
 
                 if (typeof performance !== 'undefined') {
-                    performance.measure(`replay:getSessionCore:${id}`, coreMark);
+                    performance.measure(`replay:getSessionCore:${replayRequestLabel}`, coreMark);
                 }
 
                 setFullSession(coreResult as any);
@@ -1463,11 +1549,14 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
             }
 
             setIsReplayManifestLoading(true);
-            void api.getSessionReplayManifest(id, { frameUrlMode: 'signed', signal: requestSignal })
+            const manifestPromise = activeShareToken
+                ? api.getSharedReplayManifest(activeShareToken, { signal: requestSignal })
+                : api.getSessionReplayManifest(id!, { frameUrlMode: 'signed', signal: requestSignal });
+            void manifestPromise
                 .then((manifest) => {
                     if (activeReplayRequestRef.current !== requestId) return;
                     setFullSession((prev) => {
-                        if (!prev || prev.id !== id) return prev;
+                        if (!currentMatchesLoadedSession(prev)) return prev;
                         const playbackMode = manifest.playbackMode === 'video'
                             ? prev.playbackMode
                             : manifest.playbackMode;
@@ -1504,11 +1593,14 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                 });
 
             scheduleReplayTask(() => {
-                void api.getSessionTimeline(id, { signal: requestSignal })
+                const timelinePromise = activeShareToken
+                    ? api.getSharedReplayTimeline(activeShareToken, { signal: requestSignal })
+                    : api.getSessionTimeline(id!, { signal: requestSignal });
+                void timelinePromise
                     .then((timelineResult) => {
                         if (activeReplayRequestRef.current !== requestId) return;
                         setFullSession((prev) => {
-                            if (!prev || prev.id !== id) return prev;
+                            if (!currentMatchesLoadedSession(prev)) return prev;
                             return {
                                 ...prev,
                                 deviceInfo: {
@@ -1535,11 +1627,14 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
             }, 350);
 
             scheduleReplayTask(() => {
-                void api.getSessionStats(id, { signal: requestSignal })
+                const statsPromise = activeShareToken
+                    ? api.getSharedReplayStats(activeShareToken, { signal: requestSignal })
+                    : api.getSessionStats(id!, { signal: requestSignal });
+                void statsPromise
                     .then((statsResult) => {
                         if (activeReplayRequestRef.current !== requestId) return;
                         setFullSession((prev) => {
-                            if (!prev || prev.id !== id) return prev;
+                            if (!currentMatchesLoadedSession(prev)) return prev;
                             return {
                                 ...prev,
                                 stats: {
@@ -1562,11 +1657,14 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
             }, 700);
 
             scheduleReplayTask(() => {
-                void api.getSessionHierarchy(id, { signal: requestSignal })
+                const hierarchyPromise = activeShareToken
+                    ? api.getSharedReplayHierarchy(activeShareToken, { signal: requestSignal })
+                    : api.getSessionHierarchy(id!, { signal: requestSignal });
+                void hierarchyPromise
                     .then((hierarchyResult) => {
                         if (activeReplayRequestRef.current !== requestId) return;
                         setFullSession((prev) => {
-                            if (!prev || prev.id !== id) return prev;
+                            if (!currentMatchesLoadedSession(prev)) return prev;
                             const next: any = {
                                 ...prev,
                                 hierarchySnapshots: hierarchyResult.hierarchySnapshots || [],
@@ -1589,14 +1687,14 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         } catch (err) {
             console.error('Failed to fetch session:', err);
         }
-    }, [id]);
+    }, [activeShareToken, id]);
 
     useEffect(() => {
         fetchFullSession();
     }, [fetchFullSession]);
 
     useEffect(() => {
-        if (!id || contextSessions.length > 0) {
+        if (!id || isPublicShare || contextSessions.length > 0) {
             setArchiveNeighborSessions([]);
             return;
         }
@@ -1631,7 +1729,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
             cancelled = true;
             cancelIdleLoad();
         };
-    }, [contextSessions.length, fullSession?.projectId, id, selectedProject?.id]);
+    }, [contextSessions.length, fullSession?.projectId, id, isPublicShare, selectedProject?.id]);
 
     useEffect(() => {
         return () => {
@@ -3529,8 +3627,65 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         }
         return bestUrl || fallback;
     }, [isWebSession, currentPlaybackTime, eventTimestampToPlaybackSeconds, allTimelineEvents, fullSession, session]);
-    const hasCurrentFullSession = Boolean(fullSession && fullSession.id === id);
-    const hasRevealedInitialReplay = revealedReplaySessionId === id;
+    const loadedSessionId = id || fullSession?.id || null;
+    const replayIdentityKey = activeShareToken ? `share:${activeShareToken}` : loadedSessionId;
+    const shareVisibility = fullSession?.share?.visibility ?? null;
+    const isReplayOnlyShare = isPublicShare && shareVisibility !== 'full_workbench';
+    const canShowWorkbenchTools = !isReplayOnlyShare;
+    const teamReplayUrl = useMemo(() => {
+        if (typeof window === 'undefined' || !loadedSessionId) return '';
+        const dashboardPrefix = pathPrefix || '/dashboard';
+        return `${window.location.origin}${dashboardPrefix}/sessions/${loadedSessionId}`;
+    }, [loadedSessionId, pathPrefix]);
+    const hasCurrentFullSession = Boolean(fullSession && (activeShareToken ? true : fullSession.id === id));
+    const hasRevealedInitialReplay = Boolean(replayIdentityKey && revealedReplaySessionId === replayIdentityKey);
+
+    useEffect(() => {
+        if (isReplayOnlyShare && activeWorkbenchTab !== 'timeline') {
+            setActiveWorkbenchTab('timeline');
+        }
+    }, [activeWorkbenchTab, isReplayOnlyShare]);
+
+    const refreshShareLinks = useCallback(async () => {
+        if (!loadedSessionId || isPublicShare || isDemoReplay) return;
+        setShareLinksLoading(true);
+        setShareError(null);
+        try {
+            const result = await api.getReplayShareLinks(loadedSessionId);
+            setShareCanManage(result.canManage);
+            setShareLinks(result.shares || []);
+        } catch (err) {
+            setShareError(err instanceof Error ? err.message : 'Could not load share links');
+        } finally {
+            setShareLinksLoading(false);
+        }
+    }, [isDemoReplay, isPublicShare, loadedSessionId]);
+
+    useEffect(() => {
+        if (!showShareMenu || typeof document === 'undefined') return;
+
+        const handleMouseDown = (event: MouseEvent) => {
+            const target = event.target as Node | null;
+            if (!target) return;
+            if (shareMenuRef.current?.contains(target) || shareButtonRef.current?.contains(target)) return;
+            setShowShareMenu(false);
+        };
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setShowShareMenu(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('mousedown', handleMouseDown);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [showShareMenu]);
+
     const recordingDeleted = (fullSession as any)?.recordingDeleted || session?.recordingDeleted || false;
     const hasSuccessfulRecording =
         (fullSession as any)?.hasSuccessfulRecording
@@ -3571,11 +3726,11 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         setIsReplayLoaderSettling(true);
         const settleTimer = window.setTimeout(() => {
             setIsReplayLoaderSettling(false);
-            setRevealedReplaySessionId(id ?? null);
+            setRevealedReplaySessionId(replayIdentityKey ?? null);
         }, 140);
 
         return () => window.clearTimeout(settleTimer);
-    }, [fullSession?.playbackMode, id, rrwebReplayEvents.length, rrwebReplaySegmentCount, shouldShowInitialReplayLoaderRaw]);
+    }, [fullSession?.playbackMode, replayIdentityKey, rrwebReplayEvents.length, rrwebReplaySegmentCount, shouldShowInitialReplayLoaderRaw]);
 
     const shouldShowInitialReplayLoader = !hasRevealedInitialReplay && (shouldShowInitialReplayLoaderRaw || isReplayLoaderSettling);
 
@@ -3633,7 +3788,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
 
     const geoLocation = fullSession?.geoLocation || fullSession?.geoInfo || session?.geoLocation || null;
     const geoDisplay = formatGeoDisplay(geoLocation);
-    const sessionLocationWithFlag = `${geoDisplay.flagEmoji} ${geoDisplay.fullLabel}`;
+    const sessionLocationLabel = geoDisplay.fullLabel;
 
     const rawReplayUserId = (fullSession?.userId ?? '').trim();
     const anonymousFallback = ((fullSession as any)?.anonymousDisplayName as string | undefined)?.trim() || '';
@@ -3975,14 +4130,68 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         }
     };
 
+    const copyTeamReplayLink = async () => {
+        if (!teamReplayUrl) return;
+        try {
+            await navigator.clipboard.writeText(teamReplayUrl);
+            setTeamLinkCopied(true);
+            setTimeout(() => setTeamLinkCopied(false), 2000);
+        } catch {
+            setTeamLinkCopied(false);
+        }
+    };
+
+    const copyUnlistedShareLink = async (share: ReplayShareLink) => {
+        if (!share.url) return;
+        try {
+            await navigator.clipboard.writeText(share.url);
+            setCopiedShareId(share.id);
+            setTimeout(() => setCopiedShareId((current) => current === share.id ? null : current), 2000);
+        } catch {
+            setCopiedShareId(null);
+        }
+    };
+
+    const createUnlistedShareLink = async () => {
+        if (!loadedSessionId || !shareCanManage) return;
+        setShareActionBusy(true);
+        setShareError(null);
+        try {
+            const result = await api.createReplayShareLink(loadedSessionId, {
+                visibility: selectedShareVisibility,
+                expiresIn: selectedShareExpiry,
+            });
+            setShareLinks((current) => upsertShareLink(current, result.share));
+            await copyUnlistedShareLink(result.share);
+        } catch (err) {
+            setShareError(err instanceof Error ? err.message : 'Could not create share link');
+        } finally {
+            setShareActionBusy(false);
+        }
+    };
+
+    const revokeUnlistedShareLink = async (shareId: string) => {
+        if (!loadedSessionId || !shareCanManage) return;
+        setShareActionBusy(true);
+        setShareError(null);
+        try {
+            const result = await api.revokeReplayShareLink(loadedSessionId, shareId);
+            setShareLinks((current) => current.map((share) => share.id === result.share.id ? result.share : share));
+        } catch (err) {
+            setShareError(err instanceof Error ? err.message : 'Could not revoke share link');
+        } finally {
+            setShareActionBusy(false);
+        }
+    };
+
     const replayUrlCopyButton = (
         <button
             type="button"
             onClick={copyCurrentReplayUrl}
             disabled={!currentReplayUrl.trim()}
             className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-[3px] text-slate-500 transition hover:bg-black/5 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            title={currentReplayUrl.trim() ? 'Copy current URL' : 'No URL to copy'}
-            aria-label="Copy current replay URL"
+            title={currentReplayUrl.trim() ? 'Copy visited URL' : 'No URL to copy'}
+            aria-label="Copy visited URL"
         >
             {replayUrlCopied ? (
                 <Check className="h-3 w-3 text-emerald-600" strokeWidth={2.25} />
@@ -4005,22 +4214,212 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
         URL.revokeObjectURL(url);
     };
 
+    const activeShareLinks = shareLinks.filter(isShareLinkUsable);
+    const selectedShareVisibilityOption =
+        SHARE_VISIBILITY_OPTIONS.find((option) => option.value === selectedShareVisibility) ?? SHARE_VISIBILITY_OPTIONS[0];
+    const selectedShareExpiryLabel =
+        SHARE_EXPIRY_OPTIONS.find((option) => option.value === selectedShareExpiry)?.label ?? '7 days';
+    const activeShareLinksLabel = activeShareLinks.length === 1 ? '1 active' : `${activeShareLinks.length} active`;
+    const shareMenu = !isPublicShare ? (
+        <div
+            id="replay-share-menu"
+            ref={shareMenuRef}
+            className="replay-share-popover"
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="replay-share-title"
+        >
+            <div className="replay-share-header">
+                <div className="replay-share-header-icon">
+                    <Share2 className="h-4 w-4" strokeWidth={2.4} />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p id="replay-share-title" className="replay-share-title">Share replay</p>
+                    <p className="replay-share-subtitle">Copy a team URL or create an unlisted public link.</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setShowShareMenu(false)}
+                    className="replay-share-icon-action"
+                    title="Close share panel"
+                    aria-label="Close share panel"
+                >
+                    <X className="h-4 w-4" strokeWidth={2.3} />
+                </button>
+            </div>
+
+            <div className="replay-share-body">
+                <section className="replay-share-section replay-share-team-section" aria-label="Team link">
+                    <div className="min-w-0">
+                        <span className="replay-share-section-kicker">Team link</span>
+                        <p className="replay-share-section-copy">For teammates who already have dashboard access.</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={copyTeamReplayLink}
+                        disabled={!teamReplayUrl}
+                        className={`replay-share-action-button ${teamLinkCopied ? 'is-success' : ''}`}
+                    >
+                        {teamLinkCopied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+                        <span>{teamLinkCopied ? 'Copied' : 'Copy team link'}</span>
+                    </button>
+                </section>
+
+                <section className="replay-share-section" aria-label="Unlisted link settings">
+                    <div className="replay-share-section-heading">
+                        <div className="min-w-0">
+                            <span className="replay-share-section-kicker">Unlisted link</span>
+                            <p className="replay-share-section-copy">
+                                {shareCanManage
+                                    ? `${selectedShareVisibilityOption.label}. Expires in ${selectedShareExpiryLabel.toLowerCase()}.`
+                                    : 'Owner or admin access is required to manage public links.'}
+                            </p>
+                        </div>
+                        {shareLinksLoading ? <span className="replay-share-status-pill">Loading</span> : null}
+                    </div>
+
+                    {shareLinksLoading && !shareCanManage && activeShareLinks.length === 0 ? (
+                        <div className="replay-share-empty-state">Loading share settings...</div>
+                    ) : shareCanManage ? (
+                        <>
+                            <div className="replay-share-choice-grid">
+                                {SHARE_VISIBILITY_OPTIONS.map((option) => {
+                                    const isSelected = selectedShareVisibility === option.value;
+                                    return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => setSelectedShareVisibility(option.value)}
+                                        className={`replay-share-choice ${isSelected ? 'is-selected' : ''}`}
+                                        aria-pressed={isSelected}
+                                    >
+                                        <span className="replay-share-choice-title">{option.label}</span>
+                                        <span className="replay-share-choice-description">{option.description}</span>
+                                    </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="replay-share-create-row">
+                                <label className="replay-share-field">
+                                    <span className="replay-share-field-label">
+                                        <Clock className="h-3.5 w-3.5" strokeWidth={2.25} />
+                                        Expires
+                                    </span>
+                                <select
+                                    value={selectedShareExpiry}
+                                    onChange={(event) => setSelectedShareExpiry(event.target.value as ReplayShareExpirationPreset)}
+                                        className="replay-share-select"
+                                    aria-label="Unlisted link expiry"
+                                >
+                                    {SHARE_EXPIRY_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={createUnlistedShareLink}
+                                    disabled={shareActionBusy || !loadedSessionId}
+                                    className="replay-share-create-button"
+                                >
+                                    <Share2 className="h-4 w-4" />
+                                    <span>{shareActionBusy ? 'Working...' : 'Create & copy'}</span>
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="replay-share-empty-state">
+                            Owner/admin required to create or revoke unlisted replay links.
+                        </div>
+                    )}
+                </section>
+
+                <section className="replay-share-section replay-share-links-section" aria-label="Active unlisted links">
+                    <div className="replay-share-links-heading">
+                        <span className="replay-share-section-kicker">Active links</span>
+                        <span className="replay-share-links-count">{shareLinksLoading ? 'Loading' : activeShareLinksLabel}</span>
+                    </div>
+
+                    {activeShareLinks.length === 0 ? (
+                        <div className="replay-share-empty-state">
+                            {shareLinksLoading ? 'Checking existing links...' : 'No active unlisted links yet.'}
+                        </div>
+                    ) : (
+                        <div className="replay-share-links-list">
+                            {activeShareLinks.map((share) => (
+                                <div key={share.id} className="replay-share-link-row">
+                                    <div className="replay-share-link-icon">
+                                        <Link2 className="h-4 w-4" strokeWidth={2.25} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="replay-share-link-meta">
+                                            <span className="replay-share-link-kind">{SHARE_VISIBILITY_LABELS[share.visibility]}</span>
+                                            <span className="replay-share-link-status">{formatShareLinkStatus(share)}</span>
+                                        </div>
+                                        <p className="replay-share-link-url" title={share.url || undefined}>
+                                            {formatShareLinkPreview(share)}
+                                        </p>
+                                    </div>
+                                    <div className="replay-share-link-actions">
+                                        <button
+                                            type="button"
+                                            onClick={() => copyUnlistedShareLink(share)}
+                                            className={`replay-share-link-action ${copiedShareId === share.id ? 'is-success' : ''}`}
+                                            title="Copy unlisted link"
+                                            aria-label="Copy unlisted link"
+                                        >
+                                            {copiedShareId === share.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                        </button>
+                                        {shareCanManage ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => void revokeUnlistedShareLink(share.id)}
+                                                disabled={shareActionBusy}
+                                                className="replay-share-link-action is-danger"
+                                                title="Revoke unlisted link"
+                                                aria-label="Revoke unlisted link"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </section>
+
+                {shareError ? (
+                    <div className="replay-share-error" role="alert">
+                        <AlertCircle className="h-4 w-4" strokeWidth={2.25} />
+                        <span>{shareError}</span>
+                    </div>
+                ) : null}
+            </div>
+        </div>
+    ) : null;
+
     return (
         <div className="rejourney-replay-workbench replay-workbench-page flex min-h-screen flex-col bg-[#f8fafd] xl:h-full xl:min-h-0 xl:overflow-hidden">
             <div className="replay-workbench-header border-b border-slate-200 bg-white md:sticky md:top-0 md:z-40 xl:shrink-0">
                 <div className="replay-header-shell mx-auto flex w-full max-w-[1920px] items-center gap-2 px-3 py-1.5 sm:px-4">
                     <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                        <button
-                            onClick={handleBackClick}
-                            className="replay-header-icon-button flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 bg-white text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow"
-                            aria-label="Back to sessions"
-                            title="Back to sessions"
-                        >
-                            <ArrowLeft className="h-4 w-4" strokeWidth={2.4} />
-                        </button>
+                        {!isPublicShare ? (
+                            <button
+                                onClick={handleBackClick}
+                                className="replay-header-icon-button flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 bg-white text-slate-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow"
+                                aria-label="Back to sessions"
+                                title="Back to sessions"
+                            >
+                                <ArrowLeft className="h-4 w-4" strokeWidth={2.4} />
+                            </button>
+                        ) : null}
 
                         <div className="flex min-w-0 items-center gap-2">
-                            <h1 className="truncate text-[15px] font-black text-slate-950 sm:text-base">Replay Workbench</h1>
+                            <h1 className="truncate text-[15px] font-black text-slate-950 sm:text-base">
+                                {isPublicShare ? 'Shared Replay' : 'Replay Workbench'}
+                            </h1>
                             <div className="hidden shrink-0 items-center gap-1 sm:flex">
                                 <span className="replay-header-chip bg-[#e0f2fe] text-slate-950">
                                     {isWebSession ? webEnvironment?.browserLabel : platform.toUpperCase()}
@@ -4044,7 +4443,13 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                     <div className="replay-header-actions relative flex shrink-0 items-center gap-1.5">
                         <button
                             type="button"
-                            onClick={() => setShowHeaderDetails((open) => !open)}
+                            onClick={() => {
+                                setShowHeaderDetails((open) => {
+                                    const next = !open;
+                                    if (next) setShowShareMenu(false);
+                                    return next;
+                                });
+                            }}
                             onMouseDown={(event) => event.preventDefault()}
                             className="replay-header-details-button"
                             aria-expanded={showHeaderDetails}
@@ -4061,6 +4466,34 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                             />
                         </button>
 
+                        {!isPublicShare ? (
+	                            <>
+	                                <button
+	                                    ref={shareButtonRef}
+	                                    type="button"
+	                                    onClick={() => {
+	                                        const next = !showShareMenu;
+	                                        setShowShareMenu(next);
+	                                        if (next) {
+	                                            setShowHeaderDetails(false);
+	                                            void refreshShareLinks();
+	                                        }
+	                                    }}
+	                                    onMouseDown={(event) => event.preventDefault()}
+	                                    className="replay-share-trigger"
+	                                    aria-expanded={showShareMenu}
+	                                    aria-haspopup="dialog"
+	                                    aria-controls="replay-share-menu"
+                                    title="Share replay"
+                                >
+                                    <Share2 className="h-3.5 w-3.5" strokeWidth={2.4} />
+                                    <span className="hidden sm:inline">Share</span>
+                                </button>
+                                {showShareMenu ? shareMenu : null}
+                            </>
+                        ) : null}
+
+                        {!isPublicShare ? (
                         <div className="replay-header-session-nav grid grid-cols-2 overflow-hidden border border-slate-200 bg-slate-50 shadow-sm">
                             <button
                                 onClick={() => previousSessionId && navigate(`${pathPrefix}/sessions/${previousSessionId}`)}
@@ -4091,6 +4524,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                 <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.5} />
                             </button>
                         </div>
+                        ) : null}
 
                         {showHeaderDetails && (
                             <div id="replay-header-details" className="replay-header-details-popover" role="menu">
@@ -4108,38 +4542,51 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                 </div>
                                 <div className="replay-header-detail-row">
                                     <span>Location</span>
-                                    <strong>{sessionLocationWithFlag}</strong>
+                                    <strong className="inline-flex items-center gap-1.5">
+                                        <CountryFlag
+                                            countryCode={geoDisplay.countryCode}
+                                            countryLabel={geoDisplay.countryLabel}
+                                            className="h-4"
+                                            imageClassName="h-4 w-4"
+                                            decorative
+                                        />
+                                        <span>{sessionLocationLabel}</span>
+                                    </strong>
                                 </div>
-                                <div className="replay-header-detail-row">
-                                    <span>Session</span>
-                                    <button
-                                        type="button"
-                                        onClick={copySessionId}
-                                        className="replay-header-detail-copy"
-                                        title={`${id} — click to copy`}
-                                        aria-label={`Copy session ID: ${id}`}
-                                    >
-                                        <span>{id || 'Unknown'}</span>
-                                        {sessionIdCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                                    </button>
-                                </div>
-                                <div className="replay-header-detail-row">
-                                    <span>User ID</span>
-                                    {canCopyReplayUserId ? (
+                                {!isPublicShare ? (
+                                    <div className="replay-header-detail-row">
+                                        <span>Session</span>
                                         <button
                                             type="button"
-                                            onClick={copyReplayUserId}
+                                            onClick={copySessionId}
                                             className="replay-header-detail-copy"
-                                            title={`${replayUserIdLabel} — click to copy`}
-                                            aria-label={`Copy user ID: ${replayUserIdLabel}`}
+                                            title={`${id} - click to copy`}
+                                            aria-label={`Copy session ID: ${id}`}
                                         >
-                                            <span>{replayUserIdShown}</span>
-                                            {userIdCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                            <span>{id || 'Unknown'}</span>
+                                            {sessionIdCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
                                         </button>
-                                    ) : (
-                                        <strong>{replayUserIdShown}</strong>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : null}
+                                {!isPublicShare ? (
+                                    <div className="replay-header-detail-row">
+                                        <span>User ID</span>
+                                        {canCopyReplayUserId ? (
+                                            <button
+                                                type="button"
+                                                onClick={copyReplayUserId}
+                                                className="replay-header-detail-copy"
+                                                title={`${replayUserIdLabel} - click to copy`}
+                                                aria-label={`Copy user ID: ${replayUserIdLabel}`}
+                                            >
+                                                <span>{replayUserIdShown}</span>
+                                                {userIdCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                            </button>
+                                        ) : (
+                                            <strong>{replayUserIdShown}</strong>
+                                        )}
+                                    </div>
+                                ) : null}
                             </div>
                         )}
                     </div>
@@ -4753,27 +5200,31 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                 <ListFilter className="h-4 w-4" />
                                 Timeline
                             </button>
-                            <button
-                                onClick={() => setActiveWorkbenchTab('console')}
-                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'console' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
-                            >
-                                <Terminal className="h-4 w-4" />
-                                Console
-                            </button>
-                            <button
-                                onClick={() => setActiveWorkbenchTab('inspector')}
-                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'inspector' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
-                            >
-                                <Code className="h-4 w-4" />
-                                DOM
-                            </button>
-                            <button
-                                onClick={() => setActiveWorkbenchTab('metadata')}
-                                className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'metadata' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
-                            >
-                                <Database className="h-4 w-4" />
-                                Metadata
-                            </button>
+                            {canShowWorkbenchTools ? (
+                                <>
+                                    <button
+                                        onClick={() => setActiveWorkbenchTab('console')}
+                                        className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'console' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
+                                    >
+                                        <Terminal className="h-4 w-4" />
+                                        Console
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveWorkbenchTab('inspector')}
+                                        className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'inspector' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
+                                    >
+                                        <Code className="h-4 w-4" />
+                                        DOM
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveWorkbenchTab('metadata')}
+                                        className={`flex min-w-[7rem] flex-1 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-black uppercase transition ${activeWorkbenchTab === 'metadata' ? 'border-black bg-white text-black' : 'border-transparent text-slate-600 hover:bg-[#ecfeff] hover:text-black'}`}
+                                    >
+                                        <Database className="h-4 w-4" />
+                                        Metadata
+                                    </button>
+                                </>
+                            ) : null}
                         </div>
                         <div className="relative flex min-h-0 flex-1 flex-col bg-white">
                             {activeWorkbenchTab === 'timeline' && (
@@ -4784,6 +5235,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                 <p className="text-[10px] font-semibold uppercase text-slate-400 tracking-wide">Activity Stream</p>
                                                 <h3 className="text-xs font-semibold text-slate-700">All actions, logs, and failures in one timeline</h3>
                                             </div>
+                                            {canShowWorkbenchTools ? (
                                             <div className="replay-panel-actions flex items-center gap-1.5">
                                                 <button
                                                     onClick={copyTimelineEvents}
@@ -4812,6 +5264,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                                     Export
                                                 </button>
                                             </div>
+                                            ) : null}
                                         </div>
 
                                         <div className="mt-2">
@@ -4954,7 +5407,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                     </div>
                                 </div>
                             )}
-                            {activeWorkbenchTab === 'console' && (
+                            {canShowWorkbenchTools && activeWorkbenchTab === 'console' && (
                                 <div className="absolute inset-0 flex flex-col bg-slate-950">
                                     <div className="border-b-2 border-black px-4 py-3">
                                         <div className="replay-panel-header flex items-center justify-between gap-3">
@@ -5030,7 +5483,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                     </div>
                                 </div>
                             )}
-                            {activeWorkbenchTab === 'inspector' && (
+                            {canShowWorkbenchTools && activeWorkbenchTab === 'inspector' && (
                                 <div className="absolute inset-0 flex flex-col bg-[#f8fafc]">
                                     <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-3">
                                         <div className="replay-panel-header flex items-center justify-between gap-2">
@@ -5092,7 +5545,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string }> = ({ sessionId })
                                     </div>
                                 </div>
                             )}
-                            {activeWorkbenchTab === 'metadata' && (
+                            {canShowWorkbenchTools && activeWorkbenchTab === 'metadata' && (
                                 <div className="absolute inset-0 flex flex-col bg-[#f8fafc] overflow-auto">
                                     <div className="border-b-2 border-black bg-[#f8fafc] px-4 py-3 sticky top-0 z-10">
                                         <div className="replay-panel-header flex items-center justify-between gap-2">

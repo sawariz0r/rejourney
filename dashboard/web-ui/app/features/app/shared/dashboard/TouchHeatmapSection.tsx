@@ -1336,7 +1336,7 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
     const [isLoading, setIsLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState('');
     const [partialError, setPartialError] = useState<string | null>(null);
-    const [heatmapMode, setHeatmapMode] = useState<HeatmapMode>('touch');
+    const [heatmapMode, setHeatmapMode] = useState<HeatmapMode>('attention');
     const [attentionByScreen, setAttentionByScreen] = useState<Record<string, WebAttentionHeatmapResponse>>({});
     const [attentionLoadingFor, setAttentionLoadingFor] = useState<string | null>(null);
     const [attentionErrors, setAttentionErrors] = useState<Record<string, string>>({});
@@ -1619,7 +1619,8 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
 
     useEffect(() => {
         if (!selectedScreenName) return;
-        setHeatmapMode(getDefaultHeatmapMode(selectedViewer));
+        const nextMode = getDefaultHeatmapMode(selectedViewer);
+        setHeatmapMode((currentMode) => currentMode === nextMode ? currentMode : nextMode);
     }, [selectedScreenName, selectedViewer]);
 
     const attentionScreenName = selectedScreen?.name ?? null;
@@ -1724,7 +1725,7 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
                                     {selectedViewer === 'web' ? <Monitor className="h-3.5 w-3.5" /> : <Smartphone className="h-3.5 w-3.5" />}
                                     {selectedModeLabel}
                                 </span>
-                                {selectedViewer !== 'web' && <h3 title={activeScreen.name}>{activeScreen.name}</h3>}
+                                <h3 title={activeScreen.name}>{activeScreen.name}</h3>
                             </div>
                             {attentionStatus && attentionStatus.state !== 'loading' && (
                                 <div className={`heatmap-canvas-status heatmap-canvas-status-${attentionStatus.state}`} role={attentionStatus.state === 'error' ? 'status' : undefined}>
@@ -1762,12 +1763,13 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
                             {availableHeatmapModes.length > 1 && (
                                 <div className="heatmap-mode-control heatmap-side-mode-control" role="group" aria-label="Heatmap mode">
                                     {availableHeatmapModes.map((mode) => (
-                                        <button
-                                            key={mode}
-                                            type="button"
-                                            onClick={() => setHeatmapMode(mode)}
-                                            className={effectiveHeatmapMode === mode ? 'is-active' : ''}
-                                        >
+	                                        <button
+	                                            key={mode}
+	                                            type="button"
+	                                            onClick={() => setHeatmapMode(mode)}
+	                                            aria-pressed={effectiveHeatmapMode === mode}
+	                                            className={effectiveHeatmapMode === mode ? 'is-active' : ''}
+	                                        >
                                             {mode === 'attention' ? <Eye className="h-4 w-4" /> : <MousePointer2 className="h-4 w-4" />}
                                             {mode === 'attention' ? 'Attention' : 'Touch'}
                                         </button>

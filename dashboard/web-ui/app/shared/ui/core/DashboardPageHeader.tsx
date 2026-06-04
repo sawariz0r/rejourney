@@ -5,46 +5,65 @@ interface DashboardPageHeaderProps {
     subtitle?: string;
     icon?: React.ReactNode;
     iconColor?: string;
+    iconAccent?: string;
     children?: React.ReactNode;
 }
 
 const HEADER_ICON_ACCENTS: Record<string, string> = {
-    'bg-white': '#67e8f9',
-    'bg-black': '#0f172a',
-    'bg-[#cffafe]': '#67e8f9',
-    'bg-[#ecfeff]': '#67e8f9',
-    'bg-[#67e8f9]': '#67e8f9',
-    'bg-[#d1fae5]': '#86efac',
-    'bg-[#86efac]': '#86efac',
-    'bg-[#fce7f3]': '#f9a8d4',
-    'bg-[#f9a8d4]': '#f9a8d4',
-    'bg-[#e0e7ff]': '#c4b5fd',
-    'bg-[#c4b5fd]': '#c4b5fd',
-    'bg-[#dbeafe]': '#5dadec',
-    'bg-[#5dadec]': '#5dadec',
-    'bg-[#ffe4e6]': '#fb7185',
-    'bg-[#ede9fe]': '#c4b5fd',
-    'bg-[#fee2e2]': '#fca5a5',
-    'bg-[#f4f4f5]': '#94a3b8',
-    'bg-emerald-500': '#86efac',
-    'bg-fuchsia-500': '#f9a8d4',
-    'bg-sky-600': '#5dadec',
-    'bg-sky-50': '#5dadec',
-    'bg-red-500': '#fca5a5',
-    'bg-indigo-500': '#c4b5fd',
-    'bg-rose-50': '#fb7185',
-    'bg-violet-50': '#c4b5fd',
-    'bg-slate-200': '#94a3b8',
+    'bg-white': '#0891b2',
+    'bg-[#ecfeff]': '#0891b2',
+    'bg-[#eff6ff]': '#2563eb',
+    'bg-[#ecfdf5]': '#059669',
+    'bg-[#fdf2f8]': '#db2777',
+    'bg-[#fff7ed]': '#f97316',
+    'bg-[#fef2f2]': '#dc2626',
+    'bg-[#f0fdf4]': '#16a34a',
+    'bg-[#f5f3ff]': '#7c3aed',
+    'bg-[#fffbeb]': '#d97706',
+    'bg-[#f8fafc]': '#475569',
+    'bg-[#f0fdfa]': '#0f766e',
+    'bg-[#fefce8]': '#ca8a04',
+    'bg-[#eef2ff]': '#4f46e5',
+    'bg-[#cffafe]': '#0891b2',
+    'bg-[#67e8f9]': '#0891b2',
+    'bg-[#d1fae5]': '#16a34a',
+    'bg-[#86efac]': '#16a34a',
+    'bg-[#fce7f3]': '#db2777',
+    'bg-[#f9a8d4]': '#db2777',
+    'bg-[#e0e7ff]': '#7c3aed',
+    'bg-[#c4b5fd]': '#7c3aed',
+    'bg-[#dbeafe]': '#2563eb',
+    'bg-[#e8f0fe]': '#2563eb',
+    'bg-[#5dadec]': '#2563eb',
+    'bg-[#ffe4e6]': '#dc2626',
+    'bg-[#ede9fe]': '#7c3aed',
+    'bg-[#fee2e2]': '#dc2626',
+    'bg-[#f4f4f5]': '#64748b',
 };
+
+const HEADER_ICON_BACKGROUNDS: Record<string, string> = {
+    'bg-white': '#ffffff',
+};
+
+function getHeaderIconBackground(iconColor: string) {
+    const arbitraryHex = iconColor.match(/^bg-\[(#[0-9a-fA-F]{3,8})\]$/)?.[1];
+    return arbitraryHex ?? HEADER_ICON_BACKGROUNDS[iconColor] ?? '#ffffff';
+}
 
 export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
     title,
     subtitle,
+    icon,
     iconColor = 'bg-white', // Default to white if not provided
+    iconAccent,
     children
 }) => {
-    const iconAccent = HEADER_ICON_ACCENTS[iconColor] ?? HEADER_ICON_ACCENTS['bg-white'];
-    const accentStyle = { backgroundColor: iconAccent };
+    const resolvedIconAccent = iconAccent ?? HEADER_ICON_ACCENTS[iconColor] ?? HEADER_ICON_ACCENTS['bg-white'];
+    const accentStyle = { backgroundColor: resolvedIconAccent };
+    const iconStyle = {
+        backgroundColor: getHeaderIconBackground(iconColor),
+        color: resolvedIconAccent,
+    };
 
     return (
         <div className="dashboard-page-header w-full border-b border-slate-200 bg-white">
@@ -55,6 +74,15 @@ export const DashboardPageHeader: React.FC<DashboardPageHeaderProps> = ({
                         className="dashboard-page-header-accent h-5 w-1.5 shrink-0 border border-black/20"
                         style={accentStyle}
                     />
+                    {icon && (
+                        <span
+                            aria-hidden="true"
+                            className="dashboard-page-header-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] border border-black/10"
+                            style={iconStyle}
+                        >
+                            {icon}
+                        </span>
+                    )}
                     <div className="min-w-0 flex-1" style={{ minWidth: 'min(100%, 13rem)' }}>
                         <h1 className="text-[15px] font-extrabold uppercase leading-none text-slate-950 sm:text-base">
                             {title}

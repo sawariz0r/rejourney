@@ -40,6 +40,7 @@ function apiProjectToProject(apiProject: ApiProject): Project {
 }
 
 const SELECTED_PROJECT_ID_KEY_PREFIX = 'rejourney_selected_project_id';
+const MIN_HIDDEN_MS_BEFORE_VISIBLE_REFETCH = 15000;
 
 function selectedProjectStorageKey(teamId?: string | null): string {
   return teamId ? `${SELECTED_PROJECT_ID_KEY_PREFIX}:${teamId}` : SELECTED_PROJECT_ID_KEY_PREFIX;
@@ -51,6 +52,45 @@ function readStoredSelectedProjectId(teamId: string | null | undefined): string 
   }
 
   return localStorage.getItem(selectedProjectStorageKey(teamId));
+}
+
+function arraysEqual(left: readonly unknown[] | undefined, right: readonly unknown[] | undefined): boolean {
+  const a = left ?? [];
+  const b = right ?? [];
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+}
+
+function projectsEqual(left: Project, right: Project): boolean {
+  return left.id === right.id
+    && left.name === right.name
+    && left.bundleId === right.bundleId
+    && left.packageName === right.packageName
+    && left.webDomain === right.webDomain
+    && left.teamId === right.teamId
+    && left.publicKey === right.publicKey
+    && left.rejourneyEnabled === right.rejourneyEnabled
+    && left.recordingEnabled === right.recordingEnabled
+    && left.textInputMasking === right.textInputMasking
+    && left.imageVideoMasking === right.imageVideoMasking
+    && left.recordingFps === right.recordingFps
+    && left.sampleRate === right.sampleRate
+    && left.maxRecordingMinutes === right.maxRecordingMinutes
+    && left.webMaxObservabilityMinutes === right.webMaxObservabilityMinutes
+    && left.createdAt === right.createdAt
+    && left.sessionsLast7Days === right.sessionsLast7Days
+    && left.errorsLast7Days === right.errorsLast7Days
+    && arraysEqual(left.platforms, right.platforms)
+    && arraysEqual(left.webAllowedDomains, right.webAllowedDomains);
+}
+
+function projectListsEqual(left: Project[], right: Project[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((project, index) => projectsEqual(project, right[index]));
+}
+
+function preserveStableProjectList(currentProjects: Project[], nextProjects: Project[]): Project[] {
+  return projectListsEqual(currentProjects, nextProjects) ? currentProjects : nextProjects;
 }
 
 interface SelectProjectForTeamOptions {
@@ -107,6 +147,7 @@ interface SessionContextValue {
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+const EMPTY_INITIAL_PROJECTS: ApiProject[] = [];
 
 export function useSessionData(): SessionContextValue {
   const context = useContext(SessionContext);
@@ -125,7 +166,7 @@ interface Props {
 
 export function SessionDataProvider({
   children,
-  initialProjects = [],
+  initialProjects = EMPTY_INITIAL_PROJECTS,
   initialProjectsTeamId,
   initialSelectedProjectId = null,
 }: Props) {
@@ -158,6 +199,7 @@ export function SessionDataProvider({
   const lastTeamIdRef = useRef<string | null>(currentTeam?.id ?? null);
   const bootstrapConsumedRef = useRef(false);
   const lastVisibilityProjectRefreshAtRef = useRef(0);
+  const lastHiddenAtRef = useRef<number | null>(null);
 
   const applyProjectsForTeam = useCallback((
     fetchedProjects: ApiProject[],
@@ -175,8 +217,13 @@ export function SessionDataProvider({
       preferStoredSelection,
     });
 
-    setProjects(teamProjects);
-    setSelectedProjectState(nextSelectedProject);
+    setProjects((currentProjects) => preserveStableProjectList(currentProjects, teamProjects));
+    setSelectedProjectState((currentSelectedProject) => {
+      if (!currentSelectedProject || !nextSelectedProject) return nextSelectedProject;
+      return projectsEqual(currentSelectedProject, nextSelectedProject)
+        ? currentSelectedProject
+        : nextSelectedProject;
+    });
     setProjectsReady(true);
     setProjectsError(null);
     setProjectsLoading(false);
@@ -325,8 +372,19 @@ export function SessionDataProvider({
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const isLikelyViewportOnlyInterruption = () => {
+      const hiddenAt = lastHiddenAtRef.current;
+      if (hiddenAt !== null && Date.now() - hiddenAt < MIN_HIDDEN_MS_BEFORE_VISIBLE_REFETCH) {
+        return true;
+      }
+
+      const visualViewport = window.visualViewport;
+      return Boolean(visualViewport && visualViewport.scale && visualViewport.scale !== 1);
+    };
+
     const runRefetch = () => {
       if (isTeamLoading || isAuthLoading || !isAuthenticated || !currentTeam?.id) return;
+      if (isLikelyViewportOnlyInterruption()) return;
       const now = Date.now();
       if (now - lastVisibilityProjectRefreshAtRef.current < 60000) return;
       lastVisibilityProjectRefreshAtRef.current = now;
@@ -342,6 +400,11 @@ export function SessionDataProvider({
     };
 
     const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        lastHiddenAtRef.current = Date.now();
+        return;
+      }
+
       if (document.visibilityState === 'visible') {
         scheduleRefetch();
       }
@@ -349,6 +412,7 @@ export function SessionDataProvider({
 
     const onPageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
+        lastHiddenAtRef.current = null;
         scheduleRefetch();
       }
     };

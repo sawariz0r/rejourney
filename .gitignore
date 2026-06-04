@@ -75,3 +75,4 @@ dev_docs/scaling-plan.md
 dashboard/.DS_Store
 marketing
 outputs
+.playwright-cli

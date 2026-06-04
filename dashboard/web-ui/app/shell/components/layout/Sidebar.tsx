@@ -8,35 +8,56 @@ import { Input } from '~/shared/ui/core/Input';
 import { Button } from '~/shared/ui/core/Button';
 import { ProjectCreatedModal } from '~/shared/ui/core/ProjectCreatedModal';
 import { getAndroidPackageError, getIosBundleIdError, getWebAllowedDomainsError, parseWebAllowedDomainsInput } from '~/shared/lib/validation';
+import { DASHBOARD_PAGE_META, DashboardPageKey } from '~/shell/navigation/dashboardPageMeta';
 import {
-  Activity,
+  ChartNoAxesColumnIncreasing,
   Smartphone,
   Globe,
-  Map,
-  Flame,
-  Database,
+  CodeXml,
+  BellRing,
   Settings,
-  Users,
   User,
   Plus,
   ChevronDown,
+  ChevronRight,
   Check,
   Apple,
-  MessageSquareWarning,
-  Mail,
   AlertTriangle,
-  CreditCard,
   ChevronsLeft,
   ChevronsRight,
 } from 'lucide-react';
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'rj-dashboard-sidebar-width';
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'rj-dashboard-sidebar-collapsed';
-const DEFAULT_SIDEBAR_WIDTH = 280;
-const MIN_SIDEBAR_WIDTH = 200;
+const SIDEBAR_SECTION_COLLAPSED_STORAGE_KEY = 'rj-dashboard-sidebar-section-collapsed';
+const DEFAULT_SIDEBAR_WIDTH = 300;
+const MIN_SIDEBAR_WIDTH = 220;
 const MAX_SIDEBAR_WIDTH = 440;
 const COLLAPSED_SIDEBAR_WIDTH = 64;
 const SIDEBAR_PREFETCH_TIME_RANGE = '30d';
+
+type SidebarNavVisual = {
+  accent: string;
+  activeBg: string;
+};
+
+type SidebarNavItem = {
+  path: string;
+  label: string;
+  icon: React.ElementType;
+} & SidebarNavVisual;
+
+function createSidebarNavItem(path: string, pageKey: DashboardPageKey): SidebarNavItem {
+  const meta = DASHBOARD_PAGE_META[pageKey];
+
+  return {
+    path,
+    label: meta.sidebarLabel,
+    icon: meta.icon,
+    accent: meta.accent,
+    activeBg: meta.activeBg,
+  };
+}
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
@@ -103,6 +124,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [collapsed, setCollapsed] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [sectionPrefsLoaded, setSectionPrefsLoaded] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const resizeRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
@@ -135,6 +158,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
       /* ignore */
     }
   }, [collapsed]);
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SIDEBAR_SECTION_COLLAPSED_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const next: Record<string, boolean> = {};
+        Object.entries(parsed).forEach(([key, value]) => {
+          if (value === true) next[key] = true;
+        });
+        setCollapsedSections(next);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setSectionPrefsLoaded(true);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!sectionPrefsLoaded) return;
+    try {
+      localStorage.setItem(SIDEBAR_SECTION_COLLAPSED_STORAGE_KEY, JSON.stringify(collapsedSections));
+    } catch {
+      /* ignore */
+    }
+  }, [collapsedSections, sectionPrefsLoaded]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -241,68 +291,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setCreateError(null);
   };
 
-  const navSections = React.useMemo(() => [
+  const navSections = React.useMemo<Array<{
+    id: string;
+    section: string;
+    icon: React.ElementType;
+    accent: string;
+    items: SidebarNavItem[];
+  }>>(() => [
     {
-      section: 'Monitor',
+      id: 'growth',
+      section: 'Growth',
+      icon: ChartNoAxesColumnIncreasing,
+      accent: '#2563eb',
       items: [
-        { path: p('/general'), label: 'General', icon: MessageSquareWarning },
-        { path: p('/sessions'), label: 'Replays', icon: Database },
-        { path: p('/stability'), label: 'Stability', icon: AlertTriangle },
+        createSidebarNavItem(p('/general'), 'general'),
+        createSidebarNavItem(p('/sessions'), 'sessions'),
+        createSidebarNavItem(p('/geo'), 'geo'),
+        createSidebarNavItem(p('/journeys'), 'journeys'),
+        createSidebarNavItem(p('/heatmaps'), 'heatmaps'),
       ],
     },
     {
-      section: 'Analytics',
+      id: 'developer',
+      section: 'Developer',
+      icon: CodeXml,
+      accent: '#7c3aed',
       items: [
-        { path: p('/analytics/api'), label: 'API Insights', icon: Activity },
-        { path: p('/analytics/journeys'), label: 'User Journeys', icon: Map },
-        { path: p('/analytics/heatmaps'), label: 'Heatmaps', icon: Flame },
-        { path: p('/analytics/devices'), label: 'Devices', icon: Smartphone },
-        { path: p('/analytics/geo'), label: 'Geographic', icon: Globe },
+        createSidebarNavItem(p('/stability'), 'stability'),
+        createSidebarNavItem(p('/api'), 'api'),
+        createSidebarNavItem(p('/devices'), 'devices'),
       ],
     },
     {
+      id: 'alerts',
       section: 'Alerts',
+      icon: BellRing,
+      accent: '#b45309',
       items: [
-        { path: p('/alerts/emails'), label: 'Emails', icon: Mail },
+        createSidebarNavItem(p('/alerts/emails'), 'emails'),
       ],
     },
     {
+      id: 'workspace',
       section: 'Workspace',
+      icon: Settings,
+      accent: '#475569',
       items: [
-        ...(currentProject ? [{ path: p(`/settings/${currentProject.id}`), label: 'Project', icon: Settings }] : []),
-        { path: p('/team'), label: 'Team', icon: Users },
-        { path: p('/billing'), label: 'Plan & Billing', icon: CreditCard },
+        ...(currentProject ? [createSidebarNavItem(p(`/settings/${currentProject.id}`), 'project')] : []),
+        createSidebarNavItem(p('/team'), 'team'),
+        createSidebarNavItem(p('/billing'), 'billing'),
       ],
     },
     {
+      id: 'you',
       section: 'You',
+      icon: User,
+      accent: '#64748b',
       items: [
-        { path: p('/account'), label: 'Account', icon: User },
+        createSidebarNavItem(p('/account'), 'account'),
       ],
     },
   ], [currentProject, pathPrefix]);
 
   // isActive needs to check if path matches, accounting for demo prefix
   const isActive = (path: string) => location.pathname === path;
-
-  const NAV_ACCENT: Record<string, string> = {
-    '/general':            '#22d3ee',
-    '/sessions':           '#22d3ee',
-    '/stability':          '#f97316',
-    '/analytics/api':      '#4ade80',
-    '/analytics/journeys': '#f472b6',
-    '/analytics/heatmaps': '#f472b6',
-    '/analytics/devices':  '#a78bfa',
-    '/analytics/geo':      '#38bdf8',
-    '/alerts/emails':      '#fbbf24',
-  };
-
-  const getNavAccent = (path: string): string => {
-    const stripped = path.startsWith(pathPrefix) ? path.slice(pathPrefix.length) : path;
-    return NAV_ACCENT[stripped] ?? '#e2e8f0';
-  };
-  const warehousePath = p('/warehouse');
-  const isWarehouseActive = isActive(warehousePath);
   const collapsedDesktop = isDesktop && collapsed;
   const prefetchTimeRange = readSidebarPrefetchTimeRange(currentProject?.id);
 
@@ -312,6 +364,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       timeRange: prefetchTimeRange,
     });
   }, [currentProject?.id, prefetchTimeRange]);
+
+  const toggleSection = React.useCallback((sectionId: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev };
+      if (next[sectionId]) {
+        delete next[sectionId];
+      } else {
+        next[sectionId] = true;
+      }
+      return next;
+    });
+  }, []);
 
   React.useEffect(() => {
     if (typeof window === 'undefined' || isDesktop || !isMobileOpen) return;
@@ -383,43 +447,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
         {/* Brand & Team Switcher */}
         <div className={`border-b-2 border-black bg-white ${collapsedDesktop ? 'p-2' : 'p-4'}`}>
-          {collapsedDesktop ? (
-            <Link
-              to={warehousePath}
-              title="Warehouse (Alpha)"
-              onClick={() => {
-                setShowTeamSelector(false);
-                setShowAppSelector(false);
-                setIsMobileOpen(false);
-              }}
-              className={`mb-3 flex h-10 w-full items-center justify-center border-2 transition-all ${isWarehouseActive
-                ? 'border-black bg-black text-white'
-                : 'border-black/20 bg-white text-slate-600 hover:bg-slate-50 hover:border-black/40'
-                }`}
-            >
-              <Database className="h-4 w-4" />
-            </Link>
-          ) : (
-            <Link
-              to={warehousePath}
-              onClick={() => {
-                setShowTeamSelector(false);
-                setShowAppSelector(false);
-                setIsMobileOpen(false);
-              }}
-              className={`mb-3 flex w-full items-center justify-between border-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wide transition-all ${isWarehouseActive
-                ? 'border-black bg-black text-white'
-                : 'border-black/20 bg-white text-slate-600 hover:bg-slate-50 hover:border-black/40'
-                }`}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Database className="h-3.5 w-3.5" />
-                Warehouse
-              </span>
-              <span className="border border-current px-1.5 py-0.5 text-[9px] font-black tracking-widest">Alpha</span>
-            </Link>
-          )}
-
           <div className="relative mb-3">
             <button
               type="button"
@@ -567,49 +594,91 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Navigation */}
-        <div className={`flex-1 overflow-y-auto space-y-5 custom-scrollbar ${collapsedDesktop ? 'px-2 py-3' : 'px-3 py-4'}`}>
-          {navSections.map((section) => (
-            section.items.length > 0 && (
-              <div key={section.section}>
+        <div className={`flex-1 overflow-y-auto custom-scrollbar ${collapsedDesktop ? 'space-y-4 px-2 py-3' : 'space-y-4 px-3 py-4'}`}>
+          {navSections.map((section) => {
+            if (section.items.length === 0) return null;
+
+            const activeInSection = section.items.some((item) => isActive(item.path));
+            const sectionCollapsed = !collapsedDesktop && Boolean(collapsedSections[section.id]);
+            const sectionDomId = `sidebar-section-${section.id}`;
+            const SectionIcon = section.icon;
+
+            return (
+              <div key={section.id} className={collapsedDesktop ? '' : 'border-b border-slate-100 pb-3 last:border-b-0 last:pb-0'}>
                 {!collapsedDesktop && (
-                  <div className="mb-1.5 px-2 text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">
-                    {section.section}
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.id)}
+                    aria-expanded={!sectionCollapsed}
+                    aria-controls={sectionDomId}
+                    className={`group mb-2 flex w-full items-center justify-between rounded-[6px] px-3 py-2.5 text-left transition-colors ${
+                      activeInSection
+                        ? 'bg-slate-50 text-slate-900'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <SectionIcon
+                        className="h-5 w-5 shrink-0"
+                        strokeWidth={2.7}
+                        style={{ color: section.accent }}
+                      />
+                      <span className="truncate text-base font-black tracking-normal">
+                        {section.section}
+                      </span>
+                    </span>
+                    {sectionCollapsed ? (
+                      <ChevronRight className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+                    )}
+                  </button>
+                )}
+                {(!sectionCollapsed || collapsedDesktop) && (
+                  <div id={sectionDomId} className="space-y-1">
+                    {section.items.map((item) => {
+                      const itemActive = isActive(item.path);
+
+                      return (
+                        <Link
+                          key={item.path}
+                          to={item.path}
+                          aria-current={itemActive ? 'page' : undefined}
+                          title={collapsedDesktop ? item.label : undefined}
+                          onClick={() => setIsMobileOpen(false)}
+                          onMouseEnter={() => prefetchPath(item.path)}
+                          onFocus={() => prefetchPath(item.path)}
+                          className={`
+                            dashboard-nav-item relative flex items-center overflow-hidden rounded-[6px] text-[0.95rem] transition-colors
+                            ${collapsedDesktop ? 'justify-center px-2 py-2.5' : 'gap-3.5 px-4 py-3'}
+                            ${itemActive
+                              ? 'text-[#202124] font-bold shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]'
+                              : 'text-[#4b5563] font-semibold hover:bg-[#f8fafd] hover:text-[#202124]'
+                            }
+                          `}
+                          style={{ backgroundColor: itemActive ? item.activeBg : undefined }}
+                        >
+                          <span
+                            className="absolute left-0 top-0 bottom-0 w-[3px] transition-opacity duration-150"
+                            style={{
+                              background: item.accent,
+                              opacity: itemActive ? 1 : 0,
+                            }}
+                          />
+                          <item.icon
+                            className="h-[18px] w-[18px] shrink-0"
+                            strokeWidth={2.25}
+                            style={{ color: item.accent, opacity: itemActive ? 1 : 0.78 }}
+                          />
+                          {!collapsedDesktop && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
-                <div className="space-y-0.5">
-                  {section.items.map((item) => (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      aria-current={isActive(item.path) ? 'page' : undefined}
-                      title={collapsedDesktop ? item.label : undefined}
-                      onClick={() => setIsMobileOpen(false)}
-                      onMouseEnter={() => prefetchPath(item.path)}
-                      onFocus={() => prefetchPath(item.path)}
-                      className={`
-                        dashboard-nav-item relative flex items-center text-[0.88rem] transition-colors overflow-hidden
-                        ${collapsedDesktop ? 'justify-center px-2 py-2' : 'gap-3 px-4 py-2.5'}
-                        ${isActive(item.path)
-                          ? 'bg-[#f1f3f4] text-[#202124] font-semibold'
-                          : 'text-[#5f6368] font-medium hover:bg-[#f8fafd] hover:text-[#202124]'
-                        }
-                      `}
-                    >
-                      <span
-                        className="absolute left-0 top-0 bottom-0 w-[3px] transition-opacity duration-150"
-                        style={{
-                          background: getNavAccent(item.path),
-                          opacity: isActive(item.path) ? 1 : 0,
-                        }}
-                      />
-                      <item.icon className="w-4 h-4 shrink-0 text-current" strokeWidth={2.5} />
-                      {!collapsedDesktop && <span>{item.label}</span>}
-                    </Link>
-                  ))}
-                </div>
               </div>
-            )
-          ))}
+            );
+          })}
         </div>
 
         {isDesktop && (
@@ -622,7 +691,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               aria-expanded={!collapsed}
             >
               {collapsed ? <ChevronsRight className="h-4 w-4 shrink-0" /> : <ChevronsLeft className="h-4 w-4 shrink-0" />}
-              {!collapsed && <span className="text-xs font-medium">Collapse</span>}
+              {!collapsed && <span className="text-sm font-semibold">Collapse</span>}
             </button>
           </div>
         )}

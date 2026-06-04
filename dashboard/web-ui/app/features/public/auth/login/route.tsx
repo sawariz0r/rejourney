@@ -11,43 +11,14 @@ import { useAuth } from "~/shared/providers/AuthContext";
 import { AuthServiceUnavailable } from "~/shared/ui/core/AuthServiceUnavailable";
 
 import { API_BASE_URL } from "~/shared/config/appConfig";
-import { getTurnstileSiteKey } from "~/shared/config/runtimeEnv";
 import { trackAccountActivationSignal, type AccountActivationMethod } from "~/shared/lib/edgeSignals";
 
-const STATIC_TURNSTILE_SITE_KEY = getTurnstileSiteKey();
-const TURNSTILE_SCRIPT_ID = 'cloudflare-turnstile-api';
-const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-const TURNSTILE_SCRIPT_TIMEOUT_MS = 12000;
 const ACCOUNT_ACTIVATED_PARAM = 'account_activated';
-let turnstileScriptLoadPromise: Promise<void> | null = null;
-
-// Extend Window interface for Turnstile
-declare global {
-    interface Window {
-        turnstile?: {
-            render: (element: HTMLElement, options: {
-                sitekey: string;
-                callback?: (token: string) => void;
-                'error-callback'?: (errorCode?: string) => boolean | void;
-                'expired-callback'?: () => void;
-                'timeout-callback'?: () => void;
-                retry?: 'auto' | 'never';
-            }) => string;
-            reset: (widgetId: string) => void;
-            remove: (widgetId: string) => void;
-        };
-    }
-}
 
 type LoginStep = 'email' | 'otp';
 type AuthTransitionState = 'idle' | 'checking' | 'verifying' | 'opening';
 
 const POST_LOGIN_TRANSITION_MIN_MS = 650;
-
-interface AuthPublicConfig {
-    turnstileRequired: boolean;
-    turnstileSiteKey?: string;
-}
 
 function readAccountActivationMethod(value: string | null): AccountActivationMethod | null {
     return value === 'github' || value === 'otp' ? value : null;
@@ -90,89 +61,6 @@ function AuthTransitionScreen({ state }: { state: Exclude<AuthTransitionState, '
     );
 }
 
-function isTurnstileReady() {
-    return typeof window !== 'undefined' && typeof window.turnstile?.render === 'function';
-}
-
-function ensureTurnstileScript(forceReload = false): Promise<void> {
-    if (typeof window === 'undefined') {
-        return Promise.reject(new Error('Turnstile can only load in the browser.'));
-    }
-
-    if (isTurnstileReady() && !forceReload) {
-        return Promise.resolve();
-    }
-
-    if (turnstileScriptLoadPromise && !forceReload) {
-        return turnstileScriptLoadPromise;
-    }
-
-    turnstileScriptLoadPromise = new Promise<void>((resolve, reject) => {
-        const existing = document.querySelector<HTMLScriptElement>(
-            `#${TURNSTILE_SCRIPT_ID}, script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]`
-        );
-
-        if (existing && forceReload) {
-            existing.remove();
-        }
-
-        const script = !forceReload && existing
-            ? existing
-            : document.createElement('script');
-
-        let settled = false;
-        const finish = (err?: Error) => {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(timeoutId);
-            script.removeEventListener('load', handleLoad);
-            script.removeEventListener('error', handleError);
-            if (err) {
-                turnstileScriptLoadPromise = null;
-                reject(err);
-                return;
-            }
-            resolve();
-        };
-
-        const handleLoad = () => {
-            if (isTurnstileReady()) {
-                finish();
-            } else {
-                window.setTimeout(() => {
-                    if (isTurnstileReady()) finish();
-                    else finish(new Error('Turnstile script loaded without exposing the API.'));
-                }, 150);
-            }
-        };
-
-        const handleError = () => finish(new Error('Turnstile script failed to load.'));
-
-        const timeoutId = window.setTimeout(() => {
-            if (isTurnstileReady()) finish();
-            else finish(new Error('Turnstile script timed out.'));
-        }, TURNSTILE_SCRIPT_TIMEOUT_MS);
-
-        script.addEventListener('load', handleLoad, { once: true });
-        script.addEventListener('error', handleError, { once: true });
-
-        if (!script.parentElement) {
-            script.id = TURNSTILE_SCRIPT_ID;
-            script.src = TURNSTILE_SCRIPT_SRC;
-            script.async = true;
-            script.defer = true;
-            document.head.appendChild(script);
-        }
-
-        // Script was already in the DOM and api may already be live.
-        if (isTurnstileReady()) {
-            finish();
-        }
-    });
-
-    return turnstileScriptLoadPromise;
-}
-
 export const meta: Route.MetaFunction = () => [
     { title: "Sign In - Rejourney" },
     {
@@ -203,25 +91,12 @@ export default function LoginPage() {
     const [otp, setOtp] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-    const [turnstileSiteKey, setTurnstileSiteKey] = useState(STATIC_TURNSTILE_SITE_KEY);
-    const [isTurnstileRequired, setIsTurnstileRequired] = useState(Boolean(STATIC_TURNSTILE_SITE_KEY));
-    const [isTurnstileConfigLoading, setIsTurnstileConfigLoading] = useState(!STATIC_TURNSTILE_SITE_KEY);
-    const [turnstileConfigError, setTurnstileConfigError] = useState<string | null>(null);
-    const [turnstileRenderKey, setTurnstileRenderKey] = useState(0);
-    const [isTurnstileLoading, setIsTurnstileLoading] = useState(Boolean(STATIC_TURNSTILE_SITE_KEY));
-    const [turnstileLoadError, setTurnstileLoadError] = useState<string | null>(null);
     const [isRetryingAuth, setIsRetryingAuth] = useState(false);
     const [isValidatingExistingSession, setIsValidatingExistingSession] = useState(false);
     const [authTransitionState, setAuthTransitionState] = useState<AuthTransitionState>('idle');
-    const turnstileRef = useRef<HTMLDivElement>(null);
-    const turnstileWidgetId = useRef<string | null>(null);
-    const turnstileForceReload = useRef(false);
     const authTransitionStartedAt = useRef<number | null>(null);
     const postLoginNavigationStarted = useRef(false);
     const postLoginNavigationTimer = useRef<number | null>(null);
-    const isTurnstileEnabled = isTurnstileRequired && Boolean(turnstileSiteKey);
-    const shouldShowTurnstileArea = isTurnstileConfigLoading || isTurnstileRequired || Boolean(turnstileConfigError);
     const pendingAccountActivationMethod = readAccountActivationMethod(searchParams.get(ACCOUNT_ACTIVATED_PARAM));
 
     const startAuthTransition = useCallback((state: Exclude<AuthTransitionState, 'idle'>) => {
@@ -240,62 +115,6 @@ export default function LoginPage() {
         }
         setAuthTransitionState('idle');
     }, []);
-
-    const removeTurnstileWidget = useCallback(() => {
-        if (typeof window !== 'undefined' && window.turnstile && turnstileWidgetId.current) {
-            try {
-                window.turnstile.remove(turnstileWidgetId.current);
-            } catch (err) {
-                console.debug('Unable to remove Turnstile widget:', err);
-            }
-        }
-
-        turnstileWidgetId.current = null;
-        turnstileRef.current?.replaceChildren();
-        setTurnstileToken(null);
-    }, []);
-
-    const requestFreshTurnstileWidget = useCallback((options?: { reloadScript?: boolean }) => {
-        if (!isTurnstileEnabled) {
-            setTurnstileLoadError(null);
-            setIsTurnstileLoading(false);
-            setTurnstileToken(null);
-            return;
-        }
-
-        turnstileForceReload.current = !!options?.reloadScript;
-        setTurnstileLoadError(null);
-        setIsTurnstileLoading(true);
-        removeTurnstileWidget();
-        setTurnstileRenderKey((key) => key + 1);
-    }, [isTurnstileEnabled, removeTurnstileWidget]);
-
-    const resetTurnstileWidget = useCallback(() => {
-        if (!isTurnstileEnabled) {
-            setTurnstileToken(null);
-            setIsTurnstileLoading(false);
-            setTurnstileLoadError(null);
-            return;
-        }
-
-        if (typeof window === 'undefined') {
-            setTurnstileToken(null);
-            return;
-        }
-
-        if (!window.turnstile || !turnstileWidgetId.current) {
-            requestFreshTurnstileWidget();
-            return;
-        }
-
-        try {
-            window.turnstile.reset(turnstileWidgetId.current);
-            setTurnstileToken(null);
-        } catch (err) {
-            console.debug('Unable to reset Turnstile widget:', err);
-            requestFreshTurnstileWidget();
-        }
-    }, [isTurnstileEnabled, requestFreshTurnstileWidget]);
 
     const getPostLoginDestination = useCallback(() => {
         if (typeof window === 'undefined') {
@@ -378,77 +197,6 @@ export default function LoginPage() {
         };
     }, []);
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        const controller = new AbortController();
-        setTurnstileConfigError(null);
-        if (!STATIC_TURNSTILE_SITE_KEY) {
-            setIsTurnstileConfigLoading(true);
-        }
-
-        fetch(`${API_BASE_URL || ''}/api/auth/config?_=${Date.now()}`, {
-            method: 'GET',
-            credentials: 'include',
-            cache: 'no-store',
-            headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-            },
-            signal: controller.signal,
-        })
-            .then(async (response) => {
-                if (!response.ok) {
-                    throw new Error('Unable to load auth configuration.');
-                }
-                return response.json() as Promise<AuthPublicConfig>;
-            })
-            .then((config) => {
-                const apiSiteKey = config.turnstileSiteKey?.trim() || '';
-                const nextSiteKey = apiSiteKey || STATIC_TURNSTILE_SITE_KEY;
-                const nextRequired = Boolean(config.turnstileRequired);
-
-                if (turnstileSiteKey !== nextSiteKey || isTurnstileRequired !== nextRequired) {
-                    setTurnstileToken(null);
-                }
-                setTurnstileSiteKey(nextSiteKey);
-                setIsTurnstileRequired(nextRequired);
-                setTurnstileConfigError(
-                    nextRequired && !nextSiteKey
-                        ? 'Security verification is required, but the public site key is not configured.'
-                        : null
-                );
-                setIsTurnstileLoading(nextRequired && Boolean(nextSiteKey));
-            })
-            .catch((err) => {
-                if (controller.signal.aborted) return;
-                if (STATIC_TURNSTILE_SITE_KEY) {
-                    setTurnstileSiteKey(STATIC_TURNSTILE_SITE_KEY);
-                    setIsTurnstileRequired(true);
-                    setIsTurnstileLoading(true);
-                    return;
-                }
-
-                // Auth config is a UX hint. The backend still enforces Turnstile
-                // on OTP requests when it is configured, so don't block local
-                // sign-in if this preflight route is unreachable.
-                console.warn('Unable to load auth configuration; continuing without a client-side security prompt.', err);
-                setIsTurnstileRequired(false);
-                setTurnstileSiteKey('');
-                setTurnstileToken(null);
-                setTurnstileLoadError(null);
-                setIsTurnstileLoading(false);
-                setTurnstileConfigError(null);
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) {
-                    setIsTurnstileConfigLoading(false);
-                }
-            });
-
-        return () => controller.abort();
-    }, []);
-
     // Redirect if already authenticated
     useEffect(() => {
         if (authLoading || !isAuthenticated || postLoginNavigationStarted.current) return;
@@ -502,134 +250,35 @@ export default function LoginPage() {
         };
     }, []);
 
-    // Initialize Turnstile widget
-    useEffect(() => {
-        if (!isTurnstileEnabled) {
-            setIsTurnstileLoading(false);
-            setTurnstileLoadError(null);
-            setTurnstileToken(null);
-            return;
-        }
-
-        if (step !== 'email' || typeof window === 'undefined') {
-            return;
-        }
-
-        let cancelled = false;
-        const forceReload = turnstileForceReload.current;
-        turnstileForceReload.current = false;
-
-        const renderTurnstile = () => {
-            if (cancelled || !window.turnstile || !turnstileRef.current) return;
-
-            // Tear down any stale widget instance before re-rendering.
-            if (turnstileWidgetId.current) {
-                try { window.turnstile.remove(turnstileWidgetId.current); } catch { /* noop */ }
-                turnstileWidgetId.current = null;
-            }
-            turnstileRef.current.replaceChildren();
-            setTurnstileToken(null);
-
-            try {
-                const widgetId = window.turnstile.render(turnstileRef.current, {
-                    sitekey: turnstileSiteKey,
-                    callback: (token: string) => {
-                        if (cancelled) return;
-                        setTurnstileToken(token);
-                        setIsTurnstileLoading(false);
-                        setTurnstileLoadError(null);
-                    },
-                    'error-callback': (errorCode?: string) => {
-                        if (!cancelled) {
-                            console.debug('Turnstile reported a retryable issue:', errorCode);
-                            setTurnstileToken(null);
-                            setIsTurnstileLoading(false);
-                        }
-                        return true;
-                    },
-                    'expired-callback': () => {
-                        if (cancelled) return;
-                        setTurnstileToken(null);
-                        if (window.turnstile && turnstileWidgetId.current) {
-                            try { window.turnstile.reset(turnstileWidgetId.current); } catch { /* noop */ }
-                        }
-                    },
-                    'timeout-callback': () => {
-                        if (cancelled) return;
-                        if (window.turnstile && turnstileWidgetId.current) {
-                            try { window.turnstile.reset(turnstileWidgetId.current); } catch { /* noop */ }
-                        }
-                    },
-                    retry: 'auto',
-                });
-                turnstileWidgetId.current = widgetId;
-                setIsTurnstileLoading(false);
-                setTurnstileLoadError(null);
-            } catch (err) {
-                console.error('Failed to render Turnstile widget:', err);
-                turnstileWidgetId.current = null;
-                setIsTurnstileLoading(false);
-                setTurnstileLoadError('Security check could not start.');
-            }
-        };
-
-        setIsTurnstileLoading(true);
-        setTurnstileLoadError(null);
-
-        ensureTurnstileScript(forceReload)
-            .then(() => {
-                if (cancelled) return;
-                renderTurnstile();
-            })
-            .catch((err) => {
-                if (cancelled) return;
-                setIsTurnstileLoading(false);
-                setTurnstileLoadError(err instanceof Error ? err.message : 'Failed to load security check.');
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [step, turnstileRenderKey, isTurnstileEnabled, turnstileSiteKey]);
-
-    useEffect(() => {
-        if (!isTurnstileEnabled) return;
-        if (step !== 'email') {
-            removeTurnstileWidget();
-        }
-    }, [step, removeTurnstileWidget, isTurnstileEnabled]);
-
     const handleSendOtp = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        if (isTurnstileConfigLoading) {
-            setError('Security verification is still loading. Please wait a moment.');
+        const targetEmail = email.trim();
+
+        if (!targetEmail) {
+            setError('Email address is required.');
             return;
         }
-        if (isTurnstileRequired && !turnstileSiteKey) {
-            setError(turnstileConfigError || 'Security verification is required, but the prompt could not load.');
+
+        if (targetEmail !== email) {
+            setEmail(targetEmail);
+        }
+
+        if (isAuthenticated) {
+            navigateToPostLoginDestination({ accountActivationMethod: pendingAccountActivationMethod });
             return;
         }
-        if (isTurnstileRequired && !turnstileToken) {
-            setError('Security verification...');
-            return;
-        }
+
         setIsLoading(true);
         try {
-            const result = await sendOtp(email, turnstileToken);
+            const result = await sendOtp(targetEmail);
             if (result.ok) {
                 setStep('otp');
             } else {
                 setError(result.message || authError || 'Failed to send verification code');
-                if (isTurnstileEnabled) {
-                    resetTurnstileWidget();
-                }
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to send verification code');
-            if (isTurnstileEnabled) {
-                resetTurnstileWidget();
-            }
         } finally {
             setIsLoading(false);
         }
@@ -666,18 +315,12 @@ export default function LoginPage() {
         setStep('email');
         setOtp('');
         setError(null);
-        if (isTurnstileEnabled) {
-            requestFreshTurnstileWidget();
-        }
     };
 
     const handleChangeEmail = () => {
         setStep('email');
         setOtp('');
         setError(null);
-        if (isTurnstileEnabled) {
-            requestFreshTurnstileWidget();
-        }
     };
 
     // Show loading state while checking authentication
@@ -763,41 +406,6 @@ export default function LoginPage() {
                                     className="w-full rounded-none border-2 border-black focus-visible:ring-0 focus-visible:ring-offset-0 font-mono text-sm placeholder:normal-case h-12"
                                 />
 
-                                {shouldShowTurnstileArea && (
-                                    <div className="flex flex-col items-center justify-center my-4 min-h-[65px]">
-                                        {isTurnstileEnabled && (
-                                            <div ref={turnstileRef} id="turnstile-widget" key={turnstileRenderKey}></div>
-                                        )}
-                                        {(isTurnstileConfigLoading || (isTurnstileLoading && !turnstileLoadError)) && !turnstileConfigError && (
-                                            <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-gray-500 mt-2">
-                                                <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-                                                {isTurnstileConfigLoading ? 'Preparing security check...' : 'Loading security check...'}
-                                            </div>
-                                        )}
-                                        {isTurnstileEnabled && !turnstileToken && !isTurnstileLoading && !turnstileLoadError && !turnstileConfigError && (
-                                            <div className="mt-2 text-center text-[10px] font-mono uppercase text-gray-500">
-                                                Security check...
-                                            </div>
-                                        )}
-                                        {(turnstileLoadError || turnstileConfigError) && (
-                                            <div className="flex flex-col items-center gap-2 mt-2">
-                                                <div className="text-[10px] font-mono uppercase text-red-600 text-center">
-                                                    {turnstileConfigError || turnstileLoadError}
-                                                </div>
-                                                {isTurnstileEnabled && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => requestFreshTurnstileWidget({ reloadScript: true })}
-                                                        className="text-[10px] font-mono uppercase font-bold underline decoration-2 underline-offset-4 text-black hover:text-gray-700"
-                                                    >
-                                                        Reload security check
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
                                 {error && (
                                     <div className="text-xs font-bold text-red-600 bg-red-50 border-2 border-red-500 p-3 uppercase">
                                         {error}
@@ -807,12 +415,7 @@ export default function LoginPage() {
                                 <Button
                                     type="submit"
                                     variant="primary"
-                                    disabled={
-                                        !email
-                                        || isTurnstileConfigLoading
-                                        || (isTurnstileRequired && (!turnstileSiteKey || !turnstileToken))
-                                        || isLoading
-                                    }
+                                    disabled={!email.trim() || isLoading}
                                     className="w-full rounded-none bg-black text-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all h-12 font-black uppercase tracking-widest text-sm hover:bg-gray-900"
                                 >
                                     {isLoading ? 'SENDING...' : 'PASSWORDLESS OTP'}

@@ -18,6 +18,7 @@ const PUBLIC_PREFIXES = [
   "/engineering",
   "/pricing",
   "/invite",
+  "/share",
 ];
 
 export function getPublicComparablePath(pathname: string): string {

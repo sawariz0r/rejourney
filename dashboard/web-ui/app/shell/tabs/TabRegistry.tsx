@@ -2,19 +2,7 @@ import React from 'react';
 import { matchPath } from 'react-router';
 import {
     MessageSquareWarning,
-    Database,
-    Activity,
-    Map,
-    Smartphone,
-    Globe,
-    Flame,
-    AlertTriangle,
-    Mail,
     Play,
-    Settings,
-    Users,
-    CreditCard,
-    User,
     Search as SearchIcon,
 } from 'lucide-react';
 import {
@@ -29,6 +17,8 @@ import {
     getANRsOverview,
     getSessionsPaginated,
 } from '~/shared/api/client';
+import { stripDashboardPathPrefix } from '~/shell/routing/dashboardRouteAliases';
+import { DASHBOARD_PAGE_META } from '~/shell/navigation/dashboardPageMeta';
 
 export interface TabInfo {
     id: string;
@@ -77,7 +67,7 @@ const loadSearch = () => import('~/features/app/search/route').then((module) => 
 const routes: RouteDefinition[] = [
     {
         pattern: '/general',
-        getInfo: () => ({ id: 'general', title: 'General', icon: MessageSquareWarning }),
+        getInfo: () => ({ id: 'general', title: DASHBOARD_PAGE_META.general.tabTitle, icon: DASHBOARD_PAGE_META.general.icon }),
         Component: React.lazy(loadGeneralOverview),
         loadComponent: loadGeneralOverview,
         prefetchData: async ({ projectId, timeRange }) => {
@@ -92,7 +82,7 @@ const routes: RouteDefinition[] = [
         loadComponent: loadIssueDetail,
         getProps: (p) => ({ issueId: p.issueId }),
     },
-    { pattern: '/issues', getInfo: () => ({ id: 'general', title: 'General', icon: MessageSquareWarning }), Component: React.lazy(loadGeneralOverview), loadComponent: loadGeneralOverview },
+    { pattern: '/issues', getInfo: () => ({ id: 'general', title: DASHBOARD_PAGE_META.general.tabTitle, icon: DASHBOARD_PAGE_META.general.icon }), Component: React.lazy(loadGeneralOverview), loadComponent: loadGeneralOverview },
     {
         pattern: '/issues/:issueId',
         getInfo: (p) => ({ id: `issue-${p.issueId}`, title: `Issue ${(p.issueId || '').substring(0, 8)}...`, icon: MessageSquareWarning }),
@@ -101,8 +91,8 @@ const routes: RouteDefinition[] = [
         getProps: (p) => ({ issueId: p.issueId }),
     },
     {
-        pattern: '/analytics/api',
-        getInfo: () => ({ id: 'analytics-api', title: 'API Insights', icon: Activity }),
+        pattern: '/api',
+        getInfo: () => ({ id: 'analytics-api', title: DASHBOARD_PAGE_META.api.tabTitle, icon: DASHBOARD_PAGE_META.api.icon }),
         Component: React.lazy(loadApiAnalytics),
         loadComponent: loadApiAnalytics,
         prefetchData: async ({ projectId, timeRange }) => {
@@ -111,8 +101,8 @@ const routes: RouteDefinition[] = [
         },
     },
     {
-        pattern: '/analytics/journeys',
-        getInfo: () => ({ id: 'analytics-journeys', title: 'User Journeys', icon: Map }),
+        pattern: '/journeys',
+        getInfo: () => ({ id: 'analytics-journeys', title: DASHBOARD_PAGE_META.journeys.tabTitle, icon: DASHBOARD_PAGE_META.journeys.icon }),
         Component: React.lazy(loadJourneys),
         loadComponent: loadJourneys,
         prefetchData: async ({ projectId, timeRange }) => {
@@ -121,8 +111,8 @@ const routes: RouteDefinition[] = [
         },
     },
     {
-        pattern: '/analytics/heatmaps',
-        getInfo: () => ({ id: 'analytics-heatmaps', title: 'Heatmaps', icon: Flame }),
+        pattern: '/heatmaps',
+        getInfo: () => ({ id: 'analytics-heatmaps', title: DASHBOARD_PAGE_META.heatmaps.tabTitle, icon: DASHBOARD_PAGE_META.heatmaps.icon }),
         Component: React.lazy(loadHeatmaps),
         loadComponent: loadHeatmaps,
         prefetchData: async ({ projectId, timeRange }) => {
@@ -131,8 +121,8 @@ const routes: RouteDefinition[] = [
         },
     },
     {
-        pattern: '/analytics/devices',
-        getInfo: () => ({ id: 'analytics-devices', title: 'Devices', icon: Smartphone }),
+        pattern: '/devices',
+        getInfo: () => ({ id: 'analytics-devices', title: DASHBOARD_PAGE_META.devices.tabTitle, icon: DASHBOARD_PAGE_META.devices.icon }),
         Component: React.lazy(loadDevices),
         loadComponent: loadDevices,
         prefetchData: async ({ projectId, timeRange }) => {
@@ -141,8 +131,8 @@ const routes: RouteDefinition[] = [
         },
     },
     {
-        pattern: '/analytics/geo',
-        getInfo: () => ({ id: 'analytics-geo', title: 'Geographic', icon: Globe }),
+        pattern: '/geo',
+        getInfo: () => ({ id: 'analytics-geo', title: DASHBOARD_PAGE_META.geo.tabTitle, icon: DASHBOARD_PAGE_META.geo.icon }),
         Component: React.lazy(loadGeo),
         loadComponent: loadGeo,
         prefetchData: async ({ projectId, timeRange }) => {
@@ -152,7 +142,7 @@ const routes: RouteDefinition[] = [
     },
     {
         pattern: '/stability',
-        getInfo: () => ({ id: 'stability', title: 'Stability', icon: AlertTriangle }),
+        getInfo: () => ({ id: 'stability', title: DASHBOARD_PAGE_META.stability.tabTitle, icon: DASHBOARD_PAGE_META.stability.icon }),
         Component: React.lazy(loadStability),
         loadComponent: loadStability,
         prefetchData: async ({ projectId, timeRange }) => {
@@ -167,7 +157,7 @@ const routes: RouteDefinition[] = [
     },
     {
         pattern: '/sessions',
-        getInfo: () => ({ id: 'sessions', title: 'Replays', icon: Database }),
+        getInfo: () => ({ id: 'sessions', title: DASHBOARD_PAGE_META.sessions.tabTitle, icon: DASHBOARD_PAGE_META.sessions.icon }),
         Component: React.lazy(loadRecordingsList),
         loadComponent: loadRecordingsList,
         prefetchData: async ({ projectId, timeRange }) => {
@@ -183,7 +173,7 @@ const routes: RouteDefinition[] = [
     },
     {
         pattern: '/alerts/emails',
-        getInfo: () => ({ id: 'alerts-emails', title: 'Email Alerts', icon: Mail }),
+        getInfo: () => ({ id: 'alerts-emails', title: DASHBOARD_PAGE_META.emails.tabTitle, icon: DASHBOARD_PAGE_META.emails.icon }),
         Component: React.lazy(loadAlertEmails),
         loadComponent: loadAlertEmails,
     },
@@ -194,12 +184,12 @@ const routes: RouteDefinition[] = [
         loadComponent: loadRecordingDetail,
         getProps: (p) => ({ sessionId: p.sessionId }),
     },
-    { pattern: '/team', getInfo: () => ({ id: 'team', title: 'Team', icon: Users }), Component: React.lazy(loadTeamSettings), loadComponent: loadTeamSettings },
-    { pattern: '/billing', getInfo: () => ({ id: 'billing', title: 'Billing', icon: CreditCard }), Component: React.lazy(loadBillingSettings), loadComponent: loadBillingSettings },
-    { pattern: '/account', getInfo: () => ({ id: 'account', title: 'Account', icon: User }), Component: React.lazy(loadAccountSettings), loadComponent: loadAccountSettings },
+    { pattern: '/team', getInfo: () => ({ id: 'team', title: DASHBOARD_PAGE_META.team.tabTitle, icon: DASHBOARD_PAGE_META.team.icon }), Component: React.lazy(loadTeamSettings), loadComponent: loadTeamSettings },
+    { pattern: '/billing', getInfo: () => ({ id: 'billing', title: DASHBOARD_PAGE_META.billing.tabTitle, icon: DASHBOARD_PAGE_META.billing.icon }), Component: React.lazy(loadBillingSettings), loadComponent: loadBillingSettings },
+    { pattern: '/account', getInfo: () => ({ id: 'account', title: DASHBOARD_PAGE_META.account.tabTitle, icon: DASHBOARD_PAGE_META.account.icon }), Component: React.lazy(loadAccountSettings), loadComponent: loadAccountSettings },
     {
         pattern: '/settings/:projectId',
-        getInfo: (p) => ({ id: `settings-${p.projectId}`, title: 'Project Settings', icon: Settings }),
+        getInfo: (p) => ({ id: `settings-${p.projectId}`, title: DASHBOARD_PAGE_META.project.tabTitle, icon: DASHBOARD_PAGE_META.project.icon }),
         Component: React.lazy(loadProjectSettings),
         loadComponent: loadProjectSettings,
         getProps: (p) => ({ projectId: p.projectId }),
@@ -207,12 +197,8 @@ const routes: RouteDefinition[] = [
     { pattern: '/search', getInfo: () => ({ id: 'search', title: 'New Tab', icon: SearchIcon }), Component: React.lazy(loadSearch), loadComponent: loadSearch },
 ];
 
-function stripRoutePrefix(pathname: string): string {
-    return pathname.replace(/^\/(dashboard|demo)/, '');
-}
-
 function findRoute(pathname: string): RouteDefinition | null {
-    const pathWithoutPrefix = stripRoutePrefix(pathname);
+    const pathWithoutPrefix = stripDashboardPathPrefix(pathname);
     for (const route of routes) {
         if (matchPath(route.pattern, pathWithoutPrefix)) {
             return route;
@@ -223,7 +209,7 @@ function findRoute(pathname: string): RouteDefinition | null {
 
 export const TabRegistry = {
     getTabInfo: (pathname: string): TabInfo | null => {
-        const pathWithoutPrefix = stripRoutePrefix(pathname);
+        const pathWithoutPrefix = stripDashboardPathPrefix(pathname);
 
         for (const route of routes) {
             const match = matchPath(route.pattern, pathWithoutPrefix);
@@ -235,8 +221,9 @@ export const TabRegistry = {
     },
 
     resolve: (pathname: string): TabDefinition | null => {
+        const pathWithoutPrefix = stripDashboardPathPrefix(pathname);
         for (const route of routes) {
-            const match = matchPath(route.pattern, pathname);
+            const match = matchPath(route.pattern, pathWithoutPrefix);
             if (match) {
                 const params = match.params as Record<string, string>;
                 const info = route.getInfo(params);

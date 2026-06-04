@@ -48,9 +48,19 @@ export type AuditAction =
     | 'password_reset_requested'
     | 'quota_exceeded'
     | 'recording_disabled'
-    | 'recording_enabled';
+    | 'recording_enabled'
+    | 'replay_share_created'
+    | 'replay_share_revoked'
+    | 'revenue_source_changed'
+    | 'revenue_sync_requested'
+    | 'revenue_source_disconnected'
+    | 'superwall_revenue_connected'
+    | 'custom_event_revenue_configured'
+    | 'manual_revenue_created'
+    | 'manual_revenue_updated'
+    | 'manual_revenue_deleted';
 
-export type TargetType = 'team' | 'project' | 'session' | 'api_key' | 'user' | 'billing';
+export type TargetType = 'team' | 'project' | 'session' | 'replay_share' | 'api_key' | 'user' | 'billing' | 'revenue_source';
 
 export interface AuditLogEntry {
     userId?: string;

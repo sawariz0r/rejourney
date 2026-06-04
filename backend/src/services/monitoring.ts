@@ -29,6 +29,7 @@ export type WorkerName =
     | 'retentionWorker'
     | 'statsAggregator'
     | 'alertWorker'
+    | 'revenueSyncWorker'
     | 'stripeSyncWorker';
 
 export type WorkerMetric = {

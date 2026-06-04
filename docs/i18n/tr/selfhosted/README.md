@@ -174,7 +174,7 @@ Yükleyici bu dosyayı oluşturur. Tipik değişkenler şunları içerir:
 - **Depolamak:** `STORAGE_BACKEND`, `S3_*` ve isteğe bağlı olarak `MINIO_*`
 - **Güvenlik:** `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY`
 
-İsteğe bağlı entegrasyonlar (kullanılmıyorsa boş bırakın): Stripe, SMTP, GitHub OAuth, Turnstile, vb.
+İsteğe bağlı entegrasyonlar (kullanılmıyorsa boş bırakın): Stripe, SMTP, GitHub OAuth, vb.
 
 **Depolama veya etki alanıyla ilgili değerleri değiştirme:** `.env.selfhosted`'yi düzenleyin ve ardından şunu çalıştırın:
 

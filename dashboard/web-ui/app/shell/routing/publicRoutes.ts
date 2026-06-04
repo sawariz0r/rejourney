@@ -23,6 +23,7 @@ export const publicRoutes = [
   ...MARKETING_LOCALE_SLUGS.map((locale) =>
     route(`${locale}/pricing`, "features/public/pricing/route.tsx", { id: `public-pricing-${locale}` })
   ),
+  route("share/replay/:shareToken", "features/public/replay-share/route.tsx", { id: "public-replay-share" }),
   route("about", "features/public/about/route.tsx", { id: "public-about" }),
   ...SEO_PAGE_PATHS.map((path) =>
     route(path.replace(/^\//, ""), "features/public/seo/route.tsx", { id: `public-seo-${path.replace(/^\//, "").replace(/\//g, "-")}` })
@@ -31,6 +32,7 @@ export const publicRoutes = [
   route("terms-of-service", "features/public/legal/terms/route.tsx", { id: "public-terms" }),
   route("privacy-policy", "features/public/legal/privacy/route.tsx", { id: "public-privacy" }),
   route("dpa", "features/public/legal/dpa/route.tsx", { id: "public-dpa" }),
+  route("attributions", "features/public/legal/attributions/route.tsx", { id: "public-attributions" }),
   route("engineering", "features/public/engineering/list/route.tsx", { id: "public-engineering-list" }),
   route("engineering/:date/:slug", "features/public/engineering/article/route.tsx", { id: "public-engineering-article" }),
   ...MARKETING_LOCALE_SLUGS.flatMap((locale) => [

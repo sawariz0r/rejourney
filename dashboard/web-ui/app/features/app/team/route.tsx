@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useTeam } from '~/shared/providers/TeamContext';
 import { useAuth } from '~/shared/providers/AuthContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
 import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
@@ -304,7 +305,7 @@ export const TeamSettings: React.FC = () => {
 
   if (!currentTeam) {
     return (
-      <SettingsLayout className="rejourney-settings-page rejourney-team-settings-page" title="Team" description="Select a team to manage" icon={<Users className="w-6 h-6" />} iconColor="bg-[#f4f4f5]">
+      <SettingsLayout className="rejourney-settings-page rejourney-team-settings-page" title="Team" description="Select a team to manage" {...dashboardPageHeaderProps('team')}>
         <div className="p-12 text-center border-2 border-dashed border-slate-300 bg-slate-50">
           <Building className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <h2 className="text-lg font-bold text-slate-900 mb-1">No Team Selected</h2>
@@ -319,8 +320,7 @@ export const TeamSettings: React.FC = () => {
       className="rejourney-settings-page rejourney-team-settings-page"
       title="Team"
       description={`Manage members for ${currentTeam.name}`}
-      icon={<Users className="w-6 h-6" />}
-      iconColor="bg-[#f4f4f5]"
+      {...dashboardPageHeaderProps('team')}
     >
       {/* Team Information */}
       <section className="space-y-4">

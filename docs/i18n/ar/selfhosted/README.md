@@ -174,7 +174,7 @@ cd rejourney
 - **تخزين:** `STORAGE_BACKEND`، `S3_*`، واختياريًا `MINIO_*`
 - **حماية:** `JWT_SECRET`، `JWT_SIGNING_KEY`، `INGEST_HMAC_SECRET`، `STORAGE_ENCRYPTION_KEY`
 
-عمليات التكامل الاختيارية (اتركها فارغة إذا لم يتم استخدامها): Stripe، SMTP، GitHub OAuth، Turnstile، إلخ.
+عمليات التكامل الاختيارية (اتركها فارغة إذا لم يتم استخدامها): Stripe، SMTP، GitHub OAuth، إلخ.
 
 **تغيير مساحة التخزين أو القيم المتعلقة بالمجال:** قم بتحرير `.env.selfhosted`، ثم قم بتشغيل:
 

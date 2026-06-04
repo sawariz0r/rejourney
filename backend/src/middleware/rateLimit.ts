@@ -5,6 +5,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { createHash } from 'crypto';
 import { checkRateLimit, isRedisConnected, getRedis, getRedisDiagnosticsForLog } from '../db/redis.js';
 import { rateLimits } from '../config.js';
 import { logger } from '../logger.js';
@@ -29,14 +30,62 @@ interface RateLimitOptions {
     max: number;
     keyGenerator?: (req: Request) => string;
     failOpen?: boolean; // Allow if Redis is down
+    redisUnavailableFallback?: boolean;
     message?: string;
+}
+
+interface InMemoryRateLimitBucket {
+    count: number;
+    resetAt: number;
+}
+
+const inMemoryFallbackBuckets = new Map<string, InMemoryRateLimitBucket>();
+
+declare global {
+    namespace Express {
+        interface Request {
+            rateLimitFallbackUsed?: boolean;
+        }
+    }
+}
+
+export function checkInMemoryRateLimit(
+    key: string,
+    windowMs: number,
+    max: number,
+    now: number = Date.now(),
+    store: Map<string, InMemoryRateLimitBucket> = inMemoryFallbackBuckets,
+): { allowed: boolean; remaining: number; resetAt: number } {
+    const existing = store.get(key);
+
+    if (!existing || existing.resetAt <= now) {
+        const resetAt = now + windowMs;
+        store.set(key, { count: 1, resetAt });
+        return {
+            allowed: true,
+            remaining: Math.max(max - 1, 0),
+            resetAt,
+        };
+    }
+
+    existing.count += 1;
+
+    return {
+        allowed: existing.count <= max,
+        remaining: Math.max(max - existing.count, 0),
+        resetAt: existing.resetAt,
+    };
+}
+
+export function resetInMemoryRateLimitFallbacksForTests(): void {
+    inMemoryFallbackBuckets.clear();
 }
 
 /**
  * Create a rate limiter middleware
  */
 export function rateLimit(options: RateLimitOptions) {
-    const { windowMs, max, keyGenerator, failOpen = false, message } = options;
+    const { windowMs, max, keyGenerator, failOpen = false, redisUnavailableFallback = false, message } = options;
 
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         // Skip rate limiting in test mode
@@ -45,10 +94,55 @@ export function rateLimit(options: RateLimitOptions) {
             return;
         }
 
+        const key = keyGenerator
+            ? keyGenerator(req)
+            : `rate:${req.ip}:${req.path}`;
+
+        const applyInMemoryFallback = (event: string, err?: unknown): void => {
+            const result = checkInMemoryRateLimit(key, windowMs, max);
+            req.rateLimitFallbackUsed = true;
+
+            res.set('X-RateLimit-Limit', String(max));
+            res.set('X-RateLimit-Remaining', String(result.remaining));
+            res.set('X-RateLimit-Reset', String(Math.ceil(result.resetAt / 1000)));
+            res.set('X-RateLimit-Fallback', 'memory');
+
+            logger.warn(
+                {
+                    err,
+                    event,
+                    path: req.path,
+                    rateLimitKey: key,
+                    allowed: result.allowed,
+                    max,
+                    windowMs,
+                    retryAfterSec: Math.ceil((result.resetAt - Date.now()) / 1000),
+                    ...getRedisDiagnosticsForLog(),
+                },
+                event,
+            );
+
+            if (!result.allowed) {
+                res.status(429).json({
+                    error: 'Too Many Requests',
+                    message: message || 'Rate limit exceeded. Please try again later.',
+                    retryAfter: Math.ceil((result.resetAt - Date.now()) / 1000),
+                });
+                return;
+            }
+
+            next();
+        };
+
         const redisClient = getRedis();
         const redisReady = isRedisClientUsable(redisClient);
 
         if (!redisReady) {
+            if (redisUnavailableFallback) {
+                applyInMemoryFallback('rate_limit.redis_unavailable_memory_fallback');
+                return;
+            }
+
             if (failOpen) {
                 logger.warn(
                     {
@@ -81,11 +175,6 @@ export function rateLimit(options: RateLimitOptions) {
         }
 
         try {
-            // Generate rate limit key
-            const key = keyGenerator
-                ? keyGenerator(req)
-                : `rate:${req.ip}:${req.path}`;
-
             const result = await checkRateLimit(key, windowMs, max);
 
             // Set rate limit headers
@@ -131,6 +220,11 @@ export function rateLimit(options: RateLimitOptions) {
                 },
                 'Rate limit check failed',
             );
+            if (redisUnavailableFallback) {
+                applyInMemoryFallback('rate_limit.redis_error_memory_fallback', err);
+                return;
+            }
+
             if (failOpen) {
                 next();
             } else {
@@ -254,7 +348,8 @@ export const ingestSegmentDeviceRateLimiter = rateLimit({
 export const otpSendRateLimiter = rateLimit({
     ...rateLimits.auth.otpSend,
     keyGenerator: (req) => `rate:otp:send:${req.body?.email || req.ip}`,
-    failOpen: false, // OTP must be rate limited
+    failOpen: false,
+    redisUnavailableFallback: true,
     message: 'Too many OTP requests. Please wait before requesting another code.',
 });
 
@@ -264,6 +359,7 @@ export const otpSendIpRateLimiter = rateLimit({
     max: 40,
     keyGenerator: (req) => `rate:otp:send:ip:${req.ip || 'unknown'}`,
     failOpen: false,
+    redisUnavailableFallback: true,
     message: 'Too many OTP requests from this network. Please try again later.',
 });
 
@@ -272,6 +368,7 @@ export const otpVerifyRateLimiter = rateLimit({
     ...rateLimits.auth.otpVerify,
     keyGenerator: (req) => `rate:otp:verify:${req.body?.email || req.ip}`,
     failOpen: false,
+    redisUnavailableFallback: true,
     message: 'Too many verification attempts. Please try again later.',
 });
 
@@ -281,6 +378,7 @@ export const otpVerifyIpRateLimiter = rateLimit({
     max: 80,
     keyGenerator: (req) => `rate:otp:verify:ip:${req.ip || 'unknown'}`,
     failOpen: false,
+    redisUnavailableFallback: true,
     message: 'Too many verification attempts from this network. Please try again later.',
 });
 
@@ -325,6 +423,20 @@ export const signedUrlRateLimiter = rateLimit({
     keyGenerator: (req) => `rate:signed:${req.project?.id || req.user?.id || req.ip}`,
     failOpen: false,
     message: 'Too many signed URL requests.',
+});
+
+export const replayShareRateLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 1200,
+    keyGenerator: (req) => {
+        const token = typeof req.params.shareToken === 'string' ? req.params.shareToken : '';
+        const tokenHash = token
+            ? createHash('sha256').update(token).digest('hex').slice(0, 16)
+            : 'unknown';
+        return `rate:replay-share:${req.ip || 'unknown'}:${tokenHash}`;
+    },
+    failOpen: false,
+    message: 'Too many replay share requests. Please slow down.',
 });
 
 // Network grouping rate limiter

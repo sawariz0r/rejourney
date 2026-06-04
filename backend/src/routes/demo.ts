@@ -92,7 +92,7 @@ router.get(
                 userId: session.userDisplayId || null,
                 anonymousId: session.anonymousHash,
                 deviceId: session.deviceId,
-                anonymousDisplayName: session.deviceId && !session.userDisplayId ? generateAnonymousName(session.deviceId) : null,
+                anonymousDisplayName: session.deviceId ? generateAnonymousName(session.deviceId) : null,
                 platform: session.platform,
                 appVersion: session.appVersion,
                 osVersion: session.osVersion,
@@ -204,7 +204,7 @@ function createMockDemoSession() {
         userId: 'demo-user-001',
         anonymousId: null,
         deviceId: 'demo-device-001',
-        anonymousDisplayName: null, // Has userId, so no anonymous name
+        anonymousDisplayName: generateAnonymousName('demo-device-001'),
         platform: 'ios',
         appVersion: '2.1.0',
         osVersion: '17.2',

@@ -7,6 +7,7 @@ import { useDemoMode } from './DemoModeContext';
 import { getWorkspace, saveWorkspace, WorkspaceTab } from '~/shared/api/client';
 import { isUuid } from '~/shared/lib/ids';
 import { isPublicRoutePath } from '~/shared/lib/publicRoutePaths';
+import { normalizeLegacyAnalyticsAppPath, stripDashboardPathPrefix } from '~/shell/routing/dashboardRouteAliases';
 
 export interface Tab {
     id: string;
@@ -91,14 +92,6 @@ function normalizeLegacyTabId(tabId: string): string {
     return tabId === 'issues' ? 'general' : tabId;
 }
 
-function stripPathPrefix(pathname: string): string {
-    return pathname.replace(/^\/(dashboard|demo)/, '') || '/general';
-}
-
-function isWarehousePath(pathname: string): boolean {
-    return stripPathPrefix(pathname).startsWith('/warehouse');
-}
-
 function trimTabsForLimits(
     candidateTabs: Tab[],
     recentlyClosed: Tab[],
@@ -164,7 +157,6 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const tabsRef = useRef(tabs);
     const recentlyClosedRef = useRef(recentlyClosed);
     const hasLoadedRef = useRef(hasLoaded);
-    const locationPathRef = useRef(location.pathname);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isSavingRef = useRef(false);
     const isScopeTransitionRef = useRef(false);
@@ -187,10 +179,6 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         hasLoadedRef.current = hasLoaded;
     }, [hasLoaded]);
 
-    useEffect(() => {
-        locationPathRef.current = location.pathname;
-    }, [location.pathname]);
-
     const setActiveTabId = useCallback((id: string) => {
         activeTabIdRef.current = id;
         setActiveTabIdState(id);
@@ -208,13 +196,13 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teamId: tab.teamId ?? selectedProject?.teamId ?? currentTeam?.id,
         teamName: tab.teamName ?? currentTeam?.name,
         group: tab.group ?? 'primary',
-        icon: tab.icon ?? TabRegistry.getTabInfo(stripPathPrefix(tab.path))?.icon,
+        icon: tab.icon ?? TabRegistry.getTabInfo(stripDashboardPathPrefix(tab.path))?.icon,
     }), [selectedProject?.id, selectedProject?.name, selectedProject?.teamId, currentTeam?.id, currentTeam?.name]);
 
     // Save workspace state to backend (debounced using refs to avoid stale closures)
     const saveToBackend = useCallback(() => {
         if (demoMode.isDemoMode || !hasPersistableWorkspaceScope || !workspaceTeamId || !workspaceProjectId) return;
-        if (isScopeTransitionRef.current || !hasLoadedRef.current || isWarehousePath(locationPathRef.current)) return;
+        if (isScopeTransitionRef.current || !hasLoadedRef.current) return;
         const teamId = workspaceTeamId;
         const projectId = workspaceProjectId;
 
@@ -225,7 +213,7 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Debounce: wait 1 second before saving
         saveTimeoutRef.current = setTimeout(async () => {
-            if (isScopeTransitionRef.current || !hasLoadedRef.current || isWarehousePath(locationPathRef.current)) return;
+            if (isScopeTransitionRef.current || !hasLoadedRef.current) return;
             if (isSavingRef.current) return;
             isSavingRef.current = true;
 
@@ -262,7 +250,7 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Persist whenever tabs change (but only after initial load completes)
     useEffect(() => {
-        if (hasLoaded && hasPersistableWorkspaceScope && !demoMode.isDemoMode && !isWarehousePath(location.pathname)) {
+        if (hasLoaded && hasPersistableWorkspaceScope && !demoMode.isDemoMode) {
             saveToBackend();
         }
     }, [tabs, activeTabId, recentlyClosed, hasLoaded, hasPersistableWorkspaceScope, demoMode.isDemoMode, location.pathname, saveToBackend]);
@@ -278,7 +266,9 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Normalize old paths to new SSR paths
     const normalizePath = useCallback((path: string, prefix: string): string => {
-        const legacyNormalizedPath = normalizeLegacyStabilityPath(normalizeLegacyGeneralPath(path));
+        const legacyNormalizedPath = normalizeLegacyAnalyticsAppPath(
+            normalizeLegacyStabilityPath(normalizeLegacyGeneralPath(path)),
+        );
 
         // If path already has the correct prefix, return as-is
         if (legacyNormalizedPath.startsWith(prefix)) {
@@ -296,6 +286,7 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // If path starts with old root-level routes (no prefix), add prefix
         const oldRoutes = [
             '/sessions', '/general', '/stability', '/monitor',
+            '/api', '/devices', '/geo', '/journeys', '/heatmaps',
             '/breakdowns', '/billing',
             '/alerts', '/team', '/account', '/settings',
             '/search'
@@ -358,7 +349,7 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         recentlyClosedRef.current = [];
         activeTabIdRef.current = '';
 
-        const currentRouteInfo = isWarehousePath(location.pathname) ? null : TabRegistry.getTabInfo(location.pathname);
+        const currentRouteInfo = TabRegistry.getTabInfo(location.pathname);
         const seededTab = currentRouteInfo ? annotateTabWithScope({
             id: currentRouteInfo.id,
             type: 'page',
@@ -397,7 +388,7 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return;
         }
 
-        if (skipRestoreForNextScopeRef.current || isWarehousePath(location.pathname)) {
+        if (skipRestoreForNextScopeRef.current) {
             loadedProjectIdRef.current = workspaceProjectId;
             skipRestoreForNextScopeRef.current = false;
             isScopeTransitionRef.current = false;

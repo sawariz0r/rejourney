@@ -1,5 +1,7 @@
 import React from 'react';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
+import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
+import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { TouchHeatmapSection } from '~/features/app/shared/dashboard/TouchHeatmapSection';
 import { useSharedRejourneyTimeRange } from '~/shared/hooks/useSharedRejourneyTimeRange';
 import { platformLensToSessionPlatform, useSharedPlatformLens } from '~/shared/hooks/useSharedPlatformLens';
@@ -13,16 +15,15 @@ export const Heatmaps: React.FC = () => {
 
     return (
         <div className="rejourney-heatmaps-page flex min-h-screen flex-col pb-10 font-sans text-slate-950 xl:h-full xl:min-h-0 xl:overflow-hidden xl:pb-0">
-            <header className="heatmap-page-header">
-                <div className="heatmap-page-hero-inner">
-                    <div className="min-w-0">
-                        <h1>Heatmaps</h1>
-                    </div>
-                    <div className="heatmap-page-actions">
-                        <DashboardLensControls timeRange={timeRange} onTimeRangeChange={setTimeRange} />
-                    </div>
-                </div>
-            </header>
+            <DashboardPageHeader
+                title="Heat Maps"
+                {...dashboardPageHeaderProps('heatmaps')}
+            >
+                <DashboardLensControls
+                    timeRange={timeRange}
+                    onTimeRangeChange={setTimeRange}
+                />
+            </DashboardPageHeader>
 
             <div className="heatmap-page-main mx-auto flex w-full max-w-[1900px] flex-1 flex-col px-3 py-4 sm:px-5 lg:px-6 xl:min-h-0 xl:py-3">
                 <TouchHeatmapSection timeRange={timeRange} platform={platform} compact={false} className="xl:min-h-0 xl:flex-1" />

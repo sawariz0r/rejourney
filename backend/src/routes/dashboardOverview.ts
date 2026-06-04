@@ -7,18 +7,26 @@
 
 import { Router } from 'express';
 import { and, desc, eq, gte, inArray, isNull, sql, type SQL } from 'drizzle-orm';
-import { db, dbRead, projects, recordingArtifacts, sessionMetrics, sessions, teamMembers, errors as jsErrors, crashes as appCrashes, screenTouchHeatmaps, alertHistory } from '../db/client.js';
+import {
+    db,
+    dbRead,
+    projects,
+    recordingArtifacts,
+    sessionMetrics,
+    sessions,
+    teamMembers,
+    errors as jsErrors,
+    crashes as appCrashes,
+    screenTouchHeatmaps,
+    alertHistory,
+} from '../db/client.js';
 import { getClickHouseClient, isClickHouseReadsEnabled } from '../db/clickhouse.js';
 import { getRedis } from '../db/redis.js';
 import { downloadFromS3ForArtifact } from '../db/s3.js';
 import { logger } from '../logger.js';
 import { sessionAuth, asyncHandler, ApiError } from '../middleware/index.js';
 import { config } from '../config.js';
-import {
-    OVERVIEW_CACHE_TTL_SECONDS,
-    buildOverviewCacheKey,
-    persistOverviewCachePayload,
-} from '../services/dashboardOverviewCache.js';
+import { OVERVIEW_CACHE_TTL_SECONDS, buildOverviewCacheKey, persistOverviewCachePayload } from '../services/dashboardOverviewCache.js';
 import { boundedTimeRangeToDays } from '../utils/analyticsTimeRange.js';
 import { buildRetentionCohortRows } from '../services/retentionCohorts.js';
 import { generateAnonymousName } from '../utils/anonymousName.js';
@@ -75,10 +83,7 @@ function sampleRecencyWeightedSubset<T>(items: T[], limit: number): T[] {
 }
 
 async function getAccessibleProjectIds(userId: string): Promise<string[]> {
-    const memberships = await db
-        .select({ teamId: teamMembers.teamId })
-        .from(teamMembers)
-        .where(eq(teamMembers.userId, userId));
+    const memberships = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, userId));
 
     const teamIds = memberships.map((membership) => membership.teamId);
     if (teamIds.length === 0) {
@@ -115,9 +120,7 @@ function buildObservabilityRange(timeRange?: string): string | undefined {
 }
 
 function jsonSafeStringify(value: unknown): string {
-    return JSON.stringify(value, (_key, currentValue) =>
-        typeof currentValue === 'bigint' ? Number(currentValue) : currentValue,
-    );
+    return JSON.stringify(value, (_key, currentValue) => (typeof currentValue === 'bigint' ? Number(currentValue) : currentValue));
 }
 
 function setOverviewCacheHeaders(res: { setHeader: (name: string, value: string) => void }): void {
@@ -191,12 +194,7 @@ async function respondWithOverviewCache<T>({
     res.json(JSON.parse(serializedPayload));
 }
 
-function buildIdentityKey(row: {
-    userDisplayId?: string | null;
-    anonymousHash?: string | null;
-    deviceId?: string | null;
-    fallbackId: string;
-}): string {
+function buildIdentityKey(row: { userDisplayId?: string | null; anonymousHash?: string | null; deviceId?: string | null; fallbackId: string }): string {
     return row.userDisplayId || row.anonymousHash || row.deviceId || row.fallbackId;
 }
 
@@ -204,10 +202,7 @@ function normalizeIssueCount(value: number | null | undefined): number {
     return Number(value || 0);
 }
 
-async function fetchOverviewSection<T>(
-    cookieHeader: string | undefined,
-    path: string,
-): Promise<T> {
+async function fetchOverviewSection<T>(cookieHeader: string | undefined, path: string): Promise<T> {
     const url = new URL(path, `http://localhost:${config.PORT}`);
     const headers = new Headers({ accept: 'application/json' });
 
@@ -293,7 +288,11 @@ async function resolveOverviewScope(
     };
 }
 
-async function loadRetentionPreview(projectIds: string[], timeRange?: string, platform?: string): Promise<{ rows: Array<{ weekStartKey: string; users: number; retention: Array<number | null> }> }> {
+async function loadRetentionPreview(
+    projectIds: string[],
+    timeRange?: string,
+    platform?: string,
+): Promise<{ rows: Array<{ weekStartKey: string; users: number; retention: Array<number | null> }> }> {
     if (projectIds.length === 0) {
         return { rows: [] };
     }
@@ -306,7 +305,7 @@ async function loadRetentionPreview(projectIds: string[], timeRange?: string, pl
 
     // Overview preview intentionally stays bounded even for all-time windows.
     const previewDays = Math.min(boundedTimeRangeToDays(timeRange || '') ?? 90, 90);
-    const startedAfter = new Date(Date.now() - (previewDays * 24 * 60 * 60 * 1000));
+    const startedAfter = new Date(Date.now() - previewDays * 24 * 60 * 60 * 1000);
 
     const rawIdentitySql = sql<string>`
         coalesce(
@@ -332,11 +331,7 @@ async function loadRetentionPreview(projectIds: string[], timeRange?: string, pl
         )
     `;
 
-    const conditions: SQL[] = [
-        inArray(sessions.projectId, projectIds),
-        gte(sessions.startedAt, startedAfter),
-        sql`${scopedIdentitySql} is not null`,
-    ];
+    const conditions: SQL[] = [inArray(sessions.projectId, projectIds), gte(sessions.startedAt, startedAfter), sql`${scopedIdentitySql} is not null`];
     const platformCondition = buildSessionPlatformCondition(platform);
     if (platformCondition) conditions.push(platformCondition);
 
@@ -375,7 +370,9 @@ async function loadUserFirstSeenMap(
     const userIds = [...new Set(sessionRows.filter((s) => s.userDisplayId).map((s) => s.userDisplayId!))];
     const anonDisplayIds = [...new Set(sessionRows.filter((s) => !s.userDisplayId && s.anonymousDisplayId).map((s) => s.anonymousDisplayId!))];
     const anonHashes = [...new Set(sessionRows.filter((s) => !s.userDisplayId && !s.anonymousDisplayId && s.anonymousHash).map((s) => s.anonymousHash!))];
-    const deviceIds = [...new Set(sessionRows.filter((s) => !s.userDisplayId && !s.anonymousDisplayId && !s.anonymousHash && s.deviceId).map((s) => s.deviceId!))];
+    const deviceIds = [
+        ...new Set(sessionRows.filter((s) => !s.userDisplayId && !s.anonymousDisplayId && !s.anonymousHash && s.deviceId).map((s) => s.deviceId!)),
+    ];
 
     const legs: ReturnType<typeof sql>[] = [];
 
@@ -414,9 +411,9 @@ async function loadUserFirstSeenMap(
 
     if (legs.length === 0) return resultMap;
 
-    const unionQuery = legs.reduce((acc, leg, i) => i === 0 ? leg : sql`${acc} UNION ALL ${leg}`);
+    const unionQuery = legs.reduce((acc, leg, i) => (i === 0 ? leg : sql`${acc} UNION ALL ${leg}`));
     const result = await dbRead.execute<{ kind: string; key: string; first_seen: Date }>(unionQuery);
-    const rows: Array<{ kind: string; key: string; first_seen: Date }> = Array.isArray(result) ? result : (result as any).rows ?? [];
+    const rows: Array<{ kind: string; key: string; first_seen: Date }> = Array.isArray(result) ? result : ((result as any).rows ?? []);
 
     for (const row of rows) {
         if (row.key) {
@@ -522,89 +519,89 @@ async function loadSessionPreview(projectIds: string[], timeRange?: string, plat
         .orderBy(desc(sessions.startedAt))
         .limit(SESSION_PREVIEW_LIMIT);
 
-    const firstSeenMap = await loadUserFirstSeenMap(projectIds, rows.map((r) => r.session));
+    const firstSeenMap = await loadUserFirstSeenMap(
+        projectIds,
+        rows.map((r) => r.session),
+    );
 
     return rows.map(({ session, metrics }) => {
         const identityKey = session.userDisplayId
             ? `user:${session.userDisplayId}`
             : session.anonymousDisplayId
-            ? `anon:${session.anonymousDisplayId}`
-            : session.anonymousHash
-            ? `hash:${session.anonymousHash}`
-            : session.deviceId
-            ? `device:${session.deviceId}`
-            : null;
+              ? `anon:${session.anonymousDisplayId}`
+              : session.anonymousHash
+                ? `hash:${session.anonymousHash}`
+                : session.deviceId
+                  ? `device:${session.deviceId}`
+                  : null;
         const userFirstSeenAt = identityKey ? firstSeenMap.get(identityKey) : undefined;
         return {
-        id: session.id,
-        projectId: session.projectId,
-        startedAt: session.startedAt.toISOString(),
-        endedAt: session.endedAt?.toISOString(),
-        durationSeconds: session.durationSeconds ?? 0,
-        platform: session.platform,
-        appVersion: session.appVersion,
-        sdkVersion: session.sdkVersion ?? undefined,
-        deviceModel: session.deviceModel,
-        osVersion: session.osVersion ?? undefined,
-        webReferral: session.webReferral ?? undefined,
-        webLandingRoute: session.webLandingRoute ?? undefined,
-        metadata: session.metadata ?? undefined,
-        userId: session.userDisplayId ?? undefined,
-        anonymousId: session.anonymousDisplayId || session.anonymousHash || undefined,
-        anonymousDisplayName: session.deviceId && !session.userDisplayId
-            ? generateAnonymousName(session.deviceId)
-            : undefined,
-        deviceId: session.deviceId ?? undefined,
-        geoLocation: session.geoCity
-            ? {
-                city: session.geoCity,
-                region: session.geoRegion,
-                country: session.geoCountry,
-                countryCode: session.geoCountryCode,
-                latitude: session.geoLatitude,
-                longitude: session.geoLongitude,
-                timezone: session.geoTimezone,
-            }
-            : null,
-        totalEvents: metrics?.totalEvents ?? 0,
-        errorCount: metrics?.errorCount ?? 0,
-        touchCount: metrics?.touchCount ?? 0,
-        scrollCount: metrics?.scrollCount ?? 0,
-        gestureCount: metrics?.gestureCount ?? 0,
-        inputCount: metrics?.inputCount ?? 0,
-        apiSuccessCount: metrics?.apiSuccessCount ?? 0,
-        apiErrorCount: metrics?.apiErrorCount ?? 0,
-        apiTotalCount: metrics?.apiTotalCount ?? 0,
-        apiAvgResponseMs: metrics?.apiAvgResponseMs ?? 0,
-        rageTapCount: metrics?.rageTapCount ?? 0,
-        deadTapCount: metrics?.deadTapCount ?? 0,
-        screensVisited: metrics?.screensVisited ?? [],
-        interactionScore: metrics?.interactionScore ?? 0,
-        explorationScore: metrics?.explorationScore ?? 0,
-        customEventCount: metrics?.customEventCount ?? 0,
-        crashCount: metrics?.crashCount ?? 0,
-        anrCount: metrics?.anrCount ?? 0,
-        appStartupTimeMs: metrics?.appStartupTimeMs ?? undefined,
-        networkType: metrics?.networkType ?? undefined,
-        cellularGeneration: metrics?.cellularGeneration ?? undefined,
-        isConstrained: metrics?.isConstrained ?? undefined,
-        isExpensive: metrics?.isExpensive ?? undefined,
-        status: session.status,
-        recordingDeleted: session.recordingDeleted,
-        recordingDeletedAt: session.recordingDeletedAt?.toISOString() ?? null,
-        retentionDays: session.retentionDays ?? undefined,
-        retentionTier: session.retentionTier ?? undefined,
-        isReplayExpired: session.isReplayExpired,
-        hasSuccessfulRecording: Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired,
-        effectiveStatus: session.status,
-        isLiveIngest: false,
-        isBackgroundProcessing: false,
-        canOpenReplay: Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired,
-        userFirstSeenAt: userFirstSeenAt?.toISOString(),
+            id: session.id,
+            projectId: session.projectId,
+            startedAt: session.startedAt.toISOString(),
+            endedAt: session.endedAt?.toISOString(),
+            durationSeconds: session.durationSeconds ?? 0,
+            platform: session.platform,
+            appVersion: session.appVersion,
+            sdkVersion: session.sdkVersion ?? undefined,
+            deviceModel: session.deviceModel,
+            osVersion: session.osVersion ?? undefined,
+            webReferral: session.webReferral ?? undefined,
+            webLandingRoute: session.webLandingRoute ?? undefined,
+            metadata: session.metadata ?? undefined,
+            userId: session.userDisplayId ?? undefined,
+            anonymousId: session.anonymousDisplayId || session.anonymousHash || undefined,
+            anonymousDisplayName: session.deviceId ? generateAnonymousName(session.deviceId) : undefined,
+            deviceId: session.deviceId ?? undefined,
+            geoLocation: session.geoCity
+                ? {
+                      city: session.geoCity,
+                      region: session.geoRegion,
+                      country: session.geoCountry,
+                      countryCode: session.geoCountryCode,
+                      latitude: session.geoLatitude,
+                      longitude: session.geoLongitude,
+                      timezone: session.geoTimezone,
+                  }
+                : null,
+            totalEvents: metrics?.totalEvents ?? 0,
+            errorCount: metrics?.errorCount ?? 0,
+            touchCount: metrics?.touchCount ?? 0,
+            scrollCount: metrics?.scrollCount ?? 0,
+            gestureCount: metrics?.gestureCount ?? 0,
+            inputCount: metrics?.inputCount ?? 0,
+            apiSuccessCount: metrics?.apiSuccessCount ?? 0,
+            apiErrorCount: metrics?.apiErrorCount ?? 0,
+            apiTotalCount: metrics?.apiTotalCount ?? 0,
+            apiAvgResponseMs: metrics?.apiAvgResponseMs ?? 0,
+            rageTapCount: metrics?.rageTapCount ?? 0,
+            deadTapCount: metrics?.deadTapCount ?? 0,
+            screensVisited: metrics?.screensVisited ?? [],
+            interactionScore: metrics?.interactionScore ?? 0,
+            explorationScore: metrics?.explorationScore ?? 0,
+            customEventCount: metrics?.customEventCount ?? 0,
+            crashCount: metrics?.crashCount ?? 0,
+            anrCount: metrics?.anrCount ?? 0,
+            appStartupTimeMs: metrics?.appStartupTimeMs ?? undefined,
+            networkType: metrics?.networkType ?? undefined,
+            cellularGeneration: metrics?.cellularGeneration ?? undefined,
+            isConstrained: metrics?.isConstrained ?? undefined,
+            isExpensive: metrics?.isExpensive ?? undefined,
+            status: session.status,
+            recordingDeleted: session.recordingDeleted,
+            recordingDeletedAt: session.recordingDeletedAt?.toISOString() ?? null,
+            retentionDays: session.retentionDays ?? undefined,
+            retentionTier: session.retentionTier ?? undefined,
+            isReplayExpired: session.isReplayExpired,
+            hasSuccessfulRecording: Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired,
+            effectiveStatus: session.status,
+            isLiveIngest: false,
+            isBackgroundProcessing: false,
+            canOpenReplay: Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired,
+            userFirstSeenAt: userFirstSeenAt?.toISOString(),
         };
     });
 }
-
 
 const TOP_USERS_LIMIT = 20;
 
@@ -613,11 +610,8 @@ async function loadTopUsersPreview(projectIds: string[], timeRange?: string, pla
 
     const startedAfter = buildStartedAfter(timeRange);
     const startedAfterClause = startedAfter ? sql`AND ${sessions.startedAt} >= ${startedAfter}` : sql``;
-    const platformClause = platform === 'mobile'
-        ? sql`AND ${sessions.platform} IN ('ios', 'android')`
-        : platform
-            ? sql`AND ${sessions.platform} = ${platform}`
-            : sql``;
+    const platformClause =
+        platform === 'mobile' ? sql`AND ${sessions.platform} IN ('ios', 'android')` : platform ? sql`AND ${sessions.platform} = ${platform}` : sql``;
 
     const topRows = await dbRead.execute<{
         user_key: string;
@@ -770,19 +764,41 @@ async function loadTopUsersPreview(projectIds: string[], timeRange?: string, pla
     `);
 
     const topResult: Array<{
-        user_key: string; session_count: number; total_duration_seconds: number | null;
-        id: string; project_id: string; started_at: Date; ended_at: Date | null;
-        duration_seconds: number | null; platform: string | null; app_version: string | null;
-        device_model: string | null; os_version: string | null; sdk_version: string | null;
-        web_referral: string | null; web_landing_route: string | null; metadata: Record<string, unknown> | null;
+        user_key: string;
+        session_count: number;
+        total_duration_seconds: number | null;
+        id: string;
+        project_id: string;
+        started_at: Date;
+        ended_at: Date | null;
+        duration_seconds: number | null;
+        platform: string | null;
+        app_version: string | null;
+        device_model: string | null;
+        os_version: string | null;
+        sdk_version: string | null;
+        web_referral: string | null;
+        web_landing_route: string | null;
+        metadata: Record<string, unknown> | null;
         user_display_id: string | null;
-        anonymous_display_id: string | null; anonymous_hash: string | null; device_id: string | null;
-        geo_city: string | null; geo_region: string | null; geo_country: string | null;
-        geo_country_code: string | null; geo_latitude: number | null; geo_longitude: number | null;
-        geo_timezone: string | null; status: string; recording_deleted: boolean;
-        recording_deleted_at: Date | null; retention_days: number | null; retention_tier: string | null;
-        is_replay_expired: boolean; replay_available: boolean | null;
-    }> = Array.isArray(topRows) ? topRows : (topRows as any).rows ?? [];
+        anonymous_display_id: string | null;
+        anonymous_hash: string | null;
+        device_id: string | null;
+        geo_city: string | null;
+        geo_region: string | null;
+        geo_country: string | null;
+        geo_country_code: string | null;
+        geo_latitude: number | null;
+        geo_longitude: number | null;
+        geo_timezone: string | null;
+        status: string;
+        recording_deleted: boolean;
+        recording_deleted_at: Date | null;
+        retention_days: number | null;
+        retention_tier: string | null;
+        is_replay_expired: boolean;
+        replay_available: boolean | null;
+    }> = Array.isArray(topRows) ? topRows : ((topRows as any).rows ?? []);
 
     if (topResult.length === 0) return [];
 
@@ -800,69 +816,78 @@ async function loadTopUsersPreview(projectIds: string[], timeRange?: string, pla
         const identityKey = latest.user_display_id
             ? `user:${latest.user_display_id}`
             : latest.anonymous_display_id
-            ? `anon:${latest.anonymous_display_id}`
-            : latest.anonymous_hash
-            ? `hash:${latest.anonymous_hash}`
-            : `device:${latest.device_id}`;
+              ? `anon:${latest.anonymous_display_id}`
+              : latest.anonymous_hash
+                ? `hash:${latest.anonymous_hash}`
+                : `device:${latest.device_id}`;
         const userFirstSeenAt = firstSeenMap.get(identityKey);
 
         return {
-                sessionCount: latest.session_count,
-                totalDurationSeconds: latest.total_duration_seconds ?? 0,
+            sessionCount: latest.session_count,
+            totalDurationSeconds: latest.total_duration_seconds ?? 0,
+            userFirstSeenAt: userFirstSeenAt?.toISOString(),
+            latestSession: {
+                id: latest.id,
+                projectId: latest.project_id,
+                startedAt: new Date(latest.started_at).toISOString(),
+                endedAt: latest.ended_at ? new Date(latest.ended_at).toISOString() : undefined,
+                durationSeconds: latest.duration_seconds ?? 0,
+                platform: latest.platform,
+                appVersion: latest.app_version,
+                sdkVersion: latest.sdk_version ?? undefined,
+                deviceModel: latest.device_model,
+                osVersion: latest.os_version ?? undefined,
+                webReferral: latest.web_referral ?? undefined,
+                webLandingRoute: latest.web_landing_route ?? undefined,
+                metadata: latest.metadata ?? undefined,
+                userId: latest.user_display_id ?? undefined,
+                anonymousId: latest.anonymous_display_id || latest.anonymous_hash || undefined,
+                anonymousDisplayName: latest.device_id ? generateAnonymousName(latest.device_id) : undefined,
+                deviceId: latest.device_id ?? undefined,
+                geoLocation: latest.geo_city
+                    ? {
+                          city: latest.geo_city,
+                          region: latest.geo_region,
+                          country: latest.geo_country,
+                          countryCode: latest.geo_country_code,
+                          latitude: latest.geo_latitude,
+                          longitude: latest.geo_longitude,
+                          timezone: latest.geo_timezone,
+                      }
+                    : null,
+                status: latest.status,
+                recordingDeleted: latest.recording_deleted,
+                recordingDeletedAt: latest.recording_deleted_at ? new Date(latest.recording_deleted_at).toISOString() : null,
+                retentionDays: latest.retention_days ?? undefined,
+                retentionTier: latest.retention_tier ?? undefined,
+                isReplayExpired: latest.is_replay_expired,
+                hasSuccessfulRecording: Boolean(latest.replay_available) && !latest.recording_deleted && !latest.is_replay_expired,
+                effectiveStatus: latest.status,
+                isLiveIngest: false,
+                isBackgroundProcessing: false,
+                canOpenReplay: Boolean(latest.replay_available) && !latest.recording_deleted && !latest.is_replay_expired,
                 userFirstSeenAt: userFirstSeenAt?.toISOString(),
-                latestSession: {
-                    id: latest.id,
-                    projectId: latest.project_id,
-                    startedAt: new Date(latest.started_at).toISOString(),
-                    endedAt: latest.ended_at ? new Date(latest.ended_at).toISOString() : undefined,
-                    durationSeconds: latest.duration_seconds ?? 0,
-                    platform: latest.platform,
-                    appVersion: latest.app_version,
-                    sdkVersion: latest.sdk_version ?? undefined,
-                    deviceModel: latest.device_model,
-                    osVersion: latest.os_version ?? undefined,
-                    webReferral: latest.web_referral ?? undefined,
-                    webLandingRoute: latest.web_landing_route ?? undefined,
-                    metadata: latest.metadata ?? undefined,
-                    userId: latest.user_display_id ?? undefined,
-                    anonymousId: latest.anonymous_display_id || latest.anonymous_hash || undefined,
-                    anonymousDisplayName: latest.device_id && !latest.user_display_id
-                        ? generateAnonymousName(latest.device_id)
-                        : undefined,
-                    deviceId: latest.device_id ?? undefined,
-                    geoLocation: latest.geo_city
-                        ? {
-                            city: latest.geo_city,
-                            region: latest.geo_region,
-                            country: latest.geo_country,
-                            countryCode: latest.geo_country_code,
-                            latitude: latest.geo_latitude,
-                            longitude: latest.geo_longitude,
-                            timezone: latest.geo_timezone,
-                        }
-                        : null,
-                    status: latest.status,
-                    recordingDeleted: latest.recording_deleted,
-                    recordingDeletedAt: latest.recording_deleted_at
-                        ? new Date(latest.recording_deleted_at).toISOString()
-                        : null,
-                    retentionDays: latest.retention_days ?? undefined,
-                    retentionTier: latest.retention_tier ?? undefined,
-                    isReplayExpired: latest.is_replay_expired,
-                    hasSuccessfulRecording: Boolean(latest.replay_available) && !latest.recording_deleted && !latest.is_replay_expired,
-                    effectiveStatus: latest.status,
-                    isLiveIngest: false,
-                    isBackgroundProcessing: false,
-                    canOpenReplay: Boolean(latest.replay_available) && !latest.recording_deleted && !latest.is_replay_expired,
-                    userFirstSeenAt: userFirstSeenAt?.toISOString(),
-                    // Minimal metric stubs — Top Users display doesn't need these
-                    totalEvents: 0, errorCount: 0, touchCount: 0, scrollCount: 0,
-                    gestureCount: 0, inputCount: 0, apiSuccessCount: 0, apiErrorCount: 0,
-                    apiTotalCount: 0, apiAvgResponseMs: 0, rageTapCount: 0, deadTapCount: 0,
-                    screensVisited: [], interactionScore: 0, explorationScore: 0,
-                    customEventCount: 0, crashCount: 0, anrCount: 0,
-                },
-            };
+                // Minimal metric stubs — Top Users display doesn't need these
+                totalEvents: 0,
+                errorCount: 0,
+                touchCount: 0,
+                scrollCount: 0,
+                gestureCount: 0,
+                inputCount: 0,
+                apiSuccessCount: 0,
+                apiErrorCount: 0,
+                apiTotalCount: 0,
+                apiAvgResponseMs: 0,
+                rageTapCount: 0,
+                deadTapCount: 0,
+                screensVisited: [],
+                interactionScore: 0,
+                explorationScore: 0,
+                customEventCount: 0,
+                crashCount: 0,
+                anrCount: 0,
+            },
+        };
     });
 }
 
@@ -879,7 +904,7 @@ function getHeatmapPrimarySignal(rageRate: number, errorRate: number, exitRate: 
     ].sort((a, b) => b.value - a.value);
 
     if (!ordered[0] || ordered[0].value <= 0) return 'mixed';
-    if ((ordered[0].value - ordered[1].value) < 2) return 'mixed';
+    if (ordered[0].value - ordered[1].value < 2) return 'mixed';
     return ordered[0].key;
 }
 
@@ -943,17 +968,8 @@ type HeatmapIterationSummary = {
     versions: HeatmapIterationVersion[];
 };
 
-function mergeHeatmapScreen(
-    name: string,
-    alltime: HeatmapScreenSource | undefined,
-    rangeData: HeatmapScreenSource | undefined,
-    includeTouchHotspots: boolean,
-) {
-    const evidenceSource = rangeData?.sessionIds?.[0]
-        ? rangeData
-        : alltime?.sessionIds?.[0]
-            ? alltime
-            : rangeData ?? alltime;
+function mergeHeatmapScreen(name: string, alltime: HeatmapScreenSource | undefined, rangeData: HeatmapScreenSource | undefined, includeTouchHotspots: boolean) {
+    const evidenceSource = rangeData?.sessionIds?.[0] ? rangeData : alltime?.sessionIds?.[0] ? alltime : (rangeData ?? alltime);
     const rangeVisits = normalizeIssueCount(rangeData?.visits);
     const rangeRageTaps = normalizeIssueCount(rangeData?.rageTaps);
     const rangeErrors = normalizeIssueCount(rangeData?.errors);
@@ -963,9 +979,7 @@ function mergeHeatmapScreen(
     const rangeIncidentRatePer100 = Number((rangeRageTapRatePer100 + rangeErrorRatePer100 + rangeExitRate).toFixed(1));
     const rangeEstimatedAffectedSessions = Math.max(rangeRageTaps, rangeErrors, Math.round(rangeVisits * (rangeExitRate / 100)));
     const rangeImpactScore = Number((rangeIncidentRatePer100 * Math.log10(rangeVisits + 9)).toFixed(1));
-    const touchHotspots = includeTouchHotspots
-        ? (alltime?.touchHotspots ?? rangeData?.touchHotspots ?? [])
-        : [];
+    const touchHotspots = includeTouchHotspots ? (alltime?.touchHotspots ?? rangeData?.touchHotspots ?? []) : [];
 
     return {
         name,
@@ -973,7 +987,9 @@ function mergeHeatmapScreen(
         rageTaps: normalizeIssueCount(alltime?.rageTaps ?? rangeData?.rageTaps),
         errors: normalizeIssueCount(alltime?.errors ?? rangeData?.errors),
         exitRate: Number((alltime?.exitRate ?? rangeData?.exitRate ?? 0).toFixed?.(1) ?? alltime?.exitRate ?? rangeData?.exitRate ?? 0),
-        frictionScore: Number((alltime?.frictionScore ?? rangeData?.frictionScore ?? 0).toFixed?.(1) ?? alltime?.frictionScore ?? rangeData?.frictionScore ?? 0),
+        frictionScore: Number(
+            (alltime?.frictionScore ?? rangeData?.frictionScore ?? 0).toFixed?.(1) ?? alltime?.frictionScore ?? rangeData?.frictionScore ?? 0,
+        ),
         screenshotUrl: alltime?.screenshotUrl ?? rangeData?.screenshotUrl ?? null,
         sessionIds: evidenceSource?.sessionIds ?? alltime?.sessionIds ?? rangeData?.sessionIds ?? [],
         screenFirstSeenMs: evidenceSource?.screenFirstSeenMs ?? alltime?.screenFirstSeenMs ?? rangeData?.screenFirstSeenMs ?? null,
@@ -1048,11 +1064,7 @@ function updateHeatmapIterationScreen(
     }
 }
 
-async function loadHeatmapIterationSummary(
-    projectId: string,
-    timeRange?: string,
-    platform?: string,
-): Promise<HeatmapIterationSummary> {
+async function loadHeatmapIterationSummary(projectId: string, timeRange?: string, platform?: string): Promise<HeatmapIterationSummary> {
     const conditions = [eq(sessions.projectId, projectId)];
     const startedAfter = buildStartedAfter(timeRange);
     if (startedAfter) {
@@ -1082,22 +1094,22 @@ async function loadHeatmapIterationSummary(
         .orderBy(desc(sessions.startedAt))
         .limit(5000);
 
-    const replayReadySessionIds = Array.from(new Set(
-        rows
-            .filter((row) => Boolean(row.replayAvailable) && !row.recordingDeleted && !row.isReplayExpired)
-            .map((row) => row.sessionId)
-    ));
+    const replayReadySessionIds = Array.from(
+        new Set(rows.filter((row) => Boolean(row.replayAvailable) && !row.recordingDeleted && !row.isReplayExpired).map((row) => row.sessionId)),
+    );
     const screenshotSessionIds = new Set<string>();
 
     if (replayReadySessionIds.length > 0) {
         const screenshotRows = await db
             .select({ sessionId: recordingArtifacts.sessionId })
             .from(recordingArtifacts)
-            .where(and(
-                inArray(recordingArtifacts.sessionId, replayReadySessionIds),
-                eq(recordingArtifacts.kind, 'screenshots'),
-                eq(recordingArtifacts.status, 'ready'),
-            ))
+            .where(
+                and(
+                    inArray(recordingArtifacts.sessionId, replayReadySessionIds),
+                    eq(recordingArtifacts.kind, 'screenshots'),
+                    eq(recordingArtifacts.status, 'ready'),
+                ),
+            )
             .groupBy(recordingArtifacts.sessionId)
             .limit(replayReadySessionIds.length);
 
@@ -1107,13 +1119,16 @@ async function loadHeatmapIterationSummary(
     }
 
     const overallMap = new Map<string, HeatmapIterationScreen>();
-    const versionMap = new Map<string, {
-        appVersion: string;
-        firstSeenAt: string | null;
-        lastSeenAt: string | null;
-        sessions: number;
-        screens: Map<string, HeatmapIterationScreen>;
-    }>();
+    const versionMap = new Map<
+        string,
+        {
+            appVersion: string;
+            firstSeenAt: string | null;
+            lastSeenAt: string | null;
+            sessions: number;
+            screens: Map<string, HeatmapIterationScreen>;
+        }
+    >();
 
     for (const row of rows) {
         const visitedScreens = Array.from(new Set(normalizeHeatmapScreenPath(row.screensVisited || [])));
@@ -1174,10 +1189,11 @@ async function loadHeatmapIterationSummary(
         }
     }
 
-    const sortScreens = (items: HeatmapIterationScreen[]) => items.sort((a, b) => {
-        if (b.incidentRatePer100 !== a.incidentRatePer100) return b.incidentRatePer100 - a.incidentRatePer100;
-        return b.visits - a.visits;
-    });
+    const sortScreens = (items: HeatmapIterationScreen[]) =>
+        items.sort((a, b) => {
+            if (b.incidentRatePer100 !== a.incidentRatePer100) return b.incidentRatePer100 - a.incidentRatePer100;
+            return b.visits - a.visits;
+        });
 
     const overall = sortScreens(Array.from(overallMap.values())).slice(0, 60);
     const retainedScreenNames = new Set(overall.map((screen) => screen.name));
@@ -1249,13 +1265,10 @@ async function fetchHeatmapSources(
         platform
             ? Promise.resolve({ screens: [], lastUpdated: undefined })
             : fetchOverviewSection<{ screens?: HeatmapScreenSource[]; lastUpdated?: string }>(
-                cookieHeader,
-                `/api/insights/alltime-heatmap?${new URLSearchParams({ projectId }).toString()}`,
-            ),
-        fetchOverviewSection<{ screens?: HeatmapScreenSource[] }>(
-            cookieHeader,
-            `/api/insights/friction-heatmap?${frictionParams.toString()}`,
-        ),
+                  cookieHeader,
+                  `/api/insights/alltime-heatmap?${new URLSearchParams({ projectId }).toString()}`,
+              ),
+        fetchOverviewSection<{ screens?: HeatmapScreenSource[] }>(cookieHeader, `/api/insights/friction-heatmap?${frictionParams.toString()}`),
     ]);
 
     const failedSections: string[] = [];
@@ -1276,12 +1289,7 @@ async function fetchHeatmapSources(
     };
 }
 
-async function loadHeatmapSummary(
-    cookieHeader: string | undefined,
-    projectId: string,
-    timeRange?: string,
-    platform?: string,
-) {
+async function loadHeatmapSummary(cookieHeader: string | undefined, projectId: string, timeRange?: string, platform?: string) {
     const [{ allTime, friction, failedSections }, rawScreenIteration] = await Promise.all([
         fetchHeatmapSources(cookieHeader, projectId, timeRange, platform),
         loadHeatmapIterationSummary(projectId, timeRange, platform),
@@ -1305,13 +1313,7 @@ async function loadHeatmapSummary(
     };
 }
 
-async function loadHeatmapScreenDetail(
-    cookieHeader: string | undefined,
-    projectId: string,
-    screenName: string,
-    timeRange?: string,
-    platform?: string,
-) {
+async function loadHeatmapScreenDetail(cookieHeader: string | undefined, projectId: string, screenName: string, timeRange?: string, platform?: string) {
     const { allTime, friction, failedSections } = await fetchHeatmapSources(cookieHeader, projectId, timeRange, platform);
     const alltimeScreen = (allTime.screens || []).find((screen) => screen.name === screenName);
     const frictionScreen = (friction.screens || []).find((screen) => screen.name === screenName);
@@ -1329,32 +1331,27 @@ async function loadHeatmapScreenDetail(
     };
 }
 
-async function mapWithConcurrency<T, R>(
-    items: T[],
-    concurrency: number,
-    mapper: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T, index: number) => Promise<R>): Promise<R[]> {
     const results: R[] = new Array(items.length);
     let cursor = 0;
     const workerCount = Math.max(1, Math.min(concurrency, items.length));
 
-    await Promise.all(Array.from({ length: workerCount }, async () => {
-        while (cursor < items.length) {
-            const index = cursor;
-            cursor += 1;
-            results[index] = await mapper(items[index], index);
-        }
-    }));
+    await Promise.all(
+        Array.from({ length: workerCount }, async () => {
+            while (cursor < items.length) {
+                const index = cursor;
+                cursor += 1;
+                results[index] = await mapper(items[index], index);
+            }
+        }),
+    );
 
     return results;
 }
 
 type WebAttentionPrior = Partial<WebAttentionHeatmapDimensions> & WebAttentionTouchPrior;
 
-function emptyWebAttentionHeatmap(
-    dimensions: Partial<WebAttentionHeatmapDimensions> = {},
-    reason: string | null = null,
-) {
+function emptyWebAttentionHeatmap(dimensions: Partial<WebAttentionHeatmapDimensions> = {}, reason: string | null = null) {
     return {
         hotspots: [],
         sampledSessions: 0,
@@ -1381,10 +1378,12 @@ function mergeBucketMap(target: Record<string, number>, source: Record<string, n
 }
 
 function hasTouchPriorSignal(prior: WebAttentionTouchPrior): boolean {
-    return Number(prior.totalTouches ?? 0) > 0 ||
+    return (
+        Number(prior.totalTouches ?? 0) > 0 ||
         Number(prior.totalRageTaps ?? 0) > 0 ||
         Object.keys(prior.touchBuckets ?? {}).length > 0 ||
-        Object.keys(prior.rageTapBuckets ?? {}).length > 0;
+        Object.keys(prior.rageTapBuckets ?? {}).length > 0
+    );
 }
 
 function dimensionsFromAttentionPrior(prior: WebAttentionPrior): Partial<WebAttentionHeatmapDimensions> {
@@ -1396,11 +1395,7 @@ function dimensionsFromAttentionPrior(prior: WebAttentionPrior): Partial<WebAtte
     };
 }
 
-function attentionFromPriorOrEmpty(
-    prior: WebAttentionPrior,
-    normalizedScreenName: string,
-    emptyReason: string,
-) {
+function attentionFromPriorOrEmpty(prior: WebAttentionPrior, normalizedScreenName: string, emptyReason: string) {
     const dimensions = dimensionsFromAttentionPrior(prior);
     if (!hasTouchPriorSignal(prior)) {
         return emptyWebAttentionHeatmap(dimensions, emptyReason);
@@ -1413,11 +1408,7 @@ function attentionFromPriorOrEmpty(
     };
 }
 
-function mobileAttentionFromPriorOrEmpty(
-    prior: WebAttentionPrior,
-    normalizedScreenName: string,
-    emptyReason: string,
-) {
+function mobileAttentionFromPriorOrEmpty(prior: WebAttentionPrior, normalizedScreenName: string, emptyReason: string) {
     const dimensions = dimensionsFromAttentionPrior(prior);
     const result = buildMobileAttentionHeatmap([], dimensions, hasTouchPriorSignal(prior) ? prior : null, normalizedScreenName);
     return {
@@ -1426,11 +1417,7 @@ function mobileAttentionFromPriorOrEmpty(
     };
 }
 
-async function loadWebAttentionPrior(
-    projectId: string,
-    normalizedScreenName: string,
-    timeRange?: string,
-): Promise<WebAttentionPrior> {
+async function loadWebAttentionPrior(projectId: string, normalizedScreenName: string, timeRange?: string): Promise<WebAttentionPrior> {
     const startedAfter = buildStartedAfter(timeRange);
     const rows = await db
         .select({
@@ -1445,10 +1432,12 @@ async function loadWebAttentionPrior(
             viewportHeight: screenTouchHeatmaps.viewportHeight,
         })
         .from(screenTouchHeatmaps)
-        .where(and(
-            eq(screenTouchHeatmaps.projectId, projectId),
-            startedAfter ? gte(screenTouchHeatmaps.date, startedAfter.toISOString().split('T')[0] as any) : undefined,
-        ))
+        .where(
+            and(
+                eq(screenTouchHeatmaps.projectId, projectId),
+                startedAfter ? gte(screenTouchHeatmaps.date, startedAfter.toISOString().split('T')[0] as any) : undefined,
+            ),
+        )
         .limit(5000);
 
     const matched = rows.filter((row) => normalizeHeatmapScreenName(row.screenName) === normalizedScreenName);
@@ -1473,13 +1462,7 @@ async function loadWebAttentionPrior(
     return prior;
 }
 
-async function loadWebAttentionHeatmap(
-    projectId: string,
-    screenName: string,
-    timeRange?: string,
-    platform?: string,
-    appVersion?: string,
-) {
+async function loadWebAttentionHeatmap(projectId: string, screenName: string, timeRange?: string, platform?: string, appVersion?: string) {
     const normalizedScreenName = normalizeHeatmapScreenName(screenName);
     if (!normalizedScreenName) {
         throw ApiError.badRequest('screenName is invalid');
@@ -1515,17 +1498,13 @@ async function loadWebAttentionHeatmap(
         .orderBy(desc(sessions.startedAt))
         .limit(WEB_ATTENTION_SESSION_SCAN_LIMIT);
 
-    const matchedRows = candidateRows
-        .filter((row) => normalizeHeatmapScreenPath(row.screensVisited || []).includes(normalizedScreenName))
+    const matchedRows = candidateRows.filter((row) => normalizeHeatmapScreenPath(row.screensVisited || []).includes(normalizedScreenName));
     const matchedSessionIds = matchedRows.map((row) => row.sessionId);
     const durationMsBySessionId = new Map(
         matchedRows.map((row) => {
-            const durationMsFromColumn = Number(row.durationSeconds ?? 0) > 0
-                ? Number(row.durationSeconds) * 1000
-                : null;
-            const durationMsFromDates = row.endedAt instanceof Date && row.endedAt.getTime() > row.startedAt.getTime()
-                ? row.endedAt.getTime() - row.startedAt.getTime()
-                : null;
+            const durationMsFromColumn = Number(row.durationSeconds ?? 0) > 0 ? Number(row.durationSeconds) * 1000 : null;
+            const durationMsFromDates =
+                row.endedAt instanceof Date && row.endedAt.getTime() > row.startedAt.getTime() ? row.endedAt.getTime() - row.startedAt.getTime() : null;
             return [row.sessionId, durationMsFromColumn ?? durationMsFromDates] as const;
         }),
     );
@@ -1548,11 +1527,7 @@ async function loadWebAttentionHeatmap(
             createdAt: recordingArtifacts.createdAt,
         })
         .from(recordingArtifacts)
-        .where(and(
-            inArray(recordingArtifacts.sessionId, sampledSessionIds),
-            eq(recordingArtifacts.kind, 'rrweb'),
-            eq(recordingArtifacts.status, 'ready'),
-        ))
+        .where(and(inArray(recordingArtifacts.sessionId, sampledSessionIds), eq(recordingArtifacts.kind, 'rrweb'), eq(recordingArtifacts.status, 'ready')))
         .orderBy(recordingArtifacts.createdAt)
         .limit(WEB_ATTENTION_MAX_ARTIFACTS);
 
@@ -1567,45 +1542,45 @@ async function loadWebAttentionHeatmap(
         artifactsBySession.set(artifact.sessionId, list);
     }
 
-    const sessionInputs = (await mapWithConcurrency(sampledSessionIds, WEB_ATTENTION_DOWNLOAD_CONCURRENCY, async (sessionId) => {
-        const artifacts = (artifactsBySession.get(sessionId) || [])
-            .sort((a, b) => (a.startTime ?? a.createdAt.getTime()) - (b.startTime ?? b.createdAt.getTime()))
-            .slice(0, WEB_ATTENTION_MAX_ARTIFACTS_PER_SESSION);
-        if (artifacts.length === 0) return null;
+    const sessionInputs = (
+        await mapWithConcurrency(sampledSessionIds, WEB_ATTENTION_DOWNLOAD_CONCURRENCY, async (sessionId) => {
+            const artifacts = (artifactsBySession.get(sessionId) || [])
+                .sort((a, b) => (a.startTime ?? a.createdAt.getTime()) - (b.startTime ?? b.createdAt.getTime()))
+                .slice(0, WEB_ATTENTION_MAX_ARTIFACTS_PER_SESSION);
+            if (artifacts.length === 0) return null;
 
-        const events: any[] = [];
-        let dimensions: Partial<WebAttentionHeatmapDimensions> = { ...fallbackDimensions };
+            const events: any[] = [];
+            let dimensions: Partial<WebAttentionHeatmapDimensions> = { ...fallbackDimensions };
 
-        for (const artifact of artifacts) {
-            try {
-                const data = await downloadFromS3ForArtifact(projectId, artifact.s3ObjectKey, artifact.endpointId);
-                if (!data) continue;
-                const extracted = extractRrwebEventsFromArtifact(data, artifact.s3ObjectKey);
-                events.push(...extracted.events);
-                const rrwebDimensions = dimensionsFromRrwebEnvelope(extracted.page, extracted.viewport);
-                dimensions = {
-                    pageWidth: rrwebDimensions.pageWidth ?? dimensions.pageWidth,
-                    pageHeight: rrwebDimensions.pageHeight ?? dimensions.pageHeight,
-                    viewportWidth: rrwebDimensions.viewportWidth ?? dimensions.viewportWidth,
-                    viewportHeight: rrwebDimensions.viewportHeight ?? dimensions.viewportHeight,
-                };
-            } catch (err) {
-                logger.warn(
-                    {
-                        err,
-                        projectId,
-                        sessionId,
-                        artifactId: artifact.id,
-                    },
-                    '[overview] failed to load rrweb artifact for attention heatmap',
-                );
+            for (const artifact of artifacts) {
+                try {
+                    const data = await downloadFromS3ForArtifact(projectId, artifact.s3ObjectKey, artifact.endpointId);
+                    if (!data) continue;
+                    const extracted = extractRrwebEventsFromArtifact(data, artifact.s3ObjectKey);
+                    events.push(...extracted.events);
+                    const rrwebDimensions = dimensionsFromRrwebEnvelope(extracted.page, extracted.viewport);
+                    dimensions = {
+                        pageWidth: rrwebDimensions.pageWidth ?? dimensions.pageWidth,
+                        pageHeight: rrwebDimensions.pageHeight ?? dimensions.pageHeight,
+                        viewportWidth: rrwebDimensions.viewportWidth ?? dimensions.viewportWidth,
+                        viewportHeight: rrwebDimensions.viewportHeight ?? dimensions.viewportHeight,
+                    };
+                } catch (err) {
+                    logger.warn(
+                        {
+                            err,
+                            projectId,
+                            sessionId,
+                            artifactId: artifact.id,
+                        },
+                        '[overview] failed to load rrweb artifact for attention heatmap',
+                    );
+                }
             }
-        }
 
-        return events.length > 0
-            ? { events, dimensions, durationMs: durationMsBySessionId.get(sessionId) ?? null }
-            : null;
-    })).filter((input): input is NonNullable<typeof input> => input !== null);
+            return events.length > 0 ? { events, dimensions, durationMs: durationMsBySessionId.get(sessionId) ?? null } : null;
+        })
+    ).filter((input): input is NonNullable<typeof input> => input !== null);
 
     if (sessionInputs.length === 0) {
         return attentionFromPriorOrEmpty(attentionPrior, normalizedScreenName, 'rrweb artifacts could not be read');
@@ -1617,12 +1592,14 @@ async function loadWebAttentionHeatmap(
     };
 }
 
-function synthesizeScreenshotTimestamps(artifacts: Array<{
-    startTime: number | null;
-    endTime: number | null;
-    frameCount: number | null;
-    timestamp: number | null;
-}>): number[] {
+function synthesizeScreenshotTimestamps(
+    artifacts: Array<{
+        startTime: number | null;
+        endTime: number | null;
+        frameCount: number | null;
+        timestamp: number | null;
+    }>,
+): number[] {
     const timestamps: number[] = [];
     for (const artifact of artifacts) {
         const start = Number(artifact.startTime ?? artifact.timestamp ?? 0);
@@ -1641,13 +1618,7 @@ function synthesizeScreenshotTimestamps(artifacts: Array<{
     return timestamps;
 }
 
-async function loadMobileAttentionHeatmap(
-    projectId: string,
-    screenName: string,
-    timeRange?: string,
-    platform?: string,
-    appVersion?: string,
-) {
+async function loadMobileAttentionHeatmap(projectId: string, screenName: string, timeRange?: string, platform?: string, appVersion?: string) {
     const normalizedScreenName = normalizeHeatmapScreenName(screenName);
     if (!normalizedScreenName) {
         throw ApiError.badRequest('screenName is invalid');
@@ -1656,9 +1627,7 @@ async function loadMobileAttentionHeatmap(
     const attentionPrior = await loadWebAttentionPrior(projectId, normalizedScreenName, timeRange);
     const fallbackDimensions = dimensionsFromAttentionPrior(attentionPrior);
     const startedAfter = buildStartedAfter(timeRange);
-    const platformCondition = platform === 'ios' || platform === 'android'
-        ? eq(sessions.platform, platform)
-        : inArray(sessions.platform, ['ios', 'android']);
+    const platformCondition = platform === 'ios' || platform === 'android' ? eq(sessions.platform, platform) : inArray(sessions.platform, ['ios', 'android']);
     const conditions: SQL[] = [
         eq(sessions.projectId, projectId),
         platformCondition,
@@ -1684,18 +1653,14 @@ async function loadMobileAttentionHeatmap(
         .orderBy(desc(sessions.startedAt))
         .limit(WEB_ATTENTION_SESSION_SCAN_LIMIT);
 
-    const matchedRows = candidateRows
-        .filter((row) => normalizeHeatmapScreenPath(row.screensVisited || []).includes(normalizedScreenName));
+    const matchedRows = candidateRows.filter((row) => normalizeHeatmapScreenPath(row.screensVisited || []).includes(normalizedScreenName));
     const matchedSessionIds = matchedRows.map((row) => row.sessionId);
     const rowBySessionId = new Map(matchedRows.map((row) => [row.sessionId, row] as const));
     const durationMsBySessionId = new Map(
         matchedRows.map((row) => {
-            const durationMsFromColumn = Number(row.durationSeconds ?? 0) > 0
-                ? Number(row.durationSeconds) * 1000
-                : null;
-            const durationMsFromDates = row.endedAt instanceof Date && row.endedAt.getTime() > row.startedAt.getTime()
-                ? row.endedAt.getTime() - row.startedAt.getTime()
-                : null;
+            const durationMsFromColumn = Number(row.durationSeconds ?? 0) > 0 ? Number(row.durationSeconds) * 1000 : null;
+            const durationMsFromDates =
+                row.endedAt instanceof Date && row.endedAt.getTime() > row.startedAt.getTime() ? row.endedAt.getTime() - row.startedAt.getTime() : null;
             return [row.sessionId, durationMsFromColumn ?? durationMsFromDates] as const;
         }),
     );
@@ -1719,11 +1684,13 @@ async function loadMobileAttentionHeatmap(
             createdAt: recordingArtifacts.createdAt,
         })
         .from(recordingArtifacts)
-        .where(and(
-            inArray(recordingArtifacts.sessionId, sampledSessionIds),
-            inArray(recordingArtifacts.kind, ['events', 'hierarchy', 'screenshots']),
-            eq(recordingArtifacts.status, 'ready'),
-        ))
+        .where(
+            and(
+                inArray(recordingArtifacts.sessionId, sampledSessionIds),
+                inArray(recordingArtifacts.kind, ['events', 'hierarchy', 'screenshots']),
+                eq(recordingArtifacts.status, 'ready'),
+            ),
+        )
         .orderBy(recordingArtifacts.createdAt)
         .limit(WEB_ATTENTION_MAX_ARTIFACTS * 3);
 
@@ -1738,70 +1705,75 @@ async function loadMobileAttentionHeatmap(
         artifactsBySession.set(artifact.sessionId, list);
     }
 
-    const sessionInputs = (await mapWithConcurrency(sampledSessionIds, WEB_ATTENTION_DOWNLOAD_CONCURRENCY, async (sessionId) => {
-        const artifacts = (artifactsBySession.get(sessionId) || [])
-            .sort((a, b) => (a.startTime ?? a.timestamp ?? a.createdAt.getTime()) - (b.startTime ?? b.timestamp ?? b.createdAt.getTime()));
-        if (artifacts.length === 0) return null;
+    const sessionInputs = (
+        await mapWithConcurrency(sampledSessionIds, WEB_ATTENTION_DOWNLOAD_CONCURRENCY, async (sessionId) => {
+            const artifacts = (artifactsBySession.get(sessionId) || []).sort(
+                (a, b) => (a.startTime ?? a.timestamp ?? a.createdAt.getTime()) - (b.startTime ?? b.timestamp ?? b.createdAt.getTime()),
+            );
+            if (artifacts.length === 0) return null;
 
-        const events: any[] = [];
-        const hierarchySnapshots: NonNullable<MobileAttentionSessionInput['hierarchySnapshots']> = [];
-        const screenshotTimestamps = synthesizeScreenshotTimestamps(
-            artifacts
-                .filter((artifact) => artifact.kind === 'screenshots')
-                .map((artifact) => ({
-                    startTime: artifact.startTime,
-                    endTime: artifact.endTime,
-                    frameCount: artifact.frameCount,
-                    timestamp: artifact.timestamp,
-                })),
-        );
-        let deviceInfo: Record<string, unknown> | null = null;
-        let dimensions: Partial<WebAttentionHeatmapDimensions> = { ...fallbackDimensions };
+            const events: any[] = [];
+            const hierarchySnapshots: NonNullable<MobileAttentionSessionInput['hierarchySnapshots']> = [];
+            const screenshotTimestamps = synthesizeScreenshotTimestamps(
+                artifacts
+                    .filter((artifact) => artifact.kind === 'screenshots')
+                    .map((artifact) => ({
+                        startTime: artifact.startTime,
+                        endTime: artifact.endTime,
+                        frameCount: artifact.frameCount,
+                        timestamp: artifact.timestamp,
+                    })),
+            );
+            let deviceInfo: Record<string, unknown> | null = null;
+            let dimensions: Partial<WebAttentionHeatmapDimensions> = { ...fallbackDimensions };
 
-        for (const artifact of artifacts.filter((item) => item.kind === 'events' || item.kind === 'hierarchy').slice(0, WEB_ATTENTION_MAX_ARTIFACTS_PER_SESSION * 4)) {
-            try {
-                const data = await downloadFromS3ForArtifact(projectId, artifact.s3ObjectKey, artifact.endpointId);
-                if (!data) continue;
-                if (artifact.kind === 'events') {
-                    const extracted = extractMobileEventsFromArtifact(data, artifact.s3ObjectKey);
-                    events.push(...extracted.events);
-                    if (!deviceInfo && extracted.deviceInfo) {
-                        deviceInfo = extracted.deviceInfo;
-                        dimensions = {
-                            ...dimensions,
-                            viewportWidth: Number(extracted.deviceInfo.viewportWidth ?? extracted.deviceInfo.screenWidth) || dimensions.viewportWidth,
-                            viewportHeight: Number(extracted.deviceInfo.viewportHeight ?? extracted.deviceInfo.screenHeight) || dimensions.viewportHeight,
-                        };
+            for (const artifact of artifacts
+                .filter((item) => item.kind === 'events' || item.kind === 'hierarchy')
+                .slice(0, WEB_ATTENTION_MAX_ARTIFACTS_PER_SESSION * 4)) {
+                try {
+                    const data = await downloadFromS3ForArtifact(projectId, artifact.s3ObjectKey, artifact.endpointId);
+                    if (!data) continue;
+                    if (artifact.kind === 'events') {
+                        const extracted = extractMobileEventsFromArtifact(data, artifact.s3ObjectKey);
+                        events.push(...extracted.events);
+                        if (!deviceInfo && extracted.deviceInfo) {
+                            deviceInfo = extracted.deviceInfo;
+                            dimensions = {
+                                ...dimensions,
+                                viewportWidth: Number(extracted.deviceInfo.viewportWidth ?? extracted.deviceInfo.screenWidth) || dimensions.viewportWidth,
+                                viewportHeight: Number(extracted.deviceInfo.viewportHeight ?? extracted.deviceInfo.screenHeight) || dimensions.viewportHeight,
+                            };
+                        }
+                    } else if (artifact.kind === 'hierarchy') {
+                        hierarchySnapshots.push(...extractMobileHierarchySnapshotsFromArtifact(data, artifact.s3ObjectKey, artifact.timestamp));
                     }
-                } else if (artifact.kind === 'hierarchy') {
-                    hierarchySnapshots.push(...extractMobileHierarchySnapshotsFromArtifact(data, artifact.s3ObjectKey, artifact.timestamp));
+                } catch (err) {
+                    logger.warn(
+                        {
+                            err,
+                            projectId,
+                            sessionId,
+                            artifactId: artifact.id,
+                            artifactKind: artifact.kind,
+                        },
+                        '[overview] failed to load mobile artifact for attention heatmap',
+                    );
                 }
-            } catch (err) {
-                logger.warn(
-                    {
-                        err,
-                        projectId,
-                        sessionId,
-                        artifactId: artifact.id,
-                        artifactKind: artifact.kind,
-                    },
-                    '[overview] failed to load mobile artifact for attention heatmap',
-                );
             }
-        }
 
-        return events.length > 0 || hierarchySnapshots.length > 0 || screenshotTimestamps.length > 0
-            ? {
-                events,
-                hierarchySnapshots,
-                screenshotTimestamps,
-                dimensions,
-                durationMs: durationMsBySessionId.get(sessionId) ?? null,
-                platform: rowBySessionId.get(sessionId)?.platform ?? null,
-                deviceInfo,
-            } satisfies MobileAttentionSessionInput
-            : null;
-    })).filter((input): input is NonNullable<typeof input> => input !== null);
+            return events.length > 0 || hierarchySnapshots.length > 0 || screenshotTimestamps.length > 0
+                ? ({
+                      events,
+                      hierarchySnapshots,
+                      screenshotTimestamps,
+                      dimensions,
+                      durationMs: durationMsBySessionId.get(sessionId) ?? null,
+                      platform: rowBySessionId.get(sessionId)?.platform ?? null,
+                      deviceInfo,
+                  } satisfies MobileAttentionSessionInput)
+                : null;
+        })
+    ).filter((input): input is NonNullable<typeof input> => input !== null);
 
     if (sessionInputs.length === 0) {
         return mobileAttentionFromPriorOrEmpty(attentionPrior, normalizedScreenName, 'mobile replay artifacts could not be read');
@@ -1813,13 +1785,7 @@ async function loadMobileAttentionHeatmap(
     };
 }
 
-async function loadAttentionHeatmap(
-    projectId: string,
-    screenName: string,
-    timeRange?: string,
-    platform?: string,
-    appVersion?: string,
-) {
+async function loadAttentionHeatmap(projectId: string, screenName: string, timeRange?: string, platform?: string, appVersion?: string) {
     if (platform === 'mobile' || platform === 'ios' || platform === 'android') {
         return loadMobileAttentionHeatmap(projectId, screenName, timeRange, platform, appVersion);
     }
@@ -1965,22 +1931,24 @@ async function loadErrorsOverview(projectIds: string[], timeRange?: string, plat
         }
     }
 
-    const groups = aggregateRows.map((agg) => {
-        const detail = detailMap.get(agg.fp);
-        return {
-            fingerprint: agg.fp,
-            errorName: agg.errorName,
-            message: agg.message,
-            count: Number(agg.eventCount),
-            users: detail ? Array.from(detail.users) : [],
-            firstSeen: new Date(agg.firstSeen).toISOString(),
-            lastOccurred: new Date(agg.lastOccurred).toISOString(),
-            affectedDevices: detail?.affectedDevices ?? {},
-            affectedVersions: detail?.affectedVersions ?? {},
-            screens: detail ? Array.from(detail.screens) : [],
-            sampleError: detail?.sampleError ?? null,
-        };
-    }).sort((a, b) => new Date(b.lastOccurred).getTime() - new Date(a.lastOccurred).getTime());
+    const groups = aggregateRows
+        .map((agg) => {
+            const detail = detailMap.get(agg.fp);
+            return {
+                fingerprint: agg.fp,
+                errorName: agg.errorName,
+                message: agg.message,
+                count: Number(agg.eventCount),
+                users: detail ? Array.from(detail.users) : [],
+                firstSeen: new Date(agg.firstSeen).toISOString(),
+                lastOccurred: new Date(agg.lastOccurred).toISOString(),
+                affectedDevices: detail?.affectedDevices ?? {},
+                affectedVersions: detail?.affectedVersions ?? {},
+                screens: detail ? Array.from(detail.screens) : [],
+                sampleError: detail?.sampleError ?? null,
+            };
+        })
+        .sort((a, b) => new Date(b.lastOccurred).getTime() - new Date(a.lastOccurred).getTime());
 
     return {
         groups,
@@ -2086,7 +2054,15 @@ async function loadCrashesOverview(projectIds: string[], timeRange?: string, pla
 
         let detail = detailMap.get(row.fp);
         if (!detail) {
-            detail = { sampleCrashId: row.id, sampleSessionId: row.sessionId, canOpenReplay, users: new Set(), affectedDevices: {}, affectedVersions: {}, seenSample: false };
+            detail = {
+                sampleCrashId: row.id,
+                sampleSessionId: row.sessionId,
+                canOpenReplay,
+                users: new Set(),
+                affectedDevices: {},
+                affectedVersions: {},
+                seenSample: false,
+            };
             detailMap.set(row.fp, detail);
         }
 
@@ -2103,22 +2079,24 @@ async function loadCrashesOverview(projectIds: string[], timeRange?: string, pla
         detail.affectedVersions[appVersion] = (detail.affectedVersions[appVersion] || 0) + 1;
     }
 
-    const groups = aggregateRows.map((agg) => {
-        const detail = detailMap.get(agg.fp);
-        return {
-            id: agg.fp,
-            name: agg.exceptionName || 'Crash',
-            sampleCrashId: detail?.sampleCrashId ?? '',
-            sampleSessionId: detail?.sampleSessionId ?? '',
-            canOpenReplay: detail?.canOpenReplay ?? false,
-            count: Number(agg.eventCount),
-            users: detail ? Array.from(detail.users) : [],
-            firstSeen: new Date(agg.firstSeen).toISOString(),
-            lastOccurred: new Date(agg.lastOccurred).toISOString(),
-            affectedDevices: detail?.affectedDevices ?? {},
-            affectedVersions: detail?.affectedVersions ?? {},
-        };
-    }).sort((a, b) => new Date(b.lastOccurred).getTime() - new Date(a.lastOccurred).getTime());
+    const groups = aggregateRows
+        .map((agg) => {
+            const detail = detailMap.get(agg.fp);
+            return {
+                id: agg.fp,
+                name: agg.exceptionName || 'Crash',
+                sampleCrashId: detail?.sampleCrashId ?? '',
+                sampleSessionId: detail?.sampleSessionId ?? '',
+                canOpenReplay: detail?.canOpenReplay ?? false,
+                count: Number(agg.eventCount),
+                users: detail ? Array.from(detail.users) : [],
+                firstSeen: new Date(agg.firstSeen).toISOString(),
+                lastOccurred: new Date(agg.lastOccurred).toISOString(),
+                affectedDevices: detail?.affectedDevices ?? {},
+                affectedVersions: detail?.affectedVersions ?? {},
+            };
+        })
+        .sort((a, b) => new Date(b.lastOccurred).getTime() - new Date(a.lastOccurred).getTime());
 
     return {
         groups,
@@ -2200,7 +2178,12 @@ router.get(
         }
 
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('general', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}` : undefined),
+            cacheKey: buildOverviewCacheKey(
+                'general',
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}` : undefined,
+            ),
             routeName: 'general',
             res,
             logContext: {
@@ -2211,22 +2194,24 @@ router.get(
                 const observabilityMode = scope.normalizedPlatform ? 'full' : 'summary';
                 const sections = await Promise.allSettled([
                     fetchOverviewSection(scope.cookieHeader, `/api/insights/trends?${scope.params.toString()}`),
-                    fetchOverviewSection(scope.cookieHeader, `/api/analytics/growth-observability?${new URLSearchParams({ ...Object.fromEntries(scope.obsParams), mode: observabilityMode }).toString()}`),
-                    fetchOverviewSection(scope.cookieHeader, `/api/analytics/observability-deep-metrics?${new URLSearchParams({ ...Object.fromEntries(scope.obsParams), mode: observabilityMode }).toString()}`),
-                    fetchOverviewSection(scope.cookieHeader, `/api/analytics/user-engagement-trends?${new URLSearchParams({ ...Object.fromEntries(scope.obsParams), mode: observabilityMode }).toString()}`),
+                    fetchOverviewSection(
+                        scope.cookieHeader,
+                        `/api/analytics/growth-observability?${new URLSearchParams({ ...Object.fromEntries(scope.obsParams), mode: observabilityMode }).toString()}`,
+                    ),
+                    fetchOverviewSection(
+                        scope.cookieHeader,
+                        `/api/analytics/observability-deep-metrics?${new URLSearchParams({ ...Object.fromEntries(scope.obsParams), mode: observabilityMode }).toString()}`,
+                    ),
+                    fetchOverviewSection(
+                        scope.cookieHeader,
+                        `/api/analytics/user-engagement-trends?${new URLSearchParams({ ...Object.fromEntries(scope.obsParams), mode: observabilityMode }).toString()}`,
+                    ),
                     fetchOverviewSection(scope.cookieHeader, `/api/analytics/geo-summary?${scope.obsParams.toString()}`),
                     loadRetentionPreview(scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform),
                 ]);
 
                 const failedSections: string[] = [];
-                const [
-                    trendsResult,
-                    overviewObsResult,
-                    deepMetricsResult,
-                    engagementResult,
-                    geoResult,
-                    retentionResult,
-                ] = sections;
+                const [trendsResult, overviewObsResult, deepMetricsResult, engagementResult, geoResult, retentionResult] = sections;
 
                 const response = {
                     trends: trendsResult.status === 'fulfilled' ? trendsResult.value : { daily: [] },
@@ -2255,7 +2240,10 @@ router.get(
                     ['retention', retentionResult],
                 ] as const) {
                     if (result.status === 'rejected') {
-                        logger.warn({ err: result.reason, sectionName, projectId: scope.normalizedProjectId, timeRange: scope.normalizedTimeRange }, '[overview] section load failed');
+                        logger.warn(
+                            { err: result.reason, sectionName, projectId: scope.normalizedProjectId, timeRange: scope.normalizedTimeRange },
+                            '[overview] section load failed',
+                        );
                     }
                 }
 
@@ -2270,9 +2258,7 @@ router.get(
     sessionAuth,
     asyncHandler(async (req, res) => {
         const scope = await resolveOverviewScope(req);
-        const requestedSection = req.query.section === 'sessions' || req.query.section === 'topUsers'
-            ? req.query.section
-            : undefined;
+        const requestedSection = req.query.section === 'sessions' || req.query.section === 'topUsers' ? req.query.section : undefined;
         if (scope.scopedProjectIds.length === 0) {
             setOverviewCacheHeaders(res);
             res.json({ sessions: [], topUsers: [], failedSections: [] });
@@ -2305,11 +2291,17 @@ router.get(
 
                 if (requestedSection !== 'topUsers' && sessionsResult.status !== 'fulfilled') {
                     failedSections.push('recommended sessions');
-                    logger.warn({ err: sessionsResult.reason, projectId: scope.normalizedProjectId, timeRange: scope.normalizedTimeRange }, '[overview] heavy sessions load failed');
+                    logger.warn(
+                        { err: sessionsResult.reason, projectId: scope.normalizedProjectId, timeRange: scope.normalizedTimeRange },
+                        '[overview] heavy sessions load failed',
+                    );
                 }
                 if (requestedSection !== 'sessions' && topUsersResult.status !== 'fulfilled') {
                     failedSections.push('top users');
-                    logger.warn({ err: topUsersResult.reason, projectId: scope.normalizedProjectId, timeRange: scope.normalizedTimeRange }, '[overview] top users load failed');
+                    logger.warn(
+                        { err: topUsersResult.reason, projectId: scope.normalizedProjectId, timeRange: scope.normalizedTimeRange },
+                        '[overview] top users load failed',
+                    );
                 }
 
                 return {
@@ -2332,7 +2324,12 @@ router.get(
         const regionRange = toRegionRange(scope.normalizedTimeRange);
 
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('api', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}` : undefined),
+            cacheKey: buildOverviewCacheKey(
+                'api',
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}` : undefined,
+            ),
             routeName: 'api',
             res,
             logContext: {
@@ -2350,15 +2347,12 @@ router.get(
                 if (trendsRange) trendsParams.set('timeRange', trendsRange);
                 if (scope.normalizedPlatform) trendsParams.set('platform', scope.normalizedPlatform);
 
-                const [
-                    endpointStatsResult,
-                    deepMetricsResult,
-                    regionStatsResult,
-                    latencyByLocationResult,
-                    trendsResult,
-                ] = await Promise.allSettled([
+                const [endpointStatsResult, deepMetricsResult, regionStatsResult, latencyByLocationResult, trendsResult] = await Promise.allSettled([
                     fetchOverviewSection(scope.cookieHeader, `/api/analytics/api-endpoint-stats?${endpointParams.toString()}`),
-                    fetchOverviewSection(scope.cookieHeader, `/api/analytics/observability-deep-metrics?${new URLSearchParams({ ...Object.fromEntries(endpointParams), mode: 'full' }).toString()}`),
+                    fetchOverviewSection(
+                        scope.cookieHeader,
+                        `/api/analytics/observability-deep-metrics?${new URLSearchParams({ ...Object.fromEntries(endpointParams), mode: 'full' }).toString()}`,
+                    ),
                     fetchOverviewSection(scope.cookieHeader, `/api/analytics/region-performance?${regionParams.toString()}`),
                     fetchOverviewSection(scope.cookieHeader, `/api/analytics/latency-by-location?${endpointParams.toString()}`),
                     fetchOverviewSection(scope.cookieHeader, `/api/insights/trends?${trendsParams.toString()}`),
@@ -2379,7 +2373,10 @@ router.get(
                     ['trends', trendsResult],
                 ] as const) {
                     if (result.status === 'rejected') {
-                        logger.warn({ err: result.reason, sectionName, projectId: scope.normalizedProjectId, timeRange: scope.normalizedTimeRange }, '[overview] api section load failed');
+                        logger.warn(
+                            { err: result.reason, sectionName, projectId: scope.normalizedProjectId, timeRange: scope.normalizedTimeRange },
+                            '[overview] api section load failed',
+                        );
                     }
                 }
 
@@ -2404,9 +2401,7 @@ router.get(
         const deviceRange = toDevicesRange(scope.normalizedTimeRange);
         const trendsRange = toDevicesTrendsRange(scope.normalizedTimeRange);
         const insightsRange = toApiInsightsRange(scope.normalizedTimeRange);
-        const platformFilter = typeof req.query.platform === 'string' && req.query.platform !== 'all'
-            ? req.query.platform
-            : undefined;
+        const platformFilter = typeof req.query.platform === 'string' && req.query.platform !== 'all' ? req.query.platform : undefined;
 
         await respondWithOverviewCache({
             cacheKey: buildOverviewCacheKey('devices', scope.scopedProjectIds, scope.normalizedTimeRange, platformFilter ? `${platformFilter}:v2` : 'v2'),
@@ -2461,7 +2456,12 @@ router.get(
         const range = toApiInsightsRange(scope.normalizedTimeRange);
 
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('geo', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}` : undefined),
+            cacheKey: buildOverviewCacheKey(
+                'geo',
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v2-location-cap` : 'v2-location-cap',
+            ),
             routeName: 'geo',
             res,
             logContext: {
@@ -2483,8 +2483,18 @@ router.get(
                 if (latencyByLocationResult.status !== 'fulfilled') failedSections.push('latency regions');
 
                 return {
-                    issues: issuesResult.status === 'fulfilled' ? issuesResult.value : { locations: [], countries: [], summary: { totalIssues: 0, byType: { crashes: 0, anrs: 0, errors: 0, rageTaps: 0, apiErrors: 0 } } },
-                    latencyByLocation: latencyByLocationResult.status === 'fulfilled' ? latencyByLocationResult.value : { regions: [], summary: { avgLatency: 0, totalRequests: 0 } },
+                    issues:
+                        issuesResult.status === 'fulfilled'
+                            ? issuesResult.value
+                            : {
+                                  locations: [],
+                                  countries: [],
+                                  summary: { totalIssues: 0, byType: { crashes: 0, anrs: 0, errors: 0, rageTaps: 0, apiErrors: 0 } },
+                              },
+                    latencyByLocation:
+                        latencyByLocationResult.status === 'fulfilled'
+                            ? latencyByLocationResult.value
+                            : { regions: [], summary: { avgLatency: 0, totalRequests: 0 } },
                     failedSections,
                 };
             },
@@ -2501,7 +2511,12 @@ router.get(
         const trendsRange = toJourneyTrendsRange(scope.normalizedTimeRange);
 
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('journeys', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}` : undefined),
+            cacheKey: buildOverviewCacheKey(
+                'journeys',
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}` : undefined,
+            ),
             routeName: 'journeys',
             res,
             logContext: {
@@ -2548,7 +2563,12 @@ router.get(
     asyncHandler(async (req, res) => {
         const scope = await resolveOverviewScope(req, { requireProjectId: true });
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('heatmaps', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v9` : 'v9'),
+            cacheKey: buildOverviewCacheKey(
+                'heatmaps',
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v9` : 'v9',
+            ),
             routeName: 'heatmaps',
             res,
             logContext: {
@@ -2594,13 +2614,8 @@ router.get(
                 timeRange: scope.normalizedTimeRange,
                 appVersion,
             },
-            build: async () => loadAttentionHeatmap(
-                scope.normalizedProjectId!,
-                normalizedScreenName,
-                scope.normalizedTimeRange,
-                scope.normalizedPlatform,
-                appVersion,
-            ),
+            build: async () =>
+                loadAttentionHeatmap(scope.normalizedProjectId!, normalizedScreenName, scope.normalizedTimeRange, scope.normalizedPlatform, appVersion),
         });
     }),
 );
@@ -2616,7 +2631,12 @@ router.get(
         }
 
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey(`heatmaps:screen:${screenName}`, scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v6` : 'v6'),
+            cacheKey: buildOverviewCacheKey(
+                `heatmaps:screen:${screenName}`,
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v6` : 'v6',
+            ),
             routeName: 'heatmaps-screen',
             res,
             logContext: {
@@ -2624,7 +2644,8 @@ router.get(
                 screenName,
                 timeRange: scope.normalizedTimeRange,
             },
-            build: async () => loadHeatmapScreenDetail(scope.cookieHeader, scope.normalizedProjectId!, screenName, scope.normalizedTimeRange, scope.normalizedPlatform),
+            build: async () =>
+                loadHeatmapScreenDetail(scope.cookieHeader, scope.normalizedProjectId!, screenName, scope.normalizedTimeRange, scope.normalizedPlatform),
         });
     }),
 );
@@ -2635,7 +2656,12 @@ router.get(
     asyncHandler(async (req, res) => {
         const scope = await resolveOverviewScope(req, { requireProjectId: true });
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('errors', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v2` : 'v2'),
+            cacheKey: buildOverviewCacheKey(
+                'errors',
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v2` : 'v2',
+            ),
             routeName: 'errors',
             res,
             logContext: {
@@ -2653,7 +2679,12 @@ router.get(
     asyncHandler(async (req, res) => {
         const scope = await resolveOverviewScope(req, { requireProjectId: true });
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('crashes', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v2` : 'v2'),
+            cacheKey: buildOverviewCacheKey(
+                'crashes',
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v2` : 'v2',
+            ),
             routeName: 'crashes',
             res,
             logContext: {
@@ -2671,7 +2702,12 @@ router.get(
     asyncHandler(async (req, res) => {
         const scope = await resolveOverviewScope(req, { requireProjectId: true });
         await respondWithOverviewCache({
-            cacheKey: buildOverviewCacheKey('anrs', scope.scopedProjectIds, scope.normalizedTimeRange, scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v2` : 'v2'),
+            cacheKey: buildOverviewCacheKey(
+                'anrs',
+                scope.scopedProjectIds,
+                scope.normalizedTimeRange,
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v2` : 'v2',
+            ),
             routeName: 'anrs',
             res,
             logContext: {
@@ -2686,7 +2722,7 @@ router.get(
                     `/api/projects/${scope.normalizedProjectId}/anrs?${params.toString()}`,
                 );
 
-                const anrRows = Array.isArray(response.anrs) ? response.anrs as Array<{ occurrenceCount?: number; userCount?: number }> : [];
+                const anrRows = Array.isArray(response.anrs) ? (response.anrs as Array<{ occurrenceCount?: number; userCount?: number }>) : [];
                 return {
                     anrs: response.anrs || [],
                     summary: {
@@ -2715,13 +2751,7 @@ router.get(
         const recentSpikes = await dbRead
             .select({ id: alertHistory.id, sentAt: alertHistory.sentAt })
             .from(alertHistory)
-            .where(
-                and(
-                    eq(alertHistory.projectId, projectId),
-                    eq(alertHistory.alertType, 'error_spike'),
-                    gte(alertHistory.sentAt, cutoff),
-                )
-            )
+            .where(and(eq(alertHistory.projectId, projectId), eq(alertHistory.alertType, 'error_spike'), gte(alertHistory.sentAt, cutoff)))
             .orderBy(desc(alertHistory.sentAt))
             .limit(20);
 
@@ -2729,13 +2759,14 @@ router.get(
             return res.json({ spikes: [] });
         }
 
-        const spikes = await Promise.all(recentSpikes.map(async (spike) => {
-            const spikeTime = spike.sentAt;
-            const windowStart = new Date(spikeTime.getTime() - 90 * 60 * 1000);
-            const windowEnd   = new Date(spikeTime.getTime() + 15 * 60 * 1000);
+        const spikes = await Promise.all(
+            recentSpikes.map(async (spike) => {
+                const spikeTime = spike.sentAt;
+                const windowStart = new Date(spikeTime.getTime() - 90 * 60 * 1000);
+                const windowEnd = new Date(spikeTime.getTime() + 15 * 60 * 1000);
 
-            // Per-5-minute bucketed error rate for the sparkline trend
-            const trendRows = await dbRead.execute(sql`
+                // Per-5-minute bucketed error rate for the sparkline trend
+                const trendRows = await dbRead.execute(sql`
                 SELECT
                     date_trunc('hour', s.started_at) + INTERVAL '5 min' * FLOOR(EXTRACT(MINUTE FROM s.started_at) / 5) AS bucket,
                     sum(sm.api_error_count)::int  AS error_count,
@@ -2752,32 +2783,32 @@ router.get(
                 ORDER BY 1
             `);
 
-            const trend = (trendRows.rows as Array<{ bucket: Date; error_count: number; total_count: number; error_rate: number }>).map(r => ({
-                bucket: r.bucket instanceof Date ? r.bucket.toISOString() : String(r.bucket),
-                errorCount: Number(r.error_count),
-                totalCount: Number(r.total_count),
-                errorRate:  Number(r.error_rate),
-            }));
+                const trend = (trendRows.rows as Array<{ bucket: Date; error_count: number; total_count: number; error_rate: number }>).map((r) => ({
+                    bucket: r.bucket instanceof Date ? r.bucket.toISOString() : String(r.bucket),
+                    errorCount: Number(r.error_count),
+                    totalCount: Number(r.total_count),
+                    errorRate: Number(r.error_rate),
+                }));
 
-            // Current window (last 15 min before spike) vs baseline (prev 60 min)
-            const currentBuckets = trend.filter(t => new Date(t.bucket) >= new Date(spikeTime.getTime() - 15 * 60 * 1000));
-            const baselineBuckets = trend.filter(t => new Date(t.bucket) < new Date(spikeTime.getTime() - 15 * 60 * 1000));
-            const avgRate = (buckets: typeof trend) => {
-                const withData = buckets.filter(b => b.totalCount > 0);
-                return withData.length ? withData.reduce((s, b) => s + b.errorRate, 0) / withData.length : 0;
-            };
-            const currentRate  = avgRate(currentBuckets);
-            const previousRate = avgRate(baselineBuckets);
-            const percentIncrease = previousRate > 0 ? ((currentRate - previousRate) / previousRate) * 100 : 100;
-            const affectedSessions = trend.reduce((s, b) => s + b.totalCount, 0);
+                // Current window (last 15 min before spike) vs baseline (prev 60 min)
+                const currentBuckets = trend.filter((t) => new Date(t.bucket) >= new Date(spikeTime.getTime() - 15 * 60 * 1000));
+                const baselineBuckets = trend.filter((t) => new Date(t.bucket) < new Date(spikeTime.getTime() - 15 * 60 * 1000));
+                const avgRate = (buckets: typeof trend) => {
+                    const withData = buckets.filter((b) => b.totalCount > 0);
+                    return withData.length ? withData.reduce((s, b) => s + b.errorRate, 0) / withData.length : 0;
+                };
+                const currentRate = avgRate(currentBuckets);
+                const previousRate = avgRate(baselineBuckets);
+                const percentIncrease = previousRate > 0 ? ((currentRate - previousRate) / previousRate) * 100 : 100;
+                const affectedSessions = trend.reduce((s, b) => s + b.totalCount, 0);
 
-            // Top failing endpoints from ClickHouse (best-effort, skip if not configured)
-            let topEndpoints: Array<{ method: string; endpoint: string; errorCount: number }> = [];
-            if (isClickHouseReadsEnabled()) {
-                try {
-                    const ch = getClickHouseClient();
-                    const chResult = await ch.query({
-                        query: `
+                // Top failing endpoints from ClickHouse (best-effort, skip if not configured)
+                let topEndpoints: Array<{ method: string; endpoint: string; errorCount: number }> = [];
+                if (isClickHouseReadsEnabled()) {
+                    try {
+                        const ch = getClickHouseClient();
+                        const chResult = await ch.query({
+                            query: `
                             SELECT method, endpoint, countIf(is_error = 1) AS error_count
                             FROM rejourney.api_endpoint_request_events
                             WHERE project_id = {projectId: String}
@@ -2787,35 +2818,36 @@ router.get(
                             ORDER BY error_count DESC
                             LIMIT 5
                         `,
-                        query_params: {
-                            projectId,
-                            start: windowStart.toISOString().replace('T', ' ').replace('Z', ''),
-                            end:   windowEnd.toISOString().replace('T', ' ').replace('Z', ''),
-                        },
-                        format: 'JSONEachRow',
-                    });
-                    const rows = await chResult.json<{ method: string; endpoint: string; error_count: string }>();
-                    topEndpoints = rows.map(r => ({
-                        method:     r.method,
-                        endpoint:   r.endpoint,
-                        errorCount: Number(r.error_count),
-                    }));
-                } catch {
-                    // ClickHouse unavailable — omit endpoints, still return spike
+                            query_params: {
+                                projectId,
+                                start: windowStart.toISOString().replace('T', ' ').replace('Z', ''),
+                                end: windowEnd.toISOString().replace('T', ' ').replace('Z', ''),
+                            },
+                            format: 'JSONEachRow',
+                        });
+                        const rows = await chResult.json<{ method: string; endpoint: string; error_count: string }>();
+                        topEndpoints = rows.map((r) => ({
+                            method: r.method,
+                            endpoint: r.endpoint,
+                            errorCount: Number(r.error_count),
+                        }));
+                    } catch {
+                        // ClickHouse unavailable — omit endpoints, still return spike
+                    }
                 }
-            }
 
-            return {
-                id:               spike.id,
-                detectedAt:       spikeTime.toISOString(),
-                currentRate:      Math.round(currentRate * 10) / 10,
-                previousRate:     Math.round(previousRate * 10) / 10,
-                percentIncrease:  Math.round(percentIncrease),
-                affectedSessions,
-                trend,
-                topEndpoints,
-            };
-        }));
+                return {
+                    id: spike.id,
+                    detectedAt: spikeTime.toISOString(),
+                    currentRate: Math.round(currentRate * 10) / 10,
+                    previousRate: Math.round(previousRate * 10) / 10,
+                    percentIncrease: Math.round(percentIncrease),
+                    affectedSessions,
+                    trend,
+                    topEndpoints,
+                };
+            }),
+        );
 
         return res.json({ spikes });
     }),

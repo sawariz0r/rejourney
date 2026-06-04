@@ -41,7 +41,9 @@
         "worker:retention": "tsx src/worker/retentionWorker.ts",
         "worker:retention:dev": "tsx watch src/worker/retentionWorker.ts",
         "worker:alerts": "tsx src/worker/alertWorker.ts",
-        "worker:alerts:dev": "tsx watch src/worker/alertWorker.ts"
+        "worker:alerts:dev": "tsx watch src/worker/alertWorker.ts",
+        "worker:revenue-sync": "tsx src/worker/revenueSyncWorker.ts",
+        "worker:revenue-sync:dev": "tsx watch src/worker/revenueSyncWorker.ts"
     },
     "author": "Rejourney",
     "license": "SSPL-1.0",

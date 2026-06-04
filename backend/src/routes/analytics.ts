@@ -1,13 +1,25 @@
 /**
  * Analytics Routes
- * 
+ *
  * Provides pre-computed daily stats and trends for dashboards.
  * Uses Redis caching for fast access at 100k+ sessions scale.
  */
 
 import { Router } from 'express';
-import { eq, gte, lte, and, asc, inArray, sql, desc, isNotNull, gt, isNull } from 'drizzle-orm';
-import { db, appDailyStats, projects, teamMembers, appAllTimeStats, sessions, sessionMetrics, crashes, anrs, errors, projectFunnelStats, alertSettings, alertRecipients, users } from '../db/client.js';
+import { eq, gte, lte, and, asc, inArray, sql, desc, isNotNull, gt } from 'drizzle-orm';
+import {
+    db,
+    appDailyStats,
+    projects,
+    teamMembers,
+    appAllTimeStats,
+    sessions,
+    sessionMetrics,
+    crashes,
+    anrs,
+    errors,
+    projectFunnelStats,
+} from '../db/client.js';
 import { getRedis } from '../db/redis.js';
 import { logger } from '../logger.js';
 import { asyncHandler, ApiError } from '../middleware/index.js';
@@ -28,6 +40,8 @@ const redis = getRedis();
 // Cache TTL in seconds
 const CACHE_TTL = 300; // 5 minutes
 const UNKNOWN_STATUS_CODE_KEY = 'unknown';
+const GEO_ISSUE_LOCATION_RESPONSE_LIMIT = 1200;
+const GEO_LATENCY_LOCATION_RESPONSE_LIMIT = 1600;
 
 type ErrorCodeBreakdown = Record<string, number>;
 
@@ -135,9 +149,7 @@ function addCalendarDaysUtc(dateStr: string, delta: number): string {
     return d.toISOString().split('T')[0];
 }
 
-function mergeGeoCountryCountsFromDailyRows(
-    rows: Array<{ geoCountryBreakdown: Record<string, number> | null }>,
-): Record<string, number> {
+function mergeGeoCountryCountsFromDailyRows(rows: Array<{ geoCountryBreakdown: Record<string, number> | null }>): Record<string, number> {
     const out: Record<string, number> = {};
     for (const row of rows) {
         const b = row.geoCountryBreakdown;
@@ -197,96 +209,6 @@ function buildGeoSummaryFromCountryMap(countryMap: Record<string, GeoCountryMapE
 }
 
 /**
- * Get warehouse alerting data (recipients, connections, project statuses) for the data warehouse UI
- * GET /api/analytics/warehouse-alerting
- */
-router.get(
-    '/warehouse-alerting',
-    sessionAuth,
-    asyncHandler(async (req, res) => {
-        const userId = req.user!.id;
-
-        const membership = await db
-            .select({ teamId: teamMembers.teamId })
-            .from(teamMembers)
-            .where(eq(teamMembers.userId, userId));
-
-        const teamIds = membership.map((m) => m.teamId);
-        if (teamIds.length === 0) {
-            res.json({ recipients: [], connections: [], projectStatuses: {} });
-            return;
-        }
-
-        const accessibleProjects = await db
-            .select({ id: projects.id })
-            .from(projects)
-            .where(and(inArray(projects.teamId, teamIds), isNull(projects.deletedAt)));
-
-        const projectIds = accessibleProjects.map((p) => p.id);
-        if (projectIds.length === 0) {
-            res.json({ recipients: [], connections: [], projectStatuses: {} });
-            return;
-        }
-
-        const recipientsRows = await db
-            .select({
-                userId: alertRecipients.userId,
-                projectId: alertRecipients.projectId,
-                email: users.email,
-                displayName: users.displayName,
-                avatarUrl: users.avatarUrl,
-            })
-            .from(alertRecipients)
-            .innerJoin(users, eq(alertRecipients.userId, users.id))
-            .where(inArray(alertRecipients.projectId, projectIds));
-
-        const recipientMap = new Map<string, { id: string; email: string; displayName: string | null; avatarUrl: string | null }>();
-        const connections: { projectId: string; recipientId: string }[] = [];
-
-        for (const row of recipientsRows) {
-            recipientMap.set(row.userId, {
-                id: row.userId,
-                email: row.email ?? '',
-                displayName: row.displayName ?? null,
-                avatarUrl: row.avatarUrl ?? null,
-            });
-            connections.push({ projectId: row.projectId, recipientId: row.userId });
-        }
-
-        const recipients = Array.from(recipientMap.values());
-
-        const settingsRows = await db
-            .select({
-                projectId: alertSettings.projectId,
-                crashAlertsEnabled: alertSettings.crashAlertsEnabled,
-                anrAlertsEnabled: alertSettings.anrAlertsEnabled,
-                errorSpikeAlertsEnabled: alertSettings.errorSpikeAlertsEnabled,
-                apiDegradationAlertsEnabled: alertSettings.apiDegradationAlertsEnabled,
-            })
-            .from(alertSettings)
-            .where(inArray(alertSettings.projectId, projectIds));
-
-        const projectStatuses: Record<string, { enabled: boolean; hasActiveAlert: boolean }> = {};
-        const connectedProjectIds = new Set(connections.map((c) => c.projectId));
-
-        for (const projectId of projectIds) {
-            const settings = settingsRows.find((s) => s.projectId === projectId);
-            const hasRecipients = connectedProjectIds.has(projectId);
-            const anyAlertEnabled = settings
-                ? (settings.crashAlertsEnabled ?? false) ||
-                (settings.anrAlertsEnabled ?? false) ||
-                (settings.errorSpikeAlertsEnabled ?? false) ||
-                (settings.apiDegradationAlertsEnabled ?? false)
-                : false;
-            const enabled = hasRecipients || anyAlertEnabled;
-            projectStatuses[projectId] = { enabled, hasActiveAlert: enabled };
-        }
-
-        res.json({ recipients, connections, projectStatuses });
-    })
-);
-
-/**
  * Get daily stats for a project
  * GET /api/analytics/daily-stats
  */
@@ -301,11 +223,7 @@ router.get(
         }
 
         // Verify user has access to project
-        const [project] = await db
-            .select({ id: projects.id, teamId: projects.teamId })
-            .from(projects)
-            .where(eq(projects.id, projectId))
-            .limit(1);
+        const [project] = await db.select({ id: projects.id, teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
 
         if (!project) {
             throw ApiError.notFound('Project not found');
@@ -314,10 +232,7 @@ router.get(
         const [membership] = await db
             .select({ id: teamMembers.id })
             .from(teamMembers)
-            .where(and(
-                eq(teamMembers.teamId, project.teamId),
-                eq(teamMembers.userId, req.user!.id)
-            ))
+            .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
             .limit(1);
 
         if (!membership) {
@@ -333,9 +248,7 @@ router.get(
             end = new Date(endDate as string);
         } else {
             // Use timeRange
-            const days = timeRange === '7d' ? 7 :
-                timeRange === '30d' ? 30 :
-                    timeRange === '90d' ? 90 : 30; // default 30 days
+            const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 30; // default 30 days
             start = new Date();
             start.setDate(start.getDate() - days);
         }
@@ -359,18 +272,14 @@ router.get(
         const stats = await db
             .select()
             .from(appDailyStats)
-            .where(and(
-                eq(appDailyStats.projectId, projectId),
-                gte(appDailyStats.date, startStr),
-                lte(appDailyStats.date, endStr)
-            ))
+            .where(and(eq(appDailyStats.projectId, projectId), gte(appDailyStats.date, startStr), lte(appDailyStats.date, endStr)))
             .orderBy(asc(appDailyStats.date));
 
         const response = {
             projectId,
             startDate: startStr,
             endDate: endStr,
-            stats: stats.map(s => ({
+            stats: stats.map((s) => ({
                 date: s.date,
                 totalSessions: Number(s.totalSessions || 0),
                 completedSessions: Number(s.completedSessions || 0),
@@ -397,7 +306,7 @@ router.get(
         await redis.set(cacheKey, JSON.stringify(response), 'EX', CACHE_TTL);
 
         res.json(response);
-    })
+    }),
 );
 
 /**
@@ -415,11 +324,7 @@ router.get(
         }
 
         // Verify access
-        const [project] = await db
-            .select({ id: projects.id, teamId: projects.teamId })
-            .from(projects)
-            .where(eq(projects.id, projectId))
-            .limit(1);
+        const [project] = await db.select({ id: projects.id, teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
 
         if (!project) {
             throw ApiError.notFound('Project not found');
@@ -428,19 +333,14 @@ router.get(
         const [membership] = await db
             .select({ id: teamMembers.id })
             .from(teamMembers)
-            .where(and(
-                eq(teamMembers.teamId, project.teamId),
-                eq(teamMembers.userId, req.user!.id)
-            ))
+            .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
             .limit(1);
 
         if (!membership) {
             throw ApiError.forbidden('Access denied');
         }
 
-        const days = timeRange === '7d' ? 7 :
-            timeRange === '30d' ? 30 :
-                timeRange === '90d' ? 90 : 30;
+        const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 30;
 
         const start = new Date();
         start.setDate(start.getDate() - days);
@@ -460,17 +360,13 @@ router.get(
         const stats = await db
             .select()
             .from(appDailyStats)
-            .where(and(
-                eq(appDailyStats.projectId, projectId),
-                gte(appDailyStats.date, startStr),
-                lte(appDailyStats.date, lastRolledUpDate)
-            ))
+            .where(and(eq(appDailyStats.projectId, projectId), gte(appDailyStats.date, startStr), lte(appDailyStats.date, lastRolledUpDate)))
             .orderBy(asc(appDailyStats.date));
 
         // Compute trend summaries
-        const totalSessionsOverTime = stats.map(s => ({ date: s.date, value: s.totalSessions }));
-        const avgUxScoreOverTime = stats.map(s => ({ date: s.date, value: s.avgUxScore }));
-        const avgDurationOverTime = stats.map(s => ({ date: s.date, value: s.avgDurationSeconds }));
+        const totalSessionsOverTime = stats.map((s) => ({ date: s.date, value: s.totalSessions }));
+        const avgUxScoreOverTime = stats.map((s) => ({ date: s.date, value: s.avgUxScore }));
+        const avgDurationOverTime = stats.map((s) => ({ date: s.date, value: s.avgDurationSeconds }));
 
         // Compute overall averages
         const totalSessions = stats.reduce((sum, s) => sum + s.totalSessions, 0);
@@ -484,15 +380,9 @@ router.get(
         const totalGestures = stats.reduce((sum, s) => sum + (s.totalGestures || 0), 0);
         const totalInteractions = stats.reduce((sum, s) => sum + (s.totalInteractions || 0), 0);
 
-        const avgUxScore = stats.length > 0
-            ? stats.reduce((sum, s) => sum + (s.avgUxScore || 0), 0) / stats.length
-            : 0;
-        const avgDuration = stats.length > 0
-            ? stats.reduce((sum, s) => sum + (s.avgDurationSeconds || 0), 0) / stats.length
-            : 0;
-        const avgApiErrorRate = stats.length > 0
-            ? stats.reduce((sum, s) => sum + (s.avgApiErrorRate || 0), 0) / stats.length
-            : 0;
+        const avgUxScore = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.avgUxScore || 0), 0) / stats.length : 0;
+        const avgDuration = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.avgDurationSeconds || 0), 0) / stats.length : 0;
+        const avgApiErrorRate = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.avgApiErrorRate || 0), 0) / stats.length : 0;
 
         const response = {
             projectId,
@@ -521,7 +411,7 @@ router.get(
         await redis.set(cacheKey, JSON.stringify(response), 'EX', CACHE_TTL);
 
         res.json(response);
-    })
+    }),
 );
 
 /**
@@ -540,7 +430,7 @@ router.post(
 
         if (backfillDays && typeof backfillDays === 'number') {
             // Run backfill asynchronously
-            backfillDailyStats(backfillDays).catch(err => {
+            backfillDailyStats(backfillDays).catch((err) => {
                 logger.error({ err }, 'Backfill failed');
             });
             res.json({ message: `Backfill started for ${backfillDays} days` });
@@ -551,10 +441,8 @@ router.post(
             await runDailyRollup();
             res.json({ message: 'Rollup completed for yesterday' });
         }
-    })
+    }),
 );
-
-
 
 /**
  * Get dashboard stats (summary cards)
@@ -568,35 +456,45 @@ router.get(
 
         if (!projectId) {
             // Aggregate across all accessible projects
-            const membership = await db
-                .select({ teamId: teamMembers.teamId })
-                .from(teamMembers)
-                .where(eq(teamMembers.userId, req.user!.id));
+            const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
 
-            const teamIds = membership.map(m => m.teamId);
+            const teamIds = membership.map((m) => m.teamId);
             if (teamIds.length === 0) {
                 const emptyWatermark = await getLastRolledUpDate();
                 res.json({
-                    totalSessions: 0, avgDuration: 0, avgUxScore: 0, errorRate: 0,
+                    totalSessions: 0,
+                    avgDuration: 0,
+                    avgUxScore: 0,
+                    errorRate: 0,
                     platformBreakdown: { ios: 0, android: 0 },
-                    totalErrors: 0, totalRageTaps: 0, totalDeadTaps: 0, dau: 0, wau: 0, mau: 0,
+                    totalErrors: 0,
+                    totalRageTaps: 0,
+                    totalDeadTaps: 0,
+                    dau: 0,
+                    wau: 0,
+                    mau: 0,
                     dataCompleteThrough: emptyWatermark,
                 });
                 return;
             }
 
-            const accessibleProjects = await db
-                .select({ id: projects.id })
-                .from(projects)
-                .where(inArray(projects.teamId, teamIds));
+            const accessibleProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
 
-            const projectIds = accessibleProjects.map(p => p.id);
+            const projectIds = accessibleProjects.map((p) => p.id);
             if (projectIds.length === 0) {
                 const emptyWatermark = await getLastRolledUpDate();
                 res.json({
-                    totalSessions: 0, avgDuration: 0, avgUxScore: 0, errorRate: 0,
+                    totalSessions: 0,
+                    avgDuration: 0,
+                    avgUxScore: 0,
+                    errorRate: 0,
                     platformBreakdown: { ios: 0, android: 0 },
-                    totalErrors: 0, totalRageTaps: 0, totalDeadTaps: 0, dau: 0, wau: 0, mau: 0,
+                    totalErrors: 0,
+                    totalRageTaps: 0,
+                    totalDeadTaps: 0,
+                    dau: 0,
+                    wau: 0,
+                    mau: 0,
                     dataCompleteThrough: emptyWatermark,
                 });
                 return;
@@ -616,11 +514,23 @@ router.get(
 
             const lastRolledUpDate = await getLastRolledUpDate();
             const stats = {
-                totalSessions: 0, avgDuration: 0, avgUxScore: 0, errorRate: 0,
-                platformBreakdown: { ios: 0, android: 0 }, totalErrors: 0, totalRageTaps: 0, totalDeadTaps: 0,
-                dau: 0, wau: 0, mau: 0, totalUsers: 0,
+                totalSessions: 0,
+                avgDuration: 0,
+                avgUxScore: 0,
+                errorRate: 0,
+                platformBreakdown: { ios: 0, android: 0 },
+                totalErrors: 0,
+                totalRageTaps: 0,
+                totalDeadTaps: 0,
+                dau: 0,
+                wau: 0,
+                mau: 0,
+                totalUsers: 0,
                 // Interaction Breakdown
-                totalTouches: 0, totalScrolls: 0, totalGestures: 0, totalInteractions: 0,
+                totalTouches: 0,
+                totalScrolls: 0,
+                totalGestures: 0,
+                totalInteractions: 0,
                 // Engagement Segments
                 engagementSegments: {
                     bouncers: 0,
@@ -636,10 +546,7 @@ router.get(
             // "All Time": simple query with IN clause.
 
             if (!timeRange || timeRange === 'all') {
-                const allTimeStats = await db
-                    .select()
-                    .from(appAllTimeStats)
-                    .where(inArray(appAllTimeStats.projectId, projectIds));
+                const allTimeStats = await db.select().from(appAllTimeStats).where(inArray(appAllTimeStats.projectId, projectIds));
 
                 let wSumDuration = 0;
                 let wSumUx = 0;
@@ -677,7 +584,6 @@ router.get(
             } else {
                 // Time range aggregation across projects
                 // ... (simplified fallback or similar logic)
-
                 // We're inside a multi-project aggregation block but only returning 0s for now
                 // intentionally skipping complex aggregation to ship MVP all-time stats
                 // so we don't need to query daily stats here yet.
@@ -727,7 +633,9 @@ router.get(
                 explorers: 0,
                 loyalists: 0,
             },
-            dau: 0, wau: 0, mau: 0, // active users
+            dau: 0,
+            wau: 0,
+            mau: 0, // active users
             dataCompleteThrough: lastRolledUpDate,
         };
 
@@ -762,9 +670,7 @@ router.get(
             }
         } else {
             // Aggregate daily stats for time range
-            const days = timeRange === '7d' ? 7 :
-                timeRange === '30d' ? 30 :
-                    timeRange === '90d' ? 90 : 30;
+            const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 30;
             const start = new Date();
             start.setDate(start.getDate() - days);
             const startStr = start.toISOString().split('T')[0];
@@ -774,11 +680,7 @@ router.get(
             const dailies = await db
                 .select()
                 .from(appDailyStats)
-                .where(and(
-                    eq(appDailyStats.projectId, projectId as string),
-                    gte(appDailyStats.date, startStr),
-                    lte(appDailyStats.date, lastRolledUpDate)
-                ));
+                .where(and(eq(appDailyStats.projectId, projectId as string), gte(appDailyStats.date, startStr), lte(appDailyStats.date, lastRolledUpDate)));
 
             // Sum up
             const totalSess = dailies.reduce((acc, d) => acc + d.totalSessions, 0);
@@ -804,7 +706,7 @@ router.get(
         const [dau, wau, mau] = await Promise.all([
             redis.get(`stats:dau:${projectId}`),
             redis.get(`stats:wau:${projectId}`),
-            redis.get(`stats:mau:${projectId}`)
+            redis.get(`stats:mau:${projectId}`),
         ]);
         stats.dau = Number(dau || 0);
         stats.wau = Number(wau || 0);
@@ -812,13 +714,13 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(stats), 'EX', CACHE_TTL);
         res.json(stats);
-    })
+    }),
 );
 
 /**
  * Get geographic distribution summary
  * GET /api/analytics/geo-summary
- * 
+ *
  * Returns aggregated country/city counts instead of raw sessions.
  * Used by Map.tsx to avoid loading 100k+ sessions.
  */
@@ -829,25 +731,17 @@ router.get(
         const { timeRange, projectId } = req.query;
 
         // Get accessible projects for user
-        const membership = await db
-            .select({ teamId: teamMembers.teamId })
-            .from(teamMembers)
-            .where(eq(teamMembers.userId, req.user!.id));
+        const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
 
-        const teamIds = membership.map(m => m.teamId);
+        const teamIds = membership.map((m) => m.teamId);
         if (teamIds.length === 0) {
             res.json({ countries: [], totalWithGeo: 0 });
             return;
         }
 
-        const accessibleProjects = await db
-            .select({ id: projects.id })
-            .from(projects)
-            .where(inArray(projects.teamId, teamIds));
+        const accessibleProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
 
-        const projectIds = projectId
-            ? [projectId as string]
-            : accessibleProjects.map(p => p.id);
+        const projectIds = projectId ? [projectId as string] : accessibleProjects.map((p) => p.id);
 
         if (projectIds.length === 0) {
             res.json({ countries: [], totalWithGeo: 0 });
@@ -865,10 +759,7 @@ router.get(
         // Build time filter (rolling window lower bound)
         let startedAfter: Date | undefined;
         if (timeRange && timeRange !== 'all' && timeRange !== 'max') {
-            const days = timeRange === '24h' ? 1 :
-                timeRange === '7d' ? 7 :
-                    timeRange === '30d' ? 30 :
-                        timeRange === '90d' ? 90 : undefined;
+            const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : undefined;
             if (days) {
                 startedAfter = new Date();
                 startedAfter.setDate(startedAfter.getDate() - days);
@@ -931,10 +822,7 @@ router.get(
 
         let startDateStr: string | undefined;
         if (timeRange && timeRange !== 'all' && timeRange !== 'max') {
-            const days = timeRange === '24h' ? 1 :
-                timeRange === '7d' ? 7 :
-                    timeRange === '30d' ? 30 :
-                        timeRange === '90d' ? 90 : undefined;
+            const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : undefined;
             if (days) {
                 const start = new Date();
                 start.setDate(start.getDate() - days);
@@ -967,12 +855,8 @@ router.get(
         const tailDateStr = addCalendarDaysUtc(lastRolledUpDate, 1);
         const tailStart = new Date(`${tailDateStr}T00:00:00.000Z`);
         if (Date.now() >= tailStart.getTime()) {
-            const lowerBound =
-                startedAfter && startedAfter.getTime() > tailStart.getTime() ? startedAfter : tailStart;
-            const tailConditions = [
-                inArray(sessions.projectId, projectIds),
-                gte(sessions.startedAt, lowerBound),
-            ];
+            const lowerBound = startedAfter && startedAfter.getTime() > tailStart.getTime() ? startedAfter : tailStart;
+            const tailConditions = [inArray(sessions.projectId, projectIds), gte(sessions.startedAt, lowerBound)];
 
             const tailAgg = await db
                 .select({
@@ -1017,7 +901,7 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
@@ -1047,10 +931,7 @@ router.get(
         };
 
         // Get accessible projects for user
-        const membership = await db
-            .select({ teamId: teamMembers.teamId })
-            .from(teamMembers)
-            .where(eq(teamMembers.userId, req.user!.id));
+        const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
 
         const teamIds = membership.map((m) => m.teamId);
         if (teamIds.length === 0) {
@@ -1058,14 +939,9 @@ router.get(
             return;
         }
 
-        const accessibleProjects = await db
-            .select({ id: projects.id })
-            .from(projects)
-            .where(inArray(projects.teamId, teamIds));
+        const accessibleProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
 
-        const projectIds = projectId
-            ? [projectId as string]
-            : accessibleProjects.map((p) => p.id);
+        const projectIds = projectId ? [projectId as string] : accessibleProjects.map((p) => p.id);
 
         if (projectIds.length === 0) {
             res.json(emptyResult);
@@ -1081,20 +957,14 @@ router.get(
 
         let startedAfter: Date | undefined;
         if (timeRange && timeRange !== 'all') {
-            const days = timeRange === '24h' ? 1 :
-                timeRange === '7d' ? 7 :
-                    timeRange === '30d' ? 30 :
-                        timeRange === '90d' ? 90 : undefined;
+            const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : undefined;
             if (days) {
                 startedAfter = new Date();
                 startedAfter.setDate(startedAfter.getDate() - days);
             }
         }
 
-        const conditions = [
-            inArray(sessions.projectId, projectIds),
-            isNotNull(sessions.geoCountry),
-        ];
+        const conditions = [inArray(sessions.projectId, projectIds), isNotNull(sessions.geoCountry)];
         if (startedAfter) {
             conditions.push(gte(sessions.startedAt, startedAfter));
         }
@@ -1155,8 +1025,8 @@ router.get(
 
         const totalSessions = regions.reduce((sum, row) => sum + row.sessions, 0);
         const totalValueSessions = regions.reduce((sum, row) => sum + row.valueSessions, 0);
-        const weightedUxSum = regions.reduce((sum, row) => sum + (row.avgUxScore * row.sessions), 0);
-        const weightedDurationSum = regions.reduce((sum, row) => sum + (row.avgDurationSeconds * row.sessions), 0);
+        const weightedUxSum = regions.reduce((sum, row) => sum + row.avgUxScore * row.sessions, 0);
+        const weightedDurationSum = regions.reduce((sum, row) => sum + row.avgDurationSeconds * row.sessions, 0);
 
         const result = {
             regions,
@@ -1172,13 +1042,13 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
  * Get geographic distribution of issues (errors, crashes, ANRs, rage taps)
  * GET /api/analytics/geo-issues
- * 
+ *
  * Aggregates issues by country/city using session geo data from issue events.
  * Used by the Geographic page to show issue hotspots on the map.
  */
@@ -1197,12 +1067,9 @@ router.get(
         )`;
 
         // Get accessible projects for user
-        const membership = await db
-            .select({ teamId: teamMembers.teamId })
-            .from(teamMembers)
-            .where(eq(teamMembers.userId, req.user!.id));
+        const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
 
-        const teamIds = membership.map(m => m.teamId);
+        const teamIds = membership.map((m) => m.teamId);
         if (teamIds.length === 0) {
             res.json({
                 locations: [],
@@ -1221,14 +1088,9 @@ router.get(
             return;
         }
 
-        const accessibleProjects = await db
-            .select({ id: projects.id })
-            .from(projects)
-            .where(inArray(projects.teamId, teamIds));
+        const accessibleProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
 
-        const projectIds = projectId
-            ? [projectId as string]
-            : accessibleProjects.map(p => p.id);
+        const projectIds = projectId ? [projectId as string] : accessibleProjects.map((p) => p.id);
 
         if (projectIds.length === 0) {
             res.json({
@@ -1249,7 +1111,7 @@ router.get(
         }
 
         // Build cache key
-        const cacheKey = `analytics:geo-issues:${projectIds.sort().join(',')}:${timeRange || 'all'}:${issueType || 'all'}:${normalizedPlatform || 'all'}`;
+        const cacheKey = `analytics:geo-issues:${projectIds.sort().join(',')}:${timeRange || 'all'}:${issueType || 'all'}:${normalizedPlatform || 'all'}:v2-location-cap-${GEO_ISSUE_LOCATION_RESPONSE_LIMIT}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -1259,10 +1121,7 @@ router.get(
         // Build time filter
         let startedAfter: Date | undefined;
         if (timeRange && timeRange !== 'all') {
-            const days = timeRange === '24h' ? 1 :
-                timeRange === '7d' ? 7 :
-                    timeRange === '30d' ? 30 :
-                        timeRange === '90d' ? 90 : undefined;
+            const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : undefined;
             if (days) {
                 startedAfter = new Date();
                 startedAfter.setDate(startedAfter.getDate() - days);
@@ -1270,9 +1129,7 @@ router.get(
         }
 
         // Query sessions with geo data and their associated issues
-        const conditions = [
-            inArray(sessions.projectId, projectIds),
-        ];
+        const conditions = [inArray(sessions.projectId, projectIds)];
         if (startedAfter) {
             conditions.push(gte(sessions.startedAt, startedAfter));
         }
@@ -1314,17 +1171,20 @@ router.get(
             apiErrors: number;
             lat?: number;
             lng?: number;
-            cities: Record<string, {
-                sessions: number;
-                uniqueUsers: number;
-                crashes: number;
-                anrs: number;
-                errors: number;
-                rageTaps: number;
-                apiErrors: number;
-                lat?: number;
-                lng?: number;
-            }>;
+            cities: Record<
+                string,
+                {
+                    sessions: number;
+                    uniqueUsers: number;
+                    crashes: number;
+                    anrs: number;
+                    errors: number;
+                    rageTaps: number;
+                    apiErrors: number;
+                    lat?: number;
+                    lng?: number;
+                }
+            >;
         };
 
         const countryMap: Record<string, IssueAggregation> = {};
@@ -1337,7 +1197,7 @@ router.get(
                 errors: 0,
                 rageTaps: 0,
                 apiErrors: 0,
-            }
+            },
         };
 
         for (const row of geoIssuesAgg) {
@@ -1354,7 +1214,7 @@ router.get(
             summary.byType.errors += rowErrors;
             summary.byType.rageTaps += rowRageTaps;
             summary.byType.apiErrors += rowApiErrors;
-            summary.totalIssues += (rowCrashes + rowAnrs + rowErrors + rowRageTaps + rowApiErrors);
+            summary.totalIssues += rowCrashes + rowAnrs + rowErrors + rowRageTaps + rowApiErrors;
 
             if (!countryMap[row.country]) {
                 countryMap[row.country] = {
@@ -1401,22 +1261,24 @@ router.get(
 
                 if (cityEntries.length === 0 && data.lat && data.lng) {
                     // Country-level fallback
-                    return [{
-                        country,
-                        city: 'Unknown',
-                        lat: data.lat,
-                        lng: data.lng,
-                        sessions: data.sessions,
-                        uniqueUsers: data.uniqueUsers,
-                        issues: {
-                            crashes: data.crashes,
-                            anrs: data.anrs,
-                            errors: data.errors,
-                            rageTaps: data.rageTaps,
-                            apiErrors: data.apiErrors,
-                            total: data.crashes + data.anrs + data.errors + data.rageTaps + data.apiErrors,
+                    return [
+                        {
+                            country,
+                            city: 'Unknown',
+                            lat: data.lat,
+                            lng: data.lng,
+                            sessions: data.sessions,
+                            uniqueUsers: data.uniqueUsers,
+                            issues: {
+                                crashes: data.crashes,
+                                anrs: data.anrs,
+                                errors: data.errors,
+                                rageTaps: data.rageTaps,
+                                apiErrors: data.apiErrors,
+                                total: data.crashes + data.anrs + data.errors + data.rageTaps + data.apiErrors,
+                            },
                         },
-                    }];
+                    ];
                 }
 
                 return cityEntries
@@ -1438,7 +1300,8 @@ router.get(
                         },
                     }));
             })
-            .sort((a, b) => b.issues.total - a.issues.total);
+            .sort((a, b) => b.issues.total - a.issues.total || b.uniqueUsers - a.uniqueUsers || b.sessions - a.sessions)
+            .slice(0, GEO_ISSUE_LOCATION_RESPONSE_LIMIT);
 
         // Also include country-level aggregation for summary
         const countries = Object.entries(countryMap)
@@ -1452,9 +1315,8 @@ router.get(
                 rageTaps: data.rageTaps,
                 apiErrors: data.apiErrors,
                 totalIssues: data.crashes + data.anrs + data.errors + data.rageTaps + data.apiErrors,
-                issueRate: data.sessions > 0
-                    ? Math.round(((data.crashes + data.anrs + data.errors + data.rageTaps + data.apiErrors) / data.sessions) * 100) / 100
-                    : 0,
+                issueRate:
+                    data.sessions > 0 ? Math.round(((data.crashes + data.anrs + data.errors + data.rageTaps + data.apiErrors) / data.sessions) * 100) / 100 : 0,
             }))
             .sort((a, b) => b.totalIssues - a.totalIssues);
 
@@ -1463,13 +1325,13 @@ router.get(
         // Cache for 5 minutes
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
  * Get API latency by geographic location
  * GET /api/analytics/latency-by-location
- * 
+ *
  * Returns average API response times aggregated by country.
  * Used for "API Performance by Region" analytics.
  */
@@ -1481,25 +1343,17 @@ router.get(
         const normalizedPlatform = typeof platform === 'string' && platform !== 'all' ? platform : undefined;
 
         // Get accessible projects for user
-        const membership = await db
-            .select({ teamId: teamMembers.teamId })
-            .from(teamMembers)
-            .where(eq(teamMembers.userId, req.user!.id));
+        const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
 
-        const teamIds = membership.map(m => m.teamId);
+        const teamIds = membership.map((m) => m.teamId);
         if (teamIds.length === 0) {
             res.json({ regions: [], summary: { avgLatency: 0, totalRequests: 0 } });
             return;
         }
 
-        const accessibleProjects = await db
-            .select({ id: projects.id })
-            .from(projects)
-            .where(inArray(projects.teamId, teamIds));
+        const accessibleProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
 
-        const projectIds = projectId
-            ? [projectId as string]
-            : accessibleProjects.map(p => p.id);
+        const projectIds = projectId ? [projectId as string] : accessibleProjects.map((p) => p.id);
 
         if (projectIds.length === 0) {
             res.json({ regions: [], summary: { avgLatency: 0, totalRequests: 0 } });
@@ -1507,7 +1361,7 @@ router.get(
         }
 
         // Build cache key (v3: SQL aggregation — no per-session rows in Node)
-        const cacheKey = `analytics:latency-geo:${projectIds.sort().join(',')}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v4-sql-agg`;
+        const cacheKey = `analytics:latency-geo:${projectIds.sort().join(',')}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v5-location-cap-${GEO_LATENCY_LOCATION_RESPONSE_LIMIT}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -1524,10 +1378,7 @@ router.get(
             }
         }
 
-        const conditions = [
-            inArray(sessions.projectId, projectIds),
-            isNotNull(sessions.geoCountry),
-        ];
+        const conditions = [inArray(sessions.projectId, projectIds), isNotNull(sessions.geoCountry)];
         if (startedAfter) {
             conditions.push(gte(sessions.startedAt, startedAfter));
         }
@@ -1569,7 +1420,9 @@ router.get(
             .leftJoin(sessionMetrics, eq(sessions.id, sessionMetrics.sessionId))
             .where(and(...conditions, isNotNull(sessions.geoCity), isNotNull(sessions.geoLatitude), isNotNull(sessions.geoLongitude)))
             .groupBy(sessions.geoCountry, sessions.geoCity)
-            .having(sql`sum(${apiTotalExpr}) > 0`);
+            .having(sql`sum(${apiTotalExpr}) > 0`)
+            .orderBy(desc(sql`sum(${apiTotalExpr})`))
+            .limit(GEO_LATENCY_LOCATION_RESPONSE_LIMIT);
 
         let globalTotalRequests = 0;
         let globalWeightedLatency = 0;
@@ -1591,7 +1444,8 @@ router.get(
                     errorCount,
                 };
             })
-            .sort((a, b) => b.totalRequests - a.totalRequests);
+            .sort((a, b) => b.totalRequests - a.totalRequests)
+            .slice(0, GEO_LATENCY_LOCATION_RESPONSE_LIMIT);
 
         const locations = locationAggRows
             .filter((row) => Boolean(row.country) && Boolean(row.city) && row.latitude !== null && row.longitude !== null)
@@ -1617,16 +1471,14 @@ router.get(
             locations,
             regions,
             summary: {
-                avgLatency: globalTotalRequests > 0
-                    ? Math.round(globalWeightedLatency / globalTotalRequests)
-                    : 0,
+                avgLatency: globalTotalRequests > 0 ? Math.round(globalWeightedLatency / globalTotalRequests) : 0,
                 totalRequests: globalTotalRequests,
             },
         };
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
@@ -1646,24 +1498,22 @@ router.get(
             // Verify access inline
             const [project] = await db.select({ teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
             if (!project) throw ApiError.notFound('Project not found');
-            const [membership] = await db.select({ id: teamMembers.id }).from(teamMembers).where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id))).limit(1);
+            const [membership] = await db
+                .select({ id: teamMembers.id })
+                .from(teamMembers)
+                .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
+                .limit(1);
             if (!membership) throw ApiError.forbidden('Access denied');
             projectIds = [projectId];
         } else {
-            const membership = await db
-                .select({ teamId: teamMembers.teamId })
-                .from(teamMembers)
-                .where(eq(teamMembers.userId, req.user!.id));
-            const teamIds = membership.map(m => m.teamId);
+            const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
+            const teamIds = membership.map((m) => m.teamId);
             if (teamIds.length === 0) {
                 res.json({ devices: [], platforms: {}, osVersions: [], appVersions: [], totalSessions: 0 });
                 return;
             }
-            const userProjects = await db
-                .select({ id: projects.id })
-                .from(projects)
-                .where(inArray(projects.teamId, teamIds));
-            projectIds = userProjects.map(p => p.id);
+            const userProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
+            projectIds = userProjects.map((p) => p.id);
         }
 
         if (projectIds.length === 0) {
@@ -1682,19 +1532,20 @@ router.get(
         // Date filter for rollup query
         let startDateStr: string | undefined;
         if (timeRange && timeRange !== 'all' && timeRange !== 'max') {
-            const days = timeRange === '24h'
-                ? 1
-                : timeRange === '7d'
-                    ? 7
-                    : timeRange === '30d'
+            const days =
+                timeRange === '24h'
+                    ? 1
+                    : timeRange === '7d'
+                      ? 7
+                      : timeRange === '30d'
                         ? 30
                         : timeRange === '90d'
-                            ? 90
-                            : timeRange === '180d'
-                                ? 180
-                                : timeRange === '1y'
-                                    ? 365
-                                    : undefined;
+                          ? 90
+                          : timeRange === '180d'
+                            ? 180
+                            : timeRange === '1y'
+                              ? 365
+                              : undefined;
             if (days) {
                 const startDate = new Date();
                 startDate.setDate(startDate.getDate() - days);
@@ -1719,11 +1570,12 @@ router.get(
         const platformCounts: Record<string, number> = {};
         let totalSessions = 0;
 
-        const platformCond = normalizedPlatform === 'mobile'
-            ? inArray(sessions.platform, ['ios', 'android'])
-            : normalizedPlatform
-                ? eq(sessions.platform, normalizedPlatform)
-                : null;
+        const platformCond =
+            normalizedPlatform === 'mobile'
+                ? inArray(sessions.platform, ['ios', 'android'])
+                : normalizedPlatform
+                  ? eq(sessions.platform, normalizedPlatform)
+                  : null;
 
         if (normalizedPlatform) {
             // When a platform filter is active, query raw sessions (rollup JSONB doesn't segment by platform)
@@ -1798,12 +1650,7 @@ router.get(
             return str.length > 0 ? str : 'UNKNOWN';
         };
 
-        const addIssueCount = (
-            key: string,
-            issueType: keyof IssueBreakdown,
-            count: number,
-            map: Record<string, IssueBreakdown>
-        ) => {
+        const addIssueCount = (key: string, issueType: keyof IssueBreakdown, count: number, map: Record<string, IssueBreakdown>) => {
             const bucket = ensureIssueBucket(map, normalizeKey(key));
             bucket[issueType] += count;
         };
@@ -1944,14 +1791,17 @@ router.get(
             .where(and(...engagementWhere))
             .groupBy(engagementDeviceExpr);
 
-        const deviceEngagement: Record<string, {
-            avgDurationSeconds: number;
-            avgInteractionScore: number;
-            avgExplorationScore: number;
-            avgUxScore: number;
-            totalEvents: number;
-            engagedSessions: number;
-        }> = {};
+        const deviceEngagement: Record<
+            string,
+            {
+                avgDurationSeconds: number;
+                avgInteractionScore: number;
+                avgExplorationScore: number;
+                avgUxScore: number;
+                totalEvents: number;
+                engagedSessions: number;
+            }
+        > = {};
 
         for (const row of engagementRows) {
             const model = normalizeKey(row.model);
@@ -2022,7 +1872,7 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
@@ -2041,11 +1891,7 @@ router.get(
         }
 
         // Verify access
-        const [project] = await db
-            .select({ teamId: projects.teamId })
-            .from(projects)
-            .where(eq(projects.id, projectId))
-            .limit(1);
+        const [project] = await db.select({ teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
 
         if (!project) throw ApiError.notFound('Project not found');
 
@@ -2068,19 +1914,20 @@ router.get(
         // Date filter
         let startDate: Date | undefined;
         if (timeRange && timeRange !== 'all' && timeRange !== 'max') {
-            const days = timeRange === '24h'
-                ? 1
-                : timeRange === '7d'
-                    ? 7
-                    : timeRange === '30d'
+            const days =
+                timeRange === '24h'
+                    ? 1
+                    : timeRange === '7d'
+                      ? 7
+                      : timeRange === '30d'
                         ? 30
                         : timeRange === '90d'
-                            ? 90
-                            : timeRange === '180d'
-                                ? 180
-                                : timeRange === '1y'
-                                    ? 365
-                                    : undefined;
+                          ? 90
+                          : timeRange === '180d'
+                            ? 180
+                            : timeRange === '1y'
+                              ? 365
+                              : undefined;
             if (days) {
                 startDate = new Date();
                 startDate.setDate(startDate.getDate() - days);
@@ -2120,7 +1967,7 @@ router.get(
         const deviceTotals: Record<string, number> = {};
         const versionTotals: Record<string, number> = {};
 
-        matrixData.forEach(row => {
+        matrixData.forEach((row) => {
             const d = row.device;
             const v = row.version;
             deviceTotals[d] = (deviceTotals[d] || 0) + row.sessions;
@@ -2130,12 +1977,12 @@ router.get(
         const topDevices = Object.entries(deviceTotals)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 30)
-            .map(e => e[0]);
+            .map((e) => e[0]);
 
         const topVersions = Object.entries(versionTotals)
             .sort((a, b) => b[1] - a[1]) // Sort by volume for now, ideally version semver
             .slice(0, 15)
-            .map(e => e[0]);
+            .map((e) => e[0]);
         // Re-sort versions alphanumerically or semantically if possible
         topVersions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
 
@@ -2143,8 +1990,8 @@ router.get(
         const topVersionsSet = new Set(topVersions);
 
         const filteredMatrix = matrixData
-            .filter(row => topDevicesSet.has(row.device) && topVersionsSet.has(row.version))
-            .map(row => {
+            .filter((row) => topDevicesSet.has(row.device) && topVersionsSet.has(row.version))
+            .map((row) => {
                 const totalIssues = (row.crashCount || 0) + (row.anrCount || 0) + (row.errorCount || 0) + (row.rageTapCount || 0);
                 const issueRate = row.sessions > 0 ? totalIssues / row.sessions : 0;
                 return {
@@ -2169,7 +2016,7 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(response), 'EX', CACHE_TTL);
         res.json(response);
-    })
+    }),
 );
 
 /**
@@ -2187,24 +2034,22 @@ router.get(
             // Verify access inline
             const [project] = await db.select({ teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
             if (!project) throw ApiError.notFound('Project not found');
-            const [mem] = await db.select({ id: teamMembers.id }).from(teamMembers).where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id))).limit(1);
+            const [mem] = await db
+                .select({ id: teamMembers.id })
+                .from(teamMembers)
+                .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
+                .limit(1);
             if (!mem) throw ApiError.forbidden('Access denied');
             projectIds = [projectId];
         } else {
-            const membership = await db
-                .select({ teamId: teamMembers.teamId })
-                .from(teamMembers)
-                .where(eq(teamMembers.userId, req.user!.id));
-            const teamIds = membership.map(m => m.teamId);
+            const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
+            const teamIds = membership.map((m) => m.teamId);
             if (teamIds.length === 0) {
                 res.json({ topScreens: [], flows: [], entryPoints: [], exitPoints: [] });
                 return;
             }
-            const userProjects = await db
-                .select({ id: projects.id })
-                .from(projects)
-                .where(inArray(projects.teamId, teamIds));
-            projectIds = userProjects.map(p => p.id);
+            const userProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
+            projectIds = userProjects.map((p) => p.id);
         }
 
         if (projectIds.length === 0) {
@@ -2294,7 +2139,7 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
@@ -2312,24 +2157,22 @@ router.get(
             // Verify access inline
             const [project] = await db.select({ teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
             if (!project) throw ApiError.notFound('Project not found');
-            const [mem] = await db.select({ id: teamMembers.id }).from(teamMembers).where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id))).limit(1);
+            const [mem] = await db
+                .select({ id: teamMembers.id })
+                .from(teamMembers)
+                .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
+                .limit(1);
             if (!mem) throw ApiError.forbidden('Access denied');
             projectIds = [projectId];
         } else {
-            const membership = await db
-                .select({ teamId: teamMembers.teamId })
-                .from(teamMembers)
-                .where(eq(teamMembers.userId, req.user!.id));
-            const teamIds = membership.map(m => m.teamId);
+            const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
+            const teamIds = membership.map((m) => m.teamId);
             if (teamIds.length === 0) {
                 res.json({ segments: [] });
                 return;
             }
-            const userProjects = await db
-                .select({ id: projects.id })
-                .from(projects)
-                .where(inArray(projects.teamId, teamIds));
-            projectIds = userProjects.map(p => p.id);
+            const userProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
+            projectIds = userProjects.map((p) => p.id);
         }
 
         if (projectIds.length === 0) {
@@ -2412,13 +2255,13 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
  * API Endpoint Stats - Per-endpoint performance metrics
  * GET /api/analytics/api-endpoint-stats
- * 
+ *
  * Returns:
  * - Top 3 slowest endpoints
  * - Top 3 most erroring endpoints
@@ -2435,18 +2278,22 @@ router.get(
         if (projectId && typeof projectId === 'string') {
             const [project] = await db.select({ teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
             if (!project) throw ApiError.notFound('Project not found');
-            const [membership] = await db.select({ id: teamMembers.id }).from(teamMembers).where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id))).limit(1);
+            const [membership] = await db
+                .select({ id: teamMembers.id })
+                .from(teamMembers)
+                .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
+                .limit(1);
             if (!membership) throw ApiError.forbidden('Access denied');
             projectIds = [projectId];
         } else {
             const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
-            const teamIds = membership.map(m => m.teamId);
+            const teamIds = membership.map((m) => m.teamId);
             if (teamIds.length === 0) {
                 res.json({ slowestEndpoints: [], erroringEndpoints: [], allEndpoints: [], summary: { totalCalls: 0, avgLatency: 0, errorRate: 0 } });
                 return;
             }
             const userProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
-            projectIds = userProjects.map(p => p.id);
+            projectIds = userProjects.map((p) => p.id);
         }
 
         if (projectIds.length === 0) {
@@ -2489,13 +2336,16 @@ router.get(
                     projectIds: sortedProjectIds,
                     startDate,
                 });
-                const rowsByEndpoint = new Map<string, {
-                    endpoint: string;
-                    totalCalls: number;
-                    totalErrors: number;
-                    sumLatencyMs: number;
-                    statusCodeBreakdown: ErrorCodeBreakdown;
-                }>();
+                const rowsByEndpoint = new Map<
+                    string,
+                    {
+                        endpoint: string;
+                        totalCalls: number;
+                        totalErrors: number;
+                        sumLatencyMs: number;
+                        statusCodeBreakdown: ErrorCodeBreakdown;
+                    }
+                >();
 
                 for (const row of clickHouseRows) {
                     const endpoint = row.endpoint;
@@ -2530,12 +2380,15 @@ router.get(
         }
 
         // Aggregate across dates per endpoint
-        const endpointMap: Record<string, {
-            totalCalls: number;
-            totalErrors: number;
-            sumLatencyMs: number;
-            statusCodeBreakdown: ErrorCodeBreakdown;
-        }> = {};
+        const endpointMap: Record<
+            string,
+            {
+                totalCalls: number;
+                totalErrors: number;
+                sumLatencyMs: number;
+                statusCodeBreakdown: ErrorCodeBreakdown;
+            }
+        > = {};
 
         for (const s of stats) {
             if (shouldExcludeFromEndpointProductAnalytics(s.endpoint)) continue;
@@ -2550,10 +2403,7 @@ router.get(
             endpointMap[s.endpoint].totalCalls += Number(s.totalCalls || 0);
             endpointMap[s.endpoint].totalErrors += Number(s.totalErrors || 0);
             endpointMap[s.endpoint].sumLatencyMs += Number(s.sumLatencyMs || 0);
-            mergeErrorCodeBreakdowns(
-                endpointMap[s.endpoint].statusCodeBreakdown,
-                normalizeErrorCodeBreakdown(s.statusCodeBreakdown),
-            );
+            mergeErrorCodeBreakdowns(endpointMap[s.endpoint].statusCodeBreakdown, normalizeErrorCodeBreakdown(s.statusCodeBreakdown));
         }
 
         // Transform to array with computed avg latency
@@ -2574,13 +2424,11 @@ router.get(
             .sort((a, b) => b.totalCalls - a.totalCalls);
 
         // Top 3 slowest
-        const slowestEndpoints = [...allEndpoints]
-            .sort((a, b) => b.avgLatencyMs - a.avgLatencyMs)
-            .slice(0, 3);
+        const slowestEndpoints = [...allEndpoints].sort((a, b) => b.avgLatencyMs - a.avgLatencyMs).slice(0, 3);
 
         // Top 3 most erroring (by error count, not rate)
         const erroringEndpoints = [...allEndpoints]
-            .filter(e => e.totalErrors > 0)
+            .filter((e) => e.totalErrors > 0)
             .sort((a, b) => b.totalErrors - a.totalErrors)
             .slice(0, 3);
 
@@ -2597,18 +2445,18 @@ router.get(
                 totalCalls,
                 avgLatency: totalCalls > 0 ? Math.round(totalLatency / totalCalls) : 0,
                 errorRate: totalCalls > 0 ? Number(((totalErrors / totalCalls) * 100).toFixed(2)) : 0,
-            }
+            },
         };
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
  * Region Performance - Top 3 fastest and slowest regions by API latency
  * GET /api/analytics/region-performance
- * 
+ *
  * Uses session-level geo data and API metrics to compute average latency per region.
  */
 router.get(
@@ -2622,11 +2470,7 @@ router.get(
         }
 
         // Verify access
-        const [project] = await db
-            .select({ id: projects.id, teamId: projects.teamId })
-            .from(projects)
-            .where(eq(projects.id, projectId))
-            .limit(1);
+        const [project] = await db.select({ id: projects.id, teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
 
         if (!project) {
             throw ApiError.notFound('Project not found');
@@ -2635,10 +2479,7 @@ router.get(
         const [membership] = await db
             .select({ id: teamMembers.id })
             .from(teamMembers)
-            .where(and(
-                eq(teamMembers.teamId, project.teamId),
-                eq(teamMembers.userId, req.user!.id)
-            ))
+            .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
             .limit(1);
 
         if (!membership) {
@@ -2657,12 +2498,7 @@ router.get(
         // Time filter for rollup query (all/max → long cap; was 365d)
         const tr = typeof timeRange === 'string' ? timeRange : '30d';
         const bounded = boundedTimeRangeToDays(tr);
-        const days =
-            bounded !== undefined
-                ? bounded
-                : tr === 'all' || tr === 'max'
-                    ? ANALYTICS_LONG_WINDOW_DAYS
-                    : 30;
+        const days = bounded !== undefined ? bounded : tr === 'all' || tr === 'max' ? ANALYTICS_LONG_WINDOW_DAYS : 30;
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
         const startDateStr = startDate.toISOString().split('T')[0];
@@ -2689,20 +2525,35 @@ router.get(
         // Get country names
         const getCountryName = (code: string): string => {
             const names: Record<string, string> = {
-                'US': 'United States', 'GB': 'United Kingdom', 'CA': 'Canada',
-                'AU': 'Australia', 'DE': 'Germany', 'FR': 'France', 'JP': 'Japan',
-                'CN': 'China', 'IN': 'India', 'BR': 'Brazil', 'MX': 'Mexico',
-                'KR': 'South Korea', 'IT': 'Italy', 'ES': 'Spain', 'NL': 'Netherlands',
-                'SE': 'Sweden', 'SG': 'Singapore', 'HK': 'Hong Kong', 'local': 'Local Network',
-                'PS/IL': 'Palestine/Israel', 'unknown': 'Unknown Region'
+                US: 'United States',
+                GB: 'United Kingdom',
+                CA: 'Canada',
+                AU: 'Australia',
+                DE: 'Germany',
+                FR: 'France',
+                JP: 'Japan',
+                CN: 'China',
+                IN: 'India',
+                BR: 'Brazil',
+                MX: 'Mexico',
+                KR: 'South Korea',
+                IT: 'Italy',
+                ES: 'Spain',
+                NL: 'Netherlands',
+                SE: 'Sweden',
+                SG: 'Singapore',
+                HK: 'Hong Kong',
+                local: 'Local Network',
+                'PS/IL': 'Palestine/Israel',
+                unknown: 'Unknown Region',
             };
             return names[code] || code;
         };
 
         // Transform to sorted arrays
         const regions = regionStats
-            .filter(r => Number(r.totalCalls || 0) >= 10) // Min 10 calls to be significant
-            .map(r => {
+            .filter((r) => Number(r.totalCalls || 0) >= 10) // Min 10 calls to be significant
+            .map((r) => {
                 const totalCalls = Number(r.totalCalls || 0);
                 const sumLatencyMs = Number(r.sumLatencyMs || 0);
                 return {
@@ -2726,13 +2577,13 @@ router.get(
         // Cache for 5 minutes
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
  * JS Errors List - Query JavaScript errors with filtering and search
  * GET /api/analytics/errors
- * 
+ *
  * Query params:
  * - projectId: required
  * - timeRange: '24h' | '7d' | '30d' | '90d' | 'all'
@@ -2752,11 +2603,7 @@ router.get(
         }
 
         // Verify access
-        const [project] = await db
-            .select({ id: projects.id, teamId: projects.teamId })
-            .from(projects)
-            .where(eq(projects.id, projectId))
-            .limit(1);
+        const [project] = await db.select({ id: projects.id, teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
 
         if (!project) {
             throw ApiError.notFound('Project not found');
@@ -2765,10 +2612,7 @@ router.get(
         const [membership] = await db
             .select({ id: teamMembers.id })
             .from(teamMembers)
-            .where(and(
-                eq(teamMembers.teamId, project.teamId),
-                eq(teamMembers.userId, req.user!.id)
-            ))
+            .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
             .limit(1);
 
         if (!membership) {
@@ -2795,10 +2639,7 @@ router.get(
 
         // Time filter
         if (timeRange && timeRange !== 'all') {
-            const days = timeRange === '24h' ? 1 :
-                timeRange === '7d' ? 7 :
-                    timeRange === '30d' ? 30 :
-                        timeRange === '90d' ? 90 : 30;
+            const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 30;
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - days);
             conditions.push(gte(errors.timestamp, startDate));
@@ -2846,46 +2687,52 @@ router.get(
         let filteredErrors = errorsList;
         if (search && typeof search === 'string') {
             const searchLower = search.toLowerCase();
-            filteredErrors = errorsList.filter(e =>
-                e.message.toLowerCase().includes(searchLower) ||
-                e.errorName.toLowerCase().includes(searchLower) ||
-                (e.screenName && e.screenName.toLowerCase().includes(searchLower))
+            filteredErrors = errorsList.filter(
+                (e) =>
+                    e.message.toLowerCase().includes(searchLower) ||
+                    e.errorName.toLowerCase().includes(searchLower) ||
+                    (e.screenName && e.screenName.toLowerCase().includes(searchLower)),
             );
         }
 
         // Group by fingerprint for summary
-        const grouped = filteredErrors.reduce((acc, e) => {
-            const key = e.fingerprint || e.errorName;
-            if (!acc[key]) {
-                acc[key] = { count: 0, firstSeen: e.timestamp, lastSeen: e.timestamp, sample: e };
-            }
-            acc[key].count++;
-            if (e.timestamp > acc[key].lastSeen) acc[key].lastSeen = e.timestamp;
-            if (e.timestamp < acc[key].firstSeen) acc[key].firstSeen = e.timestamp;
-            return acc;
-        }, {} as Record<string, { count: number; firstSeen: Date; lastSeen: Date; sample: typeof filteredErrors[0] }>);
+        const grouped = filteredErrors.reduce(
+            (acc, e) => {
+                const key = e.fingerprint || e.errorName;
+                if (!acc[key]) {
+                    acc[key] = { count: 0, firstSeen: e.timestamp, lastSeen: e.timestamp, sample: e };
+                }
+                acc[key].count++;
+                if (e.timestamp > acc[key].lastSeen) acc[key].lastSeen = e.timestamp;
+                if (e.timestamp < acc[key].firstSeen) acc[key].firstSeen = e.timestamp;
+                return acc;
+            },
+            {} as Record<string, { count: number; firstSeen: Date; lastSeen: Date; sample: (typeof filteredErrors)[0] }>,
+        );
 
         const result = {
             errors: filteredErrors,
-            grouped: Object.values(grouped).map(g => ({
-                errorName: g.sample.errorName,
-                message: g.sample.message,
-                count: g.count,
-                firstSeen: g.firstSeen,
-                lastSeen: g.lastSeen,
-                sampleSessionId: g.sample.sessionId,
-            })).sort((a, b) => b.count - a.count),
+            grouped: Object.values(grouped)
+                .map((g) => ({
+                    errorName: g.sample.errorName,
+                    message: g.sample.message,
+                    count: g.count,
+                    firstSeen: g.firstSeen,
+                    lastSeen: g.lastSeen,
+                    sampleSessionId: g.sample.sessionId,
+                }))
+                .sort((a, b) => b.count - a.count),
             summary: {
                 total: totalCount,
-                jsErrors: filteredErrors.filter(e => e.errorType === 'js_error').length,
-                promiseRejections: filteredErrors.filter(e => e.errorType === 'promise_rejection').length,
-                unhandledExceptions: filteredErrors.filter(e => e.errorType === 'unhandled_exception').length,
+                jsErrors: filteredErrors.filter((e) => e.errorType === 'js_error').length,
+                promiseRejections: filteredErrors.filter((e) => e.errorType === 'promise_rejection').length,
+                unhandledExceptions: filteredErrors.filter((e) => e.errorType === 'unhandled_exception').length,
             },
             pagination: {
                 offset: parseInt(offset as string) || 0,
                 limit: parseInt(limit as string) || 50,
                 total: totalCount,
-            }
+            },
         };
 
         // Cache the result (2 minutes TTL)
@@ -2894,13 +2741,13 @@ router.get(
         }
 
         res.json(result);
-    })
+    }),
 );
 
 /**
  * Journey Observability - Observability-centric journey analysis
  * GET /api/analytics/journey-observability
- * 
+ *
  * Returns observability-enriched journey data including:
  * - Journey health computation (healthy/degraded/problematic)
  * - Failure-annotated transitions (API errors, latency, rage taps)
@@ -2918,28 +2765,52 @@ router.get(
         if (projectId && typeof projectId === 'string') {
             const [project] = await db.select({ teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
             if (!project) throw ApiError.notFound('Project not found');
-            const [mem] = await db.select({ id: teamMembers.id }).from(teamMembers).where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id))).limit(1);
+            const [mem] = await db
+                .select({ id: teamMembers.id })
+                .from(teamMembers)
+                .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
+                .limit(1);
             if (!mem) throw ApiError.forbidden('Access denied');
             projectIds = [projectId];
         } else {
-            const membership = await db
-                .select({ teamId: teamMembers.teamId })
-                .from(teamMembers)
-                .where(eq(teamMembers.userId, req.user!.id));
-            const teamIds = membership.map(m => m.teamId);
+            const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
+            const teamIds = membership.map((m) => m.teamId);
             if (teamIds.length === 0) {
-                res.json({ healthSummary: { healthy: 0, degraded: 0, problematic: 0 }, flows: [], problematicJourneys: [], happyPathJourney: null, configuredHappyPath: null, exitAfterError: [], timeToFailure: {}, screenHealth: [], topScreens: [], entryPoints: [], exitPoints: [], appVersions: [] });
+                res.json({
+                    healthSummary: { healthy: 0, degraded: 0, problematic: 0 },
+                    flows: [],
+                    problematicJourneys: [],
+                    happyPathJourney: null,
+                    configuredHappyPath: null,
+                    exitAfterError: [],
+                    timeToFailure: {},
+                    screenHealth: [],
+                    topScreens: [],
+                    entryPoints: [],
+                    exitPoints: [],
+                    appVersions: [],
+                });
                 return;
             }
-            const userProjects = await db
-                .select({ id: projects.id })
-                .from(projects)
-                .where(inArray(projects.teamId, teamIds));
-            projectIds = userProjects.map(p => p.id);
+            const userProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
+            projectIds = userProjects.map((p) => p.id);
         }
 
         if (projectIds.length === 0) {
-            res.json({ healthSummary: { healthy: 0, degraded: 0, problematic: 0 }, flows: [], problematicJourneys: [], happyPathJourney: null, configuredHappyPath: null, exitAfterError: [], timeToFailure: {}, screenHealth: [], topScreens: [], entryPoints: [], exitPoints: [], appVersions: [] });
+            res.json({
+                healthSummary: { healthy: 0, degraded: 0, problematic: 0 },
+                flows: [],
+                problematicJourneys: [],
+                happyPathJourney: null,
+                configuredHappyPath: null,
+                exitAfterError: [],
+                timeToFailure: {},
+                screenHealth: [],
+                topScreens: [],
+                entryPoints: [],
+                exitPoints: [],
+                appVersions: [],
+            });
             return;
         }
 
@@ -2981,13 +2852,13 @@ router.get(
 
         const configuredHappyPath = configuredFunnel
             ? {
-                projectId: configuredFunnel.projectId,
-                path: configuredFunnel.path,
-                targetScreen: configuredFunnel.targetScreen,
-                confidence: Number(configuredFunnel.confidence || 0),
-                sampleSize: Number(configuredFunnel.sampleSize || 0),
-                updatedAt: configuredFunnel.updatedAt?.toISOString?.() || null,
-            }
+                  projectId: configuredFunnel.projectId,
+                  path: configuredFunnel.path,
+                  targetScreen: configuredFunnel.targetScreen,
+                  confidence: Number(configuredFunnel.confidence || 0),
+                  sampleSize: Number(configuredFunnel.sampleSize || 0),
+                  updatedAt: configuredFunnel.updatedAt?.toISOString?.() || null,
+              }
             : null;
 
         if (responseMode === 'summary') {
@@ -3051,10 +2922,7 @@ router.get(
             const appVersions = Object.entries(appVersionTotals)
                 .map(([version, count]) => ({ version, count }))
                 .filter((item) => item.count > 0)
-                .sort((a, b) => (
-                    (b.count - a.count)
-                    || b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
-                ))
+                .sort((a, b) => b.count - a.count || b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' }))
                 .slice(0, 100);
             const flows = Object.entries(transitionTotals)
                 .map(([transition, count]) => {
@@ -3143,10 +3011,7 @@ router.get(
                 count: Number(row.count || 0),
             }))
             .filter((item) => item.count > 0)
-            .sort((a, b) => (
-                (b.count - a.count)
-                || b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
-            ));
+            .sort((a, b) => b.count - a.count || b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' }));
 
         const conditions = [...baseSessionConditions];
         if (journeyAppVersion) {
@@ -3178,7 +3043,7 @@ router.get(
         // Compute health for each session
         type HealthStatus = 'healthy' | 'degraded' | 'problematic';
 
-        const computeHealth = (s: typeof sessionsWithMetrics[0]): HealthStatus => {
+        const computeHealth = (s: (typeof sessionsWithMetrics)[0]): HealthStatus => {
             const crashes = Number(s.crashCount || 0);
             const anrs = Number(s.anrCount || 0);
             const rageTaps = Number(s.rageTapCount || 0);
@@ -3385,9 +3250,7 @@ router.get(
                 const [from, to] = key.split('→');
                 const apiErrorRate = stats.apiTotal > 0 ? (stats.apiErrors / stats.apiTotal) * 100 : 0;
                 const avgLatency = stats.count > 0 ? stats.latencySum / stats.count : 0;
-                const sampleSessionIds = stats.replaySessionIds.length > 0
-                    ? stats.replaySessionIds
-                    : stats.sampleSessionIds;
+                const sampleSessionIds = stats.replaySessionIds.length > 0 ? stats.replaySessionIds : stats.sampleSessionIds;
 
                 // Compute transition health
                 let health: HealthStatus = 'healthy';
@@ -3412,36 +3275,35 @@ router.get(
             .sort((a, b) => b.count - a.count)
             .slice(0, 50);
 
-        const allJourneys = Object.entries(journeyMap)
-            .map(([path, stats]) => {
-                const failureScore = stats.crashes * 5 + stats.anrs * 4 + stats.apiErrors * 2 + stats.rageTaps;
-                return {
-                    path: path.split(' → '),
-                    sessionCount: stats.sessionCount,
-                    crashes: stats.crashes,
-                    anrs: stats.anrs,
-                    apiErrors: stats.apiErrors,
-                    rageTaps: stats.rageTaps,
-                    failureScore,
-                    failurePerSession: stats.sessionCount > 0 ? failureScore / stats.sessionCount : Number.POSITIVE_INFINITY,
-                    sampleSessionIds: stats.sessionIds,
-                };
-            });
+        const allJourneys = Object.entries(journeyMap).map(([path, stats]) => {
+            const failureScore = stats.crashes * 5 + stats.anrs * 4 + stats.apiErrors * 2 + stats.rageTaps;
+            return {
+                path: path.split(' → '),
+                sessionCount: stats.sessionCount,
+                crashes: stats.crashes,
+                anrs: stats.anrs,
+                apiErrors: stats.apiErrors,
+                rageTaps: stats.rageTaps,
+                failureScore,
+                failurePerSession: stats.sessionCount > 0 ? failureScore / stats.sessionCount : Number.POSITIVE_INFINITY,
+                sampleSessionIds: stats.sessionIds,
+            };
+        });
 
         // Failure-weighted journeys (failureScore = crashes×5 + anrs×4 + apiErrors×2 + rageTaps×1)
         const problematicJourneys = allJourneys
-            .filter(j => j.failureScore > 0)
+            .filter((j) => j.failureScore > 0)
             .sort((a, b) => b.failureScore - a.failureScore)
             .slice(0, 20);
 
         // Happy path = highest-volume clean path. Fallback = lowest failure-per-session path.
         const happyPathJourney = (() => {
-            const candidates = allJourneys.filter(j => j.path.length > 1);
+            const candidates = allJourneys.filter((j) => j.path.length > 1);
             if (candidates.length === 0) return null;
 
             const cleanCandidates = candidates
-                .filter(j => j.failureScore === 0)
-                .sort((a, b) => (b.sessionCount - a.sessionCount) || (b.path.length - a.path.length));
+                .filter((j) => j.failureScore === 0)
+                .sort((a, b) => b.sessionCount - a.sessionCount || b.path.length - a.path.length);
 
             if (cleanCandidates.length > 0) {
                 const best = cleanCandidates[0];
@@ -3459,7 +3321,7 @@ router.get(
             }
 
             const fallback = [...candidates].sort(
-                (a, b) => (a.failurePerSession - b.failurePerSession) || (b.sessionCount - a.sessionCount) || (b.path.length - a.path.length),
+                (a, b) => a.failurePerSession - b.failurePerSession || b.sessionCount - a.sessionCount || b.path.length - a.path.length,
             )[0];
 
             return {
@@ -3489,7 +3351,7 @@ router.get(
         // Time-to-failure metrics
         const timeToFailure = {
             avgTimeBeforeFirstErrorMs: sessionsWithError > 0 ? Math.round(totalTimeBeforeError / sessionsWithError) : null,
-            avgScreensBeforeCrash: sessionsWithCrash > 0 ? Math.round(totalScreensBeforeCrash / sessionsWithCrash * 10) / 10 : null,
+            avgScreensBeforeCrash: sessionsWithCrash > 0 ? Math.round((totalScreensBeforeCrash / sessionsWithCrash) * 10) / 10 : null,
             avgInteractionsBeforeRageTap: sessionsWithRage > 0 ? Math.round(totalInteractionsBeforeRage / sessionsWithRage) : null,
         };
 
@@ -3547,13 +3409,13 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
  * Growth Observability - Session health and growth killers
  * GET /api/analytics/growth-observability
- * 
+ *
  * Returns observability-first growth data including:
  * - Session health segmentation (clean/error/rage/slow/crash)
  * - First session success rate
@@ -3569,15 +3431,16 @@ router.get(
         if (projectId && typeof projectId === 'string') {
             const [project] = await db.select({ teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
             if (!project) throw ApiError.notFound('Project not found');
-            const [mem] = await db.select({ id: teamMembers.id }).from(teamMembers).where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id))).limit(1);
+            const [mem] = await db
+                .select({ id: teamMembers.id })
+                .from(teamMembers)
+                .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
+                .limit(1);
             if (!mem) throw ApiError.forbidden('Access denied');
             projectIds = [projectId];
         } else {
-            const membership = await db
-                .select({ teamId: teamMembers.teamId })
-                .from(teamMembers)
-                .where(eq(teamMembers.userId, req.user!.id));
-            const teamIds = membership.map(m => m.teamId);
+            const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
+            const teamIds = membership.map((m) => m.teamId);
             if (teamIds.length === 0) {
                 res.json({
                     sessionHealth: { clean: 0, error: 0, rage: 0, slow: 0, crash: 0 },
@@ -3591,11 +3454,8 @@ router.get(
                 });
                 return;
             }
-            const userProjects = await db
-                .select({ id: projects.id })
-                .from(projects)
-                .where(inArray(projects.teamId, teamIds));
-            projectIds = userProjects.map(p => p.id);
+            const userProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
+            projectIds = userProjects.map((p) => p.id);
         }
 
         if (projectIds.length === 0) {
@@ -3778,10 +3638,7 @@ router.get(
                     firstSeenAt: sql<Date>`min(${sessions.startedAt})`,
                 })
                 .from(sessions)
-                .where(and(
-                    inArray(sessions.projectId, projectIds),
-                    inArray(sessions.deviceId, observedDeviceIds),
-                ))
+                .where(and(inArray(sessions.projectId, projectIds), inArray(sessions.deviceId, observedDeviceIds)))
                 .groupBy(sessions.deviceId);
 
             for (const row of firstSeenRows) {
@@ -3790,7 +3647,7 @@ router.get(
             }
         }
 
-        const firstSessionIds = new Set(Array.from(deviceFirstSession.values()).map(d => d.id));
+        const firstSessionIds = new Set(Array.from(deviceFirstSession.values()).map((d) => d.id));
         const sessionsPerDeviceInWindow = new Map<string, number>();
 
         // First session stats
@@ -3882,9 +3739,7 @@ router.get(
         }
 
         // Calculate first session success rate
-        const firstSessionSuccessRate = firstSessionStats.total > 0
-            ? Math.round((firstSessionStats.clean / firstSessionStats.total) * 100)
-            : 0;
+        const firstSessionSuccessRate = firstSessionStats.total > 0 ? Math.round((firstSessionStats.clean / firstSessionStats.total) * 100) : 0;
 
         const activeUsers = sessionsPerDeviceInWindow.size;
         let acquiredUsers = 0;
@@ -3892,9 +3747,7 @@ router.get(
 
         for (const [deviceId, sessionCount] of sessionsPerDeviceInWindow.entries()) {
             const firstSeenAt = firstSeenByDevice.get(deviceId);
-            const isNewInWindow = startedAfter
-                ? Boolean(firstSeenAt && firstSeenAt >= startedAfter)
-                : true;
+            const isNewInWindow = startedAfter ? Boolean(firstSeenAt && firstSeenAt >= startedAfter) : true;
 
             if (!isNewInWindow) continue;
             acquiredUsers++;
@@ -3980,7 +3833,7 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
@@ -3999,14 +3852,15 @@ router.get(
         if (projectId && typeof projectId === 'string') {
             const [project] = await db.select({ teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
             if (!project) throw ApiError.notFound('Project not found');
-            const [mem] = await db.select({ id: teamMembers.id }).from(teamMembers).where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id))).limit(1);
+            const [mem] = await db
+                .select({ id: teamMembers.id })
+                .from(teamMembers)
+                .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
+                .limit(1);
             if (!mem) throw ApiError.forbidden('Access denied');
             projectIds = [projectId];
         } else {
-            const membership = await db
-                .select({ teamId: teamMembers.teamId })
-                .from(teamMembers)
-                .where(eq(teamMembers.userId, req.user!.id));
+            const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
             const teamIds = membership.map((m) => m.teamId);
             if (teamIds.length === 0) {
                 res.json({
@@ -4055,10 +3909,7 @@ router.get(
                 });
                 return;
             }
-            const userProjects = await db
-                .select({ id: projects.id })
-                .from(projects)
-                .where(inArray(projects.teamId, teamIds));
+            const userProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
             projectIds = userProjects.map((p) => p.id);
         }
 
@@ -4165,23 +4016,23 @@ router.get(
 
             const totalSessionsFromAllTime = allTimeRows.reduce((sum, row) => sum + Number(row.totalSessions || 0), 0);
             const totalSessionsFromDaily = dailyRows.reduce((sum, row) => sum + Number(row.totalSessions || 0), 0);
-            const totalSessions = timeRange && timeRange !== 'all'
-                ? totalSessionsFromDaily
-                : totalSessionsFromAllTime;
-            const totalErrors = timeRange && timeRange !== 'all'
-                ? dailyRows.reduce((sum, row) => sum + Number(row.totalErrors || 0), 0)
-                : allTimeRows.reduce((sum, row) => sum + Number(row.totalErrors || 0), 0);
+            const totalSessions = timeRange && timeRange !== 'all' ? totalSessionsFromDaily : totalSessionsFromAllTime;
+            const totalErrors =
+                timeRange && timeRange !== 'all'
+                    ? dailyRows.reduce((sum, row) => sum + Number(row.totalErrors || 0), 0)
+                    : allTimeRows.reduce((sum, row) => sum + Number(row.totalErrors || 0), 0);
             const totalCrashes = dailyRows.reduce((sum, row) => sum + Number(row.totalCrashes || 0), 0);
             const totalAnrs = dailyRows.reduce((sum, row) => sum + Number(row.totalAnrs || 0), 0);
-            const totalRageTaps = timeRange && timeRange !== 'all'
-                ? dailyRows.reduce((sum, row) => sum + Number(row.totalRageTaps || 0), 0)
-                : allTimeRows.reduce((sum, row) => sum + Number(row.totalRageTaps || 0), 0);
-            const weightedApiErrorRate = allTimeRows.length > 0
-                ? allTimeRows.reduce((sum, row) => sum + Number(row.avgApiErrorRate || 0), 0) / allTimeRows.length
-                : 0;
-            const totalUsers = timeRange && timeRange !== 'all'
-                ? Math.max(0, ...dailyRows.map((row) => Number(row.uniqueUserCount || 0)))
-                : allTimeRows.reduce((sum, row) => sum + Number(row.totalUsers || 0), 0);
+            const totalRageTaps =
+                timeRange && timeRange !== 'all'
+                    ? dailyRows.reduce((sum, row) => sum + Number(row.totalRageTaps || 0), 0)
+                    : allTimeRows.reduce((sum, row) => sum + Number(row.totalRageTaps || 0), 0);
+            const weightedApiErrorRate =
+                allTimeRows.length > 0 ? allTimeRows.reduce((sum, row) => sum + Number(row.avgApiErrorRate || 0), 0) / allTimeRows.length : 0;
+            const totalUsers =
+                timeRange && timeRange !== 'all'
+                    ? Math.max(0, ...dailyRows.map((row) => Number(row.uniqueUserCount || 0)))
+                    : allTimeRows.reduce((sum, row) => sum + Number(row.totalUsers || 0), 0);
             const aggregatedPlatformCounts: Record<string, number> = {};
             for (const row of allTimeRows) {
                 for (const [platform, count] of Object.entries(row.platformBreakdown || {})) {
@@ -4344,8 +4195,7 @@ router.get(
         }
 
         const toNumber = (value: number | null | undefined): number => Number(value || 0);
-        const hasVisualReplay = (row: typeof sessionsWithMetrics[number]): boolean =>
-            toNumber(row.screenshotSegmentCount) > 0;
+        const hasVisualReplay = (row: (typeof sessionsWithMetrics)[number]): boolean => toNumber(row.screenshotSegmentCount) > 0;
 
         let crashFreeSessions = 0;
         let anrFreeSessions = 0;
@@ -4378,7 +4228,10 @@ router.get(
         const allUsers = new Set<string>();
         const affectedUsers = new Set<string>();
         const networkMap: Record<string, { sessions: number; apiCalls: number; apiErrors: number; latencySum: number; latencySamples: number }> = {};
-        const versionMap: Record<string, { sessions: number; degradedSessions: number; crashCount: number; anrCount: number; errorCount: number; latestSeen: Date; firstSeen: Date }> = {};
+        const versionMap: Record<
+            string,
+            { sessions: number; degradedSessions: number; crashCount: number; anrCount: number; errorCount: number; latestSeen: Date; firstSeen: Date }
+        > = {};
         const platformMap: Record<string, { sessions: number; crashCount: number; anrCount: number }> = {};
 
         for (const row of sessionsWithMetrics) {
@@ -4404,13 +4257,8 @@ router.get(
             if (rageTapCount === 0 && deadTapCount === 0) frustrationFreeSessions++;
 
             const apiErrorRate = apiTotalCount > 0 ? (apiErrorCount / apiTotalCount) * 100 : 0;
-            const hasDegradedSignal = crashCount > 0
-                || anrCount > 0
-                || errorCount > 0
-                || rageTapCount >= 2
-                || apiErrorRate > 5
-                || apiAvgResponseMs > 1000
-                || appStartupTimeMs > 3000;
+            const hasDegradedSignal =
+                crashCount > 0 || anrCount > 0 || errorCount > 0 || rageTapCount >= 2 || apiErrorRate > 5 || apiAvgResponseMs > 1000 || appStartupTimeMs > 3000;
             if (hasDegradedSignal) degradedSessions++;
 
             if (apiTotalCount > 0) {
@@ -4572,13 +4420,13 @@ router.get(
                 };
             })
             .filter((row) => row.sessions >= 20)
-            .sort((a, b) => (b.deltaVsOverall - a.deltaVsOverall) || (b.sessions - a.sessions))
+            .sort((a, b) => b.deltaVsOverall - a.deltaVsOverall || b.sessions - a.sessions)
             .slice(0, 5);
 
         const rankedRows = [...sessionsWithMetrics];
         const getEvidenceIds = (
-            predicate: (row: typeof sessionsWithMetrics[number]) => boolean,
-            ranker: (row: typeof sessionsWithMetrics[number]) => number,
+            predicate: (row: (typeof sessionsWithMetrics)[number]) => boolean,
+            ranker: (row: (typeof sessionsWithMetrics)[number]) => number,
         ): string[] => {
             const candidates = rankedRows.filter(predicate).sort((a, b) => ranker(b) - ranker(a));
             const replayCandidates = candidates.filter(hasVisualReplay);
@@ -4588,7 +4436,7 @@ router.get(
 
         const crashEvidence = getEvidenceIds(
             (row) => toNumber(row.crashCount) + toNumber(row.anrCount) > 0,
-            (row) => (toNumber(row.crashCount) * 5) + (toNumber(row.anrCount) * 4) + toNumber(row.errorCount),
+            (row) => toNumber(row.crashCount) * 5 + toNumber(row.anrCount) * 4 + toNumber(row.errorCount),
         );
         const apiEvidence = getEvidenceIds(
             (row) => {
@@ -4600,12 +4448,12 @@ router.get(
             (row) => {
                 const apiTotal = toNumber(row.apiTotalCount);
                 const apiErrorRate = (toNumber(row.apiErrorCount) / Math.max(1, apiTotal)) * 100;
-                return (apiErrorRate * 200) + toNumber(row.apiAvgResponseMs);
+                return apiErrorRate * 200 + toNumber(row.apiAvgResponseMs);
             },
         );
         const frustrationEvidence = getEvidenceIds(
             (row) => toNumber(row.rageTapCount) + toNumber(row.deadTapCount) > 0,
-            (row) => (toNumber(row.rageTapCount) * 3) + (toNumber(row.deadTapCount) * 2) + toNumber(row.errorCount),
+            (row) => toNumber(row.rageTapCount) * 3 + toNumber(row.deadTapCount) * 2 + toNumber(row.errorCount),
         );
         const startupEvidence = getEvidenceIds(
             (row) => toNumber(row.appStartupTimeMs) > 3000,
@@ -4613,7 +4461,11 @@ router.get(
         );
         const ingestEvidence = getEvidenceIds(
             (row) => toNumber(row.sdkUploadFailureCount) > 0 || toNumber(row.sdkOfflinePersistCount) > 0 || toNumber(row.sdkMemoryEvictionCount) > 0,
-            (row) => (toNumber(row.sdkUploadFailureCount) * 5) + (toNumber(row.sdkOfflinePersistCount) * 2) + (toNumber(row.sdkMemoryEvictionCount) * 2) + toNumber(row.sdkRetryAttemptCount),
+            (row) =>
+                toNumber(row.sdkUploadFailureCount) * 5 +
+                toNumber(row.sdkOfflinePersistCount) * 2 +
+                toNumber(row.sdkMemoryEvictionCount) * 2 +
+                toNumber(row.sdkRetryAttemptCount),
         );
 
         const evidenceSessions = [
@@ -4672,7 +4524,7 @@ router.get(
                 platformBreakdown,
             },
             performance: {
-                apiApdex: apdexTotal > 0 ? Number((((apdexSatisfied + apdexTolerating * 0.5) / apdexTotal)).toFixed(3)) : null,
+                apiApdex: apdexTotal > 0 ? Number(((apdexSatisfied + apdexTolerating * 0.5) / apdexTotal).toFixed(3)) : null,
                 p50ApiResponseMs: percentile(apiLatencyValues, 50),
                 p95ApiResponseMs: percentile(apiLatencyValues, 95),
                 p99ApiResponseMs: percentile(apiLatencyValues, 99),
@@ -4688,9 +4540,10 @@ router.get(
                 issueReoccurrenceRate: toPercent(repeatedFingerprintEvents, Math.max(1, fingerprintEvents), 2),
             },
             ingestHealth: {
-                sdkUploadSuccessRate: (totalSdkUploadSuccess + totalSdkUploadFailure) > 0
-                    ? Number((totalSdkUploadSuccess / (totalSdkUploadSuccess + totalSdkUploadFailure) * 100).toFixed(2))
-                    : null,
+                sdkUploadSuccessRate:
+                    totalSdkUploadSuccess + totalSdkUploadFailure > 0
+                        ? Number(((totalSdkUploadSuccess / (totalSdkUploadSuccess + totalSdkUploadFailure)) * 100).toFixed(2))
+                        : null,
                 sessionsWithUploadFailures,
                 sessionsWithOfflinePersist,
                 sessionsWithMemoryEvictions,
@@ -4704,13 +4557,13 @@ router.get(
 
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 /**
  * User Engagement Trends - Daily unique user counts per engagement segment
  * GET /api/analytics/user-engagement-trends
- * 
+ *
  * Unlike session-based engagement segments, this endpoint returns
  * the number of UNIQUE USERS per day that fall into each segment,
  * based on their most engaging session of that day.
@@ -4725,24 +4578,22 @@ router.get(
         if (projectId && typeof projectId === 'string') {
             const [project] = await db.select({ teamId: projects.teamId }).from(projects).where(eq(projects.id, projectId)).limit(1);
             if (!project) throw ApiError.notFound('Project not found');
-            const [mem] = await db.select({ id: teamMembers.id }).from(teamMembers).where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id))).limit(1);
+            const [mem] = await db
+                .select({ id: teamMembers.id })
+                .from(teamMembers)
+                .where(and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, req.user!.id)))
+                .limit(1);
             if (!mem) throw ApiError.forbidden('Access denied');
             projectIds = [projectId];
         } else {
-            const membership = await db
-                .select({ teamId: teamMembers.teamId })
-                .from(teamMembers)
-                .where(eq(teamMembers.userId, req.user!.id));
-            const teamIds = membership.map(m => m.teamId);
+            const membership = await db.select({ teamId: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, req.user!.id));
+            const teamIds = membership.map((m) => m.teamId);
             if (teamIds.length === 0) {
                 res.json({ daily: [], totals: { bouncers: 0, casuals: 0, explorers: 0, loyalists: 0 } });
                 return;
             }
-            const userProjects = await db
-                .select({ id: projects.id })
-                .from(projects)
-                .where(inArray(projects.teamId, teamIds));
-            projectIds = userProjects.map(p => p.id);
+            const userProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.teamId, teamIds));
+            projectIds = userProjects.map((p) => p.id);
         }
 
         if (projectIds.length === 0) {
@@ -4815,11 +4666,12 @@ router.get(
             return;
         }
 
-        const engagementPlatformCond = engagementPlatform === 'mobile'
-            ? sql` AND ${sessions.platform} IN ('ios', 'android')`
-            : engagementPlatform
-                ? sql` AND ${sessions.platform} = ${engagementPlatform}`
-                : sql``;
+        const engagementPlatformCond =
+            engagementPlatform === 'mobile'
+                ? sql` AND ${sessions.platform} IN ('ios', 'android')`
+                : engagementPlatform
+                  ? sql` AND ${sessions.platform} = ${engagementPlatform}`
+                  : sql``;
 
         // Compute per-user-day segments: each user is classified once per day by their
         // BEST session of that day (longest duration), so the chart shows unique active
@@ -4861,8 +4713,9 @@ router.get(
             ORDER BY day
         `);
 
-        const dailyResult: Array<{ day: string; bouncers: number; casuals: number; explorers: number; loyalists: number }> =
-            Array.isArray(rawRows) ? rawRows : (rawRows as any).rows ?? [];
+        const dailyResult: Array<{ day: string; bouncers: number; casuals: number; explorers: number; loyalists: number }> = Array.isArray(rawRows)
+            ? rawRows
+            : ((rawRows as any).rows ?? []);
 
         const totals = { bouncers: 0, casuals: 0, explorers: 0, loyalists: 0 };
         for (const row of dailyResult) {
@@ -4883,7 +4736,7 @@ router.get(
         const result = { daily, totals };
         await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
         res.json(result);
-    })
+    }),
 );
 
 export default router;

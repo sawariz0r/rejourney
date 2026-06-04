@@ -957,7 +957,7 @@ export async function sendApiDegradationAlertEmail(
   const transport = getTransporter();
   if (!transport) return;
 
-  const insightsLink = data.issueUrl || emailDashboardAppPath('/analytics/api');
+  const insightsLink = data.issueUrl || emailDashboardAppPath('/api');
 
   const metaBadges: EmailMetaBadge[] = [
     { label: 'LATENCY', value: `${data.currentLatencyMs}ms` },

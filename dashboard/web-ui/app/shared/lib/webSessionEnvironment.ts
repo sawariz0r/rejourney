@@ -9,10 +9,13 @@ type OsInfo = {
 };
 
 export type WebSessionEnvironment = {
+  browserName: string;
+  browserVersion: string | null;
   browserLabel: string;
   browserTitle: string;
   osLabel: string;
   osTitle: string;
+  formFactor: 'desktop' | 'mobile';
   sdkVersionLabel: string | null;
   networkLabel: string;
   networkTitle: string;
@@ -159,6 +162,21 @@ function formatSdkVersion(session: any): string | null {
   return appVersion ? `v${appVersion}` : null;
 }
 
+function detectFormFactor(session: any, userAgent: string | null, modelParts: { browser?: string; os?: string }, osName: string | null): 'desktop' | 'mobile' {
+  const explicit = readNestedString(session, [
+    ['deviceType'],
+    ['formFactor'],
+    ['deviceInfo', 'deviceType'],
+    ['deviceInfo', 'formFactor'],
+    ['metadata', 'deviceType'],
+    ['metadata', 'device_type'],
+    ['metadata', 'formFactor'],
+  ]);
+  const haystack = [explicit, modelParts.os, osName, userAgent].filter(Boolean).join(' ').toLowerCase();
+  if (/\b(mobile|tablet|phone|iphone|ipad|ipod|ios|ipados|android)\b/.test(haystack)) return 'mobile';
+  return 'desktop';
+}
+
 export function getWebNetworkDisplay(rawNetworkType: unknown): Pick<WebSessionEnvironment, 'networkLabel' | 'networkTitle' | 'rawNetworkType'> {
   const raw = cleanString(rawNetworkType);
   if (!raw) {
@@ -214,14 +232,20 @@ export function getWebSessionEnvironment(session: any): WebSessionEnvironment {
   const network = getWebNetworkDisplay(
     readNestedString(session, [['networkType'], ['deviceInfo', 'networkType'], ['deviceInfo', 'effectiveConnectionType']])
   );
+  const cleanBrowserName = cleanString(browserName) || 'Browser';
+  const cleanBrowserVersion = normalizeVersion(browserVersion || undefined) || null;
+  const cleanOsVersion = normalizeVersion(osVersion || undefined) || null;
   const browserLabel = formatBrowserLabel(browserName, browserVersion);
   const osLabel = formatOsLabel(osName, osVersion);
 
   return {
+    browserName: cleanBrowserName,
+    browserVersion: cleanBrowserVersion,
     browserLabel,
-    browserTitle: browserVersion ? `${browserLabel} (${browserVersion})` : browserLabel,
+    browserTitle: cleanBrowserVersion ? `${browserLabel} (${cleanBrowserVersion})` : browserLabel,
     osLabel,
-    osTitle: osVersion ? `${osLabel} (${osVersion})` : osLabel,
+    osTitle: cleanOsVersion ? `${osLabel} (${cleanOsVersion})` : osLabel,
+    formFactor: detectFormFactor(session, userAgent, modelParts, osName),
     sdkVersionLabel: formatSdkVersion(session),
     ...network,
   };

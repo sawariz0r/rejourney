@@ -174,7 +174,7 @@ Het installatieprogramma genereert dit bestand. Typische variabelen zijn onder m
 - **Opslag:** `STORAGE_BACKEND`, `S3_*` en optioneel `MINIO_*`
 - **Beveiliging:** `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY`
 
-Optionele integraties (leeg laten indien ongebruikt): Stripe, SMTP, GitHub OAuth, Turnstile, etc.
+Optionele integraties (leeg laten indien ongebruikt): Stripe, SMTP, GitHub OAuth, etc.
 
 **Opslag- of domeingerelateerde waarden wijzigen:** bewerk `.env.selfhosted` en voer vervolgens het volgende uit:
 

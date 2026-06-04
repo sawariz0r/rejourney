@@ -16,7 +16,6 @@ const fingerprintSchema = z.object({
 export const sendOtpSchema = z.object({
     email: z.string().email('Invalid email address'),
     fingerprint: fingerprintSchema,
-    turnstileToken: z.string().min(1, 'Turnstile token required').optional(),
 });
 
 export const verifyOtpSchema = z.object({
@@ -34,4 +33,3 @@ export type FingerprintData = z.infer<typeof fingerprintSchema>;
 export type SendOtpInput = z.infer<typeof sendOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type OAuthCallbackInput = z.infer<typeof oauthCallbackSchema>;
-

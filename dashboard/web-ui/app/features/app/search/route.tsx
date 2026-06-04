@@ -1,18 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { 
-    Search as SearchIcon, 
-    ArrowRight, 
-    Settings, 
-    Users, 
-    User, 
-    Map as MapIcon, 
-    AlertTriangle, 
-    MessageSquareWarning, 
-    CreditCard, 
-    Database, 
-    Smartphone, 
-    Activity, 
-    Mail, 
+import {
+    Search as SearchIcon,
+    ArrowRight,
+    Settings,
+    Users,
+    UserRoundCog,
+    Route,
+    AlertTriangle,
+    LayoutDashboard,
+    CreditCard,
+    Video,
+    Smartphone,
+    Activity,
+    Mail,
     Globe,
     Flame
 } from 'lucide-react';
@@ -38,15 +38,16 @@ export const Search: React.FC = () => {
 
     // Build searchable items dynamically based on current project
     const searchableItems: SearchableItem[] = useMemo(() => [
-        // Monitor
-        { id: 'general', title: 'General', path: '/general', icon: MessageSquareWarning, description: 'Unified view of top issues, user replays, and behavior signals', section: 'Monitor', keywords: ['issues', 'problems', 'exceptions', 'overview'] },
-        { id: 'sessions', title: 'Replays', path: '/sessions', icon: Database, description: 'Watch and inspect user replay sessions', section: 'Monitor', keywords: ['recordings', 'replays', 'videos', 'playback'] },
-        { id: 'api', title: 'API Insights', path: '/analytics/api', icon: Activity, description: 'API reliability, latency, and replay-backed evidence', section: 'Analytics', keywords: ['latency', 'endpoints', 'requests', 'network', 'api'] },
-        { id: 'journeys', title: 'User Journeys', path: '/analytics/journeys', icon: MapIcon, description: 'User flows and navigation paths', section: 'Analytics', keywords: ['flows', 'navigation', 'screens', 'paths', 'funnels'] },
-        { id: 'heatmaps', title: 'Heatmaps', path: '/analytics/heatmaps', icon: Flame, description: 'Touch heatmaps and interaction friction by screen', section: 'Analytics', keywords: ['heatmap', 'touch', 'tap', 'rage', 'friction', 'interaction', 'hotspot'] },
-        { id: 'devices', title: 'Devices', path: '/analytics/devices', icon: Smartphone, description: 'Device models and OS version breakdown', section: 'Analytics', keywords: ['device', 'os', 'model', 'android', 'ios', 'version'] },
-        { id: 'geo', title: 'Geographic', path: '/analytics/geo', icon: Globe, description: 'Regional value, engagement segments, and issue hotspots', section: 'Analytics', keywords: ['location', 'country', 'region', 'map', 'world'] },
-        { id: 'stability', title: 'Stability', path: '/stability', icon: AlertTriangle, description: 'Crash, ANR, and runtime error triage', section: 'Monitor', keywords: ['crash', 'fatal', 'exception', 'native', 'freeze', 'hang', 'unresponsive', 'blocked', 'javascript', 'runtime', 'bug'] },
+        // Growth
+        { id: 'general', title: 'General', path: '/general', icon: LayoutDashboard, description: 'Unified view of top issues, user replays, and behavior signals', section: 'Growth', keywords: ['issues', 'problems', 'exceptions', 'overview'] },
+        { id: 'sessions', title: 'Replays', path: '/sessions', icon: Video, description: 'Watch and inspect user replay sessions', section: 'Growth', keywords: ['recordings', 'replays', 'videos', 'playback'] },
+        { id: 'geo', title: 'Geographic', path: '/geo', icon: Globe, description: 'Regional value, engagement segments, and issue hotspots', section: 'Growth', keywords: ['location', 'country', 'region', 'map', 'world'] },
+        { id: 'journeys', title: 'User Journey', path: '/journeys', icon: Route, description: 'User flows and navigation paths', section: 'Growth', keywords: ['flows', 'navigation', 'screens', 'paths', 'funnels'] },
+        { id: 'heatmaps', title: 'Heat Maps', path: '/heatmaps', icon: Flame, description: 'Touch heatmaps and interaction friction by screen', section: 'Growth', keywords: ['heatmap', 'touch', 'tap', 'rage', 'friction', 'interaction', 'hotspot'] },
+        // Developer
+        { id: 'stability', title: 'Stability', path: '/stability', icon: AlertTriangle, description: 'Crash, ANR, and runtime error triage', section: 'Developer', keywords: ['crash', 'fatal', 'exception', 'native', 'freeze', 'hang', 'unresponsive', 'blocked', 'javascript', 'runtime', 'bug'] },
+        { id: 'api', title: 'API Insights', path: '/api', icon: Activity, description: 'API reliability, latency, and replay-backed evidence', section: 'Developer', keywords: ['latency', 'endpoints', 'requests', 'network', 'api'] },
+        { id: 'devices', title: 'Devices', path: '/devices', icon: Smartphone, description: 'Device models and OS version breakdown', section: 'Developer', keywords: ['device', 'os', 'model', 'android', 'ios', 'version'] },
         // Workspace
         ...(selectedProject ? [{
             id: 'project',
@@ -61,7 +62,7 @@ export const Search: React.FC = () => {
         { id: 'billing', title: 'Plan & Billing', path: '/billing', icon: CreditCard, description: 'Manage subscription, plans, and payment methods', section: 'Workspace', keywords: ['subscription', 'payment', 'plan', 'upgrade', 'invoice', 'pricing'] },
         { id: 'alerts', title: 'Alerts', path: '/alerts/emails', icon: Mail, description: 'Configure email alerts and notifications', section: 'Workspace', keywords: ['email', 'notifications', 'notify', 'webhook'] },
         // You (Personal - stays same across teams)
-        { id: 'account', title: 'Account', path: '/account', icon: User, description: 'Your personal account settings and free tier usage', section: 'You', keywords: ['profile', 'personal', 'free tier', 'usage', 'password', 'security'] },
+        { id: 'account', title: 'Account', path: '/account', icon: UserRoundCog, description: 'Your personal account settings and free tier usage', section: 'You', keywords: ['profile', 'personal', 'free tier', 'usage', 'password', 'security'] },
     ], [selectedProject]);
 
     const filteredItems = useMemo(() => {
@@ -81,7 +82,7 @@ export const Search: React.FC = () => {
     // Group items by section for display
     const groupedItems = useMemo(() => {
         const groups: Record<string, typeof filteredItems> = {};
-        const sectionOrder = ['Monitor', 'Analytics', 'Workspace', 'You'];
+        const sectionOrder = ['Growth', 'Developer', 'Workspace', 'You'];
         
         filteredItems.forEach(item => {
             if (!groups[item.section]) {

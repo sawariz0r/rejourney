@@ -207,9 +207,12 @@ Rejourney.logEvent("purchase_completed", properties: [
 ```swift
 // E-commerce
 Rejourney.logEvent("purchase_completed", properties: [
+    "transactionId": order.id,
     "plan": "pro",
     "amount": 29.99,
-    "currency": "USD"
+    "currency": "USD",
+    "paymentProvider": "stripe",
+    "isRenewal": false
 ])
 
 // Onboarding
@@ -231,6 +234,22 @@ Rejourney.logEvent("payment_failed", properties: [
     "retryCount": 2
 ])
 ```
+
+### Revenue Mapping
+
+The Revenue impact Custom events source uses the same `logEvent` payload. Use a real money-collected event such as `purchase_completed`; do not map setup or device events such as `device_info`, `app_initialized`, or screen-view events as revenue.
+
+For the e-commerce example above, choose:
+
+| Dashboard field | Value |
+|---|---|
+| Purchase event | `purchase_completed` |
+| Amount property | `amount` |
+| Currency property | `currency` |
+| Default currency | `USD` |
+| Amount unit | Dollars / major units |
+
+`transactionId` is strongly recommended so retries and duplicate client/backend sends collapse into one revenue fact. If your event sends cents, for example `["amount": 2999, "currency": "USD"]`, choose Cents / minor units. Refund and lifecycle events are optional; leave them unset unless you log separate events such as `refund_completed` or `subscription_cancelled`.
 
 ### How Events Appear in the Dashboard
 

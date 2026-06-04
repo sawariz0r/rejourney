@@ -68,27 +68,50 @@ interface SankeyJourneyProps {
 
 const interpolateChannel = (from: number, to: number, amount: number): number => Math.round(from + (to - from) * amount);
 
-const volumeColorStops = [
-    { at: 0, rgb: [251, 113, 133] },
-    { at: 0.2, rgb: [251, 146, 60] },
-    { at: 0.42, rgb: [250, 204, 21] },
-    { at: 0.58, rgb: [134, 239, 172] },
-    { at: 1, rgb: [34, 197, 94] },
+const sankeyPalette = [
+    [93, 173, 236],
+    [44, 48, 56],
+    [99, 102, 241],
+    [34, 197, 94],
+    [251, 146, 60],
+    [239, 68, 68],
+    [20, 184, 166],
+    [234, 179, 8],
+    [217, 70, 239],
+    [14, 165, 233],
 ] as const;
 
 const ALL_APP_VERSIONS_VALUE = '__all_app_versions__';
 
-const getVolumeColor = (ratio: number, alpha: number): string => {
-    const normalized = Math.max(0, Math.min(1, ratio));
-    const upperIndex = volumeColorStops.findIndex((stop) => normalized <= stop.at);
-    const upper = volumeColorStops[upperIndex === -1 ? volumeColorStops.length - 1 : upperIndex];
-    const lower = volumeColorStops[Math.max(0, (upperIndex === -1 ? volumeColorStops.length - 1 : upperIndex) - 1)];
-    const span = Math.max(upper.at - lower.at, 0.001);
-    const amount = (normalized - lower.at) / span;
-    const [r1, g1, b1] = lower.rgb;
-    const [r2, g2, b2] = upper.rgb;
+const getStableColorIndex = (value: string): number => {
+    const normalized = value.toLowerCase();
+    if (/(launch|start|index|first|account)/.test(normalized)) return 0;
+    if (/(home|quit|exit|other)/.test(normalized)) return 1;
+    if (/(category|search|browse)/.test(normalized)) return 2;
+    if (/(subcategory|new arrivals|popular|recommend)/.test(normalized)) return 3;
+    if (/(list|collection|feed)/.test(normalized)) return 6;
+    if (/(detail|product|item)/.test(normalized)) return 5;
+    if (/(cart|checkout|order|purchase|confirmation)/.test(normalized)) return 7;
 
-    return `rgba(${interpolateChannel(r1, r2, amount)}, ${interpolateChannel(g1, g2, amount)}, ${interpolateChannel(b1, b2, amount)}, ${alpha})`;
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+        hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+    }
+    return Math.abs(hash) % sankeyPalette.length;
+};
+
+const getPaletteColor = (value: string, alpha = 1): string => {
+    const [r, g, b] = sankeyPalette[getStableColorIndex(value)];
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const getRibbonColor = (link: SankeyLink, alpha: number): string => {
+    const sourceColor = sankeyPalette[getStableColorIndex(link.source)];
+    const targetColor = sankeyPalette[getStableColorIndex(link.target)];
+    const [sr, sg, sb] = sourceColor;
+    const [tr, tg, tb] = targetColor;
+
+    return `rgba(${interpolateChannel(sr, tr, 0.34)}, ${interpolateChannel(sg, tg, 0.34)}, ${interpolateChannel(sb, tb, 0.34)}, ${alpha})`;
 };
 
 export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
@@ -186,13 +209,13 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
             });
         });
 
-        const cardHeight = 30;
-        const nodePadding = 34;
-        const paddingX = 44;
-        const paddingY = 52;
-        const barMinHeight = 54;
-        const barMaxHeight = 220;
-        const minLevelSpacing = 360;
+        const cardHeight = 24;
+        const nodePadding = 42;
+        const paddingX = 28;
+        const paddingY = 36;
+        const barMinHeight = 62;
+        const barMaxHeight = 300;
+        const minLevelSpacing = 318;
         const maxNodeValue = Math.max(...Array.from(nodeMap.values()).map((node) => Math.max(node.in, node.out)), 1);
 
         const calculatedWidth = propWidth || Math.max(1120, paddingX * 2 + maxLevel * minLevelSpacing + 260);
@@ -254,7 +277,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                     value: flow.count,
                     ySource: sourceNode.barY + sourceNode.barHeight / 2,
                     yTarget: targetNode.barY + targetNode.barHeight / 2,
-                    thickness: Math.max(5, Math.sqrt(flow.count / maxFlow) * 42),
+                    thickness: Math.max(4, Math.sqrt(flow.count / maxFlow) * 96),
                     data: flow,
                 };
             })
@@ -276,7 +299,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                     const nodeLinks = getNodeStackLinks(node.id, direction);
                     if (nodeLinks.length === 0) continue;
 
-                    const linkGap = nodeLinks.length > 6 ? 1 : 2;
+	                    const linkGap = nodeLinks.length > 6 ? 1.25 : 2;
                     const totalGap = Math.max(0, nodeLinks.length - 1) * linkGap;
                     const availableThickness = Math.max(node.barHeight - totalGap, nodeLinks.length * 2.25);
                     const currentThickness = nodeLinks.reduce((sum, link) => sum + link.thickness, 0);
@@ -299,7 +322,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
 
             if (nodeLinks.length === 0) return;
 
-            const linkGap = nodeLinks.length > 6 ? 1 : 2;
+	            const linkGap = nodeLinks.length > 6 ? 1.25 : 2;
             const totalThickness = nodeLinks.reduce((sum, link) => sum + link.thickness, 0)
                 + Math.max(0, nodeLinks.length - 1) * linkGap;
             let cursor = node.barY + Math.max(0, (node.barHeight - totalThickness) / 2);
@@ -354,7 +377,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                 id={versionSelectId}
                 value={selectedVersionValue}
                 onChange={(event) => onAppVersionChange?.(event.target.value === ALL_APP_VERSIONS_VALUE ? null : event.target.value)}
-                className="h-10 min-w-[190px] appearance-none border-2 border-black bg-white px-3 pr-9 text-[10px] font-black uppercase text-black shadow-neo-sm outline-none transition hover:-translate-y-0.5 hover:shadow-neo focus:ring-2 focus:ring-black"
+                className="h-10 min-w-[190px] appearance-none rounded-md border border-[#dadce0] bg-white px-3 pr-9 text-[11px] font-semibold text-[#202124] shadow-sm outline-none transition-colors hover:border-[#db2777] focus:border-[#db2777] focus:ring-2 focus:ring-[#fbcfe8]"
             >
                 <option value={ALL_APP_VERSIONS_VALUE}>All versions</option>
                 {appVersions.map((option) => (
@@ -363,17 +386,17 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                     </option>
                 ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
         </div>
     );
 
     const header = (
-        <div className="flex flex-col gap-2 border-b-2 border-black bg-[#f8fafc] px-5 py-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-2 border-b border-[#e8eaed] bg-white px-5 py-4 md:flex-row md:items-start md:justify-between">
             <div>
-                <div className="text-[11px] font-black uppercase text-black">
+                <div className="text-[15px] font-medium text-[#202124] underline decoration-dotted decoration-[#bdc1c6] underline-offset-4">
                     Journey lanes
                 </div>
-                <div className="mt-0.5 text-xs font-semibold text-slate-500">
+                <div className="mt-1 text-xs font-medium text-slate-500">
                     Transition volume by screen path
                 </div>
             </div>
@@ -383,7 +406,8 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
 
     if (nodes.length === 0) {
         return (
-            <div className="journey-sankey-card relative overflow-hidden border-2 border-black bg-white shadow-neo">
+            <div className="journey-sankey-card rejourney-general-card relative overflow-hidden border border-[#dadce0] bg-white shadow-none">
+                <div className="h-1 bg-[#db2777]" />
                 {header}
                 <div className="journey-sankey-empty flex h-80 w-full items-center justify-center bg-white">
                     <p className="text-sm font-medium text-slate-500">No flow data available for this version.</p>
@@ -392,25 +416,25 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
         );
     }
 
-    const cardWidth = 132;
-    const cardHeight = 30;
-    const barWidth = 16;
-    const cardGap = 8;
-    const padding = 44;
+    const labelHeight = 24;
+    const barWidth = 24;
+    const padding = 28;
+    const maxLabelWidth = 178;
     const maxLevel = Math.max(...nodes.map((node) => node.level), 1);
-    const levelSpacing = maxLevel > 0 ? (calculatedWidth - padding * 2 - cardWidth - barWidth - cardGap) / maxLevel : 0;
+    const levelSpacing = maxLevel > 0 ? (calculatedWidth - padding * 2 - barWidth - maxLabelWidth) / maxLevel : 0;
     const maxLinkValue = Math.max(...links.map((link) => link.value), 1);
 
     const getLinkColor = (link: SankeyLink, isHovered: boolean, isSelected: boolean) => {
         const ratio = link.value / maxLinkValue;
-        if (isSelected) return getVolumeColor(ratio, isHovered ? 0.98 : 0.9);
-        return getVolumeColor(ratio, isHovered ? 0.9 : 0.58);
+        const baseAlpha = 0.18 + Math.min(0.32, Math.sqrt(ratio) * 0.28);
+        if (isSelected) return getRibbonColor(link, isHovered ? 0.76 : 0.62);
+        return getRibbonColor(link, isHovered ? 0.58 : baseAlpha);
     };
 
     const getNodeBarColor = (node: SankeyNode, isHovered: boolean, isSelectedNode: boolean, isHappyNode: boolean): string => {
-        if (isSelectedNode) return isHovered ? '#0891b2' : '#67e8f9';
-        if (isHappyNode) return isHovered ? '#22c55e' : '#86efac';
-        return isHovered ? '#5dadec' : '#dbeafe';
+        if (isSelectedNode) return isHovered ? '#be185d' : '#db2777';
+        if (isHappyNode && isHovered) return getPaletteColor(node.id, 0.96);
+        return getPaletteColor(node.id, isHovered ? 0.95 : 0.82);
     };
 
     const hoveredLink = hoveredLinkId ? links.find((link) => link.id === hoveredLinkId) || null : null;
@@ -419,11 +443,12 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
     const hasSelectedPaths = selectedTransitionSet.size > 0;
 
     return (
-        <div className="journey-sankey-card relative overflow-hidden border-2 border-black bg-white shadow-neo">
+        <div className="journey-sankey-card rejourney-general-card relative overflow-hidden border border-[#dadce0] bg-white shadow-none">
+            <div className="h-1 bg-[#db2777]" />
             {header}
 
             <div
-                className="relative overflow-x-auto overflow-y-visible bg-white focus:outline-none focus:ring-2 focus:ring-black focus:ring-inset"
+                className="relative overflow-x-auto overflow-y-visible bg-white focus:outline-none focus:ring-2 focus:ring-[#fbcfe8] focus:ring-inset"
                 style={{
                     minHeight: calculatedHeight,
                     overscrollBehaviorX: 'contain',
@@ -442,7 +467,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                             const targetNode = nodeLookup.get(link.target);
                             if (!sourceNode || !targetNode) return null;
 
-                            const xStart = padding + sourceNode.level * levelSpacing + barWidth + cardGap;
+                            const xStart = padding + sourceNode.level * levelSpacing + barWidth;
                             const xEnd = padding + targetNode.level * levelSpacing;
                             const cp1x = xStart + Math.max(80, (xEnd - xStart) * 0.46);
                             const cp2x = xEnd - Math.max(80, (xEnd - xStart) * 0.46);
@@ -453,7 +478,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                             const isOther = hasActiveFocus && !isHovered && !isSelected;
                             const isAggregate = Boolean(link.data.isAggregate);
 
-                            const t = isSelected ? link.thickness + 6 : isHovered ? link.thickness + 4 : link.thickness;
+                            const t = isSelected ? link.thickness + 8 : isHovered ? link.thickness + 5 : link.thickness;
                             const ht = t / 2;
                             const y0t = link.ySource - ht;
                             const y0b = link.ySource + ht;
@@ -474,9 +499,9 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                                     key={link.id}
                                     d={d}
                                     fill={getLinkColor(link, isHovered, isSelected)}
-                                    stroke="none"
-                                    strokeDasharray={isAggregate ? '14 10' : undefined}
-                                    opacity={isOther ? 0.16 : 1}
+                                    stroke={isSelected ? '#be185d' : isHovered ? 'rgba(15, 23, 42, 0.16)' : 'none'}
+                                    strokeWidth={isSelected || isHovered ? 1 : 0}
+                                    opacity={isOther ? 0.12 : isAggregate ? 0.58 : 1}
                                     onMouseEnter={() => setHoveredLinkId(link.id)}
                                     onMouseLeave={() => setHoveredLinkId(null)}
                                     onClick={(event) => {
@@ -487,7 +512,7 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                                     }}
                                     className={isAggregate ? 'cursor-default' : 'cursor-pointer'}
                                     style={{
-                                        filter: isHovered || isSelected ? 'drop-shadow(0 4px 7px rgba(15,23,42,0.16))' : 'none',
+                                        filter: isHovered || isSelected ? 'drop-shadow(0 4px 8px rgba(15,23,42,0.13))' : 'none',
                                         transition: 'opacity 180ms ease, filter 180ms ease',
                                     }}
                                 />
@@ -498,13 +523,16 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                     <g>
                         {nodes.map((node) => {
                             const x = padding + node.level * levelSpacing;
-                            const cardX = x + barWidth + cardGap;
                             const transitionHover = activeLink && (activeLink.source === node.id || activeLink.target === node.id);
                             const isSelectedNode = selectedNodeSet.has(node.id);
                             const isHovered = hoveredNode === node.id || Boolean(transitionHover) || isSelectedNode;
                             const isOther = (hoveredLinkId || hasSelectedPaths) && !isHovered;
                             const isHappyNode = happyNodeSet.has(node.id);
                             const visibleValue = Math.max(node.inValue, node.outValue);
+                            const label = `${node.name}: ${formatCompact(visibleValue)}`;
+                            const labelWidth = Math.min(maxLabelWidth, Math.max(92, label.length * 6.8 + 18));
+                            const labelX = Math.min(x + 5, calculatedWidth - labelWidth - 8);
+                            const labelY = Math.max(4, node.barY + 5);
 
                             return (
                                 <g
@@ -513,52 +541,47 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
                                     onMouseLeave={() => setHoveredNode(null)}
                                     style={{ cursor: 'pointer' }}
                                 >
-                                    <rect
-                                        x={x}
-                                        y={node.barY}
-                                        width={barWidth}
-                                        height={node.barHeight}
-                                        rx="3"
-                                        fill={getNodeBarColor(node, isHovered, isSelectedNode, isHappyNode)}
-                                        stroke="#0f172a"
-                                        strokeWidth={isHovered || isSelectedNode ? 2 : 1}
-                                        opacity={isOther ? 0.34 : 1}
-                                        style={{
-                                            filter: isHovered || isSelectedNode ? 'drop-shadow(0 5px 7px rgba(15,23,42,0.14))' : 'none',
-                                            transition: 'opacity 180ms ease, stroke 180ms ease, stroke-width 180ms ease, filter 180ms ease, fill 180ms ease',
-                                        }}
-                                    />
-                                    <rect
-                                        x={cardX}
-                                        y={node.cardY}
-                                        width={cardWidth}
-                                        height={cardHeight}
-                                        rx="4"
-                                        fill={isSelectedNode ? '#ecfeff' : '#ffffff'}
-                                        stroke={isSelectedNode ? '#0891b2' : isHappyNode ? '#22c55e' : isHovered ? '#5dadec' : '#cbd5e1'}
-                                        strokeWidth={isHovered || isSelectedNode ? 2 : 1}
-                                        opacity={isOther ? 0.36 : 1}
-                                        pointerEvents="none"
-                                        style={{
-                                            filter: isHovered || isSelectedNode ? 'drop-shadow(0 3px 6px rgba(15,23,42,0.14))' : 'drop-shadow(0 2px 4px rgba(15,23,42,0.08))',
-                                            transition: 'opacity 180ms ease, stroke 180ms ease, stroke-width 180ms ease, filter 180ms ease, fill 180ms ease',
-                                        }}
-                                    />
-                                    <foreignObject x={cardX + 8} y={node.cardY + 6} width={cardWidth - 16} height={18} pointerEvents="none">
-                                        <div className="flex h-full min-w-0 items-center overflow-hidden pointer-events-none">
-                                            <div className="flex w-full min-w-0 items-center justify-between gap-2">
-                                                <div
-                                                    className={`min-w-0 truncate text-[10px] font-black leading-tight ${isHappyNode ? 'text-emerald-800' : 'text-slate-800'}`}
-                                                    title={node.name}
-                                                >
-                                                    {node.name}
-                                                </div>
-                                                <div className="shrink-0 font-mono text-[10px] font-black text-slate-700">
-                                                    {formatCompact(visibleValue)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </foreignObject>
+	                                    <rect
+	                                        x={x}
+	                                        y={node.barY}
+	                                        width={barWidth}
+	                                        height={node.barHeight}
+	                                        rx="2"
+	                                        fill={getNodeBarColor(node, isHovered, isSelectedNode, isHappyNode)}
+	                                        stroke={isSelectedNode ? '#be185d' : 'rgba(15, 23, 42, 0.22)'}
+	                                        strokeWidth={isHovered || isSelectedNode ? 1.5 : 1}
+	                                        opacity={isOther ? 0.34 : 1}
+	                                        style={{
+	                                            filter: isHovered || isSelectedNode ? 'drop-shadow(0 5px 7px rgba(15,23,42,0.14))' : 'drop-shadow(0 1px 2px rgba(15,23,42,0.08))',
+	                                            transition: 'opacity 180ms ease, stroke 180ms ease, stroke-width 180ms ease, filter 180ms ease, fill 180ms ease',
+	                                        }}
+	                                    />
+	                                    <rect
+	                                        x={labelX}
+	                                        y={labelY}
+	                                        width={labelWidth}
+	                                        height={labelHeight}
+	                                        rx="2"
+	                                        fill="#ffffff"
+	                                        stroke={isSelectedNode ? '#db2777' : isHovered ? '#94a3b8' : '#d4d8de'}
+	                                        strokeWidth={isHovered || isSelectedNode ? 1.5 : 1}
+	                                        opacity={isOther ? 0.36 : 1}
+	                                        pointerEvents="none"
+	                                        style={{
+	                                            filter: isHovered || isSelectedNode ? 'drop-shadow(0 3px 5px rgba(15,23,42,0.16))' : 'drop-shadow(0 1px 2px rgba(15,23,42,0.12))',
+	                                            transition: 'opacity 180ms ease, stroke 180ms ease, stroke-width 180ms ease, filter 180ms ease, fill 180ms ease',
+	                                        }}
+	                                    />
+	                                    <foreignObject x={labelX + 6} y={labelY + 4} width={labelWidth - 12} height={16} pointerEvents="none">
+	                                        <div className="flex h-full min-w-0 items-center overflow-hidden pointer-events-none">
+	                                            <div
+	                                                className="min-w-0 truncate text-[10px] font-extrabold leading-none text-slate-800"
+	                                                title={label}
+	                                            >
+	                                                {label}
+	                                            </div>
+	                                        </div>
+	                                    </foreignObject>
                                 </g>
                             );
                         })}
@@ -568,25 +591,25 @@ export const SankeyJourney: React.FC<SankeyJourneyProps> = ({
 
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 border-t-2 border-black bg-[#f8fafc] px-5 py-3 text-[11px] font-semibold text-slate-600">
+            <div className="flex flex-wrap items-center gap-4 border-t border-[#dadce0] bg-[#f8fafd] px-5 py-3 text-[11px] font-semibold text-slate-600">
                 <div className="flex items-center gap-2">
-                    <div className="h-2 w-4 border border-black bg-[#86efac]"></div>
+                    <div className="h-2 w-4 rounded-full border border-[#dadce0] bg-[#86efac]"></div>
                     <span>Highest volume</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="h-2 w-4 border border-black bg-[#facc15]"></div>
+                    <div className="h-2 w-4 rounded-full border border-[#dadce0] bg-[#facc15]"></div>
                     <span>Mid volume</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="h-2 w-4 border border-black bg-[#fb923c]"></div>
+                    <div className="h-2 w-4 rounded-full border border-[#dadce0] bg-[#fb923c]"></div>
                     <span>Thin path</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="h-2 w-4 border border-black bg-[#fb7185]"></div>
+                    <div className="h-2 w-4 rounded-full border border-[#dadce0] bg-[#fb7185]"></div>
                     <span>Lowest volume</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-7 border-t-2 border-dashed border-black"></div>
+                    <div className="w-7 border-t border-dashed border-slate-400"></div>
                     <span>Aggregated tail</span>
                 </div>
             </div>
