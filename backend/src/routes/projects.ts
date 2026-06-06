@@ -470,7 +470,9 @@ function sanitizeQueryBuilderCondition(raw: any, filters: AvailableProjectFilter
         case 'conversion': {
             const preset = normalizeString(raw.preset);
             if (preset !== 'checkout_bounced' && preset !== 'checkout_success') return null;
-            return { id: randomUUID(), type: 'conversion', preset };
+            const requestedPreset = inferConversionFromPrompt(prompt);
+            if (!requestedPreset) return null;
+            return { id: randomUUID(), type: 'conversion', preset: requestedPreset };
         }
         case 'platform': {
             const requestedPlatform = inferPlatformFromPrompt(prompt);
@@ -2090,7 +2092,10 @@ router.post(
             prompt,
             projectContext
         );
-        const explanation = describeQueryBuilderGroups(groups) || normalizeString(parsed?.explanation) || 'Built a query from your description.';
+        const hasSupportedConditions = groups.some((group) => group.conditions.length > 0);
+        const explanation = describeQueryBuilderGroups(groups)
+            || (hasSupportedConditions ? normalizeString(parsed?.explanation) : '')
+            || 'No supported project-specific filter matched that description.';
 
         res.json({
             groups,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link, useLocation } from 'react-router';
-import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Github, Minus } from 'lucide-react';
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Copy, Github, Minus, Plus } from 'lucide-react';
 import { api, type BillingPlan } from '~/shared/api/client';
 import { useToast } from '~/shared/providers/ToastContext';
 import { getContentLocaleCopy } from '~/shared/lib/contentLocalization';
@@ -111,7 +111,35 @@ const PlanGroup: React.FC<{ title: string; children: React.ReactNode }> = ({ tit
 const PRICING_FAQS = [
     {
         question: 'Are analytics unlimited?',
-        answer: 'Yes. DAU, MAU, and analytics events are unlimited on every plan. If you use all of your included session replays for the month, Rejourney still accepts analytics events and keeps funnels, cohorts, journeys, heatmaps, crashes, ANRs, errors, and geo analytics working.',
+        answer: 'Yes. DAU, MAU, and analytics events are unlimited on every plan. Rejourney pricing is planned around saved session replay volume, not around every event your app sends.',
+    },
+    {
+        question: 'What happens when I use all included session replays?',
+        answer: 'Replay recording pauses until the next billing cycle or until you upgrade. Rejourney still accepts analytics events, so funnels, cohorts, journeys, heatmaps, crashes, ANRs, errors, and geo analytics keep updating while replay capture waits for more allowance.',
+    },
+    {
+        question: 'How is Rejourney different from usage-based replay pricing?',
+        answer: 'Many observability and product analytics tools meter several things at once: events, replays, errors, seats, sites, add-ons, retention, or separate product packages. Rejourney keeps the public plans anchored to included monthly session replays, with core analytics and debugging features included.',
+    },
+    {
+        question: 'Do web and mobile replays cost different amounts?',
+        answer: 'No. The listed Rejourney plans use one session replay allowance for web and mobile. You do not need to buy a separate mobile replay add-on just to understand native app sessions.',
+    },
+    {
+        question: 'Do I pay per seat or tracked user?',
+        answer: 'No. The public plans are not priced per teammate, DAU, MAU, or tracked user. Invite product, engineering, design, support, and leadership without turning every new viewer into a billing decision.',
+    },
+    {
+        question: 'Are crashes, ANRs, errors, heatmaps, and journeys add-ons?',
+        answer: 'No. They are part of the core Rejourney workspace. The plan limit decides how many session replays you can save each month and how long those replays are retained.',
+    },
+    {
+        question: 'What counts as a session replay?',
+        answer: 'A session replay is one saved user session from the web or mobile SDK. It can include the screens, routes, events, errors, and interaction context from that user journey. Analytics events still count as analytics, not as extra replay charges.',
+    },
+    {
+        question: 'Can high-traffic teams control what gets recorded?',
+        answer: 'Yes. Every plan includes standard replay capture controls such as project-level replay toggles, replay length limits, sample rate, FPS, and masking. Scale adds Smart Capture for teams that need rule-based replay selection at higher volume.',
     },
     {
         question: 'What are the standard capture controls?',
@@ -120,6 +148,14 @@ const PRICING_FAQS = [
     {
         question: 'What is Smart Capture, and why is it Scale-only?',
         answer: 'Smart Capture is the high-volume capture layer for Scale teams. It is more than a complex filter: AI can turn prompts into labeled rules, saved sessions are tagged by the rule that kept them, and rules can combine strict conditions with AND clauses, alternative OR rules, per-rule capture rates, colors, and names. You can target checkout risk, churn signals, rage taps, dead taps, crashes, ANRs, JS errors, API failures, API latency, slow starts, route or screen names, custom events, metadata, UTM and referral context, platform, device, browser, country, app version, network type, session duration, screen count, new users, loyal users, bouncers, and engagement score so Scale workspaces keep only the replays they actually need.',
+    },
+    {
+        question: 'How should I compare Rejourney with PostHog, Sentry, Hotjar, Fullstory, or LogRocket?',
+        answer: 'Start with the billing unit and the workflow you need. If the important work is reviewing user sessions, journeys, heatmaps, crashes, and product analytics together, compare how many replays are included, whether mobile is bundled, which features are add-ons, how retention works, and whether seats or events can change the bill.',
+    },
+    {
+        question: 'Can we self-host Rejourney instead of using cloud pricing?',
+        answer: 'Yes. Rejourney can be self-hosted if your team wants to run the stack on its own infrastructure. Cloud pricing is for the managed Rejourney service, storage, retention, billing, and hosted operations.',
     },
 ];
 
@@ -130,7 +166,7 @@ export const PricingTable: React.FC = () => {
     const copy = getContentLocaleCopy(locale).pricing;
     const [availablePlans, setAvailablePlans] = useState<PricingPlan[]>([]);
     const [sliderValue, setSliderValue] = useState(DEFAULT_CALCULATOR_SLIDER_VALUE);
-    const [calculatorOpen, setCalculatorOpen] = useState(true);
+    const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
     const [contactCopied, setContactCopied] = useState(false);
     const copyResetTimerRef = useRef<number | null>(null);
     const plansRailRef = useRef<HTMLDivElement | null>(null);
@@ -371,29 +407,111 @@ export const PricingTable: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="relative z-10 border-t-2 border-black pt-12 sm:pt-16 lg:pt-20">
-                    <div className="grid gap-7 lg:grid-cols-[0.72fr_1.28fr] lg:items-start">
+                <div className="border-t-2 border-black pt-12 sm:pt-16 lg:pt-20">
+                    <div className="mb-8 border-2 border-black bg-white px-5 py-5 text-left shadow-neo-sm">
+                        <span className="block text-xl font-black uppercase leading-tight text-slate-950">{copy.comparisonTitle}</span>
+                        <span className="mt-1.5 block text-base font-semibold leading-6 text-slate-700">{copy.comparisonSubtitle}</span>
+                    </div>
+
+                    <div className="grid gap-8 border-2 border-black bg-[#f8fafc] px-5 py-8 shadow-neo-sm lg:grid-cols-[0.85fr_1.35fr]">
+                        <div>
+                            <div className="mb-3 flex items-end justify-between gap-4">
+                                <span className="text-sm font-black uppercase leading-tight text-slate-700">{copy.sessionsPerMonthLabel}</span>
+                                <span className="text-3xl font-black text-slate-950">{formatInteger(calculatorSessions, locale.languageTag)}</span>
+                            </div>
+                            <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step="any"
+                                value={sliderValue}
+                                onChange={(event) => setSliderValue(Number(event.target.value))}
+                                className="pricing-range-slider"
+                                style={sliderStyle}
+                                aria-label={copy.monthlySessionsAriaLabel}
+                            />
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                {VOLUME_PRESETS.map((preset) => {
+                                    const active = Math.abs(calculatorSessions - preset.sessions) / preset.sessions < 0.08;
+                                    return (
+                                        <button
+                                            key={preset.label}
+                                            type="button"
+                                            onClick={() => setSliderValue(sessionsToSlider(preset.sessions))}
+                                            className={`h-9 rounded-md border px-3 text-sm font-semibold transition ${
+                                                active
+                                                    ? 'border-slate-950 bg-slate-950 text-white'
+                                                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-950'
+                                            }`}
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="grid overflow-hidden border-2 border-black bg-white sm:grid-cols-3">
+                            <div className="border-b-2 border-black bg-[#ecfeff] p-5 sm:border-b-0 sm:border-r-2 sm:p-6">
+                                <p className="text-sm font-black uppercase leading-none text-slate-950">Rejourney</p>
+                                <p className="mt-4 text-4xl font-black leading-none text-slate-950">${rejourneyMonthlyPlan.price}</p>
+                                <p className="mt-3 text-base font-semibold leading-6 text-slate-800">{copy.rejourneyPlanLabel(rejourneyMonthlyPlan.plan, rejourneyMonthlyPlan.isCustom)}</p>
+                            </div>
+                            <div className="border-b-2 border-black p-5 sm:border-b-0 sm:border-r-2 sm:p-6">
+                                <p className="text-sm font-black uppercase leading-none text-slate-950">PostHog</p>
+                                <p className="mt-4 text-4xl font-black leading-none text-slate-950">{formatApproxCurrency(posthogMonthlyCost)}</p>
+                                <p className="mt-3 text-base font-semibold leading-6 text-slate-800">{copy.posthogEstimate}</p>
+                            </div>
+                            <div className="bg-white p-5 sm:p-6">
+                                <p className="text-sm font-black uppercase leading-none text-slate-950">Sentry</p>
+                                <p className="mt-4 text-4xl font-black leading-none text-slate-950">{formatApproxCurrency(sentryMonthlyCost)}</p>
+                                <p className="mt-3 text-base font-semibold leading-6 text-slate-800">{copy.sentryEstimate}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="relative z-10 -mx-5 overflow-hidden border-y-2 border-black bg-[#fff7df] px-5 py-12 sm:-mx-8 sm:px-8 sm:py-16 lg:-mx-10 lg:px-10 lg:py-20">
+                    <div className="pointer-events-none absolute inset-0 opacity-[0.18] [background-image:radial-gradient(#0f172a_1px,transparent_1px)] [background-size:16px_16px]" aria-hidden />
+
+                    <div className="relative grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-start">
                         <div className="max-w-2xl">
-                            <p className="font-mono text-[10px] font-black uppercase text-slate-500">FAQ</p>
-                            <h2 className="mt-3 text-2xl font-black uppercase leading-tight text-slate-950 sm:text-3xl">
+                            <p className="mb-4 inline-flex border-2 border-black bg-[#67e8f9] px-3 py-1 text-[11px] font-black uppercase tracking-widest text-black shadow-neo-sm">FAQ</p>
+                            <h2 className="text-3xl font-black uppercase leading-[0.96] tracking-normal text-slate-950 sm:text-4xl">
                                 Everything included, clarified.
                             </h2>
-                            <p className="mt-4 text-[15px] font-semibold leading-7 text-slate-600">
+                            <p className="mt-5 text-base font-bold leading-relaxed text-slate-700">
                                 Replays are planned by volume. Analytics stays open, and Scale adds Smart Capture for teams that need precise replay selection.
                             </p>
                         </div>
 
-                        <div className="space-y-3">
-                            {PRICING_FAQS.map((faq) => (
-                                <details key={faq.question} className="group border-2 border-black bg-white shadow-neo-sm">
-                                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left text-base font-black uppercase leading-6 text-slate-950 transition hover:bg-[#ecfeff] [&::-webkit-details-marker]:hidden">
-                                        <span>{faq.question}</span>
-                                        <ChevronDown className="h-5 w-5 shrink-0 text-slate-800 transition-transform duration-200 group-open:rotate-180" aria-hidden />
-                                    </summary>
-                                    <div className="border-t-2 border-black bg-[#f8fafc] px-5 py-4">
-                                        <p className="text-sm font-semibold leading-7 text-slate-700">{faq.answer}</p>
-                                    </div>
-                                </details>
+                        <div className="divide-y-2 divide-black border-2 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                            {PRICING_FAQS.map((faq, index) => (
+                                <div key={faq.question}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
+                                        className="flex w-full select-none items-center justify-between gap-6 px-5 py-5 text-left transition-colors hover:bg-[#fef3c7] focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 focus-visible:ring-offset-[#fff7df] sm:px-6"
+                                        style={{ WebkitTapHighlightColor: 'transparent' }}
+                                        aria-expanded={openFaqIndex === index}
+                                    >
+                                        <span className="text-base font-black uppercase leading-snug tracking-normal text-slate-950 sm:text-lg">
+                                            {faq.question}
+                                        </span>
+                                        <span className="shrink-0 border-2 border-black bg-white p-1 text-slate-950">
+                                            {openFaqIndex === index
+                                                ? <Minus className="h-4 w-4 stroke-[3px]" aria-hidden />
+                                                : <Plus className="h-4 w-4 stroke-[3px]" aria-hidden />
+                                            }
+                                        </span>
+                                    </button>
+
+                                    {openFaqIndex === index && (
+                                        <div className="border-t-2 border-black bg-[#ecfeff] px-5 py-5 sm:px-6">
+                                            <p className="max-w-3xl text-base font-bold leading-relaxed text-slate-600">{faq.answer}</p>
+                                        </div>
+                                    )}
+                                </div>
                             ))}
                         </div>
                     </div>
@@ -423,79 +541,6 @@ export const PricingTable: React.FC = () => {
                             {contactCopied ? copy.copied : copy.contact}
                         </button>
                     </div>
-                </div>
-
-                <div className="border-t-2 border-black pt-12 sm:pt-16 lg:pt-20">
-                    <button
-                        type="button"
-                        onClick={() => setCalculatorOpen((open) => !open)}
-                        className={`flex w-full items-center justify-between gap-5 border-2 border-black bg-white px-5 py-5 text-left shadow-neo-sm transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo ${calculatorOpen ? 'mb-8' : ''}`}
-                    >
-                        <span>
-                            <span className="block text-xl font-black uppercase leading-tight text-slate-950">{copy.comparisonTitle}</span>
-                            <span className="mt-1.5 block text-base font-semibold leading-6 text-slate-700">{copy.comparisonSubtitle}</span>
-                        </span>
-                        <ChevronDown className={`h-6 w-6 shrink-0 text-slate-800 transition-transform duration-300 ${calculatorOpen ? 'rotate-180' : ''}`} aria-hidden />
-                    </button>
-
-                    {calculatorOpen && (
-                        <div className="grid gap-8 border-2 border-black bg-[#f8fafc] px-5 py-8 shadow-neo-sm lg:grid-cols-[0.85fr_1.35fr]">
-                            <div>
-                                <div className="mb-3 flex items-end justify-between gap-4">
-                                    <span className="text-sm font-black uppercase leading-tight text-slate-700">{copy.sessionsPerMonthLabel}</span>
-                                    <span className="text-3xl font-black text-slate-950">{formatInteger(calculatorSessions, locale.languageTag)}</span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={100}
-                                    step="any"
-                                    value={sliderValue}
-                                    onChange={(event) => setSliderValue(Number(event.target.value))}
-                                    className="pricing-range-slider"
-                                    style={sliderStyle}
-                                    aria-label={copy.monthlySessionsAriaLabel}
-                                />
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                    {VOLUME_PRESETS.map((preset) => {
-                                        const active = Math.abs(calculatorSessions - preset.sessions) / preset.sessions < 0.08;
-                                        return (
-                                            <button
-                                                key={preset.label}
-                                                type="button"
-                                                onClick={() => setSliderValue(sessionsToSlider(preset.sessions))}
-                                                className={`h-9 rounded-md border px-3 text-sm font-semibold transition ${
-                                                    active
-                                                        ? 'border-slate-950 bg-slate-950 text-white'
-                                                        : 'border-slate-300 bg-white text-slate-700 hover:border-slate-950'
-                                                }`}
-                                            >
-                                                {preset.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            <div className="grid overflow-hidden border-2 border-black bg-white sm:grid-cols-3">
-                                <div className="border-b-2 border-black bg-[#ecfeff] p-5 sm:border-b-0 sm:border-r-2 sm:p-6">
-                                    <p className="text-sm font-black uppercase leading-none text-slate-950">Rejourney</p>
-                                    <p className="mt-4 text-4xl font-black leading-none text-slate-950">${rejourneyMonthlyPlan.price}</p>
-                                    <p className="mt-3 text-base font-semibold leading-6 text-slate-800">{copy.rejourneyPlanLabel(rejourneyMonthlyPlan.plan, rejourneyMonthlyPlan.isCustom)}</p>
-                                </div>
-                                <div className="border-b-2 border-black p-5 sm:border-b-0 sm:border-r-2 sm:p-6">
-                                    <p className="text-sm font-black uppercase leading-none text-slate-950">PostHog</p>
-                                    <p className="mt-4 text-4xl font-black leading-none text-slate-950">{formatApproxCurrency(posthogMonthlyCost)}</p>
-                                    <p className="mt-3 text-base font-semibold leading-6 text-slate-800">{copy.posthogEstimate}</p>
-                                </div>
-                                <div className="bg-white p-5 sm:p-6">
-                                    <p className="text-sm font-black uppercase leading-none text-slate-950">Sentry</p>
-                                    <p className="mt-4 text-4xl font-black leading-none text-slate-950">{formatApproxCurrency(sentryMonthlyCost)}</p>
-                                    <p className="mt-3 text-base font-semibold leading-6 text-slate-800">{copy.sentryEstimate}</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 <div className="border-t-2 border-black pt-12 sm:pt-16 lg:pt-20">

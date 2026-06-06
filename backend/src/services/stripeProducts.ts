@@ -17,7 +17,7 @@ import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { db, teams, projects, projectUsage, users, teamMembers } from '../db/client.js';
 import { getTeamBillingPeriod } from '../utils/billing.js';
-import { getStripeSubscriptionCache, setStripeSubscriptionCache } from '../db/redis.js';
+import { getStripeSubscriptionCache, invalidateStripeSubscriptionCache, setStripeSubscriptionCache } from '../db/redis.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { stripeErrorLogFields } from '../utils/stripeErrorLog.js';
 import {
@@ -157,14 +157,29 @@ function isMetadataEnabled(value: unknown): boolean {
     return typeof value === 'string' && ['1', 'true', 'yes', 'enabled'].includes(value.toLowerCase().trim());
 }
 
-function parseSmartCaptureEnabled(
+function hasMetadataKey(metadata: Stripe.Metadata | null | undefined, key: string): boolean {
+    return Boolean(metadata && Object.prototype.hasOwnProperty.call(metadata, key));
+}
+
+export function parseSmartCaptureEnabled(
     price: Pick<Stripe.Price, 'metadata'>,
     product: Pick<Stripe.Product, 'metadata'> | null,
     planName: string,
 ): boolean {
-    return isMetadataEnabled(price.metadata?.smart_capture_enabled)
-        || isMetadataEnabled(product?.metadata?.smart_capture_enabled)
-        || planName.toLowerCase().trim() === 'scale';
+    if (hasMetadataKey(price.metadata, 'smart_capture_enabled')) {
+        return isMetadataEnabled(price.metadata.smart_capture_enabled);
+    }
+    if (hasMetadataKey(product?.metadata, 'smart_capture_enabled')) {
+        return isMetadataEnabled(product?.metadata.smart_capture_enabled);
+    }
+
+    const normalizedPlanName = planName.toLowerCase().trim();
+    const scaleIndex = PLAN_ORDER.indexOf('scale');
+    const planIndex = PLAN_ORDER.indexOf(normalizedPlanName);
+
+    return isMetadataEnabled(price.metadata?.is_custom)
+        || isMetadataEnabled(product?.metadata?.is_custom)
+        || (scaleIndex >= 0 && planIndex >= scaleIndex);
 }
 
 export function isStripeEnabled(): boolean {
@@ -530,9 +545,12 @@ export function derivePlanChangePreviewState(
 // Serialization helpers for TeamSubscriptionInfo ↔ Redis (JSON doesn't
 // preserve Date objects, so we store ISO strings and rehydrate on read).
 // ---------------------------------------------------------------------------
+const STRIPE_SUBSCRIPTION_CACHE_VERSION = 2;
+
 function serializeSubscriptionForCache(info: TeamSubscriptionInfo): Record<string, unknown> {
     return {
         ...info,
+        cacheVersion: STRIPE_SUBSCRIPTION_CACHE_VERSION,
         currentPeriodStart: info.currentPeriodStart?.toISOString() ?? null,
         currentPeriodEnd: info.currentPeriodEnd?.toISOString() ?? null,
     };
@@ -552,7 +570,7 @@ export async function getTeamSubscription(teamId: string): Promise<TeamSubscript
     // fallback). Transient states (incomplete, unpaid, canceled) are NOT cached
     // so they propagate to the caller within one request cycle.
     const cachedRaw = await getStripeSubscriptionCache(teamId);
-    if (cachedRaw) {
+    if (cachedRaw && Number(cachedRaw.cacheVersion ?? 1) === STRIPE_SUBSCRIPTION_CACHE_VERSION) {
         return deserializeSubscriptionFromCache(cachedRaw);
     }
 
@@ -1465,6 +1483,8 @@ export async function executePlanChange(
         .update(teams)
         .set(updateData)
         .where(eq(teams.id, teamId));
+
+    await invalidateStripeSubscriptionCache(teamId);
 
     // Invalidate Redis cache for replay limits (needed for all plan changes)
     try {

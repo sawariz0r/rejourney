@@ -173,7 +173,20 @@ describe('SmartCaptureModal AI rule inference', () => {
   it('falls back from shorthand product-risk prompts', () => {
     expect(inferRuleFromConditions([], 'cart abandoned').signal).toBe('cart_abandonment');
     expect(inferRuleFromConditions([], 'pre churn no return').signal).toBe('churn_risk');
+    expect(inferRuleFromConditions([], 'users who churn').signal).toBe('churn_risk');
     expect(inferRuleFromConditions([], 'users stuck during onboarding').signal).toBe('onboarding_risk');
+  });
+
+  it('falls back to churn risk when the AI returns an unsupported checkout conversion for churn intent', () => {
+    const groups: QueryGroup[] = [{
+      id: 'g1',
+      conditions: [{ id: 'c1', type: 'conversion', preset: 'checkout_bounced' }],
+    }];
+
+    const rule = inferRuleFromConditions(groups, 'users who churn');
+
+    expect(rule.signal).toBe('churn_risk');
+    expect(rule.type).toBe('lifecycle');
   });
 
   it.each([

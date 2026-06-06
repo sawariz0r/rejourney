@@ -39,6 +39,7 @@ import {
   getTeamSessionUsage,
   clearCache,
   completeCheckoutSession,
+  createBillingPortalPlanChangeSession,
   createCheckoutSession,
   TeamUsage,
   StripeStatus,
@@ -420,6 +421,35 @@ export const BillingSettings: React.FC = () => {
         if (launchMode === 'popup') {
           resetPlanChangeModal();
         }
+        return;
+      }
+
+      if (preview.changeType === 'upgrade' || preview.changeType === 'downgrade') {
+        const returnUrl = `${window.location.origin}${pathPrefix}/billing/return`;
+        const { url } = await createBillingPortalPlanChangeSession(currentTeam.id, selectedPlan, returnUrl);
+        const features = buildCenteredPopupFeatures({
+          width: 1000,
+          height: 700,
+          screenWidth: window.screen.width,
+          screenHeight: window.screen.height,
+        });
+        const portalWindow = window.open(url, 'stripeBillingPortalPlanChange', features);
+
+        if (!portalWindow) {
+          window.location.assign(url);
+          return;
+        }
+
+        portalWindow.focus();
+        resetPlanChangeModal();
+
+        const checkClosed = setInterval(() => {
+          if (portalWindow.closed) {
+            clearInterval(checkClosed);
+            clearCache();
+            loadTeamBilling();
+          }
+        }, 500);
         return;
       }
 
@@ -1151,7 +1181,14 @@ export const BillingSettings: React.FC = () => {
                     )}
 
                   {/* When change takes effect */}
-                  {planChangeModal.preview.isImmediate ? (
+                  {planChangeModal.preview.changeType === 'downgrade' ? (
+                    <div className="dashboard-inner-surface p-3 text-sm">
+                      <div className="font-semibold text-slate-900">Confirm in Stripe</div>
+                      <p className="mt-1 text-slate-600">
+                        Stripe will show the downgrade timing and any billing adjustment before you confirm.
+                      </p>
+                    </div>
+                  ) : planChangeModal.preview.isImmediate ? (
                     <div className="dashboard-inner-surface p-3 text-sm">
                       <div className="font-semibold text-slate-900">Takes effect immediately</div>
                       <p className="text-slate-600 mt-1">Your new session replay limit will be active right away.</p>
@@ -1205,11 +1242,11 @@ export const BillingSettings: React.FC = () => {
                     {planChangeModal.isConfirming ? (
                       'Processing...'
                     ) : planChangeModal.preview.changeType === 'new' ? (
-                      'Subscribe'
+                      'Continue to Stripe'
                     ) : planChangeModal.preview.changeType === 'upgrade' ? (
-                      'Confirm Upgrade'
+                      'Continue to Stripe'
                     ) : planChangeModal.preview.changeType === 'downgrade' ? (
-                      'Confirm Downgrade'
+                      'Continue to Stripe'
                     ) : (
                       'Confirm'
                     )}

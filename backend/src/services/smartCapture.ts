@@ -5,6 +5,7 @@ import { logger } from '../logger.js';
 import { normalizeHeatmapScreenName } from '../utils/heatmapScreens.js';
 import { getFrustrationTapKind } from '../utils/mobileFrustration.js';
 import { removeArtifactJobIfQueued } from './artifactBullQueue.js';
+import { getTeamSubscription } from './stripeProducts.js';
 
 export type SmartCaptureMode = 'record_all' | 'smart_capture' | 'analytics_only';
 export type SmartCapturePreset = 'none' | 'high_friction' | 'onboarding_risk' | 'churn_risk' | 'checkout_risk' | 'minimum_signal';
@@ -112,9 +113,14 @@ const NUMERIC_OPERATORS = new Set(['gt', 'gte', 'lt', 'lte', 'eq', 'neq']);
 const TEXT_OPERATORS = new Set(['contains', 'eq', 'neq', 'starts_with', 'ends_with', 'matches_regex', 'exists', 'not_exists']);
 const SMART_CAPTURE_COLORS = new Set(['slate', 'cyan', 'emerald', 'amber', 'rose', 'violet', 'blue', 'pink']);
 
-export async function isSmartCaptureEntitled(_teamId: string): Promise<boolean> {
-    // TEMP: unlocked for all plans while Smart Capture is being tested.
-    return true;
+export async function isSmartCaptureEntitled(teamId: string): Promise<boolean> {
+    try {
+        const subscription = await getTeamSubscription(teamId);
+        return Boolean(subscription.smartCaptureEnabled);
+    } catch (err) {
+        logger.warn({ err, teamId }, 'Failed to resolve Smart Capture entitlement');
+        return false;
+    }
 }
 
 export function normalizeSmartCaptureMode(value: unknown): SmartCaptureMode {

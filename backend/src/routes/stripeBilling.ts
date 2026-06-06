@@ -26,7 +26,9 @@ import {
     detachPaymentMethod,
     customerHasPaymentMethods,
     listPaymentMethods,
+    createBillingPortalCancellationSession,
     createBillingPortalSession,
+    createBillingPortalPlanChangeSession,
     createSetupIntent,
 } from '../services/stripe.js';
 import {
@@ -36,6 +38,7 @@ import {
 } from '../utils/billing.js';
 import {
     getStripePlans,
+    getStripePlan,
     getTeamSubscription,
     previewPlanChange,
     executePlanChange,
@@ -377,6 +380,66 @@ router.post(
             sessionId: result.sessionId,
             url: result.url,
         });
+    })
+);
+
+router.post(
+    '/:teamId/billing/stripe/portal/plan-change',
+    sessionAuth,
+    validate(teamIdParamSchema, 'params'),
+    requireBillingAdmin,
+    asyncHandler(async (req, res) => {
+        if (!isStripeEnabled()) {
+            throw ApiError.serviceUnavailable('Stripe is not enabled');
+        }
+
+        const teamId = req.params.teamId;
+        const { planName, returnUrl } = req.body;
+
+        if (!planName) {
+            throw ApiError.badRequest('planName is required');
+        }
+
+        const plan = await getStripePlan(planName);
+        if (!plan) {
+            throw ApiError.badRequest(`Plan not found: ${planName}`);
+        }
+
+        const preview = await previewPlanChange(teamId, plan.priceId);
+        if (preview.changeType !== 'upgrade' && preview.changeType !== 'downgrade') {
+            throw ApiError.badRequest('Hosted Stripe confirmation is only available for paid plan changes');
+        }
+
+        const defaultReturnUrl = `${config.PUBLIC_DASHBOARD_URL || 'http://localhost:8080'}/dashboard/billing/return`;
+        if (preview.changeType === 'downgrade' && plan.priceCents <= 0) {
+            const url = await createBillingPortalCancellationSession({
+                teamId,
+                returnUrl: returnUrl || defaultReturnUrl,
+            });
+
+            if (!url) {
+                throw ApiError.internal('Failed to create billing portal cancellation session');
+            }
+
+            res.json({ url });
+            return;
+        }
+
+        const url = await createBillingPortalPlanChangeSession({
+            teamId,
+            priceId: plan.priceId,
+            returnUrl: returnUrl || defaultReturnUrl,
+            portalProducts: [{
+                productId: plan.productId,
+                priceIds: [plan.priceId],
+            }],
+        });
+
+        if (!url) {
+            throw ApiError.internal('Failed to create billing portal plan change session');
+        }
+
+        res.json({ url });
     })
 );
 

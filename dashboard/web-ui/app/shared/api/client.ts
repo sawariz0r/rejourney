@@ -2108,6 +2108,17 @@ export async function createBillingPortalSession(teamId: string, returnUrl?: str
     });
 }
 
+export async function createBillingPortalPlanChangeSession(
+    teamId: string,
+    planName: string,
+    returnUrl: string,
+): Promise<{ url: string }> {
+    return fetchJson<{ url: string }>(`/api/teams/${teamId}/billing/stripe/portal/plan-change`, {
+        method: 'POST',
+        body: JSON.stringify({ planName, returnUrl }),
+    });
+}
+
 // =============================================================================
 // Project Revenue API
 // =============================================================================
@@ -4855,6 +4866,7 @@ export const api = {
     addPaymentMethod,
     removePaymentMethod,
     createBillingPortalSession,
+    createBillingPortalPlanChangeSession,
     getFreeTierStatus,
     updateAccountSettings,
     getTeamPlan,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     derivePlanChangePreviewState,
+    parseSmartCaptureEnabled,
     type StripePlan,
     type TeamSubscriptionInfo,
 } from '../services/stripeProducts.js';
@@ -148,5 +149,34 @@ describe('derivePlanChangePreviewState', () => {
         expect(result.isImmediate).toBe(true);
         expect(result.chargeAmountCents).toBe(14900);
         expect(result.requiresPaymentMethod).toBe(true);
+    });
+});
+
+describe('parseSmartCaptureEnabled', () => {
+    const price = (metadata: Record<string, string>) => ({ metadata }) as any;
+    const product = (metadata: Record<string, string>) => ({ metadata }) as any;
+
+    it('does not fall back to Scale inference when smart_capture_enabled is explicitly invalid', () => {
+        expect(parseSmartCaptureEnabled(
+            price({ smart_capture_enabled: '4' }),
+            product({ plan_name: 'scale' }),
+            'scale',
+        )).toBe(false);
+    });
+
+    it('enables Smart Capture for Scale when no explicit smart_capture_enabled metadata is set', () => {
+        expect(parseSmartCaptureEnabled(
+            price({}),
+            product({ plan_name: 'scale' }),
+            'scale',
+        )).toBe(true);
+    });
+
+    it('allows explicit Smart Capture metadata on non-Scale plans', () => {
+        expect(parseSmartCaptureEnabled(
+            price({ smart_capture_enabled: 'true' }),
+            product({ plan_name: 'pro' }),
+            'pro',
+        )).toBe(true);
     });
 });

@@ -13,6 +13,7 @@ import {
   Gauge,
   Globe,
   Globe2,
+  Info,
   Link2,
   Loader,
   Megaphone,
@@ -622,6 +623,10 @@ const firstNumber = (text: string): number | undefined => {
   return Number.isFinite(value) ? value : undefined;
 };
 
+const promptMentionsCheckoutIntent = (prompt: string): boolean => (
+  /\b(checkout|cart|basket|payment|purchase|order)\b/i.test(prompt)
+);
+
 const fallbackRuleFromPrompt = (prompt: string, label: string): SmartCaptureRule => {
   const normalized = prompt.toLowerCase();
   const captureRateMatch = normalized.match(/\b(save|keep|sample|capture)\s+(\d{1,3})\s*%/);
@@ -644,7 +649,7 @@ const fallbackRuleFromPrompt = (prompt: string, label: string): SmartCaptureRule
   if (/\b(new users?|first[-\s]?time users?|first session|first few sessions|first \d+ sessions|recent signups?|just joined)\b/.test(normalized)) {
     return withCaptureRate(namedRule('new_user', label, number ? { condition: { signal: 'new_user', maxVisits: number, captureRate } } : {}));
   }
-  if (/\b(pre[-\s]?churn|churn risk|no return|not return|didn'?t return|never returned|came once)\b/.test(normalized)) {
+  if (/\b(pre[-\s]?churn|churn risk|churn|churns|churned|churning|no return|not return|didn'?t return|never returned|came once)\b/.test(normalized)) {
     return withCaptureRate(namedRule('churn_risk', label));
   }
   if (/\b(rage|angry|rapid click|rage tap|rage click)\b/.test(normalized)) {
@@ -690,7 +695,7 @@ const fallbackRuleFromPrompt = (prompt: string, label: string): SmartCaptureRule
 };
 
 // Maps a QueryBuilder condition to a Smart Capture rule
-export const mapQueryConditionToRule = (cond: QueryCondition, label: string): SmartCaptureRule | null => {
+export const mapQueryConditionToRule = (cond: QueryCondition, label: string, prompt?: string): SmartCaptureRule | null => {
   if (cond.type === 'issue') {
     if (cond.issueFilter === 'crashes') return namedRule('crashes', label);
     if (cond.issueFilter === 'anrs') return namedRule('anrs', label);
@@ -762,6 +767,9 @@ export const mapQueryConditionToRule = (cond: QueryCondition, label: string): Sm
         condition: { signal: 'new_user', maxVisits: cond.sessionWindowSize ?? 3, captureRate: 100 },
       });
     }
+  }
+  if (cond.type === 'conversion' && prompt !== undefined && !promptMentionsCheckoutIntent(prompt)) {
+    return null;
   }
   if (cond.type === 'conversion' && cond.preset === 'checkout_bounced') {
     return namedRule('checkout_risk', label);
@@ -919,13 +927,17 @@ const compoundRuleFromCandidates = (candidates: MappedRuleCandidate[], label: st
 };
 
 export const inferRulesFromConditions = (groups: QueryGroup[], prompt: string, explanation?: string): SmartCaptureRule[] => {
-  const fallbackLabel = (explanation?.replace(/^Find sessions where\s+/i, '').replace(/\.$/, '') || prompt).slice(0, 120);
+  const hasUsableConditions = groups.some((group) => group.conditions.length > 0);
+  const fallbackLabelSource = hasUsableConditions
+    ? explanation?.replace(/^Find sessions where\s+/i, '').replace(/\.$/, '')
+    : prompt;
+  const fallbackLabel = (fallbackLabelSource || prompt).slice(0, 120);
 
   const groupRules = groups
     .filter((group) => group.conditions.length > 0)
     .map((group) => {
       const candidates = group.conditions
-        .map((cond, index) => ({ cond, rule: mapQueryConditionToRule(cond, fallbackLabel), priority: conditionCapturePriority(cond), index }))
+        .map((cond, index) => ({ cond, rule: mapQueryConditionToRule(cond, fallbackLabel, prompt), priority: conditionCapturePriority(cond), index }))
         .filter((candidate): candidate is MappedRuleCandidate => Boolean(candidate.rule));
       return compoundRuleFromCandidates(candidates, fallbackLabel, prompt);
     })
@@ -1243,7 +1255,7 @@ export const SmartCaptureModal: React.FC<SmartCaptureModalProps> = ({
     }
     const normalizedRules = rules.map(normalizeRule);
     const payload: SmartCaptureConfigUpdate = {
-      enabled: true, 
+      enabled: smartCaptureEnabled,
       mode: captureMode,
       preset: 'none',
       rules: normalizedRules,
@@ -1277,10 +1289,11 @@ export const SmartCaptureModal: React.FC<SmartCaptureModalProps> = ({
       const parsed = await buildSessionQueryFromPrompt(projectId, trimmedPrompt);
       const groups = (parsed.groups || []) as QueryGroup[];
       const explanation = parsed.explanation;
+      const hasUsableConditions = groups.some((group) => group.conditions.length > 0);
       
       const nextRules = inferRulesFromConditions(groups, trimmedPrompt, explanation);
       
-      setBuilderExplanation(explanation || 'Created a rule based on your prompt.');
+      setBuilderExplanation(hasUsableConditions ? (explanation || 'Created a rule based on your prompt.') : 'Created a Smart Capture rule from your prompt.');
       setCaptureMode('smart_capture');
       setRules((current) => [...current, ...nextRules].slice(0, 20));
       setPrompt('');
@@ -1365,6 +1378,9 @@ export const SmartCaptureModal: React.FC<SmartCaptureModalProps> = ({
           className={`${selectClass} w-full sm:w-48`}
         >
           <option value=""></option>
+          {option.hidden && option.value && (
+            <option value={option.value}>{option.label}</option>
+          )}
           {ruleOptionGroups.map(groupName => (
             <optgroup key={groupName} label={groupName}>
               {VISIBLE_RULE_OPTIONS.filter(o => o.group === groupName).map(item => (
@@ -1618,11 +1634,11 @@ export const SmartCaptureModal: React.FC<SmartCaptureModalProps> = ({
 
         <div className="flex-1 overflow-y-auto bg-slate-50 px-3 py-3 sm:px-6 sm:py-6">
           {locked && (
-            <div className="mb-3 flex flex-wrap items-center gap-2 border-2 border-black bg-[#fef3c7] px-4 py-3 text-sm font-black text-black shadow-neo-sm">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-black" strokeWidth={2} />
-              Scale Plan Required to use Smart Capture rules.
-              <Link to={`${pathPrefix}/billing`} className="ml-auto underline underline-offset-2">
-                Upgrade to Scale
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">
+              <Info className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2.2} />
+              <span>Smart Capture rules are available on Scale. You can preview this setup, but editing is locked on your current plan.</span>
+              <Link to={`${pathPrefix}/billing`} className="ml-auto font-bold text-slate-900 underline underline-offset-2">
+                View billing
               </Link>
             </div>
           )}
@@ -1924,7 +1940,7 @@ export const SmartCaptureModal: React.FC<SmartCaptureModalProps> = ({
             <button
               type="button"
               onClick={() => void saveConfig()}
-              disabled={isSaving || !dirty}
+              disabled={isSaving || locked || !dirty}
               className="inline-flex h-11 w-full items-center justify-center gap-2 border-2 border-black bg-[#67e8f9] px-6 text-sm font-black uppercase text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 sm:h-[42px] sm:w-auto"
             >
               <Save className="h-4 w-4" strokeWidth={2.5} />

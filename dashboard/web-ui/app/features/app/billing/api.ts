@@ -3,6 +3,7 @@ export {
   clearCache,
   completeCheckoutSession,
   confirmPlanChange,
+  createBillingPortalPlanChangeSession,
   createBillingPortalSession,
   createCheckoutSession,
   createSetupIntent,

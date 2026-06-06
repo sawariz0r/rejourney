@@ -15,6 +15,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { db, teams, stripeWebhookEvents, billingUsage, users, teamMembers } from '../db/client.js';
+import { invalidateStripeSubscriptionCache } from '../db/redis.js';
 import {
     FREE_VIDEO_RETENTION_TIER,
     parseVideoRetentionTier,
@@ -27,6 +28,13 @@ import {
 
 let stripe: Stripe | null = null;
 let loggedStripeDisabled = false;
+const MANAGED_PLAN_CHANGE_PORTAL_METADATA_KEY = 'rejourney_managed';
+const MANAGED_PLAN_CHANGE_PORTAL_METADATA_VALUE = 'plan_change_v1';
+
+export interface BillingPortalPlanChangeProduct {
+    productId: string;
+    priceIds: string[];
+}
 
 /**
  * Initialize Stripe client if not in self-hosted mode and keys are configured
@@ -350,6 +358,212 @@ export async function createBillingPortalSession(
         logger.error({ err, customerId }, 'Failed to create billing portal session');
         throw err;
     }
+}
+
+export async function createBillingPortalPlanChangeSession({
+    teamId,
+    priceId,
+    returnUrl,
+    portalProducts = [],
+}: {
+    teamId: string;
+    priceId: string;
+    returnUrl: string;
+    portalProducts?: BillingPortalPlanChangeProduct[];
+}): Promise<string | null> {
+    const client = getStripe();
+    if (!client) return null;
+
+    const [team] = await db
+        .select({
+            stripeCustomerId: teams.stripeCustomerId,
+            stripeSubscriptionId: teams.stripeSubscriptionId,
+        })
+        .from(teams)
+        .where(eq(teams.id, teamId))
+        .limit(1);
+
+    if (!team?.stripeCustomerId) {
+        throw new Error('Team does not have a Stripe customer');
+    }
+
+    if (!team.stripeSubscriptionId) {
+        throw new Error('Team does not have an active Stripe subscription');
+    }
+
+    try {
+        const subscription = await client.subscriptions.retrieve(team.stripeSubscriptionId);
+        const item = subscription.items.data[0];
+        if (!item) {
+            throw new Error('Subscription has no items to update');
+        }
+
+        const configuration = await ensureManagedPlanChangePortalConfiguration(client, returnUrl, portalProducts);
+        const sessionParams: Stripe.BillingPortal.SessionCreateParams = {
+            customer: team.stripeCustomerId,
+            return_url: returnUrl,
+            flow_data: {
+                type: 'subscription_update_confirm',
+                subscription_update_confirm: {
+                    subscription: subscription.id,
+                    items: [{
+                        id: item.id,
+                        price: priceId,
+                        quantity: item.quantity || 1,
+                    }],
+                },
+                after_completion: {
+                    type: 'redirect',
+                    redirect: {
+                        return_url: returnUrl,
+                    },
+                },
+            },
+        };
+
+        if (configuration) {
+            sessionParams.configuration = configuration;
+        }
+
+        const session = await client.billingPortal.sessions.create(sessionParams);
+
+        await invalidateStripeSubscriptionCache(teamId);
+        return session.url;
+    } catch (err) {
+        logger.error({ err, teamId, priceId }, 'Failed to create billing portal plan change session');
+        throw err;
+    }
+}
+
+export async function createBillingPortalCancellationSession({
+    teamId,
+    returnUrl,
+}: {
+    teamId: string;
+    returnUrl: string;
+}): Promise<string | null> {
+    const client = getStripe();
+    if (!client) return null;
+
+    const [team] = await db
+        .select({
+            stripeCustomerId: teams.stripeCustomerId,
+            stripeSubscriptionId: teams.stripeSubscriptionId,
+        })
+        .from(teams)
+        .where(eq(teams.id, teamId))
+        .limit(1);
+
+    if (!team?.stripeCustomerId) {
+        throw new Error('Team does not have a Stripe customer');
+    }
+
+    if (!team.stripeSubscriptionId) {
+        throw new Error('Team does not have an active Stripe subscription');
+    }
+
+    try {
+        const configuration = await ensureManagedPlanChangePortalConfiguration(client, returnUrl, []);
+        const sessionParams: Stripe.BillingPortal.SessionCreateParams = {
+            customer: team.stripeCustomerId,
+            return_url: returnUrl,
+            flow_data: {
+                type: 'subscription_cancel',
+                subscription_cancel: {
+                    subscription: team.stripeSubscriptionId,
+                },
+                after_completion: {
+                    type: 'redirect',
+                    redirect: {
+                        return_url: returnUrl,
+                    },
+                },
+            },
+        };
+
+        if (configuration) {
+            sessionParams.configuration = configuration;
+        }
+
+        const session = await client.billingPortal.sessions.create(sessionParams);
+        await invalidateStripeSubscriptionCache(teamId);
+        return session.url;
+    } catch (err) {
+        logger.error({ err, teamId }, 'Failed to create billing portal cancellation session');
+        throw err;
+    }
+}
+
+async function ensureManagedPlanChangePortalConfiguration(
+    client: Stripe,
+    returnUrl: string,
+    portalProducts: BillingPortalPlanChangeProduct[],
+): Promise<string | undefined> {
+    if (config.NODE_ENV === 'production') {
+        return undefined;
+    }
+
+    const products = portalProducts
+        .map(product => ({
+            product: product.productId,
+            prices: [...new Set(product.priceIds.filter(Boolean))],
+            adjustable_quantity: { enabled: false },
+        }))
+        .filter(product => product.product && product.prices.length > 0)
+        .slice(0, 10);
+
+    const features: Stripe.BillingPortal.ConfigurationCreateParams.Features = {
+        invoice_history: { enabled: true },
+        payment_method_update: { enabled: true },
+        subscription_cancel: {
+            enabled: true,
+            mode: 'at_period_end',
+            proration_behavior: 'none',
+        },
+    };
+
+    if (products.length > 0) {
+        features.subscription_update = {
+            enabled: true,
+            default_allowed_updates: ['price'],
+            products,
+            proration_behavior: 'none',
+            schedule_at_period_end: {
+                conditions: [{ type: 'decreasing_item_amount' }],
+            },
+        };
+    }
+
+    const existingConfigs = await client.billingPortal.configurations.list({
+        active: true,
+        limit: 100,
+    });
+    const existing = existingConfigs.data.find(candidate =>
+        candidate.metadata?.[MANAGED_PLAN_CHANGE_PORTAL_METADATA_KEY] === MANAGED_PLAN_CHANGE_PORTAL_METADATA_VALUE
+    );
+
+    if (existing) {
+        const updated = await client.billingPortal.configurations.update(existing.id, {
+            default_return_url: returnUrl,
+            features,
+            metadata: {
+                ...existing.metadata,
+                [MANAGED_PLAN_CHANGE_PORTAL_METADATA_KEY]: MANAGED_PLAN_CHANGE_PORTAL_METADATA_VALUE,
+            },
+            name: 'Rejourney local plan changes',
+        });
+        return updated.id;
+    }
+
+    const created = await client.billingPortal.configurations.create({
+        default_return_url: returnUrl,
+        features,
+        metadata: {
+            [MANAGED_PLAN_CHANGE_PORTAL_METADATA_KEY]: MANAGED_PLAN_CHANGE_PORTAL_METADATA_VALUE,
+        },
+        name: 'Rejourney local plan changes',
+    });
+    return created.id;
 }
 
 // =============================================================================
@@ -757,6 +971,8 @@ async function syncTeamToCheckoutSession(
     await db.update(teams)
         .set(updateData)
         .where(eq(teams.id, teamId));
+
+    await invalidateStripeSubscriptionCache(teamId);
 
     const retentionTier = provisioned
         ? await resolveSubscriptionRetentionTier(subscription)
