@@ -24,6 +24,7 @@ import {
     YAxis,
 } from 'recharts';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import {
     getApiOverview,
     ApiEndpointStats,
@@ -488,6 +489,7 @@ const getTopStatusCodes = (breakdown: Record<string, number> | null | undefined,
 
 export const ApiAnalytics: React.FC = () => {
     const { selectedProject } = useSessionData();
+    const manualRefreshVersion = useDashboardManualRefreshVersion();
     const { platformLens } = useSharedPlatformLens(selectedProject?.id, selectedProject?.platforms);
     const platform = platformLensToSessionPlatform(platformLens);
 
@@ -545,7 +547,7 @@ export const ApiAnalytics: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform]);
+    }, [manualRefreshVersion, selectedProject?.id, timeRange, platform]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;

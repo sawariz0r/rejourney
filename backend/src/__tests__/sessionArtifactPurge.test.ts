@@ -272,6 +272,7 @@ describe('sessionArtifactPurge', () => {
             recordingDeletedAt: now,
             isReplayExpired: true,
             replayAvailable: false,
+            replayRetentionState: 'not_available',
             replaySegmentCount: 0,
             replayStorageBytes: 0,
             updatedAt: now,

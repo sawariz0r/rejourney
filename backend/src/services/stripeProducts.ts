@@ -44,6 +44,7 @@ export interface StripePlan {
     priceCents: number;     // Unit amount
     interval: 'month' | 'year';
     isCustom: boolean;      // Custom enterprise price
+    smartCaptureEnabled: boolean;
     sortOrder: number;      // For display ordering
 }
 
@@ -59,6 +60,7 @@ export interface TeamSubscriptionInfo {
     videoRetentionLabel: string;
     priceCents: number;
     isCustom: boolean;
+    smartCaptureEnabled: boolean;
     subscriptionId: string | null;
     subscriptionStatus: string | null;  // 'active', 'past_due', 'canceled', etc.
     currentPeriodStart: Date | null;
@@ -113,7 +115,7 @@ interface DerivedPlanChangePreview {
 export const FREE_TIER_SESSIONS = 5000;
 
 // Standard plan names for ordering
-const PLAN_ORDER = ['free', 'starter', 'growth', 'pro'];
+const PLAN_ORDER = ['free', 'starter', 'growth', 'pro', 'scale'];
 
 // Cache for Stripe prices (refreshed periodically)
 let priceCache: StripePlan[] | null = null;
@@ -149,6 +151,20 @@ function getStripe(): Stripe | null {
     }
 
     return stripe;
+}
+
+function isMetadataEnabled(value: unknown): boolean {
+    return typeof value === 'string' && ['1', 'true', 'yes', 'enabled'].includes(value.toLowerCase().trim());
+}
+
+function parseSmartCaptureEnabled(
+    price: Pick<Stripe.Price, 'metadata'>,
+    product: Pick<Stripe.Product, 'metadata'> | null,
+    planName: string,
+): boolean {
+    return isMetadataEnabled(price.metadata?.smart_capture_enabled)
+        || isMetadataEnabled(product?.metadata?.smart_capture_enabled)
+        || planName.toLowerCase().trim() === 'scale';
 }
 
 export function isStripeEnabled(): boolean {
@@ -299,6 +315,7 @@ export async function getStripePlans(forceRefresh = false): Promise<StripePlan[]
                 priceCents: price.unit_amount || 0,
                 interval: price.recurring?.interval === 'year' ? 'year' : 'month',
                 isCustom: product.metadata?.is_custom === 'true' || price.metadata?.is_custom === 'true',
+                smartCaptureEnabled: parseSmartCaptureEnabled(price, product, planName),
                 sortOrder,
             };
 
@@ -420,6 +437,7 @@ function getFreePlan(): StripePlan {
         priceCents: 0,
         interval: 'month',
         isCustom: false,
+        smartCaptureEnabled: false,
         sortOrder: 0,
     };
 }
@@ -580,6 +598,7 @@ export async function getTeamSubscription(teamId: string): Promise<TeamSubscript
         videoRetentionLabel: '7 days',
         priceCents: 0,
         isCustom: false,
+        smartCaptureEnabled: false,
         subscriptionId: null,
         subscriptionStatus: null,
         currentPeriodStart: null,
@@ -611,6 +630,7 @@ export async function getTeamSubscription(teamId: string): Promise<TeamSubscript
                     result.videoRetentionLabel = plan.videoRetentionLabel;
                     result.priceCents = plan.priceCents;
                     result.isCustom = plan.isCustom;
+                    result.smartCaptureEnabled = plan.smartCaptureEnabled;
                     result.subscriptionId = team.stripeSubscriptionId;
                     result.subscriptionStatus = 'active'; // Assume active if we can't check
                     // Use billing cycle anchor for period dates if available
@@ -714,6 +734,7 @@ export async function getTeamSubscription(teamId: string): Promise<TeamSubscript
                         result.videoRetentionLabel = plan.videoRetentionLabel;
                         result.priceCents = plan.priceCents;
                         result.isCustom = plan.isCustom;
+                        result.smartCaptureEnabled = plan.smartCaptureEnabled;
                         result.subscriptionId = team.stripeSubscriptionId;
                         result.subscriptionStatus = subscription.status;
                         if (team.billingCycleAnchor) {
@@ -754,7 +775,8 @@ export async function getTeamSubscription(teamId: string): Promise<TeamSubscript
         result.videoRetentionDays = videoRetention.days;
         result.videoRetentionLabel = videoRetention.label;
         result.priceCents = price.unit_amount || 0;
-        result.isCustom = product.metadata?.is_custom === 'true';
+        result.isCustom = product.metadata?.is_custom === 'true' || price.metadata?.is_custom === 'true';
+        result.smartCaptureEnabled = parseSmartCaptureEnabled(price, product, result.planName);
         result.subscriptionId = subscription.id;
         result.subscriptionStatus = subscription.status;
         result.currentPeriodStart = new Date((subscription as any).current_period_start * 1000);
@@ -887,6 +909,7 @@ export async function getTeamSubscription(teamId: string): Promise<TeamSubscript
                     result.videoRetentionLabel = plan.videoRetentionLabel;
                     result.priceCents = plan.priceCents;
                     result.isCustom = plan.isCustom;
+                    result.smartCaptureEnabled = plan.smartCaptureEnabled;
                     result.subscriptionId = team.stripeSubscriptionId;
                     result.subscriptionStatus = 'active'; // Assume active if we can't check
                     // Use billing cycle anchor for period dates if available
@@ -1066,6 +1089,7 @@ export async function previewPlanChange(
             priceCents: currentSub.priceCents,
             interval: 'month' as const,
             isCustom: currentSub.isCustom,
+            smartCaptureEnabled: currentSub.smartCaptureEnabled,
             sortOrder: PLAN_ORDER.indexOf(currentSub.planName),
         } : getFreePlan(); // Return free plan if no subscription
 

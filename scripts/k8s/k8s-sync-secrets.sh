@@ -169,6 +169,12 @@ fi
 if [ -z "$STORAGE_ENCRYPTION_KEY" ] || [ "$STORAGE_ENCRYPTION_KEY" = "generate_with_openssl_rand_hex_32" ]; then
     error "STORAGE_ENCRYPTION_KEY not set or still has placeholder value. Generate with: openssl rand -hex 32"
 fi
+if [ -n "${SUPERWALL_API_KEY_ENCRYPTION_KEY:-}" ] && ! [[ "$SUPERWALL_API_KEY_ENCRYPTION_KEY" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    error "SUPERWALL_API_KEY_ENCRYPTION_KEY must be 64 hex characters when set. Generate with: openssl rand -hex 32"
+fi
+if [ -n "${REVENUECAT_API_KEY_ENCRYPTION_KEY:-}" ] && ! [[ "$REVENUECAT_API_KEY_ENCRYPTION_KEY" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    error "REVENUECAT_API_KEY_ENCRYPTION_KEY must be 64 hex characters when set. Generate with: openssl rand -hex 32"
+fi
 
 # Build app-secret args
 APP_SECRET_ARGS=(
@@ -177,6 +183,13 @@ APP_SECRET_ARGS=(
     --from-literal=INGEST_HMAC_SECRET="$INGEST_HMAC_SECRET"
     --from-literal=STORAGE_ENCRYPTION_KEY="$STORAGE_ENCRYPTION_KEY"
 )
+
+if [ -n "${SUPERWALL_API_KEY_ENCRYPTION_KEY:-}" ]; then
+    APP_SECRET_ARGS+=(--from-literal=SUPERWALL_API_KEY_ENCRYPTION_KEY="$SUPERWALL_API_KEY_ENCRYPTION_KEY")
+fi
+if [ -n "${REVENUECAT_API_KEY_ENCRYPTION_KEY:-}" ]; then
+    APP_SECRET_ARGS+=(--from-literal=REVENUECAT_API_KEY_ENCRYPTION_KEY="$REVENUECAT_API_KEY_ENCRYPTION_KEY")
+fi
 
 # Add PUBLIC URLs to app-secret (for both prod and self-hosted deployments)
 # These come from the .env file and are used by k8s deployments

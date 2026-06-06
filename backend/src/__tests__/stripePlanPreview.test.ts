@@ -18,6 +18,7 @@ const freeSubscription: TeamSubscriptionInfo = {
     videoRetentionLabel: '7 days',
     priceCents: 0,
     isCustom: false,
+    smartCaptureEnabled: false,
     subscriptionId: null,
     subscriptionStatus: null,
     currentPeriodStart: null,
@@ -39,6 +40,7 @@ const starterPlan: StripePlan = {
     priceCents: 500,
     interval: 'month',
     isCustom: false,
+    smartCaptureEnabled: false,
     sortOrder: 1,
 };
 
@@ -101,5 +103,50 @@ describe('derivePlanChangePreviewState', () => {
         expect(result.changeType).toBe('upgrade');
         expect(result.requiresPaymentMethod).toBe(true);
         expect(result.warnings).toContain('You must add a payment method before upgrading to a paid plan.');
+    });
+
+    it('classifies Pro to Scale as an immediate upgrade', () => {
+        const proSub: TeamSubscriptionInfo = {
+            ...freeSubscription,
+            priceId: 'price_pro',
+            productId: 'prod_pro',
+            planName: 'pro',
+            displayName: 'Pro',
+            sessionLimit: 350000,
+            videoRetentionTier: 4,
+            videoRetentionDays: 60,
+            videoRetentionLabel: '60 days',
+            priceCents: 3500,
+            subscriptionId: 'sub_123',
+            subscriptionStatus: 'active',
+            currentPeriodStart: new Date('2026-04-01T00:00:00.000Z'),
+            currentPeriodEnd: new Date('2026-05-01T00:00:00.000Z'),
+        };
+        const scalePlan: StripePlan = {
+            ...starterPlan,
+            priceId: 'price_scale',
+            productId: 'prod_scale',
+            name: 'scale',
+            displayName: 'Scale',
+            sessionLimit: 1000000,
+            videoRetentionTier: 4,
+            videoRetentionDays: 60,
+            videoRetentionLabel: '60 days',
+            priceCents: 14900,
+            smartCaptureEnabled: true,
+            sortOrder: 4,
+        };
+
+        const result = derivePlanChangePreviewState(
+            proSub,
+            scalePlan,
+            scalePlan.priceId,
+            true,
+        );
+
+        expect(result.changeType).toBe('upgrade');
+        expect(result.isImmediate).toBe(true);
+        expect(result.chargeAmountCents).toBe(14900);
+        expect(result.requiresPaymentMethod).toBe(true);
     });
 });

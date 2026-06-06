@@ -1,6 +1,7 @@
 import { User, Project, RecordingSession, SessionEvent, ApiCall, Platform, TimeRange, ProjectDailyStats, Issue, IssueSession } from '~/shared/types';
 import { isUuid } from '~/shared/lib/ids';
 import { isPublicRoutePath } from '~/shared/lib/publicRoutePaths';
+import { canOpenReplayFromSession } from '~/shared/lib/replayAvailability';
 import * as demoApiData from '~/shared/data/demoApiData';
 import { demoProjects, demoSessions } from '~/shared/data/demoData';
 import { buildDemoHeatmapOverview, getDemoWebAttentionHeatmap } from '~/shared/data/demoHeatmapData';
@@ -478,6 +479,11 @@ export interface ApiSessionSummary {
     isBackgroundProcessing?: boolean;
     canOpenReplay?: boolean;
     isFirstSession?: boolean;
+    replayRetentionState?: 'saved' | 'buffered' | 'analytics_only' | 'not_available' | null;
+    smartCaptureStatus?: 'not_applicable' | 'pending' | 'kept' | 'discarded';
+    smartCaptureReason?: string | null;
+    smartCaptureRuleId?: string | null;
+    smartCaptureDecidedAt?: string | null;
 }
 
 export interface DashboardStats {
@@ -1019,6 +1025,8 @@ export function transformToRecordingSession(session: ApiSession | ApiSessionSumm
         : metrics.screensVisited && metrics.screensVisited.length > 0
           ? metrics.screensVisited
           : [];
+    const readyReplayArtifacts = Number(session.stats?.screenshotSegmentCount ?? 0) > 0;
+    const canOpenReplay = canOpenReplayFromSession(session as any, readyReplayArtifacts);
 
     return {
         id: session.id,
@@ -1057,10 +1065,15 @@ export function transformToRecordingSession(session: ApiSession | ApiSessionSumm
         interactionScore,
         explorationScore,
         status: (session as any).status || 'ready',
+        replayRetentionState: (session as any).replayRetentionState,
+        smartCaptureStatus: (session as any).smartCaptureStatus,
+        smartCaptureReason: (session as any).smartCaptureReason ?? null,
+        smartCaptureRuleId: (session as any).smartCaptureRuleId ?? null,
+        smartCaptureDecidedAt: (session as any).smartCaptureDecidedAt ?? null,
         effectiveStatus: (session as any).effectiveStatus ?? (session as any).status ?? 'ready',
         isLiveIngest: Boolean((session as any).isLiveIngest),
         isBackgroundProcessing: Boolean((session as any).isBackgroundProcessing),
-        canOpenReplay: (session as any).canOpenReplay ?? (session as any).hasSuccessfulRecording ?? false,
+        canOpenReplay,
         // Geo data if available
         geoLocation: session.geoLocation,
         // Device ID for DAU/MAU tracking
@@ -1070,8 +1083,7 @@ export function transformToRecordingSession(session: ApiSession | ApiSessionSumm
         recordingDeletedAt: (session as any).recordingDeletedAt ?? null,
         retentionDays: (session as any).retentionDays ?? 14,
         customEventCount: summary.customEventCount ?? metrics.customEventCount ?? 0,
-        // Canonical replay availability flag derived from successful screenshot capture.
-        hasSuccessfulRecording: (session as any).hasSuccessfulRecording ?? false,
+        hasSuccessfulRecording: canOpenReplay,
         isFirstSession: Boolean((session as any).isFirstSession),
         visitorSessionNumber: (session as any).visitorSessionNumber ?? null,
         visitorFinalSessionNumber: (session as any).visitorFinalSessionNumber ?? null,
@@ -1128,6 +1140,9 @@ export type SessionArchiveQuery = {
     platform?: string;
     hasRecording?: boolean;
     issueFilter?: 'all' | 'crashes' | 'anrs' | 'errors' | 'rage' | 'dead_taps' | 'slow_start' | 'slow_api' | 'new_user';
+    smartCaptureStatus?: 'not_applicable' | 'pending' | 'kept' | 'discarded';
+    smartCaptureRuleId?: string;
+    smartCaptureRuleName?: string;
     lifecyclePreset?: 'early_user' | 'returning_user';
     sessionWindowSize?: number;
     conversionPreset?: 'checkout_bounced' | 'checkout_success';
@@ -1166,6 +1181,9 @@ function buildSessionArchiveQueryString(params: SessionArchiveQuery & { countOnl
         platform,
         hasRecording,
         issueFilter,
+        smartCaptureStatus,
+        smartCaptureRuleId,
+        smartCaptureRuleName,
         lifecyclePreset,
         sessionWindowSize,
         conversionPreset,
@@ -1201,6 +1219,9 @@ function buildSessionArchiveQueryString(params: SessionArchiveQuery & { countOnl
     if (platform) queryParams.set('platform', platform);
     if (recordingFilter) queryParams.set('hasRecording', 'true');
     if (issueFilter && issueFilter !== 'all') queryParams.set('issueFilter', issueFilter);
+    if (smartCaptureStatus) queryParams.set('smartCaptureStatus', smartCaptureStatus);
+    if (smartCaptureRuleId) queryParams.set('smartCaptureRuleId', smartCaptureRuleId);
+    if (smartCaptureRuleName) queryParams.set('smartCaptureRuleName', smartCaptureRuleName);
     if (lifecyclePreset) queryParams.set('lifecyclePreset', lifecyclePreset);
     if (sessionWindowSize) queryParams.set('sessionWindowSize', String(sessionWindowSize));
     if (conversionPreset) queryParams.set('conversionPreset', conversionPreset);
@@ -1356,6 +1377,11 @@ export interface ApiProject {
     sampleRate: number;
     maxRecordingMinutes?: number;
     webMaxObservabilityMinutes?: number;
+    smartCaptureEnabled?: boolean;
+    smartCaptureMode?: SmartCaptureMode;
+    smartCapturePreset?: SmartCapturePreset;
+    smartCaptureRules?: Array<Record<string, unknown>>;
+    smartCaptureDecisionWindowHours?: number;
     sessionsTotal?: number;
     sessionsLast7Days?: number;
     errorsLast7Days?: number;
@@ -1431,6 +1457,136 @@ export async function buildSessionQueryFromPrompt(projectId: string, prompt: str
         method: 'POST',
         body: JSON.stringify({ prompt }),
     });
+}
+
+export type SmartCaptureMode = 'record_all' | 'smart_capture' | 'analytics_only';
+export type SmartCapturePreset = 'none' | 'high_friction' | 'onboarding_risk' | 'churn_risk' | 'checkout_risk' | 'minimum_signal';
+export type SmartCaptureStatus = 'scale_only' | 'off' | 'active' | 'pending_rules';
+
+export interface SmartCaptureRule {
+    id: string;
+    type: string;
+    name?: string;
+    label: string;
+    color?: string;
+    enabled?: boolean;
+    immediate?: boolean;
+    signal?: string;
+    condition?: Record<string, unknown>;
+    operator?: string;
+    value?: string | number | boolean;
+    windowHours?: number;
+    captureRate?: number;
+}
+
+export interface SmartCaptureConfig {
+    enabled: boolean;
+    configuredEnabled?: boolean;
+    mode: SmartCaptureMode;
+    preset: SmartCapturePreset;
+    rules: SmartCaptureRule[];
+    effectiveRules?: SmartCaptureRule[];
+    decisionWindowHours: number;
+    status: SmartCaptureStatus;
+    entitlement: {
+        smartCaptureEnabled: boolean;
+        requiredPlan: 'scale';
+    };
+}
+
+export interface SmartCaptureConfigUpdate {
+    enabled: boolean;
+    mode: SmartCaptureMode;
+    preset: SmartCapturePreset;
+    rules: SmartCaptureRule[];
+    decisionWindowHours: number;
+}
+
+function lockedSmartCaptureConfig(overrides: Partial<SmartCaptureConfig> = {}): SmartCaptureConfig {
+    return {
+        enabled: false,
+        configuredEnabled: false,
+        mode: 'record_all',
+        preset: 'none',
+        rules: [],
+        effectiveRules: [],
+        decisionWindowHours: 168,
+        status: 'scale_only',
+        entitlement: {
+            smartCaptureEnabled: false,
+            requiredPlan: 'scale',
+        },
+        ...overrides,
+    };
+}
+
+function isMissingSmartCaptureRoute(error: unknown): boolean {
+    const status = typeof (error as { status?: unknown } | null)?.status === 'number'
+        ? (error as { status: number }).status
+        : null;
+    const message = error instanceof Error ? error.message : String(error);
+    return status === 404 && /smart-capture/i.test(message) && /not found/i.test(message);
+}
+
+export async function getProjectSmartCaptureConfig(projectId: string): Promise<SmartCaptureConfig> {
+    if (isDemoMode()) {
+        return {
+            configuredEnabled: true,
+            enabled: true,
+            mode: 'smart_capture',
+            preset: 'none',
+            decisionWindowHours: 168,
+            rules: [
+                {
+                    id: 'demo-rule-1',
+                    type: 'issue',
+                    name: 'High friction',
+                    signal: 'high_friction',
+                    color: 'amber',
+                    operator: 'eq',
+                    label: 'High friction is detected',
+                    immediate: true,
+                    condition: { signal: 'high_friction' }
+                }
+            ],
+            effectiveRules: [],
+            status: 'active',
+            entitlement: {
+                smartCaptureEnabled: true,
+                requiredPlan: 'scale',
+            },
+        } as unknown as SmartCaptureConfig;
+    }
+    try {
+        return await fetchJson<SmartCaptureConfig>(`/api/projects/${projectId}/smart-capture`);
+    } catch (error) {
+        if (isMissingSmartCaptureRoute(error)) {
+            return lockedSmartCaptureConfig();
+        }
+        throw error;
+    }
+}
+
+export async function updateProjectSmartCaptureConfig(projectId: string, config: SmartCaptureConfigUpdate): Promise<SmartCaptureConfig> {
+    if (isDemoMode()) {
+        return {
+            ...config,
+            configuredEnabled: config.enabled,
+            enabled: config.enabled,
+            effectiveRules: config.rules,
+            status: config.enabled ? 'active' : 'off',
+            entitlement: {
+                smartCaptureEnabled: true,
+                requiredPlan: 'scale',
+            },
+        } as any;
+    }
+    const response = await fetchJson<SmartCaptureConfig>(`/api/projects/${projectId}/smart-capture`, {
+        method: 'PUT',
+        body: JSON.stringify(config),
+    });
+    clearCache('projects:list');
+    return response;
 }
 
 /**
@@ -1575,6 +1731,7 @@ export interface BillingPlan {
     priceCents: number;
     interval?: 'month' | 'year';
     isCustom?: boolean;
+    smartCaptureEnabled?: boolean;
 }
 
 export interface TeamPlanInfo {
@@ -1590,6 +1747,7 @@ export interface TeamPlanInfo {
     priceCents: number;
     interval?: 'month' | 'year';
     isCustom: boolean;
+    smartCaptureEnabled?: boolean;
     subscriptionId?: string | null; // Stripe subscription ID (null for free plan)
     subscriptionStatus?: string | null; // 'active', 'past_due', 'canceled', etc.
     cancelAtPeriodEnd?: boolean; // True if subscription is scheduled to cancel
@@ -1642,6 +1800,7 @@ export async function getTeamPlan(teamId: string): Promise<TeamPlanInfo | null> 
             videoRetentionLabel: '90 days',
             priceCents: 9900,
             isCustom: false,
+            smartCaptureEnabled: false,
             subscriptionId: null,
             subscriptionStatus: null,
             cancelAtPeriodEnd: false,
@@ -1953,7 +2112,7 @@ export async function createBillingPortalSession(teamId: string, returnUrl?: str
 // Project Revenue API
 // =============================================================================
 
-export type RevenueProvider = 'custom_events' | 'superwall';
+export type RevenueProvider = 'custom_events' | 'superwall' | 'revenuecat';
 export type RevenueConnectionStatus = 'not_connected' | 'connected' | 'syncing' | 'error' | 'disconnected';
 
 export interface RevenueProviderStatus {
@@ -2097,13 +2256,34 @@ export async function disconnectRevenueSource(projectId: string, provider: Reven
     });
 }
 
+export interface AccountSettingsUpdate {
+    timezone?: string | null;
+}
+
+export async function updateAccountSettings(input: AccountSettingsUpdate): Promise<{ success: boolean; user: { id: string; timezone: string | null } }> {
+    return fetchJson<{ success: boolean; user: { id: string; timezone: string | null } }>('/api/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+    });
+}
+
 export async function connectSuperwallRevenue(
     projectId: string,
-    input: { apiKey: string; organizationId?: string; applicationId?: string },
+    input: { apiKey: string },
 ): Promise<{ success: boolean; connectionId: string }> {
     return fetchJson<{ success: boolean; connectionId: string }>(`/api/projects/${projectId}/revenue/superwall/connect`, {
         method: 'POST',
         body: JSON.stringify(input),
+    });
+}
+
+export async function connectRevenueCatRevenue(
+    projectId: string,
+    input: { apiKey: string; revenueCatProjectId: string },
+): Promise<{ success: boolean; connectionId: string }> {
+    return fetchJson<{ success: boolean; connectionId: string }>(`/api/projects/${projectId}/revenue/revenuecat/connect`, {
+        method: 'POST',
+        body: JSON.stringify({ apiKey: input.apiKey, projectId: input.revenueCatProjectId }),
     });
 }
 
@@ -4676,6 +4856,7 @@ export const api = {
     removePaymentMethod,
     createBillingPortalSession,
     getFreeTierStatus,
+    updateAccountSettings,
     getTeamPlan,
     updateTeamPlan,
     getAvailablePlans,

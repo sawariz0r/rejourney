@@ -13,6 +13,7 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import {
     getDevicesOverview,
     DeviceIssueMatrix,
@@ -387,6 +388,7 @@ const CohortTable: React.FC<{
 
 export const Devices: React.FC = () => {
     const { selectedProject } = useSessionData();
+    const manualRefreshVersion = useDashboardManualRefreshVersion();
     const { timeRange, setTimeRange } = useSharedRejourneyTimeRange(selectedProject?.id);
     const [data, setData] = useState<DeviceSummary | null>(null);
     const [matrixData, setMatrixData] = useState<DeviceIssueMatrix | null>(null);
@@ -430,7 +432,7 @@ export const Devices: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform]);
+    }, [manualRefreshVersion, selectedProject?.id, timeRange, platform]);
 
     const hasData = Boolean(data && data.totalSessions > 0);
 

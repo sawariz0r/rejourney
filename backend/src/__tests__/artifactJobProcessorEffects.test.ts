@@ -12,6 +12,7 @@ const {
     runArtifactCompletionEffectsMock,
     transactionMock,
     txUpdateSetMock,
+    updateReturningRows,
 } = vi.hoisted(() => {
     const txUpdateSetMock = vi.fn();
     return {
@@ -39,6 +40,7 @@ const {
             })),
         })),
         txUpdateSetMock,
+        updateReturningRows: [] as any[][],
     };
 });
 
@@ -72,6 +74,13 @@ vi.mock('../db/client.js', () => ({
         execute: executeMock,
         select: vi.fn(() => selectBuilder(limitResults.shift() ?? [])),
         transaction: transactionMock,
+        update: vi.fn(() => ({
+            set: vi.fn(() => ({
+                where: vi.fn(() => ({
+                    returning: vi.fn(async () => updateReturningRows.shift() ?? []),
+                })),
+            })),
+        })),
     },
     projects: { id: 'projects.id' },
     recordingArtifacts: {
@@ -132,7 +141,7 @@ vi.mock('../services/sessionReconciliation.js', () => ({
     reconcileSessionState: reconcileSessionStateMock,
 }));
 
-import { processArtifactJobFromBullMQ } from '../services/artifactJobProcessor.js';
+import { markArtifactFailedAfterExhausted, processArtifactJobFromBullMQ } from '../services/artifactJobProcessor.js';
 
 const sessionResult = {
     metrics: { sessionId: 'session-1' },
@@ -163,6 +172,7 @@ describe('processArtifactJobFromBullMQ completion effects', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         limitResults.length = 0;
+        updateReturningRows.length = 0;
         limitResults.push([sessionResult]);
         limitResults.push([{
             endpointId: null,
@@ -206,5 +216,37 @@ describe('processArtifactJobFromBullMQ completion effects', () => {
             replayAvailable: true,
             sessionId: 'session-1',
         });
+    });
+
+    it('does not let an exhausted retry overwrite an artifact that already became ready', async () => {
+        updateReturningRows.push([]);
+
+        await markArtifactFailedAfterExhausted('artifact-1', 'late quota failure');
+
+        expect(reconcileSessionStateMock).not.toHaveBeenCalled();
+        expect(loggerMock.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                artifactId: 'artifact-1',
+                event: 'artifact.exhausted_ignored',
+            }),
+            'artifact.exhausted_ignored',
+        );
+    });
+
+    it('still reconciles replay sessions when a non-ready artifact exhausts retries', async () => {
+        updateReturningRows.push([{ kind: 'screenshots', sessionId: 'session-1' }]);
+
+        await markArtifactFailedAfterExhausted('artifact-1', 'decoder failure');
+
+        expect(reconcileSessionStateMock).toHaveBeenCalledWith('session-1');
+        expect(loggerMock.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                artifactId: 'artifact-1',
+                event: 'artifact.exhausted',
+                kind: 'screenshots',
+                sessionId: 'session-1',
+            }),
+            'artifact.exhausted',
+        );
     });
 });

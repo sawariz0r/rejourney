@@ -1,17 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '~/shared/providers/AuthContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
 import { NeoCard } from '~/shared/ui/core/neo/NeoCard';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
 import { SettingsLayout } from '~/shell/components/layout/SettingsLayout';
-import { LogOut, Mail, Calendar, CheckCircle, AlertCircle, Zap, UserCircle, Download, Clock, Gift, CreditCard } from 'lucide-react';
-import { getFreeTierStatus, FreeTierStatus, getDataExportStatus, exportUserData, DataExportStatus } from '~/shared/api/client';
+import { LogOut, Mail, Calendar, CheckCircle, AlertCircle, UserCircle, Download, Clock, Gift, CreditCard, Globe2 } from 'lucide-react';
+import { getFreeTierStatus, FreeTierStatus, getDataExportStatus, exportUserData, DataExportStatus, updateAccountSettings } from '~/shared/api/client';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
+
+const COMMON_TIME_ZONES = [
+  'UTC',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/Phoenix',
+  'America/Anchorage',
+  'Pacific/Honolulu',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Paris',
+  'Asia/Hebron',
+  'Asia/Jerusalem',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+];
+
+function getBrowserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+function getTimeZoneOptions(currentTimeZone: string | null): string[] {
+  return Array.from(new Set([
+    currentTimeZone || null,
+    getBrowserTimeZone(),
+    ...COMMON_TIME_ZONES,
+  ].filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
+}
 
 export const AccountSettings: React.FC = () => {
   const { user, logout } = useAuth();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const pathPrefix = usePathPrefix();
   const [freeTierStatus, setFreeTierStatus] = useState<FreeTierStatus | null>(null);
   const [isLoadingFreeTier, setIsLoadingFreeTier] = useState(true);
@@ -19,6 +58,16 @@ export const AccountSettings: React.FC = () => {
   const [isLoadingExportStatus, setIsLoadingExportStatus] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [timeZoneDraft, setTimeZoneDraft] = useState(user?.timezone || getBrowserTimeZone());
+  const [savedTimeZone, setSavedTimeZone] = useState<string | null>(user?.timezone || null);
+  const [isSavingTimeZone, setIsSavingTimeZone] = useState(false);
+  const [timeZoneMessage, setTimeZoneMessage] = useState<string | null>(null);
+  const timeZoneOptions = getTimeZoneOptions(savedTimeZone || timeZoneDraft);
+
+  useEffect(() => {
+    setTimeZoneDraft(user?.timezone || getBrowserTimeZone());
+    setSavedTimeZone(user?.timezone || null);
+  }, [user?.timezone]);
 
   useEffect(() => {
     const loadFreeTier = async () => {
@@ -35,7 +84,7 @@ export const AccountSettings: React.FC = () => {
     if (user) {
       loadFreeTier();
     }
-  }, [user]);
+  }, [manualRefreshVersion, user]);
 
   useEffect(() => {
     const loadExportStatus = async () => {
@@ -52,7 +101,7 @@ export const AccountSettings: React.FC = () => {
     if (user) {
       loadExportStatus();
     }
-  }, [user]);
+  }, [manualRefreshVersion, user]);
 
   const handleExportData = async () => {
     setIsExporting(true);
@@ -75,6 +124,20 @@ export const AccountSettings: React.FC = () => {
       setExportError(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleSaveTimeZone = async () => {
+    setIsSavingTimeZone(true);
+    setTimeZoneMessage(null);
+    try {
+      const result = await updateAccountSettings({ timezone: timeZoneDraft });
+      setSavedTimeZone(result.user.timezone);
+      setTimeZoneMessage('Time zone saved for alert emails.');
+    } catch (err) {
+      setTimeZoneMessage(err instanceof Error ? err.message : 'Failed to save time zone.');
+    } finally {
+      setIsSavingTimeZone(false);
     }
   };
 
@@ -156,6 +219,46 @@ export const AccountSettings: React.FC = () => {
                   {user.emailVerified ? 'VERIFIED' : 'UNVERIFIED'}
                 </NeoBadge>
               </div>
+            </div>
+          </NeoCard>
+
+          <NeoCard className="p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 flex items-center gap-2 text-slate-500">
+                  <Globe2 className="h-4 w-4" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest">Time Zone</span>
+                </div>
+                <select
+                  value={timeZoneDraft}
+                  onChange={(event) => {
+                    setTimeZoneDraft(event.target.value);
+                    setTimeZoneMessage(null);
+                  }}
+                  className="h-9 w-full border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                >
+                  {timeZoneOptions.map((timeZone) => (
+                    <option key={timeZone} value={timeZone}>{timeZone}</option>
+                  ))}
+                </select>
+                <p className="mt-2 text-[11px] font-semibold text-slate-500">
+                  Alert email timestamps use this setting.
+                </p>
+                {timeZoneMessage && (
+                  <p className={`mt-2 text-[11px] font-bold ${timeZoneMessage.includes('saved') ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {timeZoneMessage}
+                  </p>
+                )}
+              </div>
+              <NeoButton
+                variant="secondary"
+                size="sm"
+                onClick={handleSaveTimeZone}
+                disabled={isSavingTimeZone || timeZoneDraft === savedTimeZone}
+                leftIcon={<Clock className="h-3 w-3" />}
+              >
+                {isSavingTimeZone ? 'Saving...' : 'Save'}
+              </NeoButton>
             </div>
           </NeoCard>
 

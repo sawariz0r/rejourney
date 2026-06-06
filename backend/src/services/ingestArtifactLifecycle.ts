@@ -6,7 +6,7 @@ import {
     ABANDONED_ARTIFACT_TTL_MS,
     REPLAY_PENDING_ARTIFACT_GRACE_MS,
 } from './ingestUploadRelay.js';
-import { markSessionIngestActivity } from './sessionReconciliation.js';
+import { markSessionIngestActivity, reconcileSessionState } from './sessionReconciliation.js';
 import { assertSessionAcceptsNewIngestWork, isSessionIngestImmutable } from './sessionIngestImmutability.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import {
@@ -844,12 +844,17 @@ export async function abandonExpiredPendingArtifacts(limit = 100): Promise<numbe
         .set({ status: 'abandoned' })
         .where(inArray(recordingArtifacts.id, ids));
 
+    const replaySessionIds = new Set<string>();
+
     // Remove any waiting BullMQ jobs for these artifacts (pending artifacts
     // shouldn't have jobs yet, but guard in case of race)
     for (const row of rows) {
         await removeArtifactJobIfQueued(row.id, row.kind);
 
         const replayArtifact = isReplayArtifactKind(row.kind);
+        if (replayArtifact) {
+            replaySessionIds.add(row.sessionId);
+        }
         logger.warn(
             {
                 event: 'artifact.abandoned',
@@ -862,6 +867,10 @@ export async function abandonExpiredPendingArtifacts(limit = 100): Promise<numbe
             },
             replayArtifact ? 'ingest.replay_artifact_abandoned' : 'artifact.abandoned',
         );
+    }
+
+    for (const sessionId of replaySessionIds) {
+        await reconcileSessionState(sessionId);
     }
 
     return rows.length;

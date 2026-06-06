@@ -4,6 +4,7 @@ import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import {
   Search,
   Smartphone,
+  ScanEye,
   ChevronUp,
   ChevronDown,
   Download,
@@ -32,13 +33,18 @@ import {
   getSessionsArchiveTotalCount,
   getSessionsPaginated,
   getAvailableFilters,
+  getProjectSmartCaptureConfig,
   type SessionArchiveSortKey,
+  type SmartCaptureConfig,
+  type SmartCaptureRule,
 } from '~/shared/api/client';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { useSafeTeam } from '~/shared/providers/TeamContext';
 import { formatGeoDisplay } from '~/shared/lib/geoDisplay';
 import { formatDeviceModel, getDeviceModelSearchText } from '~/shared/lib/deviceModelNames';
+import { hasSuccessfulRecordingFromSession } from '~/shared/lib/replayAvailability';
 import { getWebNetworkDisplay, getWebSessionEnvironment } from '~/shared/lib/webSessionEnvironment';
 import { formatWebReferralLabel, getWebReferral, getWebUtmAttribution } from '~/shared/lib/webAttributionMetadata';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
@@ -48,6 +54,7 @@ import { MobilePlatformBrandIcon } from '~/shared/ui/core/MobilePlatformBrandIco
 import { CountryFlag } from '~/shared/ui/core/CountryFlag';
 import { matchesSessionArchiveIssueFilter } from './sessionArchiveFilters';
 import { QueryBuilder } from './QueryBuilder';
+import { SmartCaptureModal } from './SmartCaptureModal';
 import {
   type QueryGroup,
   type IssueCondition,
@@ -91,8 +98,9 @@ const NetworkIcon: React.FC<{ type: string | undefined }> = ({ type }) => {
 };
 
 
-const hasSuccessfulRecording = (session: any): boolean =>
-  Boolean(session?.hasSuccessfulRecording ?? ((session?.stats?.screenshotSegmentCount ?? 0) > 0));
+const hasSuccessfulRecording = (session: any): boolean => {
+  return hasSuccessfulRecordingFromSession(session, Number(session?.stats?.screenshotSegmentCount ?? 0) > 0);
+};
 
 function isWebSession(session: any): boolean {
   return String(session?.platform || '').toLowerCase() === 'web';
@@ -127,6 +135,44 @@ function getRowAccentColor(session: any, hasIssues: boolean, isReplayBlocked: bo
   if ((session.rageTapCount || 0) > 0 || ((session as any).deadTapCount || 0) > 0) return '#fbbf24';
   if (((session as any).errorCount || 0) > 0 || hasSlowApi || hasSlowStart) return '#f9a8d4';
   return '#86efac';
+}
+
+const SMART_CAPTURE_NOTE_STYLES: Record<string, { bg: string; border: string; text: string }> = {
+  cyan: { bg: '#ecfeff', border: '#0891b2', text: '#164e63' },
+  emerald: { bg: '#dcfce7', border: '#16a34a', text: '#14532d' },
+  amber: { bg: '#fef3c7', border: '#d97706', text: '#78350f' },
+  rose: { bg: '#ffe4e6', border: '#e11d48', text: '#881337' },
+  violet: { bg: '#ede9fe', border: '#7c3aed', text: '#4c1d95' },
+  blue: { bg: '#dbeafe', border: '#2563eb', text: '#1e3a8a' },
+  pink: { bg: '#fce7f3', border: '#db2777', text: '#831843' },
+  slate: { bg: '#f1f5f9', border: '#475569', text: '#0f172a' },
+};
+
+function getSmartCaptureRuleNote(session: any, config: SmartCaptureConfig | null): { label: string; color: string } | null {
+  const ignoredReasons = new Set(['record_all', 'analytics_only', 'no_rules_configured', 'no_rules_matched', 'feature_disabled', 'waiting_for_decision_window']);
+  const ruleId = typeof session?.smartCaptureRuleId === 'string' ? session.smartCaptureRuleId : null;
+  const matchedRule = ruleId
+    ? (config?.rules ?? []).find((rule: SmartCaptureRule) => rule.id === ruleId)
+    : null;
+  const label = (matchedRule?.name || session?.smartCaptureReason || matchedRule?.label || '').trim();
+  if (!label || ignoredReasons.has(label)) return null;
+  return {
+    label,
+    color: matchedRule?.color || 'cyan',
+  };
+}
+
+function SmartCaptureNoteBadge({ note }: { note: { label: string; color: string } }) {
+  const style = SMART_CAPTURE_NOTE_STYLES[note.color] ?? SMART_CAPTURE_NOTE_STYLES.cyan;
+  return (
+    <span
+      className="inline-block max-w-[8rem] truncate whitespace-nowrap border px-2 py-0.5 text-[10px] font-black uppercase leading-tight shadow-neo-sm"
+      style={{ backgroundColor: style.bg, borderColor: style.border, color: style.text }}
+      title={`Smart Capture: ${note.label}`}
+    >
+      {note.label}
+    </span>
+  );
 }
 
 const createEmptyQueryGroups = (): QueryGroup[] => [{ id: generateGroupId(), conditions: [] }];
@@ -172,6 +218,7 @@ export const RecordingsList: React.FC = () => {
   const navigate = useNavigate();
   const pathPrefix = usePathPrefix();
   const { isDemoMode, demoReplaySessions } = useDemoMode();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const { selectedProject, projects, isLoading: isContextLoading } = useSessionData();
   const { currentTeam } = useSafeTeam();
   const [sessions, setSessions] = useState<any[]>([]);
@@ -195,6 +242,9 @@ export const RecordingsList: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [smartCaptureConfig, setSmartCaptureConfig] = useState<SmartCaptureConfig | null>(null);
+  const [isLoadingSmartCapture, setIsLoadingSmartCapture] = useState(false);
+  const [isSmartCaptureModalOpen, setIsSmartCaptureModalOpen] = useState(false);
   const activeRequestIdRef = useRef(0);
 
   useEffect(() => {
@@ -208,6 +258,38 @@ export const RecordingsList: React.FC = () => {
   const selectedProjectId = selectedProject?.id;
   const selectedProjectTeamId = selectedProject?.teamId;
   const isProjectFromCurrentTeam = !selectedProjectId || !currentTeam?.id || selectedProjectTeamId === currentTeam.id;
+
+  useEffect(() => {
+    if (!isDemoMode && (!selectedProjectId || !isProjectFromCurrentTeam)) {
+      setSmartCaptureConfig(null);
+      setIsLoadingSmartCapture(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingSmartCapture(true);
+    getProjectSmartCaptureConfig(selectedProjectId || 'demo')
+      .then((config) => {
+        if (!cancelled) {
+          setSmartCaptureConfig(config);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('Failed to load Smart Capture config:', err);
+          setSmartCaptureConfig(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingSmartCapture(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [manualRefreshVersion, selectedProjectId, isProjectFromCurrentTeam]);
 
   // Use refs to avoid stale closures
   const queryGroupsRef = useRef(queryGroups);
@@ -240,12 +322,24 @@ export const RecordingsList: React.FC = () => {
 
     // On team/project switches, wait until context resolves to avoid cross-team bleed-through.
     if (!cursor) {
-      if (isContextLoading || !isProjectFromCurrentTeam) {
+      if (!isProjectFromCurrentTeam) {
         setSessions([]);
         setNextCursor(null);
         setHasMore(false);
         setIsLoading(true);
         setIsRefreshing(false);
+        return;
+      }
+
+      if (isContextLoading) {
+        const hasExistingRows = sessions.length > 0;
+        setIsLoading(!hasExistingRows);
+        setIsRefreshing(hasExistingRows);
+        if (!hasExistingRows) {
+          setSessions([]);
+          setNextCursor(null);
+          setHasMore(false);
+        }
         return;
       }
 
@@ -340,7 +434,7 @@ export const RecordingsList: React.FC = () => {
 
   // Trigger refetch when filters or project change
   const conditionsKey = queryGroups.map((g) => g.conditions.map((c) => JSON.stringify(c)).join(',')).join('|');
-  const fetchScopeKeyBase = `all:${currentTeam?.id || 'no-team'}:${selectedProjectId || 'no-project'}:${isContextLoading ? 'loading' : 'ready'}:${projects.length}:${isProjectFromCurrentTeam ? 'valid' : 'invalid'}:${rowsPerPage}:${conditionsKey}`;
+  const fetchScopeKeyBase = `all:${currentTeam?.id || 'no-team'}:${selectedProjectId || 'no-project'}:${isContextLoading ? 'loading' : 'ready'}:${projects.length}:${isProjectFromCurrentTeam ? 'valid' : 'invalid'}:${rowsPerPage}:${conditionsKey}:refresh-${manualRefreshVersion}`;
   const fetchScopeKey = isDemoMode
     ? `demo:${fetchScopeKeyBase}`
     : `live:${fetchScopeKeyBase}:${debouncedSearchQuery}:${primarySortKey}:${primarySortDir}`;
@@ -384,9 +478,9 @@ export const RecordingsList: React.FC = () => {
     writeStoredQueryGroups(selectedProjectId, queryGroups);
   }, [selectedProjectId, queryGroupsProjectId, isProjectFromCurrentTeam, queryGroups]);
 
-  // Lazy-load available filter options when query builder panel opens
+  // Lazy-load available filter options when query builder or Smart Capture needs them.
   useEffect(() => {
-    if (isDemoMode || !showQueryBuilder || !selectedProjectId || !isProjectFromCurrentTeam) {
+    if (isDemoMode || (!showQueryBuilder && !isSmartCaptureModalOpen) || !selectedProjectId || !isProjectFromCurrentTeam) {
       return;
     }
     if (availableFiltersFetchedRef.current === selectedProjectId) {
@@ -410,7 +504,7 @@ export const RecordingsList: React.FC = () => {
         }
       });
     return () => { cancelled = true; };
-  }, [isDemoMode, showQueryBuilder, selectedProjectId, isProjectFromCurrentTeam]);
+  }, [isDemoMode, showQueryBuilder, isSmartCaptureModalOpen, selectedProjectId, isProjectFromCurrentTeam]);
 
   const handleLoadMore = useCallback(async () => {
     if (nextCursor && !isLoadingMore) {
@@ -512,6 +606,33 @@ export const RecordingsList: React.FC = () => {
   const totalConditions = queryGroups.reduce((n, g) => n + g.conditions.length, 0);
   const hasActiveFilters = !!(searchQuery || totalConditions > 0);
   const archiveCountLabel = `${totalCount === null ? '…' : totalCount.toLocaleString()} total replays${isRefreshing ? ' · refreshing…' : ''}`;
+  const smartCaptureEntitled = Boolean(smartCaptureConfig?.entitlement.smartCaptureEnabled);
+  const smartCaptureHasRules = (smartCaptureConfig?.rules?.length ?? 0) > 0;
+  const smartCaptureStatusTone = isLoadingSmartCapture
+    ? 'loading'
+    : !smartCaptureEntitled
+      ? 'locked'
+      : !smartCaptureConfig?.enabled
+        ? 'off'
+        : smartCaptureHasRules
+          ? 'active'
+          : 'pending';
+  const smartCaptureButtonClass = {
+    loading: 'border-black bg-slate-100 text-slate-500 shadow-neo-sm cursor-not-allowed',
+    locked: 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo',
+    off: 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo',
+    active: 'border-black bg-[#86efac] text-black shadow-neo-sm hover:-translate-y-0.5 hover:shadow-neo',
+    pending: 'border-black bg-[#fef08a] text-black shadow-neo-sm hover:-translate-y-0.5 hover:shadow-neo',
+  }[smartCaptureStatusTone];
+  const smartCaptureStatusLabel = isLoadingSmartCapture
+    ? 'Loading'
+    : !smartCaptureEntitled
+      ? 'Scale'
+      : !smartCaptureConfig?.enabled
+        ? 'Off'
+        : smartCaptureHasRules
+          ? `${smartCaptureConfig?.rules.length ?? 0} rules`
+          : 'No rules';
 
   const handleSort = (key: SortKey, multiSort: boolean) => {
     const allowMultiColumn = isDemoMode && multiSort;
@@ -609,6 +730,18 @@ export const RecordingsList: React.FC = () => {
           subtitle={selectedProjectId ? archiveCountLabel : 'Browse, filter & replay user sessions'}
           {...dashboardPageHeaderProps('sessions')}
         >
+          {(selectedProjectId || isDemoMode) && (
+            <button
+              type="button"
+              disabled={isLoadingSmartCapture}
+              onClick={() => setIsSmartCaptureModalOpen(true)}
+              className={`smart-capture-trigger relative inline-flex h-11 w-11 shrink-0 items-center justify-center border-2 border-black transition-all disabled:pointer-events-none sm:h-9 sm:w-9 ${smartCaptureButtonClass}`}
+              title={`Smart Capture: ${smartCaptureStatusLabel}`}
+              aria-label={`Smart Capture: ${smartCaptureStatusLabel}`}
+            >
+              {isLoadingSmartCapture ? <Loader className="h-4 w-4 shrink-0 animate-spin" aria-hidden /> : <ScanEye className="h-4 w-4 shrink-0" aria-hidden />}
+            </button>
+          )}
           <button
             onClick={() => {
               const params = new URLSearchParams();
@@ -709,6 +842,7 @@ export const RecordingsList: React.FC = () => {
                 availableFilters={availableFilters}
                 isLoadingFilters={isLoadingFilters}
                 projectId={selectedProjectId}
+                smartCaptureRules={smartCaptureConfig?.rules ?? []}
               />
             </div>
           </div>
@@ -745,8 +879,8 @@ export const RecordingsList: React.FC = () => {
       </div>
 
       {/* List Content — table header sticks when scrolling */}
-      <div className="flex-1 w-full max-w-full px-4 sm:px-6 pt-4 pb-24">
-        <div className="space-y-3 md:hidden">
+      <div className="sessions-list-shell flex-1 w-full max-w-full px-4 sm:px-6 pt-4 pb-24">
+        <div className="sessions-mobile-list space-y-3">
           {paginatedSessions.length === 0 ? (
             <div className="border border-slate-200 bg-white p-6 text-center shadow-sm">
               <div className="mx-auto mb-3 inline-flex h-11 w-11 items-center justify-center border border-black bg-[#86efac]">
@@ -823,6 +957,7 @@ export const RecordingsList: React.FC = () => {
                 hasSlowStart ||
                 hasSlowApi;
               const rowAccent = getRowAccentColor(session, hasIssues, isReplayBlocked, hasSlowStart, hasSlowApi);
+              const smartCaptureNote = getSmartCaptureRuleNote(session, smartCaptureConfig);
               const screens: string[] = (session as any).screensVisited || [];
 
               return (
@@ -912,6 +1047,7 @@ export const RecordingsList: React.FC = () => {
                       <div className="font-black uppercase text-slate-400">Notes</div>
                       <div className="mt-1 flex justify-end gap-1">
                         {session.isFirstSession && <span className="border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black text-emerald-800">NEW</span>}
+                        {smartCaptureNote && <SmartCaptureNoteBadge note={smartCaptureNote} />}
                         {!hasIssues && <span className="border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black text-emerald-800">OK</span>}
                         {hasIssues && <span className="border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[9px] font-black text-rose-800">ISSUES</span>}
                       </div>
@@ -1048,8 +1184,8 @@ export const RecordingsList: React.FC = () => {
           )}
         </div>
 
-        <div className="dashboard-mobile-scroll hidden overflow-x-auto md:block">
-        <div className="w-full min-w-[1160px] overflow-hidden border-2 border-black bg-white shadow-neo">
+        <div className="sessions-desktop-table dashboard-mobile-scroll overflow-x-auto">
+          <div className="w-full min-w-[1160px] overflow-hidden border-2 border-black bg-white shadow-neo">
           <table className="w-full table-fixed border-collapse">
             <thead>
               <tr className="border-b-2 border-black bg-[#cffafe]">
@@ -1154,14 +1290,14 @@ export const RecordingsList: React.FC = () => {
 	                    title: `${displayDeviceModel}${session.osVersion ? ` · ${session.osVersion}` : ''}`,
 	                  };
 
-	              const hasIssues = (session.crashCount || 0) > 0 ||
+              const hasIssues = (session.crashCount || 0) > 0 ||
                 ((session as any).anrCount || 0) > 0 ||
                 ((session as any).errorCount || 0) > 0 ||
                 (session.rageTapCount || 0) > 0 ||
                 hasDeadTaps ||
                 hasSlowStart || hasSlowApi;
-
               const rowAccent = getRowAccentColor(session, hasIssues, isReplayBlocked, hasSlowStart, hasSlowApi);
+              const smartCaptureNote = getSmartCaptureRuleNote(session, smartCaptureConfig);
 
               return (
                 <React.Fragment key={session.id}>
@@ -1273,6 +1409,7 @@ export const RecordingsList: React.FC = () => {
                           NEW USER
                         </span>
                       )}
+                      {smartCaptureNote && <SmartCaptureNoteBadge note={smartCaptureNote} />}
                       {!hasIssues && (
                         <span className="inline-flex items-center border border-[#15803d] bg-[#dcfce7] px-2 py-0.5 text-[10px] font-black uppercase text-[#14532d]">
                           HEALTHY
@@ -1317,12 +1454,12 @@ export const RecordingsList: React.FC = () => {
 
                     {/* Expand Toggle - icon only, no box, extra right padding */}
                     <td className="w-12 py-2.5 pl-2 pr-6 align-middle">
-                    <button
-                      onClick={(e) => toggleExpand(e, session.id)}
-                      className={`flex items-center justify-center border-2 border-transparent p-1.5 transition-all mx-auto ${isExpanded ? 'border-black bg-[#67e8f9] text-black shadow-neo-sm' : 'text-slate-600 hover:border-black hover:bg-[#ecfeff] hover:text-black hover:shadow-neo-sm'}`}
-                    >
-                      {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </button>
+                      <button
+                        onClick={(e) => toggleExpand(e, session.id)}
+                        className={`flex items-center justify-center border-2 border-transparent p-1.5 transition-all mx-auto ${isExpanded ? 'border-black bg-[#67e8f9] text-black shadow-neo-sm' : 'text-slate-600 hover:border-black hover:bg-[#ecfeff] hover:text-black hover:shadow-neo-sm'}`}
+                      >
+                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
                     </td>
                 </tr>
 
@@ -1506,18 +1643,17 @@ export const RecordingsList: React.FC = () => {
                                 </div>
                               </div>
                             </div>
-
-	                            {/* Replay — compact */}
-	                            <div className={`flex flex-col gap-2 border-2 border-black p-3 shadow-neo-sm ${webSession ? 'bg-[#ecfeff]' : 'bg-white'}`}>
-	                              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-600">
-	                                <AnimalAvatar animal={replayAnimal} seed={replayAnimalSeed} size={18} active={isExpanded} neutral />
-	                                {webSession ? 'Browser Replay' : 'Replay'}
-	                              </div>
-	                              <NeoButton
-	                                variant={webSession ? 'secondary' : 'primary'}
-	                                size="sm"
-	                                onClick={() => !isReplayBlocked && navigate(`${pathPrefix}/sessions/${session.id}`)}
-	                                className={`w-full justify-center ${isReplayBlocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            {/* Replay - compact */}
+                            <div className={`flex flex-col gap-2 border-2 border-black p-3 shadow-neo-sm ${webSession ? 'bg-[#ecfeff]' : 'bg-white'}`}>
+                              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-600">
+                                <AnimalAvatar animal={replayAnimal} seed={replayAnimalSeed} size={18} active={isExpanded} neutral />
+                                {webSession ? 'Browser Replay' : 'Replay'}
+                              </div>
+                              <NeoButton
+                                variant={webSession ? 'secondary' : 'primary'}
+                                size="sm"
+                                onClick={() => !isReplayBlocked && navigate(`${pathPrefix}/sessions/${session.id}`)}
+                                className={`w-full justify-center ${isReplayBlocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 disabled={isReplayBlocked}
                               >
                                 {isReplayBlocked ? (
@@ -1528,10 +1664,10 @@ export const RecordingsList: React.FC = () => {
                                   <><Play size={12} fill="currentColor" className="mr-2" /> Open Replay</>
                                 )}
                               </NeoButton>
-	                              <div className="text-[9px] text-slate-400 font-medium text-center leading-tight">
-	                                {screensCount} {webSession ? 'page' : 'screen'}{screensCount !== 1 ? 's' : ''}&nbsp;·&nbsp;{Math.floor(session.durationSeconds / 60)}m {session.durationSeconds % 60}s
-	                              </div>
-	                            </div>
+                              <div className="text-[9px] text-slate-400 font-medium text-center leading-tight">
+                                {screensCount} {webSession ? 'page' : 'screen'}{screensCount !== 1 ? 's' : ''}&nbsp;·&nbsp;{Math.floor(session.durationSeconds / 60)}m {session.durationSeconds % 60}s
+                              </div>
+                            </div>
                           </div>
 
                           {/* ── Page Journey ── */}
@@ -1699,6 +1835,18 @@ export const RecordingsList: React.FC = () => {
         </div>
         </div>
       </div>
+
+      <SmartCaptureModal
+        isOpen={isSmartCaptureModalOpen}
+        onClose={() => setIsSmartCaptureModalOpen(false)}
+        projectId={selectedProjectId || 'demo'}
+        pathPrefix={pathPrefix}
+        config={smartCaptureConfig}
+        isLoading={isLoadingSmartCapture}
+        availableFilters={availableFilters}
+        isLoadingFilters={isLoadingFilters}
+        onConfigChange={setSmartCaptureConfig}
+      />
     </div>
   );
 };

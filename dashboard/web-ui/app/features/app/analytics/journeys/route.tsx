@@ -14,6 +14,7 @@ import {
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
 import { AnimalAvatar, getAnimalAvatarSeed, getAnimalForIdentity } from '~/shared/ui/core/AnimalAvatar';
 import { useSharedPlatformLens, platformLensToSessionPlatform } from '~/shared/hooks/useSharedPlatformLens';
@@ -402,6 +403,7 @@ const buildContiguousJourneyPath = (options: TransitionReplayOption[]): string[]
 
 export const Journeys: React.FC = () => {
     const { selectedProject } = useSessionData();
+    const manualRefreshVersion = useDashboardManualRefreshVersion();
     const pathPrefix = usePathPrefix();
     const navigate = useNavigate();
     const { platformLens } = useSharedPlatformLens(selectedProject?.id, selectedProject?.platforms);
@@ -484,7 +486,7 @@ export const Journeys: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform, selectedAppVersion]);
+    }, [manualRefreshVersion, selectedProject?.id, timeRange, platform, selectedAppVersion]);
 
     const totalSessions = useMemo(() => {
         if (!data) return 0;

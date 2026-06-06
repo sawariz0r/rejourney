@@ -8,7 +8,8 @@
  * - Captured analytics sessions increment project_usage.sessions when the
  *   session row is first created.
  * - Billable replay usage increments project_usage.session_replays once, when
- *   the session first becomes replay_available=true.
+ *   replay_retention_state becomes saved. Smart Capture buffered sessions may
+ *   be replay_available=true without counting yet.
  * - replay_quota_counted_at makes replay counting idempotent across retries,
  *   worker replays, and reconciliation.
  * - The replay_usage_split cutover row is inserted only after production
@@ -597,6 +598,7 @@ export async function incrementProjectSessionReplayIfNeeded(sessionId: string): 
                 replayQuotaCountedAt: sessions.replayQuotaCountedAt,
                 replayAvailable: sessions.replayAvailable,
                 replayQuotaBillingExhausted: sessions.replayQuotaBillingExhausted,
+                replayRetentionState: sessions.replayRetentionState,
                 teamId: projects.teamId,
                 billingCycleAnchor: teams.billingCycleAnchor,
                 stripeCurrentPeriodStart: teams.stripeCurrentPeriodStart,
@@ -608,11 +610,32 @@ export async function incrementProjectSessionReplayIfNeeded(sessionId: string): 
             .where(eq(sessions.id, sessionId))
             .limit(1);
 
-        if (!row || !row.replayAvailable || row.replayQuotaBillingExhausted) {
+        if (
+            !row
+            || !row.replayAvailable
+            || row.replayQuotaBillingExhausted
+            || (row.replayRetentionState != null && row.replayRetentionState !== 'saved')
+        ) {
             return null;
         }
 
         if (row.replayQuotaCountedAt) {
+            return null;
+        }
+
+        const cutoverTableResult = await tx.execute(sql`
+            select to_regclass('public.billing_cutovers') as "tableName"
+        `);
+        const cutoverTableExists = Boolean(((cutoverTableResult as any).rows as Array<{ tableName?: string | null }> | undefined)?.[0]?.tableName);
+
+        if (!cutoverTableExists) {
+            if (!warnedMissingReplayUsageCutover) {
+                warnedMissingReplayUsageCutover = true;
+                logger.warn(
+                    { cutoverName: REPLAY_USAGE_SPLIT_CUTOVER_NAME, reason: 'missing_cutover_table' },
+                    'Replay usage split cutover is not finalized; replay usage increment skipped'
+                );
+            }
             return null;
         }
 

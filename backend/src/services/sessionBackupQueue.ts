@@ -50,6 +50,8 @@ export async function enqueueSessionBackupCandidate(sessionId: string): Promise<
               AND s.status IN ('ready', 'completed')
               AND s.ended_at IS NOT NULL
               AND p.deleted_at IS NULL
+              AND COALESCE(s.replay_retention_state, 'saved') = 'saved'
+              AND COALESCE(s.smart_capture_status, 'not_applicable') NOT IN ('pending', 'discarded')
               AND artifact_stats.ready_artifact_count > 0
               AND (
                 (

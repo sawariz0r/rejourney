@@ -78,7 +78,16 @@ interface EmailTemplateProps {
   alertType?: 'crash' | 'anr' | 'error_spike' | 'api_degradation' | 'billing' | 'general';
   metaBadges?: EmailMetaBadge[];
   timestamp?: Date;
+  timeZone?: string | null;
 }
+
+export interface AlertEmailRecipient {
+  email: string;
+  name?: string | null;
+  timeZone?: string | null;
+}
+
+type AlertEmailRecipientInput = string | AlertEmailRecipient;
 
 // Rejourney Neo-Brutalist Style
 const BRAND = {
@@ -126,6 +135,98 @@ function emailDashboardAppPath(path: string): string {
   return `${PRODUCTION_DASHBOARD_BASE}${p}`;
 }
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isValidTimeZone(timeZone: string | null | undefined): timeZone is string {
+  if (!timeZone) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveEmailTimeZone(timeZone: string | null | undefined): string {
+  return isValidTimeZone(timeZone) ? timeZone : 'UTC';
+}
+
+function normalizeAlertRecipients(recipients: AlertEmailRecipientInput[]): AlertEmailRecipient[] {
+  return recipients
+    .map((recipient) => typeof recipient === 'string' ? { email: recipient } : recipient)
+    .filter((recipient) => recipient.email.trim().length > 0)
+    .map((recipient) => ({
+      ...recipient,
+      email: recipient.email.trim(),
+      timeZone: resolveEmailTimeZone(recipient.timeZone),
+    }));
+}
+
+function groupAlertRecipientsByTimeZone(recipients: AlertEmailRecipientInput[]): Array<{ timeZone: string; recipients: AlertEmailRecipient[] }> {
+  const groups = new Map<string, AlertEmailRecipient[]>();
+  for (const recipient of normalizeAlertRecipients(recipients)) {
+    const timeZone = resolveEmailTimeZone(recipient.timeZone);
+    const group = groups.get(timeZone) || [];
+    group.push(recipient);
+    groups.set(timeZone, group);
+  }
+  return Array.from(groups.entries()).map(([timeZone, groupedRecipients]) => ({
+    timeZone,
+    recipients: groupedRecipients,
+  }));
+}
+
+function formatCount(value: number | undefined | null): string {
+  return Math.max(0, Number(value || 0)).toLocaleString();
+}
+
+function formatCountWithLabel(value: number | undefined | null, singular: string, plural: string): string {
+  const count = Math.max(0, Number(value || 0));
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
+}
+
+function truncateForSubject(value: string, maxLength = 150): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function renderKeyValueTable(rows: Array<[string, string | number | null | undefined]>): string {
+  const visibleRows = rows.filter(([, value]) => value !== null && value !== undefined && String(value).trim().length > 0);
+  if (visibleRows.length === 0) return '';
+
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; font-size: 13px;">
+      ${visibleRows.map(([label, value]) => `
+        <tr>
+          <td style="border-bottom: 1px solid #e5e7eb; padding: 8px 0; color: #525252; font-weight: 700; width: 38%;">${escapeHtml(label)}</td>
+          <td style="border-bottom: 1px solid #e5e7eb; padding: 8px 0; color: #000; font-family: monospace; font-weight: 800; text-align: right;">${escapeHtml(value)}</td>
+        </tr>
+      `).join('')}
+    </table>
+  `;
+}
+
+function renderTopCountBadges(
+  counts: Record<string, number> | undefined,
+  options: { prefix?: string; limit?: number } = {},
+): string {
+  if (!counts || Object.keys(counts).length === 0) return '';
+  const limit = options.limit ?? 5;
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([label, count]) => `<span style="border: 1px solid #000; background: #fff; padding: 3px 7px; margin: 0 5px 5px 0; display: inline-block; font-size: 11px; font-family: monospace; font-weight: 800;">${escapeHtml(options.prefix || '')}${escapeHtml(label)}: ${formatCount(count)}</span>`)
+    .join('');
+}
+
 function emailBillingUrl(query?: string): string {
   const base = emailDashboardAppPath('/billing');
   if (!query) return base;
@@ -143,13 +244,15 @@ function emailInviteAcceptUrl(token: string): string {
 /**
  * Format a date for email display
  */
-function formatEmailDate(date: Date): string {
+function formatEmailDate(date: Date, timeZone?: string | null): string {
+  const resolvedTimeZone = resolveEmailTimeZone(timeZone);
   return date.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: resolvedTimeZone,
     timeZoneName: 'short',
   });
 }
@@ -170,8 +273,14 @@ function generateEmailHtml({
   alertType = 'general',
   metaBadges,
   timestamp,
+  timeZone,
 }: EmailTemplateProps): string {
   const baseUrl = emailDashboardHomeUrl();
+  const safeTitle = escapeHtml(title);
+  const safePreviewText = escapeHtml(previewText);
+  const safeProjectName = projectName ? escapeHtml(projectName) : null;
+  const safeProjectUrl = projectUrl ? escapeHtml(projectUrl) : null;
+  const safeBaseUrl = escapeHtml(baseUrl);
 
   // Base styles
   const styles = {
@@ -183,7 +292,9 @@ function generateEmailHtml({
 
     // Header
     header: `background-color: ${BRAND.white}; padding: 32px 32px 24px; border-bottom: 3px solid ${BRAND.black};`,
-    nav: `display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;`,
+    navTable: `width: 100%; border-collapse: collapse; margin-bottom: 32px;`,
+    navCell: `vertical-align: middle;`,
+    navProjectCell: `vertical-align: middle; text-align: right;`,
     logo: `font-size: 24px; font-weight: 900; color: ${BRAND.black}; text-decoration: none; text-transform: uppercase; letter-spacing: -0.5px;`,
     projectBadge: `background: ${BRAND.black}; color: ${BRAND.white}; font-size: 12px; font-weight: 700; padding: 6px 12px; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block;`,
 
@@ -249,7 +360,7 @@ function generateEmailHtml({
 
     return `
       <div style="${styles.section}">
-        ${section.title ? `<div style="${styles.sectionTitle}">${section.title}</div>` : ''}
+        ${section.title ? `<div style="${styles.sectionTitle}">${escapeHtml(section.title)}</div>` : ''}
         ${contentHtml}
       </div>
     `;
@@ -258,8 +369,8 @@ function generateEmailHtml({
   const renderMetaBadge = (badge: EmailMetaBadge) => {
     return `
       <div style="${styles.badge}">
-        <span style="${styles.badgeLabel}">${badge.label}:</span>
-        <span>${badge.value}</span>
+        <span style="${styles.badgeLabel}">${escapeHtml(badge.label)}:</span>
+        <span>${escapeHtml(badge.value)}</span>
       </div>
     `;
   };
@@ -270,12 +381,12 @@ function generateEmailHtml({
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <title>${safeTitle}</title>
 </head>
 <body style="${styles.body}">
   <!-- Preheader -->
   <div style="display:none;font-size:1px;color:#f1f5f9;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
-    ${previewText}
+    ${safePreviewText}
     ${'&nbsp;'.repeat(100)}
   </div>
 
@@ -286,14 +397,18 @@ function generateEmailHtml({
           
           <!-- Header -->
           <div style="${styles.header}">
-            <div style="${styles.nav}">
-              <a href="${baseUrl}" style="${styles.logo}">
-                Rejourney
-              </a>
-              ${projectName && projectUrl ? `
-                <a href="${projectUrl}" style="${styles.projectBadge}">${projectName}</a>
-              ` : ''}
-            </div>
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="${styles.navTable}">
+              <tr>
+                <td style="${styles.navCell}">
+                  <a href="${safeBaseUrl}" style="${styles.logo}">Rejourney</a>
+                </td>
+                <td align="right" style="${styles.navProjectCell}">
+                  ${safeProjectName && safeProjectUrl ? `
+                    <a href="${safeProjectUrl}" style="${styles.projectBadge}">${safeProjectName}</a>
+                  ` : ''}
+                </td>
+              </tr>
+            </table>
 
             ${alertType ? `
               <div style="${styles.alertLabel}">
@@ -301,11 +416,11 @@ function generateEmailHtml({
               </div>
             ` : ''}
             
-            <h1 style="${styles.h1}">${title}</h1>
+            <h1 style="${styles.h1}">${safeTitle}</h1>
             
             ${timestamp ? `
               <div style="${styles.subtitle}">
-                ${formatEmailDate(timestamp)}
+                ${formatEmailDate(timestamp, timeZone)}
               </div>
             ` : ''}
 
@@ -322,8 +437,8 @@ function generateEmailHtml({
 
             ${action || secondaryAction ? `
               <div style="${styles.buttonContainer}">
-                ${action ? `<a href="${action.url}" style="${styles.button}">${action.label}</a>` : ''}
-                ${secondaryAction ? `<a href="${secondaryAction.url}" style="${styles.buttonSecondary}">${secondaryAction.label}</a>` : ''}
+                ${action ? `<a href="${escapeHtml(action.url)}" style="${styles.button}">${escapeHtml(action.label)}</a>` : ''}
+                ${secondaryAction ? `<a href="${escapeHtml(secondaryAction.url)}" style="${styles.buttonSecondary}">${escapeHtml(secondaryAction.label)}</a>` : ''}
               </div>
             ` : ''}
           </div>
@@ -331,10 +446,10 @@ function generateEmailHtml({
           <!-- Footer -->
           <div style="${styles.footer}">
             <p style="${styles.footerText}">
-              ${footerText || 'You received this email because you are registered on Rejourney.'}
+              ${escapeHtml(footerText || 'You received this email because you are registered on Rejourney.')}
             </p>
             <div style="margin-top: 16px; font-family: monospace; font-size: 11px;">
-              <a href="${baseUrl}" style="${styles.footerLink}">Dashboard</a> &bull; 
+              <a href="${safeBaseUrl}" style="${styles.footerLink}">Dashboard</a> &bull; 
               <a href="https://rejourney.co/docs" style="${styles.footerLink}">Docs</a> &bull; 
               <a href="mailto:contact@rejourney.co" style="${styles.footerLink}">Support</a>
             </div>
@@ -695,14 +810,23 @@ export interface CrashAlertData {
 }
 
 export async function sendCrashAlertEmail(
-  recipients: string[],
+  recipients: AlertEmailRecipientInput[],
   data: CrashAlertData
 ): Promise<void> {
   if (recipients.length === 0) return;
   const transport = getTransporter();
   if (!transport) return;
 
-  const issueLink = emailDashboardAppPath(`/general/${data.issueId || ''}`);
+  const recipientGroups = groupAlertRecipientsByTimeZone(recipients);
+  if (recipientGroups.length === 0) return;
+
+  const issueLink = emailDashboardAppPath(data.issueId ? `/general/${data.issueId}` : '/general');
+  const allIssuesLink = emailDashboardAppPath('/general');
+  const projectSettingsLink = emailDashboardAppPath(`/settings/${data.projectId}`);
+  const alertTitle = data.isHandled === false ? 'Unhandled Crash' : 'Crash Alert';
+  const eventLabel = formatCountWithLabel(data.eventCount, 'event', 'events');
+  const userLabel = formatCountWithLabel(data.affectedUsers, 'user', 'users');
+  const subject = truncateForSubject(`${alertTitle} in ${data.projectName}: ${data.crashTitle} (${userLabel})`);
 
   const metaBadges: EmailMetaBadge[] = [
     { label: 'USERS', value: data.affectedUsers.toLocaleString() },
@@ -715,65 +839,107 @@ export async function sendCrashAlertEmail(
   if (data.environment) {
     metaBadges.push({ label: 'ENV', value: data.environment.toUpperCase() });
   }
-
-  const sections: EmailSection[] = [];
-
-  // Crash Header
-  sections.push({
-    style: 'error',
-    content: `
-      <div style="font-family: monospace; font-size: 12px; margin-bottom: 8px; opacity: 0.7;">EXCEPTION</div>
-      <div style="font-weight: 800; font-size: 18px; margin-bottom: 8px;">${data.crashTitle}</div>
-      ${data.subtitle ? `<div style="font-family: monospace; font-size: 13px;">${data.subtitle}</div>` : ''}
-      
-      ${data.screenName ? `<div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #000; font-size: 13px;"><strong>Screen:</strong> ${data.screenName}</div>` : ''}
-    `
-  });
-
-  // Stack Trace
-  if (data.stackTrace) {
-    const stackLines = data.stackTrace.split('\n').slice(0, 10);
-    sections.push({
-      title: 'Stack Trace',
-      style: 'highlight',
-      content: `<pre style="margin: 0;">${stackLines.join('\n')}</pre>`
-    });
+  if (data.eventCount !== undefined) {
+    metaBadges.push({ label: 'EVENTS', value: formatCount(data.eventCount) });
   }
 
-  // Versions Breakdown
-  if (data.affectedVersions && Object.keys(data.affectedVersions).length > 0) {
-    const sortedVersions = Object.entries(data.affectedVersions)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([ver, count]) => `<span style="border: 1px solid #000; background: #fff; padding: 2px 6px; margin-right: 4px; font-size: 11px; font-family: monospace;">v${ver}: ${count}</span>`)
-      .join('');
+  const buildSections = (timeZone: string): EmailSection[] => {
+    const sections: EmailSection[] = [];
+    const lastSeenLabel = data.lastSeen ? formatEmailDate(data.lastSeen, timeZone) : 'Just now';
+    const firstSeenLabel = data.firstSeen ? formatEmailDate(data.firstSeen, timeZone) : null;
 
     sections.push({
-      title: 'Affected Versions',
-      content: sortedVersions
+      style: 'error',
+      content: `
+        <div style="font-family: monospace; font-size: 12px; margin-bottom: 8px; opacity: 0.7;">${escapeHtml(data.isHandled === false ? 'UNHANDLED EXCEPTION' : 'EXCEPTION')}</div>
+        <div style="font-weight: 800; font-size: 19px; margin-bottom: 8px;">${escapeHtml(data.crashTitle)}</div>
+        ${data.subtitle ? `<div style="font-family: monospace; font-size: 13px; line-height: 1.45;">${escapeHtml(data.subtitle)}</div>` : ''}
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #000; font-size: 13px; line-height: 1.55;">
+          Rejourney grouped this crash in <strong>${escapeHtml(data.projectName)}</strong>. It has affected <strong>${escapeHtml(userLabel)}</strong>${data.eventCount !== undefined ? ` across <strong>${escapeHtml(eventLabel)}</strong>` : ''}. Last seen <strong>${escapeHtml(lastSeenLabel)}</strong>.
+        </div>
+      `
+    });
+
+    sections.push({
+      title: 'Triage Context',
+      content: renderKeyValueTable([
+        ['Issue ID', data.shortId || data.issueId],
+        ['First seen', firstSeenLabel],
+        ['Last seen', lastSeenLabel],
+        ['Screen', data.screenName],
+        ['Component', data.componentName],
+        ['Environment', data.environment],
+        ['Sample app version', data.sampleAppVersion ? `v${data.sampleAppVersion}` : null],
+        ['Sample OS', data.sampleOsVersion],
+        ['Sample device', data.sampleDeviceModel],
+      ]),
+    });
+
+    const versionBadges = renderTopCountBadges(data.affectedVersions, { prefix: 'v' });
+    if (versionBadges) {
+      sections.push({
+        title: 'Affected Versions',
+        content: versionBadges,
+      });
+    }
+
+    const deviceBadges = renderTopCountBadges(data.affectedDevices);
+    if (deviceBadges) {
+      sections.push({
+        title: 'Affected Devices',
+        content: deviceBadges,
+      });
+    }
+
+    if (data.stackTrace) {
+      const stackLines = data.stackTrace.split('\n').slice(0, 12);
+      sections.push({
+        title: 'Stack Trace',
+        style: 'highlight',
+        content: `<pre style="margin: 0; white-space: pre-wrap;">${escapeHtml(stackLines.join('\n'))}</pre>`
+      });
+    }
+
+    sections.push({
+      title: 'Why You Got This',
+      style: 'info',
+      content: `
+        This matched your crash email alert rules for ${escapeHtml(data.projectName)}. Rejourney suppresses duplicate emails for the same issue for one hour and caps project alert emails per day.
+      `,
+    });
+
+    return sections;
+  };
+
+  for (const group of recipientGroups) {
+    const lastSeenText = data.lastSeen ? formatEmailDate(data.lastSeen, group.timeZone) : 'just now';
+    await transport.sendMail({
+      from: config.SMTP_FROM || 'Rejourney Alerts <alerts@rejourney.co>',
+      to: group.recipients.map((recipient) => recipient.email).join(','),
+      subject,
+      text: `${alertTitle} in ${data.projectName}: ${data.crashTitle}. Affected users: ${data.affectedUsers}. Last seen: ${lastSeenText}. View issue: ${issueLink}`,
+      html: generateEmailHtml({
+        title: alertTitle,
+        previewText: `${data.crashTitle} in ${data.projectName} affected ${userLabel}; last seen ${lastSeenText}`,
+        sections: buildSections(group.timeZone),
+        action: {
+          label: 'View Issue',
+          url: issueLink
+        },
+        secondaryAction: {
+          label: 'All Issues',
+          url: allIssuesLink,
+        },
+        projectName: data.projectName,
+        projectUrl: projectSettingsLink,
+        alertType: 'crash',
+        metaBadges,
+        timestamp: data.lastSeen || new Date(),
+        timeZone: group.timeZone,
+        footerText: `Sent to alert recipients for ${data.projectName}. Times shown in ${group.timeZone}.`,
+      })
     });
   }
-
-  await transport.sendMail({
-    from: config.SMTP_FROM || 'Rejourney Alerts <alerts@rejourney.co>',
-    to: recipients.join(','),
-    subject: `Issue Alert: ${data.crashTitle} (${data.affectedUsers} impacted)`,
-    text: `New issue in ${data.projectName}: ${data.crashTitle}. View details: ${issueLink}`,
-    html: generateEmailHtml({
-      title: 'Issue Alert',
-      previewText: `${data.crashTitle} in ${data.projectName}`,
-      sections,
-      action: {
-        label: 'View Issue',
-        url: issueLink
-      },
-      projectName: data.projectName,
-      projectUrl: emailDashboardAppPath(`/settings/${data.projectId}`),
-      alertType: 'crash',
-      metaBadges,
-      timestamp: data.lastSeen || new Date()
-    })
-  });
 }
 
 // =============================================================================
@@ -802,16 +968,24 @@ export interface AnrAlertData {
 }
 
 export async function sendAnrAlertEmail(
-  recipients: string[],
+  recipients: AlertEmailRecipientInput[],
   data: AnrAlertData
 ): Promise<void> {
   if (recipients.length === 0) return;
   const transport = getTransporter();
   if (!transport) return;
 
-  const issueLink = emailDashboardAppPath(`/general/${data.issueId || ''}`);
+  const recipientGroups = groupAlertRecipientsByTimeZone(recipients);
+  if (recipientGroups.length === 0) return;
+
+  const issueLink = emailDashboardAppPath(data.issueId ? `/general/${data.issueId}` : '/general');
+  const allIssuesLink = emailDashboardAppPath('/general');
+  const projectSettingsLink = emailDashboardAppPath(`/settings/${data.projectId}`);
 
   const durationSecs = Math.round(data.durationMs / 1000);
+  const userLabel = formatCountWithLabel(data.affectedUsers, 'user', 'users');
+  const eventLabel = formatCountWithLabel(data.eventCount, 'event', 'events');
+  const subject = truncateForSubject(`ANR in ${data.projectName}: app frozen for ${durationSecs}s (${userLabel})`);
   const metaBadges: EmailMetaBadge[] = [
     { label: 'DURATION', value: `${durationSecs}s` },
     { label: 'USERS', value: data.affectedUsers.toLocaleString() },
@@ -820,44 +994,93 @@ export async function sendAnrAlertEmail(
   if (data.shortId) {
     metaBadges.unshift({ label: 'ID', value: data.shortId });
   }
-
-  const sections: EmailSection[] = [];
-
-  sections.push({
-    style: 'warning',
-    content: `
-      <div style="font-family: monospace; font-size: 12px; margin-bottom: 8px; opacity: 0.7;">APP NOT RESPONDING</div>
-      <div style="font-weight: 800; font-size: 18px; margin-bottom: 8px;">ANR for ${durationSecs} seconds</div>
-      ${data.screenName ? `<div style="font-size: 13px;"><strong>Screen:</strong> ${data.screenName}</div>` : ''}
-    `
-  });
-
-  if (data.stackTrace) {
-    const stackLines = data.stackTrace.split('\n').slice(0, 10);
-    sections.push({
-      title: 'Thread State',
-      style: 'highlight',
-      content: `<pre style="margin: 0;">${stackLines.join('\n')}</pre>`
-    });
+  if (data.eventCount !== undefined) {
+    metaBadges.push({ label: 'EVENTS', value: formatCount(data.eventCount) });
   }
 
-  await transport.sendMail({
-    from: config.SMTP_FROM || 'Rejourney Alerts <alerts@rejourney.co>',
-    to: recipients.join(','),
-    subject: `ANR Alert: App frozen for ${durationSecs}s (${data.affectedUsers} users)`,
-    text: `ANR detected in ${data.projectName}. View details: ${issueLink}`,
-    html: generateEmailHtml({
-      title: 'ANR Alert',
-      previewText: `ANR in ${data.projectName}`,
-      sections,
-      action: { label: 'View Issue', url: issueLink },
-      projectName: data.projectName,
-      projectUrl: emailDashboardAppPath(`/settings/${data.projectId}`),
-      alertType: 'anr',
-      metaBadges,
-      timestamp: data.lastSeen || new Date()
-    })
-  });
+  const buildSections = (timeZone: string): EmailSection[] => {
+    const sections: EmailSection[] = [];
+    const lastSeenLabel = data.lastSeen ? formatEmailDate(data.lastSeen, timeZone) : 'Just now';
+    const firstSeenLabel = data.firstSeen ? formatEmailDate(data.firstSeen, timeZone) : null;
+
+    sections.push({
+      style: 'warning',
+      content: `
+        <div style="font-family: monospace; font-size: 12px; margin-bottom: 8px; opacity: 0.7;">APP NOT RESPONDING</div>
+        <div style="font-weight: 800; font-size: 19px; margin-bottom: 8px;">Main thread frozen for ${durationSecs} seconds</div>
+        <div style="margin-top: 12px; font-size: 13px; line-height: 1.55;">
+          Rejourney detected an ANR in <strong>${escapeHtml(data.projectName)}</strong> affecting <strong>${escapeHtml(userLabel)}</strong>${data.eventCount !== undefined ? ` across <strong>${escapeHtml(eventLabel)}</strong>` : ''}. Last seen <strong>${escapeHtml(lastSeenLabel)}</strong>.
+        </div>
+      `
+    });
+
+    sections.push({
+      title: 'Triage Context',
+      content: renderKeyValueTable([
+        ['Issue ID', data.shortId || data.issueId],
+        ['First seen', firstSeenLabel],
+        ['Last seen', lastSeenLabel],
+        ['Screen', data.screenName],
+        ['Environment', data.environment],
+        ['Sample app version', data.sampleAppVersion ? `v${data.sampleAppVersion}` : null],
+        ['Sample OS', data.sampleOsVersion],
+        ['Sample device', data.sampleDeviceModel],
+      ]),
+    });
+
+    const versionBadges = renderTopCountBadges(data.affectedVersions, { prefix: 'v' });
+    if (versionBadges) {
+      sections.push({ title: 'Affected Versions', content: versionBadges });
+    }
+
+    const deviceBadges = renderTopCountBadges(data.affectedDevices);
+    if (deviceBadges) {
+      sections.push({ title: 'Affected Devices', content: deviceBadges });
+    }
+
+    if (data.stackTrace) {
+      const stackLines = data.stackTrace.split('\n').slice(0, 12);
+      sections.push({
+        title: 'Thread State',
+        style: 'highlight',
+        content: `<pre style="margin: 0; white-space: pre-wrap;">${escapeHtml(stackLines.join('\n'))}</pre>`
+      });
+    }
+
+    sections.push({
+      title: 'Why You Got This',
+      style: 'info',
+      content: `
+        This matched your ANR email alert rules for ${escapeHtml(data.projectName)}. Rejourney suppresses duplicate emails for the same issue for one hour and caps project alert emails per day.
+      `,
+    });
+
+    return sections;
+  };
+
+  for (const group of recipientGroups) {
+    const lastSeenText = data.lastSeen ? formatEmailDate(data.lastSeen, group.timeZone) : 'just now';
+    await transport.sendMail({
+      from: config.SMTP_FROM || 'Rejourney Alerts <alerts@rejourney.co>',
+      to: group.recipients.map((recipient) => recipient.email).join(','),
+      subject,
+      text: `ANR in ${data.projectName}: app frozen for ${durationSecs}s. Affected users: ${data.affectedUsers}. Last seen: ${lastSeenText}. View issue: ${issueLink}`,
+      html: generateEmailHtml({
+        title: 'ANR Alert',
+        previewText: `ANR in ${data.projectName} affected ${userLabel}; last seen ${lastSeenText}`,
+        sections: buildSections(group.timeZone),
+        action: { label: 'View Issue', url: issueLink },
+        secondaryAction: { label: 'All Issues', url: allIssuesLink },
+        projectName: data.projectName,
+        projectUrl: projectSettingsLink,
+        alertType: 'anr',
+        metaBadges,
+        timestamp: data.lastSeen || new Date(),
+        timeZone: group.timeZone,
+        footerText: `Sent to alert recipients for ${data.projectName}. Times shown in ${group.timeZone}.`,
+      })
+    });
+  }
 }
 
 // =============================================================================
@@ -876,14 +1099,20 @@ export interface ErrorSpikeAlertData {
 }
 
 export async function sendErrorSpikeAlertEmail(
-  recipients: string[],
+  recipients: AlertEmailRecipientInput[],
   data: ErrorSpikeAlertData
 ): Promise<void> {
   if (recipients.length === 0) return;
   const transport = getTransporter();
   if (!transport) return;
 
-  const issueLink = data.issueUrl || emailDashboardAppPath('/general');
+  const recipientGroups = groupAlertRecipientsByTimeZone(recipients);
+  if (recipientGroups.length === 0) return;
+
+  const issueLink = data.issueUrl || emailDashboardAppPath('/sessions');
+  const apiLink = emailDashboardAppPath('/api');
+  const projectSettingsLink = emailDashboardAppPath(`/settings/${data.projectId}`);
+  const subject = truncateForSubject(`API error spike in ${data.projectName}: +${data.percentIncrease.toFixed(0)}% (${data.previousRate.toFixed(1)}% -> ${data.currentRate.toFixed(1)}%)`);
 
   const metaBadges: EmailMetaBadge[] = [
     { label: 'SPIKE', value: `+${data.percentIncrease.toFixed(0)}%` },
@@ -891,47 +1120,77 @@ export async function sendErrorSpikeAlertEmail(
     { label: 'PREVIOUS', value: `${data.previousRate.toFixed(1)}%` },
   ];
 
-  const sections: EmailSection[] = [];
+  const buildSections = (timeZone: string): EmailSection[] => {
+    const detectedAtLabel = data.detectedAt ? formatEmailDate(data.detectedAt, timeZone) : 'Just now';
+    const sections: EmailSection[] = [
+      {
+        style: 'warning',
+        content: `
+          <div style="font-family: monospace; font-size: 12px; margin-bottom: 8px; opacity: 0.7;">API ERROR RATE SPIKE DETECTED</div>
+          <div style="font-weight: 800; font-size: 19px; margin-bottom: 8px;">API error rate increased ${data.percentIncrease.toFixed(0)}%</div>
+          <div style="margin-top: 8px; font-size: 13px; line-height: 1.55;">This measures HTTP 4xx/5xx responses from your app's API calls. It is separate from crash and ANR alerts.</div>
+          <div style="margin-top: 16px; font-size: 13px; line-height: 1.55;">
+            <strong>Baseline:</strong> ${data.previousRate.toFixed(1)}% &rarr; <strong>Current:</strong> ${data.currentRate.toFixed(1)}%<br>
+            <strong>Detected:</strong> ${escapeHtml(detectedAtLabel)}
+          </div>
+        `
+      },
+      {
+        title: 'Triage Context',
+        content: renderKeyValueTable([
+          ['Project', data.projectName],
+          ['Detected at', detectedAtLabel],
+          ['Previous API error rate', `${data.previousRate.toFixed(1)}%`],
+          ['Current API error rate', `${data.currentRate.toFixed(1)}%`],
+          ['Increase', `+${data.percentIncrease.toFixed(0)}%`],
+        ]),
+      },
+    ];
 
-  sections.push({
-    style: 'warning',
-    content: `
-      <div style="font-family: monospace; font-size: 12px; margin-bottom: 8px; opacity: 0.7;">API ERROR RATE SPIKE DETECTED</div>
-      <div style="font-weight: 800; font-size: 18px; margin-bottom: 8px;">API error rate increased ${data.percentIncrease.toFixed(0)}%</div>
-      <div style="margin-top: 8px; font-size: 13px; opacity: 0.8;">This measures HTTP 4xx/5xx responses from your app's API calls, not crashes or JS exceptions.</div>
-      <div style="margin-top: 16px; font-size: 13px;">
-        <strong>Previous:</strong> ${data.previousRate.toFixed(1)}% → <strong>Current:</strong> ${data.currentRate.toFixed(1)}%
-      </div>
-    `
-  });
+    if (data.topErrors && data.topErrors.length > 0) {
+      const errorsList = data.topErrors.map(e =>
+        `<div style="margin: 6px 0; font-size: 12px; font-family: monospace;"><strong>${formatCount(e.count)}x</strong> ${escapeHtml(e.name)}</div>`
+      ).join('');
+      sections.push({
+        title: 'Top Related Issues',
+        content: errorsList
+      });
+    }
 
-  if (data.topErrors && data.topErrors.length > 0) {
-    const errorsList = data.topErrors.map(e =>
-      `<div style="margin: 4px 0; font-size: 12px;"><strong>${e.count}x</strong> ${e.name}</div>`
-    ).join('');
     sections.push({
-      title: 'Recent Issues',
-      content: errorsList
+      title: 'Why You Got This',
+      style: 'info',
+      content: `
+        This matched your API error spike alert rules for ${escapeHtml(data.projectName)}. The alert worker compares the recent window against a baseline and rate-limits repeat emails.
+      `,
+    });
+
+    return sections;
+  };
+
+  for (const group of recipientGroups) {
+    const detectedAtText = data.detectedAt ? formatEmailDate(data.detectedAt, group.timeZone) : 'just now';
+    await transport.sendMail({
+      from: config.SMTP_FROM || 'Rejourney Alerts <alerts@rejourney.co>',
+      to: group.recipients.map((recipient) => recipient.email).join(','),
+      subject,
+      text: `API error spike in ${data.projectName}: ${data.previousRate.toFixed(1)}% -> ${data.currentRate.toFixed(1)}% (+${data.percentIncrease.toFixed(0)}%). Detected: ${detectedAtText}. View affected sessions: ${issueLink}`,
+      html: generateEmailHtml({
+        title: 'API Error Spike',
+        previewText: `API error rate increased ${data.percentIncrease.toFixed(0)}% in ${data.projectName}`,
+        sections: buildSections(group.timeZone),
+        action: { label: 'View Sessions', url: issueLink },
+        secondaryAction: { label: 'API Insights', url: apiLink },
+        projectName: data.projectName,
+        projectUrl: projectSettingsLink,
+        alertType: 'error_spike',
+        metaBadges,
+        timestamp: data.detectedAt || new Date(),
+        timeZone: group.timeZone,
+        footerText: `Sent to alert recipients for ${data.projectName}. Times shown in ${group.timeZone}.`,
+      })
     });
   }
-
-  await transport.sendMail({
-    from: config.SMTP_FROM || 'Rejourney Alerts <alerts@rejourney.co>',
-    to: recipients.join(','),
-    subject: `API Error Rate Spike: +${data.percentIncrease.toFixed(0)}% in ${data.projectName}`,
-    text: `API error rate spike in ${data.projectName}. Check affected sessions: ${issueLink}`,
-    html: generateEmailHtml({
-      title: 'API Error Rate Spike',
-      previewText: `API error rate spike in ${data.projectName}`,
-      sections,
-      action: { label: 'View Sessions', url: issueLink },
-      projectName: data.projectName,
-      projectUrl: emailDashboardAppPath(`/settings/${data.projectId}`),
-      alertType: 'error_spike',
-      metaBadges,
-      timestamp: data.detectedAt || new Date()
-    })
-  });
 }
 
 // =============================================================================
@@ -950,58 +1209,92 @@ export interface ApiDegradationAlertData {
 }
 
 export async function sendApiDegradationAlertEmail(
-  recipients: string[],
+  recipients: AlertEmailRecipientInput[],
   data: ApiDegradationAlertData
 ): Promise<void> {
   if (recipients.length === 0) return;
   const transport = getTransporter();
   if (!transport) return;
 
+  const recipientGroups = groupAlertRecipientsByTimeZone(recipients);
+  if (recipientGroups.length === 0) return;
+
   const insightsLink = data.issueUrl || emailDashboardAppPath('/api');
+  const projectSettingsLink = emailDashboardAppPath(`/settings/${data.projectId}`);
+  const subject = truncateForSubject(`API latency degradation in ${data.projectName}: +${data.percentIncrease.toFixed(0)}% (${data.previousLatencyMs}ms -> ${data.currentLatencyMs}ms)`);
 
   const metaBadges: EmailMetaBadge[] = [
     { label: 'LATENCY', value: `${data.currentLatencyMs}ms` },
     { label: 'INCREASE', value: `+${data.percentIncrease.toFixed(0)}%` },
   ];
 
-  const sections: EmailSection[] = [];
+  const buildSections = (timeZone: string): EmailSection[] => {
+    const detectedAtLabel = data.detectedAt ? formatEmailDate(data.detectedAt, timeZone) : 'Just now';
+    const sections: EmailSection[] = [
+      {
+        style: 'warning',
+        content: `
+          <div style="font-family: monospace; font-size: 12px; margin-bottom: 8px; opacity: 0.7;">API DEGRADATION DETECTED</div>
+          <div style="font-weight: 800; font-size: 19px; margin-bottom: 8px;">Average API latency increased ${data.percentIncrease.toFixed(0)}%</div>
+          <div style="margin-top: 16px; font-size: 13px; line-height: 1.55;">
+            <strong>Baseline:</strong> ${data.previousLatencyMs}ms &rarr; <strong>Current:</strong> ${data.currentLatencyMs}ms<br>
+            <strong>Detected:</strong> ${escapeHtml(detectedAtLabel)}
+          </div>
+        `
+      },
+      {
+        title: 'Triage Context',
+        content: renderKeyValueTable([
+          ['Project', data.projectName],
+          ['Detected at', detectedAtLabel],
+          ['Previous average latency', `${data.previousLatencyMs}ms`],
+          ['Current average latency', `${data.currentLatencyMs}ms`],
+          ['Increase', `+${data.percentIncrease.toFixed(0)}%`],
+        ]),
+      },
+    ];
 
-  sections.push({
-    style: 'warning',
-    content: `
-      <div style="font-family: monospace; font-size: 12px; margin-bottom: 8px; opacity: 0.7;">API DEGRADATION</div>
-      <div style="font-weight: 800; font-size: 16px; margin-bottom: 8px;">Latency increased ${data.percentIncrease.toFixed(0)}%</div>
-      <div style="margin-top: 16px; font-size: 13px;">
-        <strong>Latency:</strong> ${data.previousLatencyMs}ms → ${data.currentLatencyMs}ms
-      </div>
-    `
-  });
+    if (data.slowestEndpoints && data.slowestEndpoints.length > 0) {
+      const endpointsList = data.slowestEndpoints.map(e =>
+        `<div style="margin: 6px 0; font-size: 12px; font-family: monospace;"><strong>${formatCount(e.latency)}ms</strong> ${escapeHtml(e.method)} ${escapeHtml(e.path)}</div>`
+      ).join('');
+      sections.push({
+        title: 'Slowest Endpoints',
+        content: endpointsList
+      });
+    }
 
-  if (data.slowestEndpoints && data.slowestEndpoints.length > 0) {
-    const endpointsList = data.slowestEndpoints.map(e =>
-      `<div style="margin: 4px 0; font-size: 12px;"><strong>${e.latency}ms</strong> ${e.method} ${e.path}</div>`
-    ).join('');
     sections.push({
-      title: 'Slowest Endpoints',
-      content: endpointsList
+      title: 'Why You Got This',
+      style: 'info',
+      content: `
+        This matched your API latency alert rules for ${escapeHtml(data.projectName)}. The alert worker compares the recent window against a baseline and rate-limits repeat emails.
+      `,
+    });
+
+    return sections;
+  };
+
+  for (const group of recipientGroups) {
+    const detectedAtText = data.detectedAt ? formatEmailDate(data.detectedAt, group.timeZone) : 'just now';
+    await transport.sendMail({
+      from: config.SMTP_FROM || 'Rejourney Alerts <alerts@rejourney.co>',
+      to: group.recipients.map((recipient) => recipient.email).join(','),
+      subject,
+      text: `API latency degradation in ${data.projectName}: ${data.previousLatencyMs}ms -> ${data.currentLatencyMs}ms (+${data.percentIncrease.toFixed(0)}%). Detected: ${detectedAtText}. View API insights: ${insightsLink}`,
+      html: generateEmailHtml({
+        title: 'API Degradation',
+        previewText: `API latency increased ${data.percentIncrease.toFixed(0)}% in ${data.projectName}`,
+        sections: buildSections(group.timeZone),
+        action: { label: 'View API Insights', url: insightsLink },
+        projectName: data.projectName,
+        projectUrl: projectSettingsLink,
+        alertType: 'api_degradation',
+        metaBadges,
+        timestamp: data.detectedAt || new Date(),
+        timeZone: group.timeZone,
+        footerText: `Sent to alert recipients for ${data.projectName}. Times shown in ${group.timeZone}.`,
+      })
     });
   }
-
-  await transport.sendMail({
-    from: config.SMTP_FROM || 'Rejourney Alerts <alerts@rejourney.co>',
-    to: recipients.join(','),
-    subject: `API Degradation: +${data.percentIncrease.toFixed(0)}% latency in ${data.projectName}`,
-    text: `API degradation in ${data.projectName}. View details: ${insightsLink}`,
-    html: generateEmailHtml({
-      title: 'API Degradation Alert',
-      previewText: `API degradation in ${data.projectName}`,
-      sections,
-      action: { label: 'View API Insights', url: insightsLink },
-      projectName: data.projectName,
-      projectUrl: emailDashboardAppPath(`/settings/${data.projectId}`),
-      alertType: 'api_degradation',
-      metaBadges,
-      timestamp: data.detectedAt || new Date()
-    })
-  });
 }

@@ -580,7 +580,9 @@ Backend
   Redis buffer + flush worker
   S3 canonical object
   artifact worker validates JSON
-  session reconciliation marks replayAvailable
+  sessionEvidence sees ready rrweb replay evidence
+  replayRetention decides saved/buffered/analytics-only/not-available
+  replayAvailability derives whether the archive can open playback
 ```
 
 Chunk format:
@@ -677,13 +679,17 @@ The current backend already has most of the mobile ingest machinery we should re
 - `backend/src/services/ingestArtifactLifecycle.ts`
   - `isReplayArtifactKind()` is currently screenshot/hierarchy only.
   - Update replay logging, queue decisions, and replay-pending recovery to include `rrweb`.
-- `backend/src/services/sessionPresentationState.ts`
-  - `loadSessionWorkAggregate()` only counts screenshots/hierarchy.
+- `backend/src/services/sessionEvidence.ts`
+  - `loadSessionWorkAggregate()` owns replay artifact evidence.
   - Add `readyRrwebCount`, `readyRrwebBytes`, and include `rrweb` in open replay work and latest replay end time.
 - `backend/src/services/sessionReconciliation.ts`
-  - `replayAvailable` is currently `readyScreenshotCount > 0`.
+  - Replay availability now flows through `sessionEvidence -> smartCapture -> replayRetention`.
+  - `replay_available` is a retained-artifact outcome, not a direct artifact-count expression.
   - `reconcileDueSessions()` SQL looks for pending screenshot/hierarchy work and ready screenshots.
   - Update both paths so a ready rrweb artifact makes web sessions openable and finalizable.
+- `backend/src/services/replayAvailability.ts`
+  - Public openability should continue to come from `canOpenReplayFromSessionFields()`.
+  - A web replay is user-openable only when retained and `replay_retention_state = saved`.
 - `backend/src/services/sessionTiming.ts`
   - Comments and derived duration logic say replay end means screenshots/hierarchy.
   - Include rrweb chunk end time in the same concept.
@@ -819,17 +825,22 @@ Important: do not inline rrweb events into `sessions.events`. Store rrweb in obj
 
 ### 5. Session Reconciliation
 
-Current code marks `replayAvailable` from ready screenshot artifacts:
+Replay visibility must follow the same layered architecture used by mobile replay:
 
-```ts
-const replayAvailable = readyScreenshotCount > 0;
+```text
+sessionEvidence
+  -> has ready screenshot/hierarchy/rrweb replay artifacts
+smartCapture
+  -> keep, buffer, discard, or record all
+replayRetention
+  -> replay_available + replay_retention_state
+replayAvailability
+  -> canOpenReplay for API/UI presentation
 ```
 
-Update to:
-
-```ts
-const replayAvailable = readyScreenshotCount > 0 || readyRrwebCount > 0;
-```
+Do not reintroduce direct `readyScreenshotCount > 0` or
+`readyRrwebCount > 0` visibility checks in routes. Artifact readiness is only
+evidence; user-openable replay requires `replay_retention_state = saved`.
 
 Update `loadSessionWorkAggregate`:
 
@@ -1803,7 +1814,7 @@ Local k8s fixtures:
   - web fixture points at `http://api.localtest.me`;
   - MinIO contains `rrweb/*.json.gz`;
   - Postgres has `recording_artifacts.kind = 'rrweb'`;
-  - session becomes `replayAvailable = true`;
+  - session has `replay_available = true` and `replay_retention_state = saved`;
   - dashboard can open rrweb playback.
 - Run `node scripts/check-worker-parity.mjs` after any worker manifest change.
 

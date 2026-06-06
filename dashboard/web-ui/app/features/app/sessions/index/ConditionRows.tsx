@@ -2,13 +2,14 @@ import React from 'react';
 import {
   X, AlertOctagon, Calendar, LayoutGrid, Zap, Tag, Users,
   Smartphone, ArrowRight, Plus, Info, Route, ChevronDown,
-  MonitorSmartphone, Globe2, Megaphone,
+  MonitorSmartphone, Globe2, Megaphone, ScanEye,
 } from 'lucide-react';
+import type { SmartCaptureRule } from '~/shared/api/client';
 import {
   type IssueCondition, type DateCondition, type ScreenCondition,
   type EventCondition, type MetadataCondition, type LifecycleCondition,
   type ConversionCondition, type PlatformCondition, type JourneyCondition,
-  type ReferralCondition, type UtmCondition, type UtmField,
+  type ReferralCondition, type UtmCondition, type UtmField, type SmartCaptureCondition,
   CONDITION_TYPE_META, UTM_FIELD_SHORT_LABELS, UTM_FIELD_META_KEYS,
 } from './queryBuilderTypes';
 
@@ -80,6 +81,7 @@ const TYPE_COLORS: Record<string, { icon: React.ReactNode; bg: string; text: str
   metadata:   { icon: <Tag className="w-4 h-4" />,          bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
   referral:   { icon: <Globe2 className="w-4 h-4" />,       bg: 'bg-cyan-50',    text: 'text-cyan-600',    border: 'border-cyan-100' },
   utm:        { icon: <Megaphone className="w-4 h-4" />,    bg: 'bg-amber-50',   text: 'text-amber-600',   border: 'border-amber-100' },
+  smart_capture: { icon: <ScanEye className="w-4 h-4" />,   bg: 'bg-cyan-50',    text: 'text-cyan-600',    border: 'border-cyan-100' },
   lifecycle:  { icon: <Users className="w-4 h-4" />,        bg: 'bg-pink-50',    text: 'text-pink-600',    border: 'border-pink-100' },
   platform:   { icon: <Smartphone className="w-4 h-4" />,   bg: 'bg-indigo-50',  text: 'text-indigo-600',  border: 'border-indigo-100' },
   journey:    { icon: <Route className="w-4 h-4" />,        bg: 'bg-teal-50',    text: 'text-teal-600',    border: 'border-teal-100' },
@@ -327,6 +329,72 @@ export function UtmRow({ cond, onChange, onRemove, filters, loading }: {
     ) : (
       <input type="text" value={cond.value ?? ''} onChange={(e) => onChange({ ...cond, value: e.target.value || undefined })}
           placeholder="value" className="w-32 rounded-[6px] border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+      )}
+    </ConditionRowShell>
+  );
+}
+
+const SMART_CAPTURE_STATUS_OPTIONS = [
+  { value: '', label: 'any decision' },
+  { value: 'kept', label: 'kept replay' },
+  { value: 'pending', label: 'waiting' },
+  { value: 'discarded', label: 'discarded' },
+];
+
+function smartCaptureRuleName(rule: SmartCaptureRule): string {
+  return rule.name || rule.label || rule.id;
+}
+
+export function SmartCaptureRow({ cond, onChange, onRemove, smartCaptureRules }: {
+  cond: SmartCaptureCondition;
+  onChange: (c: SmartCaptureCondition) => void;
+  onRemove: () => void;
+  smartCaptureRules: SmartCaptureRule[];
+}) {
+  const ruleOptions = [
+    { value: '', label: 'any rule' },
+    ...smartCaptureRules.map((rule) => ({ value: rule.id, label: smartCaptureRuleName(rule) })),
+  ];
+
+  return (
+    <ConditionRowShell type="smart_capture" onRemove={onRemove}>
+      <Chip
+        value={cond.status ?? ''}
+        onChange={(v) => onChange({ ...cond, status: (v || undefined) as SmartCaptureCondition['status'] })}
+        options={SMART_CAPTURE_STATUS_OPTIONS}
+      />
+      <span className="text-xs text-slate-400">by</span>
+      {smartCaptureRules.length > 0 ? (
+        <Chip
+          value={cond.ruleId ?? ''}
+          onChange={(v) => {
+            const selectedRule = smartCaptureRules.find((rule) => rule.id === v);
+            onChange({
+              ...cond,
+              ruleId: v || undefined,
+              ruleName: selectedRule ? smartCaptureRuleName(selectedRule) : cond.ruleName,
+            });
+          }}
+          options={ruleOptions}
+          className="max-w-[220px]"
+        />
+      ) : (
+        <input
+          type="text"
+          value={cond.ruleName ?? ''}
+          onChange={(e) => onChange({ ...cond, ruleName: e.target.value || undefined })}
+          placeholder="rule name"
+          className="w-40 rounded-[6px] border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        />
+      )}
+      {smartCaptureRules.length > 0 && !cond.ruleId && (
+        <input
+          type="text"
+          value={cond.ruleName ?? ''}
+          onChange={(e) => onChange({ ...cond, ruleName: e.target.value || undefined })}
+          placeholder="or rule name"
+          className="w-36 rounded-[6px] border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        />
       )}
     </ConditionRowShell>
   );

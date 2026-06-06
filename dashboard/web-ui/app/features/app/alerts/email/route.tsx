@@ -23,6 +23,7 @@ import {
     Zap,
 } from 'lucide-react';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
@@ -515,6 +516,7 @@ const createEmptyRuleDraft = (): RuleDraft => ({
 
 export const AlertEmails: React.FC = () => {
     const { selectedProject } = useSessionData();
+    const manualRefreshVersion = useDashboardManualRefreshVersion();
     const pathPrefix = usePathPrefix();
     const [settings, setSettings] = useState<AlertSettings | null>(null);
     const [rules, setRules] = useState<EmailAlertRule[]>([]);
@@ -606,7 +608,7 @@ export const AlertEmails: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [selectedProject?.id]);
+    }, [manualRefreshVersion, selectedProject?.id]);
 
     useEffect(() => {
         loadData();
@@ -616,7 +618,7 @@ export const AlertEmails: React.FC = () => {
         if (selectedProject?.id) {
             loadEmailLogs(1);
         }
-    }, [selectedProject?.id, emailLogTypeFilter, loadEmailLogs]);
+    }, [manualRefreshVersion, selectedProject?.id, emailLogTypeFilter, loadEmailLogs]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => {

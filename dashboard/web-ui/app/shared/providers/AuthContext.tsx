@@ -185,6 +185,7 @@ export interface User {
   email: string;
   name: string | null;
   avatarUrl: string | null;
+  timezone: string | null;
   emailVerified: boolean;
   sessionsUsedThisMonth: number;
   totalSessionsUsed: number;
@@ -201,6 +202,7 @@ export function normalizeAuthUser(userData: Record<string, any>): User {
     email: userData.email,
     name: userData.name || userData.displayName || null,
     avatarUrl: userData.avatarUrl || null,
+    timezone: userData.timezone || userData.registrationTimezone || null,
     emailVerified: userData.emailVerified ?? true,
     sessionsUsedThisMonth: userData.sessionsUsedThisMonth ?? 0,
     totalSessionsUsed: userData.totalSessionsUsed ?? 0,

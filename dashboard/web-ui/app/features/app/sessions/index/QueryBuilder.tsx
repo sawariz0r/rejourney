@@ -3,21 +3,21 @@ import {
   Plus, ChevronDown, Loader, AlertOctagon, Calendar, LayoutGrid, Zap,
   Tag, Users, Route, GitMerge, Trash2, MousePointerClick,
   Timer, UserPlus, CheckCircle, AlertCircle, Search,
-  MonitorSmartphone, Globe2, Megaphone,
+  MonitorSmartphone, Globe2, Megaphone, ScanEye,
 } from 'lucide-react';
-import { buildSessionQueryFromPrompt } from '~/shared/api/client';
+import { buildSessionQueryFromPrompt, type SmartCaptureRule } from '~/shared/api/client';
 import {
   type QueryCondition, type QueryGroup, type ConditionType,
   type IssueCondition, type DateCondition, type ScreenCondition,
   type EventCondition, type MetadataCondition, type LifecycleCondition,
   type ConversionCondition, type PlatformCondition, type JourneyCondition,
-  type ReferralCondition, type UtmCondition, type UtmField,
+  type ReferralCondition, type UtmCondition, type UtmField, type SmartCaptureCondition,
   generateConditionId, generateGroupId,
   groupsBuildHumanSummary, UTM_FIELD_META_KEYS,
 } from './queryBuilderTypes';
 import {
   type AvailableFilters, IssueRow, DateRow, ScreenRow, EventRow,
-  MetadataRow, ReferralRow, UtmRow, LifecycleRow, PlatformRow, JourneyRow, ConversionRow,
+  MetadataRow, ReferralRow, UtmRow, LifecycleRow, PlatformRow, JourneyRow, ConversionRow, SmartCaptureRow,
 } from './ConditionRows';
 
 export type { AvailableFilters };
@@ -29,6 +29,7 @@ interface QueryBuilderProps {
   availableFilters: AvailableFilters;
   isLoadingFilters: boolean;
   projectId?: string;
+  smartCaptureRules?: SmartCaptureRule[];
 }
 
 type AddRuleInit = {
@@ -46,6 +47,7 @@ const ADD_MENU: { type: ConditionType; label: string; desc: string; icon: React.
   { type: 'date',      label: 'Date / Time',       desc: 'When the session occurred',           icon: <Calendar className="w-4 h-4" /> },
   { type: 'referral',  label: 'Referral',          desc: 'Web sessions by referrer/source',     icon: <Globe2 className="w-4 h-4" /> },
   { type: 'utm',       label: 'UTM',               desc: 'Web sessions by campaign tags',       icon: <Megaphone className="w-4 h-4" /> },
+  { type: 'smart_capture', label: 'Smart Capture', desc: 'Captured by a custom rule',           icon: <ScanEye className="w-4 h-4" /> },
   { type: 'metadata',  label: 'Metadata',          desc: 'Session metadata key=value',          icon: <Tag className="w-4 h-4" /> },
   { type: 'platform',  label: 'Platform',          desc: 'iOS, Android, or Web',                 icon: <MonitorSmartphone className="w-4 h-4" /> },
 ];
@@ -57,6 +59,7 @@ const BG: Record<ConditionType, string> = {
   issue: 'bg-rose-50 text-rose-700', event: 'bg-blue-50 text-blue-700',
   lifecycle: 'bg-pink-50 text-pink-700', date: 'bg-sky-50 text-sky-700',
   referral: 'bg-cyan-50 text-cyan-700', utm: 'bg-amber-50 text-amber-700',
+  smart_capture: 'bg-cyan-50 text-cyan-700',
   metadata: 'bg-emerald-50 text-emerald-700', platform: 'bg-cyan-50 text-cyan-700',
   conversion: 'bg-pink-50 text-pink-700',
 };
@@ -118,7 +121,7 @@ function AddRuleMenu({
 
 // ── Default conditions ────────────────────────────────────────────────────────
 
-function makeCondition(type: ConditionType, filters: AvailableFilters, init: AddRuleInit = {}): QueryCondition {
+function makeCondition(type: ConditionType, filters: AvailableFilters, init: AddRuleInit = {}, smartCaptureRules: SmartCaptureRule[] = []): QueryCondition {
   const id = generateConditionId();
   switch (type) {
     case 'issue':     return { id, type, issueFilter: 'crashes' };
@@ -136,14 +139,22 @@ function makeCondition(type: ConditionType, filters: AvailableFilters, init: Add
     case 'conversion':return { id, type, preset: 'checkout_bounced' };
     case 'platform':  return { id, type, platform: 'ios' };
     case 'journey':   return { id, type, steps: ['', ''] };
+    case 'smart_capture': return {
+      id,
+      type,
+      status: 'kept',
+      ruleId: smartCaptureRules[0]?.id,
+      ruleName: smartCaptureRules[0] ? (smartCaptureRules[0].name ?? smartCaptureRules[0].label) : undefined,
+    };
   }
 }
 
 // ── Condition row dispatcher ──────────────────────────────────────────────────
 
-function ConditionRow({ cond, onChange, onRemove, filters, loading }: {
+function ConditionRow({ cond, onChange, onRemove, filters, loading, smartCaptureRules }: {
   cond: QueryCondition; onChange: (c: QueryCondition) => void; onRemove: () => void;
   filters: AvailableFilters; loading: boolean;
+  smartCaptureRules: SmartCaptureRule[];
 }) {
   switch (cond.type) {
     case 'issue':      return <IssueRow cond={cond} onChange={onChange as (c: IssueCondition) => void} onRemove={onRemove} />;
@@ -157,15 +168,17 @@ function ConditionRow({ cond, onChange, onRemove, filters, loading }: {
     case 'conversion': return <ConversionRow cond={cond} onChange={onChange as (c: ConversionCondition) => void} onRemove={onRemove} />;
     case 'platform':   return <PlatformRow cond={cond} onChange={onChange as (c: PlatformCondition) => void} onRemove={onRemove} />;
     case 'journey':    return <JourneyRow cond={cond} onChange={onChange as (c: JourneyCondition) => void} onRemove={onRemove} filters={filters} loading={loading} />;
+    case 'smart_capture': return <SmartCaptureRow cond={cond} onChange={onChange as (c: SmartCaptureCondition) => void} onRemove={onRemove} smartCaptureRules={smartCaptureRules} />;
   }
 }
 
 // ── Group card ────────────────────────────────────────────────────────────────
 
-function GroupCard({ group, groupIndex, totalGroups, onChange, onRemove, filters, loading }: {
+function GroupCard({ group, groupIndex, totalGroups, onChange, onRemove, filters, loading, smartCaptureRules }: {
   group: QueryGroup; groupIndex: number; totalGroups: number;
   onChange: (g: QueryGroup) => void; onRemove: () => void;
   filters: AvailableFilters; loading: boolean;
+  smartCaptureRules: SmartCaptureRule[];
 }) {
   const presentTypes = new Set(group.conditions.map((c) => c.type));
   const presentUtmFields = new Set(
@@ -175,7 +188,7 @@ function GroupCard({ group, groupIndex, totalGroups, onChange, onRemove, filters
   );
 
   function addCond(type: ConditionType, init?: AddRuleInit) {
-    onChange({ ...group, conditions: [...group.conditions, makeCondition(type, filters, init)] });
+    onChange({ ...group, conditions: [...group.conditions, makeCondition(type, filters, init, smartCaptureRules)] });
   }
   function updateCond(id: string, updated: QueryCondition) {
     onChange({ ...group, conditions: group.conditions.map((c) => (c.id === id ? updated : c)) });
@@ -220,7 +233,7 @@ function GroupCard({ group, groupIndex, totalGroups, onChange, onRemove, filters
         )}
         {group.conditions.map((cond, idx) => (
           <React.Fragment key={cond.id}>
-            <ConditionRow cond={cond} onChange={(u) => updateCond(cond.id, u)} onRemove={() => removeCond(cond.id)} filters={filters} loading={loading} />
+            <ConditionRow cond={cond} onChange={(u) => updateCond(cond.id, u)} onRemove={() => removeCond(cond.id)} filters={filters} loading={loading} smartCaptureRules={smartCaptureRules} />
             {idx < group.conditions.length - 1 && (
               <div className="flex items-center gap-2 px-4">
                 <div className="h-px flex-1 bg-slate-200" />
@@ -243,7 +256,15 @@ function GroupCard({ group, groupIndex, totalGroups, onChange, onRemove, filters
 
 // ── Main QueryBuilder ─────────────────────────────────────────────────────────
 
-export function QueryBuilder({ groups, onGroupsChange, onClearQueries, availableFilters, isLoadingFilters, projectId }: QueryBuilderProps) {
+export function QueryBuilder({
+  groups,
+  onGroupsChange,
+  onClearQueries,
+  availableFilters,
+  isLoadingFilters,
+  projectId,
+  smartCaptureRules = [],
+}: QueryBuilderProps) {
   const [prompt, setPrompt] = useState('');
   const [isBuilding, setIsBuilding] = useState(false);
   const [builderError, setBuilderError] = useState<string | null>(null);
@@ -373,6 +394,7 @@ export function QueryBuilder({ groups, onGroupsChange, onClearQueries, available
               onChange={(g) => updateGroup(group.id, g)}
               onRemove={() => removeGroup(group.id)}
               filters={availableFilters} loading={isLoadingFilters}
+              smartCaptureRules={smartCaptureRules}
             />
             {idx < groups.length - 1 && (
               <div className="flex items-center gap-3">

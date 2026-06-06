@@ -8,16 +8,9 @@ import { Router } from 'express';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { db, errors, projects, sessions, teamMembers } from '../db/client.js';
 import { sessionAuth, asyncHandler, ApiError } from '../middleware/index.js';
+import { canOpenReplayFromSessionFields } from '../services/replayAvailability.js';
 
 const router = Router();
-
-function canOpenReplayFromSessionFields(session: {
-    replayAvailable?: boolean | null;
-    recordingDeleted?: boolean | null;
-    isReplayExpired?: boolean | null;
-}): boolean {
-    return Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired;
-}
 
 /**
  * Get errors for a project
@@ -105,6 +98,7 @@ router.get(
             .select({
                 error: errors,
                 replayAvailable: sessions.replayAvailable,
+                replayRetentionState: sessions.replayRetentionState,
                 recordingDeleted: sessions.recordingDeleted,
                 isReplayExpired: sessions.isReplayExpired,
             })

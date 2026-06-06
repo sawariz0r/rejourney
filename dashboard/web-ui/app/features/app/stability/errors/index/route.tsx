@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { getErrorsOverview, type ErrorOverviewGroup } from '~/shared/api/client';
@@ -40,6 +41,7 @@ const formatCompact = (value: number): string => {
 
 export const ErrorsList: React.FC = () => {
   const { selectedProject, isLoading: contextLoading } = useSessionData();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const { isDemoMode } = useDemoMode();
   const currentProject = selectedProject;
   const [searchParams] = useSearchParams();
@@ -77,7 +79,7 @@ export const ErrorsList: React.FC = () => {
     };
 
     fetchErrors();
-  }, [currentProject?.id, isDemoMode, timeRange, platform]);
+  }, [currentProject?.id, isDemoMode, manualRefreshVersion, timeRange, platform]);
 
   useEffect(() => {
     window.scrollTo(0, 0);

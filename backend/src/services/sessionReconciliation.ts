@@ -2,14 +2,25 @@ import { eq, sql } from 'drizzle-orm';
 import { db, projects, recordingArtifacts, sessionMetrics, sessions } from '../db/client.js';
 import { logger } from '../logger.js';
 import { updateDeviceUsage } from './recording.js';
-import { incrementProjectSessionReplayIfNeeded } from './quotaCheck.js';
+import { getTeamSessionUsage, incrementProjectSessionReplayIfNeeded } from './quotaCheck.js';
+import { canOpenReplayFromSessionFields } from './replayAvailability.js';
+import { resolveReplayRetention } from './replayRetention.js';
 import { enqueueSessionBackupCandidate } from './sessionBackupQueue.js';
 import {
-    deriveSessionPresentationState,
+    discardSmartCaptureVisualArtifacts,
+    isSmartCaptureEntitled,
+    isSmartCaptureBufferAtLimit,
+    resolveSmartCaptureDecision,
+    type ReplayRetentionState,
+    type SmartCaptureDecision,
+} from './smartCapture.js';
+import { deriveSessionPresentationState } from './sessionPresentationState.js';
+import {
+    deriveSessionEvidenceState,
     loadSessionWorkAggregate,
     SESSION_LIVE_INGEST_WINDOW_MS,
-} from './sessionPresentationState.js';
-import { computeSessionDurationSeconds, hasStoredClosedTiming, resolveAuthoritativeSessionClose, selectMaxObservabilityMinutes, shouldApplySuccessorSessionCap } from './sessionTiming.js';
+} from './sessionEvidence.js';
+import { computeSessionDurationSeconds, hasStoredClosedTiming, resolveAuthoritativeSessionClose, selectMaxObservabilityMinutes } from './sessionTiming.js';
 import { loadSuccessorSessionStartedAt } from './sessionTimingQuery.js';
 
 export const SESSION_FINALIZE_IDLE_MS = SESSION_LIVE_INGEST_WINDOW_MS;
@@ -17,6 +28,7 @@ export const SESSION_FINALIZE_IDLE_MS = SESSION_LIVE_INGEST_WINDOW_MS;
 type ReconcileSessionResult = {
     sessionId: string;
     replayAvailable: boolean;
+    replayRetentionState: ReplayRetentionState | null;
     finalized: boolean;
     status: string;
 };
@@ -72,25 +84,27 @@ export async function reconcileSessionState(sessionId: string, now = new Date())
         return {
             sessionId,
             replayAvailable: Boolean(session.replayAvailable),
+            replayRetentionState: session.replayRetentionState as ReplayRetentionState | null,
             finalized: false,
             status: session.status,
         };
     }
 
     if (session.status === 'completed') {
-        if (session.replayAvailable) {
+        if (canOpenReplayFromSessionFields(session)) {
             await incrementProjectSessionReplayIfNeeded(sessionId);
         }
         return {
             sessionId,
             replayAvailable: Boolean(session.replayAvailable),
+            replayRetentionState: session.replayRetentionState as ReplayRetentionState | null,
             finalized: true,
             status: session.status,
         };
     }
 
     await ensureMetricsRow(sessionId);
-    const [aggregate, successorStartedAt] = await Promise.all([
+    const [aggregate, successorStartedAt, metrics] = await Promise.all([
         loadSessionWorkAggregate(sessionId),
         loadSuccessorSessionStartedAt({
             sessionId: session.id,
@@ -98,45 +112,102 @@ export async function reconcileSessionState(sessionId: string, now = new Date())
             deviceId: session.deviceId,
             startedAt: session.startedAt,
         }),
+        db.select().from(sessionMetrics).where(eq(sessionMetrics.sessionId, sessionId)).limit(1).then((rows) => rows[0] ?? null),
     ]);
 
-    const readyScreenshotCount = aggregate.readyScreenshotCount;
-    const readyScreenshotBytes = aggregate.readyScreenshotBytes;
-    const readyWebReplayCount = aggregate.readyWebReplayCount;
-    const readyWebReplayBytes = aggregate.readyWebReplayBytes;
-    const readyHierarchyCount = aggregate.readyHierarchyCount;
-    const openArtifactCount = aggregate.openArtifactCount;
-    const activeJobCount = aggregate.activeJobCount;
-    const openReplayArtifactCount = aggregate.openReplayArtifactCount;
-    const activeReplayJobCount = aggregate.activeReplayJobCount;
+    const evidence = deriveSessionEvidenceState({
+        aggregate,
+        finalizationIdleMs: SESSION_FINALIZE_IDLE_MS,
+        now,
+        session,
+        successorStartedAt,
+    });
+    const {
+        activeJobCount,
+        activeReplayJobCount,
+        hasReplayArtifacts,
+        latestClientEvidenceEndMs,
+        openArtifactCount,
+        openReplayArtifactCount,
+        readyHierarchyCount,
+        readyScreenshotBytes,
+        readyScreenshotCount,
+        readyWebReplayBytes,
+        readyWebReplayCount,
+        smartCaptureEvidenceSettled,
+        supersededByNewerVisitorSession,
+    } = evidence;
 
     const [project] = await db.select({
+        id: projects.id,
+        teamId: projects.teamId,
         maxRecordingMinutes: projects.maxRecordingMinutes,
         webMaxObservabilityMinutes: projects.webMaxObservabilityMinutes,
+        smartCaptureEnabled: projects.smartCaptureEnabled,
+        smartCaptureMode: projects.smartCaptureMode,
+        smartCapturePreset: projects.smartCapturePreset,
+        smartCaptureRules: projects.smartCaptureRules,
+        smartCaptureDecisionWindowHours: projects.smartCaptureDecisionWindowHours,
     })
         .from(projects)
         .where(eq(projects.id, session.projectId))
         .limit(1);
     const maxRecordingMinutes = selectMaxObservabilityMinutes(project, session.platform);
 
-    const replayAvailable = !session.replayQuotaBillingExhausted && (readyScreenshotCount > 0 || readyWebReplayCount > 0);
+    const smartCaptureEntitled = project?.teamId ? await isSmartCaptureEntitled(project.teamId) : false;
+    let smartCaptureDecision: SmartCaptureDecision = project
+        ? await resolveSmartCaptureDecision({
+            project,
+            session,
+            metrics,
+            hasReplayArtifacts,
+            entitled: smartCaptureEntitled,
+            canDiscardUnmatched: smartCaptureEvidenceSettled,
+            now,
+        })
+        : {
+            status: 'not_applicable',
+            reason: 'project_not_found',
+            ruleId: null,
+            decidedAt: null,
+            shouldExposeReplay: hasReplayArtifacts,
+            shouldDiscardVisualArtifacts: false,
+        };
+
+    const smartCaptureBufferAtLimit = smartCaptureDecision.status === 'pending' && project?.teamId
+        ? await isSmartCaptureBufferAtLimit(project.teamId, session.id)
+        : false;
+    const replayQuotaAtLimit = Boolean(
+        project?.teamId
+        && hasReplayArtifacts
+        && smartCaptureDecision.shouldExposeReplay
+        && smartCaptureDecision.status !== 'pending'
+        && !session.replayQuotaCountedAt
+        && (await getTeamSessionUsage(project.teamId)).isReplayAtLimit
+    );
+    const replayRetention = resolveReplayRetention({
+        hasReplayArtifacts,
+        hasReplayQuotaCounted: Boolean(session.replayQuotaCountedAt),
+        now,
+        replayQuotaAtLimit,
+        replayQuotaBillingExhausted: Boolean(session.replayQuotaBillingExhausted),
+        smartCaptureBufferAtLimit,
+        smartCaptureDecision,
+    });
+    smartCaptureDecision = replayRetention.smartCaptureDecision;
+    const {
+        replayAvailable,
+        replayQuotaBillingExhausted,
+        replayRetentionState,
+    } = replayRetention;
 
     const normalizedStatus = session.status === 'pending' ? 'processing' : session.status;
-    const latestClientEvidenceEndMs = Math.max(
-        Number(aggregate.latestReplayArtifactEndMs ?? 0),
-        Number(aggregate.latestEventArtifactEndMs ?? 0),
-    ) || null;
-    const successorCapsThisSession = shouldApplySuccessorSessionCap({
-        platform: session.platform,
-        successorStartedAt,
-        latestClientEvidenceEndMs,
-    });
-    const supersededByNewerVisitorSession = successorCapsThisSession;
 
     const presentationState = deriveSessionPresentationState({
         status: normalizedStatus,
         platform: session.platform,
         replayAvailable,
+        replayRetentionState,
         recordingDeleted: session.recordingDeleted,
         isReplayExpired: session.isReplayExpired,
         lastIngestActivityAt: session.lastIngestActivityAt,
@@ -157,7 +228,7 @@ export async function reconcileSessionState(sessionId: string, now = new Date())
         latestReplayEndMs: latestClientEvidenceEndMs,
         storedBackgroundTimeSeconds: session.backgroundTimeSeconds,
         maxRecordingMinutes,
-        successorStartedAt: successorCapsThisSession ? successorStartedAt : null,
+        successorStartedAt: supersededByNewerVisitorSession ? successorStartedAt : null,
     });
     const hasLaterWebClientEvidence = Boolean(
         session.platform === 'web'
@@ -180,6 +251,12 @@ export async function reconcileSessionState(sessionId: string, now = new Date())
 
     const sessionUpdate: Record<string, unknown> = {
         replayAvailable,
+        replayQuotaBillingExhausted,
+        replayRetentionState,
+        smartCaptureStatus: smartCaptureDecision.status,
+        smartCaptureReason: smartCaptureDecision.reason,
+        smartCaptureRuleId: smartCaptureDecision.ruleId,
+        smartCaptureDecidedAt: smartCaptureDecision.decidedAt,
         replaySegmentCount: readyScreenshotCount + readyWebReplayCount,
         replayStorageBytes: readyScreenshotBytes + readyWebReplayBytes,
         updatedAt: now,
@@ -212,7 +289,11 @@ export async function reconcileSessionState(sessionId: string, now = new Date())
             .where(eq(sessionMetrics.sessionId, sessionId));
     });
 
-    if (replayAvailable) {
+    if (replayRetention.shouldDiscardVisualArtifacts) {
+        await discardSmartCaptureVisualArtifacts(sessionId);
+    }
+
+    if (replayRetention.shouldCountReplay) {
         await incrementProjectSessionReplayIfNeeded(sessionId);
     }
 
@@ -239,6 +320,9 @@ export async function reconcileSessionState(sessionId: string, now = new Date())
     logger.info({
         sessionId,
         replayAvailable,
+        replayRetentionState,
+        smartCaptureStatus: smartCaptureDecision.status,
+        smartCaptureReason: smartCaptureDecision.reason,
         readyScreenshotCount,
         readyWebReplayCount,
         openArtifactCount,
@@ -252,6 +336,7 @@ export async function reconcileSessionState(sessionId: string, now = new Date())
     return {
         sessionId,
         replayAvailable,
+        replayRetentionState,
         finalized: shouldFinalize,
         status: shouldFinalize ? 'ready' : session.status === 'failed' ? 'failed' : 'processing',
     };
@@ -334,6 +419,48 @@ export async function reconcileDueSessions(batchSize = 500, maxBatches = 20): Pr
     return processed;
 }
 
+export async function reconcileDueSmartCaptureSessions(batchSize = 250, maxBatches = 4): Promise<number> {
+    const now = new Date();
+    const evidenceCutoff = new Date(now.getTime() - SESSION_FINALIZE_IDLE_MS);
+    let processed = 0;
+
+    for (let batch = 0; batch < maxBatches; batch += 1) {
+        const result = await db.execute(sql`
+            select s.id
+            from ${sessions} s
+            join ${projects} p on p.id = s.project_id
+            where s.smart_capture_status = 'pending'
+              and p.deleted_at is null
+              and (
+                (
+                    s.smart_capture_reason = 'waiting_for_session_evidence'
+                    and coalesce(s.last_ingest_activity_at, s.started_at) <= ${evidenceCutoff}
+                )
+                or (
+                    coalesce(s.smart_capture_reason, '') <> 'waiting_for_session_evidence'
+                    and s.started_at <= (${now}::timestamp - make_interval(
+                        hours => least(168, greatest(1, coalesce(p.smart_capture_decision_window_hours, 168)))
+                    ))
+                )
+              )
+            order by s.started_at asc, s.id asc
+            limit ${batchSize}
+        `);
+        const rows = (result as any).rows as Array<{ id: string }> | undefined;
+        const list = rows ?? [];
+        if (list.length === 0) break;
+
+        for (const row of list) {
+            await reconcileSessionState(row.id, now);
+        }
+
+        processed += list.length;
+        if (list.length < batchSize) break;
+    }
+
+    return processed;
+}
+
 export async function backfillArtifactDrivenLifecycleState(): Promise<void> {
     await db.execute(sql`
         insert into ${sessionMetrics} (session_id)
@@ -373,16 +500,25 @@ export async function backfillArtifactDrivenLifecycleState(): Promise<void> {
         )
         update ${sessions} s
         set replay_available = case
-            when coalesce(s.replay_quota_billing_exhausted, false) then false
-            else coalesce(replay.has_replay, false)
-        end
+                when coalesce(s.replay_quota_billing_exhausted, false) then false
+                else coalesce(replay.has_replay, false)
+            end,
+            replay_retention_state = case
+                when coalesce(s.replay_quota_billing_exhausted, false) then 'analytics_only'
+                when coalesce(replay.has_replay, false) then 'saved'
+                else 'not_available'
+            end
         from replay
         where s.id = replay.session_id
     `);
 
     await db.execute(sql`
         update ${sessions} s
-        set replay_available = false
+        set replay_available = false,
+            replay_retention_state = case
+                when coalesce(s.replay_quota_billing_exhausted, false) then 'analytics_only'
+                else 'not_available'
+            end
         where coalesce(s.replay_quota_billing_exhausted, false)
            or not exists (
                 select 1

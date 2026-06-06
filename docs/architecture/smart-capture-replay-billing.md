@@ -7,9 +7,8 @@ counts only when a replay is intentionally kept and made available.
 
 ## Decision Order
 
-The capture pipeline is designed to make future smart capture rules server-side.
-That means apps do not need package updates just to change which replays are
-kept.
+Smart Capture rules are evaluated server-side. Apps do not need browser, React
+Native, iOS, or Android package updates to change which replays are kept.
 
 ```text
 SDK and project controls
@@ -27,11 +26,32 @@ Replay quota
   -> keep analytics data
   -> do not count replay usage
 
-Smart capture
-  -> if replay quota remains, evaluate keep/toss rules
-  -> keep only sessions that match the configured rules
-  -> count replay usage only for kept, available replays
+Smart Capture
+  -> Scale entitlement + project config decide whether rules apply
+  -> delayed rules can place visual artifacts in a hidden buffer
+  -> immediate rules can promote during reconciliation
+  -> delayed rules are revisited by the session lifecycle worker
+  -> count replay usage only after a final kept decision
 ```
+
+## Layered Architecture
+
+The replay decision pipeline has four layers:
+
+```text
+sessionEvidence
+  -> artifact/event readiness, pending evidence, replay counts
+smartCapture
+  -> normalized project config + side-effect-free rule decision
+replayRetention
+  -> replay_available, replay_retention_state, quota/buffer effects
+public presentation
+  -> canOpenReplay and archive/detail/dashboard visibility
+```
+
+`sessionReconciliation` orchestrates those layers and writes denormalized
+session columns. New logic should land in the owning layer rather than expanding
+reconciliation into a second rule engine or UI visibility helper.
 
 ## What Counts As Usage
 
@@ -55,10 +75,50 @@ analytics-only session caused by replay quota. Internally, those sessions are
 marked separately from observe-only mode so operations dashboards can avoid
 confusing quota behavior with broken replay uploads.
 
-## Future Smart Capture Rules
+## Smart Capture Rules
 
-Smart capture rules can be evaluated after the backend receives the session.
-Examples include:
+Project-level config lives on `projects`:
+
+- `smart_capture_enabled`
+- `smart_capture_mode`: `record_all`, `smart_capture`, or `analytics_only`
+- `smart_capture_preset`
+- `smart_capture_rules`
+- `smart_capture_decision_window_hours`
+
+Backend config normalization is intentionally simple: if Smart Capture is not
+enabled or the team is not entitled, the effective capture mode is `record_all`.
+That means disabled Smart Capture is represented as a normal kept replay when
+visual artifacts exist, not as a distinct product state.
+
+Operators manage this config from the Replays page capture icon, which opens the
+Smart Capture modal. Project Settings does not expose a second Smart Capture
+surface; the modal is the user-facing home for rule editing.
+
+Session decisions are stored on `sessions`:
+
+- `replay_retention_state`: `NULL` for legacy rows, then `saved`, `buffered`,
+  `analytics_only`, or `not_available` once new code reconciles the session
+- `smart_capture_status`: `not_applicable`, `pending`, `kept`, or `discarded`
+- `smart_capture_reason`
+- `smart_capture_rule_id`
+- `smart_capture_decided_at`
+
+For the canonical visibility, quota, migration, and backfill matrix, see
+[`dev_docs/replay-state-columns.md`](../../dev_docs/replay-state-columns.md).
+
+Public replay openability is derived, not stored. Use the backend
+`canOpenReplayFromSessionFields()` helper and the dashboard
+`canOpenReplayFromSession()` helper; do not duplicate retention checks in route
+or UI code.
+
+The deploy migration does not run a full-table historical backfill on
+`sessions`. It adds nullable `replay_retention_state`; `NULL` means legacy row,
+so existing rows keep the old visibility behavior through `replay_available`,
+`recording_deleted`, `is_replay_expired`, and quota guards. New reconciliation
+writes precise states going forward; any historical cleanup can run later as a
+low-priority maintenance job.
+
+Rules are evaluated after the backend receives the session. Examples include:
 
 - minimum session duration before a replay is worth retaining
 - rage taps or dead taps
@@ -67,9 +127,27 @@ Examples include:
 - users who churn or do not return after a key flow
 - customer-defined filters
 
-Immediate rules, such as crash or rage tap, can decide quickly. Delayed rules,
-such as churn or failure to return, may require a decision window before the
-visual replay data is retained or discarded.
+Immediate rules, such as crash or rage tap, decide during session
+reconciliation. Delayed rules, such as churn or failure to return, stay
+`pending` until the decision window elapses. Pending sessions use
+`replay_retention_state=buffered`: visual artifacts can exist and
+`replay_available=true` can reflect that artifact truth, but normal dashboard
+replay surfaces filter buffered rows out. The buffer is capped by
+`RJ_SMART_CAPTURE_BUFFER_MAX_REPLAYS`, defaulting to `200000`, and the decision
+window is capped at 7 days.
+
+When a delayed session is buffered, `smart_capture_decided_at` and
+`replay_quota_counted_at` remain null. When a session is finally kept,
+`replay_retention_state=saved` and `project_usage.session_replays` increments
+exactly once via `replay_quota_counted_at`. When a session is discarded,
+analytics/events/metrics remain queryable, `replay_available=false` is set,
+`replay_retention_state=analytics_only`, visual replay artifacts are abandoned,
+and replay usage does not increment. Replay quota is re-checked at promotion
+time; if exhausted, the visual replay is discarded and analytics remains intact.
+
+Rules are normalized JSON. The backend evaluator does not know or care whether a
+rule was created manually or by the AI builder. Compound `all` clauses and scoped
+metrics, such as rage taps on a specific screen/page, use the same evaluator.
 
 ## Observe-Only Is Different
 

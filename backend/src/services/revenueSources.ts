@@ -16,11 +16,11 @@ import {
     buildClickHouseRevenueEventRow,
     writeRevenueEventsToClickHouse,
 } from './clickhouseRevenueEventsSink.js';
-import { safeDecrypt, safeEncrypt } from './crypto.js';
+import { encrypt, isEncryptionKeyConfigured, safeDecrypt, safeEncrypt } from './crypto.js';
 
-// MVP providers only. Stripe can be added later as another adapter that writes
-// into the same generic revenue tables and ClickHouse revenue_events fact table.
-export const SUPPORTED_REVENUE_PROVIDERS = ['custom_events', 'superwall'] as const;
+// Providers all write into the same generic revenue tables and ClickHouse
+// revenue_events fact table.
+export const SUPPORTED_REVENUE_PROVIDERS = ['custom_events', 'superwall', 'revenuecat'] as const;
 export type RevenueProvider = typeof SUPPORTED_REVENUE_PROVIDERS[number];
 export type RevenueConnectionStatus = 'not_connected' | 'connected' | 'syncing' | 'error' | 'disconnected';
 export type RevenueSyncMode = 'initial' | 'manual' | 'scheduled';
@@ -121,7 +121,7 @@ export interface RevenueOverview {
     daily: RevenueDailyRow[];
 }
 
-interface GenericRevenueTransaction {
+export interface GenericRevenueTransaction {
     externalTransactionId: string;
     externalSourceId?: string | null;
     occurredAt: Date;
@@ -158,6 +158,7 @@ interface CustomEventAggregateRow extends RawAggregateRow {
 
 const PROVIDER_LABELS: Record<RevenueProvider, string> = {
     superwall: 'Superwall',
+    revenuecat: 'RevenueCat',
     custom_events: 'Custom events',
 };
 
@@ -175,11 +176,16 @@ function providerSyncKey(projectId: string, provider: RevenueProvider): string {
 }
 
 export function isSuperwallRevenueSourceConfigured(): boolean {
-    return Boolean(config.STORAGE_ENCRYPTION_KEY);
+    return isEncryptionKeyConfigured('superwallApiKey');
+}
+
+export function isRevenueCatRevenueSourceConfigured(): boolean {
+    return isEncryptionKeyConfigured('revenueCatApiKey');
 }
 
 function isProviderConfigured(provider: RevenueProvider): boolean {
     if (provider === 'superwall') return isSuperwallRevenueSourceConfigured();
+    if (provider === 'revenuecat') return isRevenueCatRevenueSourceConfigured();
     return true;
 }
 
@@ -509,6 +515,393 @@ function normalizeCustomEventConfig(raw: unknown): CustomRevenueEventConfig | nu
 function nullableTrim(value: unknown): string | null {
     const text = typeof value === 'string' ? value.trim() : '';
     return text || null;
+}
+
+function escapeClickHouseString(value: string): string {
+    return value.replace(/\\/g, '\\\\').replace(/'/g, "''");
+}
+
+async function superwallResponseErrorMessage(response: Response, fallback: string): Promise<string> {
+    const detail = await response.text()
+        .then((text) => text
+            .replace(/sk_[a-zA-Z0-9]+/g, 'sk_[REDACTED]')
+            .replace(/pk_[a-zA-Z0-9]+/g, 'pk_[REDACTED]')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 240))
+        .catch(() => '');
+    return detail ? `${fallback}: ${detail}` : fallback;
+}
+
+export function buildSuperwallQueryEndpoint(baseUrl: string, organizationId: string): string {
+    const trimmedOrganizationId = nullableTrim(organizationId);
+    if (!trimmedOrganizationId) {
+        throw new Error('Superwall organization ID is required for revenue sync');
+    }
+
+    return `${baseUrl.replace(/\/+$/, '')}/v2/organizations/${encodeURIComponent(trimmedOrganizationId)}/query`;
+}
+
+export function buildSuperwallProjectsEndpoint(baseUrl: string): string {
+    return `${baseUrl.replace(/\/+$/, '')}/v2/projects?limit=1`;
+}
+
+function normalizeSuperwallId(value: unknown): string | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    return nullableTrim(value);
+}
+
+export function extractSuperwallOrganizationId(payload: unknown): string | null {
+    const seen = new Set<unknown>();
+    const visit = (value: unknown): string | null => {
+        if (!value || typeof value !== 'object') return null;
+        if (seen.has(value)) return null;
+        seen.add(value);
+
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                const found = visit(item);
+                if (found) return found;
+            }
+            return null;
+        }
+
+        const record = value as Record<string, unknown>;
+        const direct = normalizeSuperwallId(record.organization_id ?? record.organizationId);
+        if (direct) return direct;
+
+        for (const child of Object.values(record)) {
+            const found = visit(child);
+            if (found) return found;
+        }
+        return null;
+    };
+
+    return visit(payload);
+}
+
+export function buildSuperwallRevenueQuery(since: Date, applicationId?: string | null): string {
+    const appId = nullableTrim(applicationId);
+    const appFilter = appId ? `AND toString(applicationId) = '${escapeClickHouseString(appId)}'` : '';
+    const eventTimestamp = 'coalesce(transactionCompleteEventDate, purchasedAt, ts)';
+    const amountExpression = 'toFloat64(coalesce(priceInPurchasedCurrency, price, proceeds, 0))';
+
+    return `
+        SELECT
+          toDate(${eventTimestamp}) AS date,
+          lower(coalesce(currencyCode, 'usd')) AS currency,
+          sum(if(isRefund = 1, -abs(${amountExpression}), abs(${amountExpression}))) AS gross_amount,
+          count() AS transaction_count
+        FROM open_revenue.attributed_events_by_ts_rep
+        WHERE ${eventTimestamp} >= toDateTime('${since.toISOString().replace('T', ' ').slice(0, 19)}')
+          ${appFilter}
+        GROUP BY date, currency
+        ORDER BY date ASC
+        FORMAT JSONEachRow
+    `;
+}
+
+async function discoverSuperwallOrganizationId(apiKey: string): Promise<string> {
+    const response = await fetch(buildSuperwallProjectsEndpoint(config.SUPERWALL_API_BASE_URL), {
+        method: 'GET',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            Accept: 'application/json',
+        },
+    });
+
+    if (response.status === 401) {
+        throw new Error('Superwall API key is invalid or revoked');
+    }
+    if (response.status === 403) {
+        throw new Error('Superwall API key needs projects:read and data:read scopes');
+    }
+    if (!response.ok) {
+        throw new Error(await superwallResponseErrorMessage(
+            response,
+            `Superwall project discovery failed (${response.status})`,
+        ));
+    }
+
+    const payload = await response.json().catch(() => null);
+    const organizationId = extractSuperwallOrganizationId(payload);
+    if (!organizationId) {
+        throw new Error('Unable to discover Superwall organization ID. Make sure the key has projects:read access to at least one Superwall project.');
+    }
+
+    return organizationId;
+}
+
+async function validateSuperwallDataReadAccess(apiKey: string, organizationId: string): Promise<void> {
+    const response = await fetch(buildSuperwallQueryEndpoint(config.SUPERWALL_API_BASE_URL, organizationId), {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'text/plain; charset=utf-8',
+            Accept: 'application/json, text/plain',
+        },
+        body: 'SELECT 1 FORMAT JSONEachRow',
+    });
+
+    if (response.status === 401) {
+        throw new Error('Superwall API key is invalid or revoked');
+    }
+    if (response.status === 403) {
+        throw new Error('Superwall API key needs projects:read and data:read scopes');
+    }
+    if (!response.ok) {
+        throw new Error(await superwallResponseErrorMessage(
+            response,
+            `Superwall query access check failed (${response.status})`,
+        ));
+    }
+}
+
+async function revenueCatResponseErrorMessage(response: Response, fallback: string): Promise<string> {
+    const detail = await response.text()
+        .then((text) => text
+            .replace(/sk_[a-zA-Z0-9_:-]+/g, 'sk_[REDACTED]')
+            .replace(/atk_[a-zA-Z0-9_:-]+/g, 'atk_[REDACTED]')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 240))
+        .catch(() => '');
+    return detail ? `${fallback}: ${detail}` : fallback;
+}
+
+function buildRevenueCatApiUrl(baseUrl: string, path: string): URL {
+    return new URL(`${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`);
+}
+
+export function buildRevenueCatOverviewEndpoint(
+    baseUrl: string,
+    revenueCatProjectId: string,
+    currency?: string | null,
+): string {
+    const projectId = nullableTrim(revenueCatProjectId);
+    if (!projectId) {
+        throw new Error('RevenueCat project ID is required for revenue sync');
+    }
+
+    const url = buildRevenueCatApiUrl(
+        baseUrl,
+        `/projects/${encodeURIComponent(projectId)}/metrics/overview`,
+    );
+    const currencyCode = nullableTrim(currency);
+    if (currencyCode) url.searchParams.set('currency', currencyCode.toUpperCase());
+    return url.toString();
+}
+
+export function buildRevenueCatRevenueChartEndpoint(input: {
+    baseUrl: string;
+    revenueCatProjectId: string;
+    startDate: string;
+    endDate: string;
+    currency?: string | null;
+}): string {
+    const projectId = nullableTrim(input.revenueCatProjectId);
+    if (!projectId) {
+        throw new Error('RevenueCat project ID is required for revenue sync');
+    }
+
+    const url = buildRevenueCatApiUrl(
+        input.baseUrl,
+        `/projects/${encodeURIComponent(projectId)}/charts/revenue`,
+    );
+    url.searchParams.set('realtime', 'true');
+    url.searchParams.set('resolution', '0');
+    url.searchParams.set('start_date', input.startDate);
+    url.searchParams.set('end_date', input.endDate);
+    const currencyCode = nullableTrim(input.currency);
+    if (currencyCode) url.searchParams.set('currency', currencyCode.toUpperCase());
+    return url.toString();
+}
+
+function parseRevenueCatDateKey(value: unknown): string | null {
+    if (typeof value === 'string') {
+        const text = value.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+        const numeric = Number(text);
+        if (Number.isFinite(numeric)) return parseRevenueCatDateKey(numeric);
+        const parsed = new Date(text);
+        return Number.isNaN(parsed.getTime()) ? null : toUtcDateKey(parsed);
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const millis = value > 10_000_000_000 ? value : value * 1000;
+        const parsed = new Date(millis);
+        return Number.isNaN(parsed.getTime()) ? null : toUtcDateKey(parsed);
+    }
+
+    return null;
+}
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+    const date = new Date(`${dateKey}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return toUtcDateKey(date);
+}
+
+function measureName(value: unknown): string {
+    const record = asRecord(value);
+    const raw = record
+        ? record.id ?? record.name ?? record.display_name ?? record.key ?? record.label
+        : value;
+    return typeof raw === 'string' ? raw.toLowerCase() : '';
+}
+
+function findRevenueCatMeasureValue(
+    values: unknown[],
+    measures: string[],
+    patterns: RegExp[],
+    fallbackIndex: number,
+): unknown {
+    const measureIndex = measures.findIndex((name) => patterns.some((pattern) => pattern.test(name)));
+    if (measureIndex >= 0) {
+        const valueIndex = measures.length === values.length - 1 ? measureIndex + 1 : measureIndex;
+        return values[valueIndex];
+    }
+    return values[fallbackIndex];
+}
+
+function firstRecordValue(record: Record<string, unknown>, keys: string[]): unknown {
+    for (const key of keys) {
+        if (record[key] !== undefined && record[key] !== null) return record[key];
+    }
+    return undefined;
+}
+
+export function parseRevenueCatRevenueChartRows(payload: unknown): GenericRevenueTransaction[] {
+    const record = asRecord(payload) ?? {};
+    const chartCurrency = normalizeCurrency(
+        record.yaxis_currency ?? record.currency ?? record.currency_code,
+        'usd',
+    );
+    const values = Array.isArray(record.values) ? record.values : [];
+    const measures = Array.isArray(record.measures) ? record.measures.map(measureName) : [];
+
+    return values.flatMap((point) => {
+        let dateKey: string | null = null;
+        let amountCents: number | null = null;
+        let transactionCount = 1;
+        let currency = chartCurrency;
+
+        if (Array.isArray(point)) {
+            dateKey = parseRevenueCatDateKey(point[0]);
+            const amountValue = findRevenueCatMeasureValue(
+                point,
+                measures,
+                [/gross/, /revenue/, /proceeds/, /value/, /amount/],
+                1,
+            );
+            amountCents = minorFromMajorAmount(amountValue);
+            transactionCount = positiveInt(findRevenueCatMeasureValue(
+                point,
+                measures,
+                [/transaction/, /purchase/, /count/],
+                2,
+            )) || 1;
+        } else {
+            const pointRecord = asRecord(point);
+            if (!pointRecord) return [];
+            dateKey = parseRevenueCatDateKey(firstRecordValue(pointRecord, [
+                'date',
+                'start_date',
+                'end_date',
+                'timestamp',
+                'time',
+                'x',
+            ]));
+            amountCents = minorFromMajorAmount(firstRecordValue(pointRecord, [
+                'gross_revenue',
+                'revenue',
+                'proceeds',
+                'amount',
+                'value',
+                'y',
+            ]));
+            transactionCount = positiveInt(firstRecordValue(pointRecord, [
+                'transaction_count',
+                'transactions',
+                'purchase_count',
+                'purchases',
+                'count',
+            ])) || 1;
+            currency = normalizeCurrency(pointRecord.currency ?? pointRecord.currency_code, chartCurrency);
+        }
+
+        if (!dateKey || amountCents === null) return [];
+        const occurredAt = new Date(`${dateKey}T00:00:00Z`);
+        const reportingCategory = amountCents < 0 ? 'refund' : 'revenue';
+        return [{
+            externalTransactionId: `revenuecat:${dateKey}:${currency}`,
+            occurredAt,
+            amountCents,
+            feeCents: 0,
+            netCents: amountCents,
+            grossAmountCents: amountCents > 0 ? amountCents : 0,
+            refundAmountCents: amountCents < 0 ? Math.abs(amountCents) : 0,
+            currency,
+            type: reportingCategory,
+            reportingCategory,
+            metadata: {
+                source: 'revenuecat_revenue_chart',
+                chart: 'revenue',
+                transactionCount,
+            },
+        } satisfies GenericRevenueTransaction];
+    });
+}
+
+async function assertRevenueCatApiResponseOk(response: Response, fallback: string): Promise<void> {
+    if (response.status === 401) {
+        throw new Error('RevenueCat API key is invalid or revoked');
+    }
+    if (response.status === 403) {
+        throw new Error('RevenueCat API key needs charts_metrics:overview:read and charts_metrics:charts:read permissions');
+    }
+    if (response.status === 404) {
+        throw new Error('RevenueCat project not found for this API key');
+    }
+    if (!response.ok) {
+        throw new Error(await revenueCatResponseErrorMessage(
+            response,
+            fallback,
+        ));
+    }
+}
+
+async function validateRevenueCatApiAccess(apiKey: string, revenueCatProjectId: string): Promise<void> {
+    const headers = {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: 'application/json',
+    };
+    const overviewResponse = await fetch(buildRevenueCatOverviewEndpoint(
+        config.REVENUECAT_API_BASE_URL,
+        revenueCatProjectId,
+    ), {
+        method: 'GET',
+        headers,
+    });
+    await assertRevenueCatApiResponseOk(
+        overviewResponse,
+        `RevenueCat overview access check failed (${overviewResponse.status})`,
+    );
+
+    const today = toUtcDateKey(new Date());
+    const chartResponse = await fetch(buildRevenueCatRevenueChartEndpoint({
+        baseUrl: config.REVENUECAT_API_BASE_URL,
+        revenueCatProjectId,
+        startDate: today,
+        endDate: today,
+    }), {
+        method: 'GET',
+        headers,
+    });
+    await assertRevenueCatApiResponseOk(
+        chartResponse,
+        `RevenueCat revenue chart access check failed (${chartResponse.status})`,
+    );
 }
 
 function normalizeRevenueDateKey(value: unknown): string {
@@ -1081,17 +1474,18 @@ export async function connectSuperwallRevenue(input: {
     projectId: string;
     userId: string;
     apiKey: string;
-    organizationId?: string | null;
-    applicationId?: string | null;
 }): Promise<{ connectionId: string }> {
     if (!isSuperwallRevenueSourceConfigured()) {
-        throw new Error('STORAGE_ENCRYPTION_KEY is required for Superwall API key storage');
+        throw new Error('SUPERWALL_API_KEY_ENCRYPTION_KEY is required for Superwall API key storage');
     }
 
     const project = await getProjectForRevenue(input.projectId);
     if (!project) throw new Error('Project not found');
     const apiKey = input.apiKey.trim();
     if (apiKey.length < 12) throw new Error('A scoped Superwall API key is required');
+    const organizationId = await discoverSuperwallOrganizationId(apiKey);
+    await validateSuperwallDataReadAccess(apiKey, organizationId);
+    const encryptedApiKey = encrypt(apiKey, 'superwallApiKey');
     const now = new Date();
     const [connection] = await db
         .insert(projectRevenueConnections)
@@ -1100,14 +1494,14 @@ export async function connectSuperwallRevenue(input: {
             teamId: project.teamId,
             connectedByUserId: input.userId,
             provider: 'superwall',
-            externalAccountId: input.organizationId || input.applicationId || null,
+            externalAccountId: organizationId,
             externalAccountName: 'Superwall',
             status: 'connected',
-            apiKeyEncrypted: safeEncrypt(apiKey) ?? apiKey,
+            apiKeyEncrypted: encryptedApiKey,
             apiKeyLast4: apiKey.slice(-4),
             connectionConfig: {
-                organizationId: nullableTrim(input.organizationId),
-                applicationId: nullableTrim(input.applicationId),
+                organizationId,
+                applicationId: null,
             },
             lastSyncStartedAt: now,
             lastSyncError: null,
@@ -1118,14 +1512,14 @@ export async function connectSuperwallRevenue(input: {
             set: {
                 teamId: project.teamId,
                 connectedByUserId: input.userId,
-                externalAccountId: input.organizationId || input.applicationId || null,
+                externalAccountId: organizationId,
                 externalAccountName: 'Superwall',
                 status: 'connected',
-                apiKeyEncrypted: safeEncrypt(apiKey) ?? apiKey,
+                apiKeyEncrypted: encryptedApiKey,
                 apiKeyLast4: apiKey.slice(-4),
                 connectionConfig: {
-                    organizationId: nullableTrim(input.organizationId),
-                    applicationId: nullableTrim(input.applicationId),
+                    organizationId,
+                    applicationId: null,
                 },
                 lastSyncStartedAt: now,
                 lastSyncError: null,
@@ -1143,11 +1537,15 @@ export async function connectSuperwallRevenue(input: {
 }
 
 async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): Promise<void> {
+    if (!isSuperwallRevenueSourceConfigured()) {
+        throw new Error('SUPERWALL_API_KEY_ENCRYPTION_KEY is required for Superwall API key storage');
+    }
+
     const connection = await getProviderConnection(projectId, 'superwall');
     if (!connection || connection.status === 'disconnected') {
         throw new Error('Superwall revenue is not connected for this project');
     }
-    const apiKey = connection.apiKeyEncrypted ? safeDecrypt(connection.apiKeyEncrypted) : null;
+    const apiKey = connection.apiKeyEncrypted ? safeDecrypt(connection.apiKeyEncrypted, 'superwallApiKey') : null;
     if (!apiKey || apiKey === 'disconnected') {
         throw new Error('Superwall API key is unavailable');
     }
@@ -1156,34 +1554,42 @@ async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): P
     const since = mode === 'initial' || !connection.newestSyncedAt
         ? new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
         : new Date(connection.newestSyncedAt.getTime() - 48 * 60 * 60 * 1000);
-    const queryEndpoint = `${config.SUPERWALL_API_BASE_URL.replace(/\/+$/, '')}/v1/query`;
+    let organizationId = nullableTrim(connectionConfig.organizationId);
+    if (!organizationId) {
+        organizationId = await discoverSuperwallOrganizationId(apiKey);
+        await validateSuperwallDataReadAccess(apiKey, organizationId);
+        await db
+            .update(projectRevenueConnections)
+            .set({
+                externalAccountId: organizationId,
+                connectionConfig: {
+                    ...connectionConfig,
+                    organizationId,
+                    applicationId: nullableTrim(connectionConfig.applicationId),
+                },
+                lastSyncError: null,
+                updatedAt: new Date(),
+            })
+            .where(eq(projectRevenueConnections.id, connection.id));
+    }
+    const queryEndpoint = buildSuperwallQueryEndpoint(config.SUPERWALL_API_BASE_URL, organizationId);
     const applicationId = nullableTrim(connectionConfig.applicationId);
-    const appFilter = applicationId ? `AND application_id = '${applicationId.replace(/'/g, "''")}'` : '';
-    const query = `
-        SELECT
-          toDate(ts) AS date,
-          lower(coalesce(currency, 'usd')) AS currency,
-          sum(coalesce(amount, revenue, price, 0)) AS gross_amount,
-          count() AS transaction_count
-        FROM open_revenue.attributed_events_by_ts_rep
-        WHERE ts >= toDateTime('${since.toISOString().replace('T', ' ').slice(0, 19)}')
-          ${appFilter}
-        GROUP BY date, currency
-        ORDER BY date ASC
-        FORMAT JSONEachRow
-    `;
+    const query = buildSuperwallRevenueQuery(since, applicationId);
 
     const response = await fetch(queryEndpoint, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+            'Content-Type': 'text/plain; charset=utf-8',
             Accept: 'application/json, text/plain',
         },
-        body: JSON.stringify({ query }),
+        body: query,
     });
     if (!response.ok) {
-        throw new Error(`Superwall query failed (${response.status})`);
+        throw new Error(await superwallResponseErrorMessage(
+            response,
+            `Superwall revenue query failed (${response.status})`,
+        ));
     }
 
     const body = await response.text();
@@ -1245,6 +1651,189 @@ async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): P
 
     await upsertGenericRevenueTransactions(connection, 'superwall', transactions);
     await rebuildGenericProviderDailyRollups(projectId, 'superwall', rebuildDateKeys);
+}
+
+export async function connectRevenueCatRevenue(input: {
+    projectId: string;
+    userId: string;
+    apiKey: string;
+    revenueCatProjectId: string;
+}): Promise<{ connectionId: string }> {
+    if (!isRevenueCatRevenueSourceConfigured()) {
+        throw new Error('REVENUECAT_API_KEY_ENCRYPTION_KEY is required for RevenueCat API key storage');
+    }
+
+    const project = await getProjectForRevenue(input.projectId);
+    if (!project) throw new Error('Project not found');
+    const apiKey = input.apiKey.trim();
+    const revenueCatProjectId = input.revenueCatProjectId.trim();
+    if (!/^sk_[a-zA-Z0-9_:-]{8,}$/.test(apiKey)) {
+        throw new Error('A RevenueCat v2 secret API key is required');
+    }
+    if (!/^proj[a-zA-Z0-9_:-]{4,}$/.test(revenueCatProjectId)) {
+        throw new Error('RevenueCat project ID must start with proj');
+    }
+
+    await validateRevenueCatApiAccess(apiKey, revenueCatProjectId);
+    const encryptedApiKey = encrypt(apiKey, 'revenueCatApiKey');
+    const now = new Date();
+    const [connection] = await db
+        .insert(projectRevenueConnections)
+        .values({
+            projectId: project.id,
+            teamId: project.teamId,
+            connectedByUserId: input.userId,
+            provider: 'revenuecat',
+            externalAccountId: revenueCatProjectId,
+            externalAccountName: `RevenueCat project ${revenueCatProjectId}`,
+            status: 'connected',
+            apiKeyEncrypted: encryptedApiKey,
+            apiKeyLast4: apiKey.slice(-4),
+            connectionConfig: {
+                projectId: revenueCatProjectId,
+                apiVersion: 'v2',
+                requiredPermissions: [
+                    'charts_metrics:overview:read',
+                    'charts_metrics:charts:read',
+                ],
+            },
+            lastSyncStartedAt: now,
+            lastSyncError: null,
+            updatedAt: now,
+        })
+        .onConflictDoUpdate({
+            target: [projectRevenueConnections.projectId, projectRevenueConnections.provider],
+            set: {
+                teamId: project.teamId,
+                connectedByUserId: input.userId,
+                externalAccountId: revenueCatProjectId,
+                externalAccountName: `RevenueCat project ${revenueCatProjectId}`,
+                status: 'connected',
+                apiKeyEncrypted: encryptedApiKey,
+                apiKeyLast4: apiKey.slice(-4),
+                connectionConfig: {
+                    projectId: revenueCatProjectId,
+                    apiVersion: 'v2',
+                    requiredPermissions: [
+                        'charts_metrics:overview:read',
+                        'charts_metrics:charts:read',
+                    ],
+                },
+                lastSyncStartedAt: now,
+                lastSyncError: null,
+                updatedAt: now,
+            },
+        })
+        .returning({ id: projectRevenueConnections.id });
+
+    await setProjectRevenueActiveProvider(input.projectId, 'revenuecat', input.userId);
+    void enqueueGenericRevenueSync(input.projectId, 'revenuecat', 'initial').catch((err) => {
+        logger.error({ err, projectId: input.projectId }, 'Unable to enqueue initial RevenueCat revenue sync');
+    });
+
+    return { connectionId: connection.id };
+}
+
+async function replaceRevenueProviderTransactionsForDateRange(
+    connection: NonNullable<Awaited<ReturnType<typeof getProviderConnection>>>,
+    provider: RevenueProvider,
+    rows: GenericRevenueTransaction[],
+    startDateKey: string,
+    endDateKey: string,
+): Promise<string[]> {
+    const startAt = new Date(`${startDateKey}T00:00:00Z`);
+    const endExclusive = new Date(`${addDaysToDateKey(endDateKey, 1)}T00:00:00Z`);
+    const existingRows = await dbRead
+        .select({
+            id: revenueProviderTransactions.id,
+            date: sql<string>`(${revenueProviderTransactions.occurredAt} AT TIME ZONE 'UTC')::date::text`,
+        })
+        .from(revenueProviderTransactions)
+        .where(and(
+            eq(revenueProviderTransactions.projectId, connection.projectId),
+            eq(revenueProviderTransactions.provider, provider),
+            gte(revenueProviderTransactions.occurredAt, startAt),
+            lt(revenueProviderTransactions.occurredAt, endExclusive),
+        ));
+
+    for (let index = 0; index < existingRows.length; index += GENERIC_REVENUE_UPSERT_BATCH_SIZE) {
+        const batch = existingRows.slice(index, index + GENERIC_REVENUE_UPSERT_BATCH_SIZE).map((row) => row.id);
+        await db
+            .delete(revenueProviderTransactions)
+            .where(inArray(revenueProviderTransactions.id, batch));
+    }
+
+    await upsertGenericRevenueTransactions(connection, provider, rows);
+    return [
+        ...existingRows.map((row) => row.date).filter(Boolean),
+        ...rows.map((row) => toUtcDateKey(row.occurredAt)),
+    ];
+}
+
+async function syncRevenueCatRevenue(projectId: string, mode: RevenueSyncMode): Promise<void> {
+    if (!isRevenueCatRevenueSourceConfigured()) {
+        throw new Error('REVENUECAT_API_KEY_ENCRYPTION_KEY is required for RevenueCat API key storage');
+    }
+
+    const connection = await getProviderConnection(projectId, 'revenuecat');
+    if (!connection || connection.status === 'disconnected') {
+        throw new Error('RevenueCat revenue is not connected for this project');
+    }
+    const apiKey = connection.apiKeyEncrypted ? safeDecrypt(connection.apiKeyEncrypted, 'revenueCatApiKey') : null;
+    if (!apiKey || apiKey === 'disconnected') {
+        throw new Error('RevenueCat API key is unavailable');
+    }
+
+    const connectionConfig = asRecord(connection.connectionConfig) || {};
+    const revenueCatProjectId = nullableTrim(connectionConfig.projectId) || nullableTrim(connection.externalAccountId);
+    if (!revenueCatProjectId) {
+        throw new Error('RevenueCat project ID is unavailable');
+    }
+
+    const startDate = mode === 'initial' || !connection.newestSyncedAt
+        ? new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+        : new Date(connection.newestSyncedAt.getTime() - 48 * 60 * 60 * 1000);
+    const startDateKey = toUtcDateKey(startDate);
+    const endDateKey = toUtcDateKey(new Date());
+    const response = await fetch(buildRevenueCatRevenueChartEndpoint({
+        baseUrl: config.REVENUECAT_API_BASE_URL,
+        revenueCatProjectId,
+        startDate: startDateKey,
+        endDate: endDateKey,
+    }), {
+        method: 'GET',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            Accept: 'application/json',
+        },
+    });
+
+    if (response.status === 401) {
+        throw new Error('RevenueCat API key is invalid or revoked');
+    }
+    if (response.status === 403) {
+        throw new Error('RevenueCat API key needs charts_metrics:overview:read and charts_metrics:charts:read permissions');
+    }
+    if (response.status === 404) {
+        throw new Error('RevenueCat project not found for this API key');
+    }
+    if (!response.ok) {
+        throw new Error(await revenueCatResponseErrorMessage(
+            response,
+            `RevenueCat revenue chart sync failed (${response.status})`,
+        ));
+    }
+
+    const payload = await response.json().catch(() => null);
+    const transactions = parseRevenueCatRevenueChartRows(payload);
+    const rebuildDateKeys = await replaceRevenueProviderTransactionsForDateRange(
+        connection,
+        'revenuecat',
+        transactions,
+        startDateKey,
+        endDateKey,
+    );
+    await rebuildGenericProviderDailyRollups(projectId, 'revenuecat', rebuildDateKeys);
 }
 
 export async function configureCustomEventRevenue(input: {
@@ -1841,6 +2430,8 @@ export async function syncGenericRevenueProvider(
 
         if (provider === 'superwall') {
             await syncSuperwallRevenue(projectId, mode);
+        } else if (provider === 'revenuecat') {
+            await syncRevenueCatRevenue(projectId, mode);
         } else if (provider === 'custom_events') {
             const normalizedConfig = normalizeCustomEventConfig(connection.customEventConfig);
             if (normalizedConfig) {
@@ -1919,14 +2510,19 @@ export async function syncGenericRevenueProvider(
 export async function disconnectGenericRevenueProvider(projectId: string, provider: RevenueProvider): Promise<void> {
     const connection = await getProviderConnection(projectId, provider);
     if (!connection) return;
+    const credentialKeyPurpose = provider === 'superwall'
+        ? 'superwallApiKey'
+        : provider === 'revenuecat'
+            ? 'revenueCatApiKey'
+            : 'storage';
 
     await db
         .update(projectRevenueConnections)
         .set({
             status: 'disconnected',
-            accessTokenEncrypted: connection.accessTokenEncrypted ? safeEncrypt('disconnected') : null,
+            accessTokenEncrypted: connection.accessTokenEncrypted ? safeEncrypt('disconnected', credentialKeyPurpose) : null,
             refreshTokenEncrypted: null,
-            apiKeyEncrypted: connection.apiKeyEncrypted ? safeEncrypt('disconnected') : null,
+            apiKeyEncrypted: connection.apiKeyEncrypted ? safeEncrypt('disconnected', credentialKeyPurpose) : null,
             lastSyncError: null,
             updatedAt: new Date(),
         })

@@ -683,6 +683,30 @@
     box-shadow: 2px 2px 0 #000;
   }
 
+  .pricing-plan-rail {
+    scroll-padding-inline: 1.25rem;
+    scrollbar-color: rgb(148 163 184 / 0.55) transparent;
+    scrollbar-width: thin;
+  }
+
+  .pricing-plan-rail::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  .pricing-plan-rail::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .pricing-plan-rail::-webkit-scrollbar-thumb {
+    background: rgb(148 163 184 / 0.45);
+    border: 3px solid #ffffff;
+    border-radius: 999px;
+  }
+
+  .pricing-plan-rail::-webkit-scrollbar-thumb:hover {
+    background: rgb(100 116 139 / 0.7);
+  }
+
   @keyframes shimmer {
     0% {
       transform: translateX(-100%);
@@ -2772,7 +2796,7 @@
 }
 
 .heatmap-phone-frame {
-  max-width: 340px;
+  max-width: 420px;
   margin-inline: auto;
   border-color: #101827 !important;
   border-radius: 34px !important;
@@ -2883,7 +2907,7 @@
   }
 
   .rejourney-heatmaps-page .heatmap-primary-stage:not(.heatmap-web-scroll-stage) .heatmap-phone-frame {
-    width: min(340px, 100%, 34dvh);
+    width: min(420px, 100%, 38dvh);
   }
 
   .rejourney-heatmaps-page .heatmap-side-panel {
@@ -2919,7 +2943,7 @@
 
 @media (min-width: 1280px) and (max-height: 760px) {
   .rejourney-heatmaps-page .heatmap-primary-stage:not(.heatmap-web-scroll-stage) .heatmap-phone-frame {
-    width: min(300px, 100%, 29dvh);
+    width: min(360px, 100%, 35dvh);
   }
 
   .rejourney-heatmaps-page .heatmap-page-hero-inner,
@@ -3692,6 +3716,57 @@
 
 .rejourney-replays-page :where(.dashboard-page-header) {
   background: #f8fafd !important;
+}
+
+.rejourney-replays-page :where(.smart-capture-trigger) {
+  border-color: #000000 !important;
+  border-width: 2px !important;
+  border-radius: 0 !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 1) !important;
+}
+
+.rejourney-replays-page :where(.smart-capture-trigger:hover:not(:disabled)) {
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 1) !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(.border-black) {
+  border-color: #000000 !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(.border-2) {
+  border-width: 2px !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(.border-t-2) {
+  border-top-width: 2px !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(.border-r-2) {
+  border-right-width: 2px !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(.border-b-2) {
+  border-bottom-width: 2px !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(.border-l-2) {
+  border-left-width: 2px !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(button, input, select, .dashboard-pill) {
+  border-radius: 0 !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(.shadow-neo-sm) {
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 1) !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(.shadow-neo) {
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 1) !important;
+}
+
+.rejourney-replays-page .smart-capture-retro-surface :where(.shadow-neo-lg) {
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 1) !important;
 }
 
 .rejourney-replay-workbench .replay-workbench-header {
@@ -4496,6 +4571,28 @@
   max-width: 100%;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-inline: contain;
+}
+
+.sessions-list-shell {
+  container-type: inline-size;
+}
+
+.sessions-mobile-list {
+  display: block;
+}
+
+.sessions-desktop-table {
+  display: none;
+}
+
+@container (min-width: 1180px) {
+  .sessions-list-shell .sessions-mobile-list {
+    display: none;
+  }
+
+  .sessions-list-shell .sessions-desktop-table {
+    display: block;
+  }
 }
 
 /* Keep inner dashboard route wrappers from introducing conflicting page backgrounds. */

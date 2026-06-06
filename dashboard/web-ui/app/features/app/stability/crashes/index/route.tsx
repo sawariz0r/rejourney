@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { api, CrashReport, getCrashesOverview, type CrashOverviewGroup } from '~/shared/api/client';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
@@ -40,6 +41,7 @@ const formatCompact = (value: number): string => {
 
 export const CrashesList: React.FC = () => {
   const { selectedProject, projectsLoading } = useSessionData();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const pathPrefix = usePathPrefix();
@@ -78,7 +80,7 @@ export const CrashesList: React.FC = () => {
     return () => {
        cancelled = true;
     };
-  }, [selectedProject?.id, timeRange, platform]);
+  }, [manualRefreshVersion, selectedProject?.id, timeRange, platform]);
 
   useEffect(() => {
     window.scrollTo(0, 0);

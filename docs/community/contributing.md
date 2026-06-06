@@ -42,7 +42,7 @@ Fill the required local secrets in `.env.k8s.local`. For a local development
 environment, random 32-byte hex values are fine:
 
 ```bash
-for key in JWT_SECRET JWT_SIGNING_KEY INGEST_HMAC_SECRET STORAGE_ENCRYPTION_KEY; do
+for key in JWT_SECRET JWT_SIGNING_KEY INGEST_HMAC_SECRET STORAGE_ENCRYPTION_KEY SUPERWALL_API_KEY_ENCRYPTION_KEY REVENUECAT_API_KEY_ENCRYPTION_KEY; do
   perl -0pi -e "s|^$key=.*$|$key=$(openssl rand -hex 32)|m" .env.k8s.local
 done
 ```
@@ -139,6 +139,8 @@ JWT_SECRET=<random 32-byte hex>
 JWT_SIGNING_KEY=<random 32-byte hex>
 INGEST_HMAC_SECRET=<random 32-byte hex>
 STORAGE_ENCRYPTION_KEY=<random 32-byte hex>
+SUPERWALL_API_KEY_ENCRYPTION_KEY=<random 32-byte hex>
+REVENUECAT_API_KEY_ENCRYPTION_KEY=<random 32-byte hex>
 
 PUBLIC_DASHBOARD_URL=http://127.0.0.1:8080
 PUBLIC_API_URL=http://127.0.0.1:3000

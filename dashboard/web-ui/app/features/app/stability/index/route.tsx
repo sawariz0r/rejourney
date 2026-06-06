@@ -33,6 +33,7 @@ import { platformLensToSessionPlatform, useSharedPlatformLens } from '~/shared/h
 import { formatAge, formatLastSeen } from '~/shared/lib/formatDates';
 import { formatDeviceModel, getDeviceModelSearchText } from '~/shared/lib/deviceModelNames';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
@@ -416,6 +417,7 @@ const ApiSpikeTrendline: React.FC<{ spike: ApiErrorSpikeRecord; height?: number 
 
 export const Stability: React.FC = () => {
   const { selectedProject, projectsLoading } = useSessionData();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const { isDemoMode } = useDemoMode();
   const currentProject = selectedProject;
   const navigate = useNavigate();
@@ -486,7 +488,7 @@ export const Stability: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentProject?.id, isDemoMode, timeRange, platform]);
+  }, [currentProject?.id, isDemoMode, manualRefreshVersion, timeRange, platform]);
 
   const allRows = useMemo<StabilityIssueRow[]>(() => {
     return [

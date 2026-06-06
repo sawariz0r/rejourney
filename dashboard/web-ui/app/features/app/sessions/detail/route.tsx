@@ -43,6 +43,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
+import { canOpenReplayFromSession } from '~/shared/lib/replayAvailability';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { api, type ReplayShareExpirationPreset, type ReplayShareLink, type ReplayShareVisibility } from '~/shared/api/client';
 import DOMInspector, { HierarchySnapshot } from '~/shared/ui/core/DOMInspector';
@@ -64,6 +65,7 @@ import {
     formatBackgroundGapDuration,
     isTimestampInsideCompressedBackgroundGap,
 } from '~/shared/lib/replayTimeCompression';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 
 // ============================================================================
@@ -960,11 +962,18 @@ const getReadablePropertiesSummary = (properties: Record<string, any> | undefine
 };
 
 const canNavigateToReplaySession = (session: any): boolean => {
-    if (!session) return false;
-    if (session.canOpenReplay !== undefined) return Boolean(session.canOpenReplay);
-    if (session.replayAvailable === false || session.recordingDeleted || session.isReplayExpired) return false;
-    if (session.replayAvailable === true) return true;
-    if (session.hasSuccessfulRecording !== undefined) return Boolean(session.hasSuccessfulRecording);
+    if (canOpenReplayFromSession(session)) return true;
+    if (
+        !session
+        || session.canOpenReplay === false
+        || (session.replayRetentionState && session.replayRetentionState !== 'saved')
+        || session.smartCaptureStatus === 'discarded'
+        || session.replayAvailable === false
+        || session.recordingDeleted
+        || session.isReplayExpired
+    ) {
+        return false;
+    }
     if (session.hasRecording !== undefined) return Boolean(session.hasRecording);
     if (session.playbackMode && session.playbackMode !== 'none') return true;
     return Number(session.stats?.screenshotSegmentCount ?? 0) > 0;
@@ -1295,6 +1304,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string; shareToken?: string
     const pathPrefix = usePathPrefix();
     const isDemoReplay = pathPrefix === '/demo';
     const { sessions: contextSessions, selectedProject } = useSessionData();
+    const manualRefreshVersion = useDashboardManualRefreshVersion();
 
     const handleBackClick = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -1388,6 +1398,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string; shareToken?: string
     const replayDeferredTaskCleanupsRef = useRef<Array<() => void>>([]);
     const shareButtonRef = useRef<HTMLButtonElement>(null);
     const shareMenuRef = useRef<HTMLDivElement>(null);
+    const revealedReplaySessionIdRef = useRef<string | null>(null);
 
     // Ref-based playback state to avoid stale closures in animation loop
     const currentPlaybackTimeRef = useRef<number>(0);
@@ -1399,6 +1410,10 @@ export const RecordingDetail: React.FC<{ sessionId?: string; shareToken?: string
     useEffect(() => {
         currentPlaybackTimeRef.current = currentPlaybackTime;
     }, [currentPlaybackTime]);
+
+    useEffect(() => {
+        revealedReplaySessionIdRef.current = revealedReplaySessionId;
+    }, [revealedReplaySessionId]);
 
     useEffect(() => {
         currentFrameIndexRef.current = currentFrameIndex;
@@ -1437,7 +1452,10 @@ export const RecordingDetail: React.FC<{ sessionId?: string; shareToken?: string
         }
 
         try {
-            setRevealedReplaySessionId(null);
+            const currentReplayIdentity = activeShareToken ? `share:${activeShareToken}` : id || null;
+            if (!currentReplayIdentity || revealedReplaySessionIdRef.current !== currentReplayIdentity) {
+                setRevealedReplaySessionId(null);
+            }
             setIsCoreLoading(true);
             setIsTimelineLoading(true);
             setIsHierarchyLoading(true);
@@ -1687,7 +1705,7 @@ export const RecordingDetail: React.FC<{ sessionId?: string; shareToken?: string
         } catch (err) {
             console.error('Failed to fetch session:', err);
         }
-    }, [activeShareToken, id]);
+    }, [activeShareToken, id, manualRefreshVersion]);
 
     useEffect(() => {
         fetchFullSession();

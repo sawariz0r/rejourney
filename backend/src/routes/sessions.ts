@@ -58,10 +58,12 @@ import {
 import { hasSuccessfulRecording } from '../services/replayAvailability.js';
 import {
     deriveSessionPresentationState,
-    loadSessionWorkAggregate,
     type SessionPresentationState,
-    type SessionWorkAggregate,
 } from '../services/sessionPresentationState.js';
+import {
+    loadSessionWorkAggregate,
+    type SessionWorkAggregate,
+} from '../services/sessionEvidence.js';
 import { durationSecondsForDisplay, shouldApplySuccessorSessionCap } from '../services/sessionTiming.js';
 import {
     archiveKeysetMatchesRequest,
@@ -296,6 +298,9 @@ function buildSessionArchiveBaseConditions(
         eventPropKey?: string;
         eventPropValue?: string;
         issueFilter?: string;
+        smartCaptureStatus?: string;
+        smartCaptureRuleId?: string;
+        smartCaptureRuleName?: string;
         lifecyclePreset?: string;
         sessionWindowSize?: string;
         conversionPreset?: string;
@@ -329,6 +334,9 @@ function buildSessionArchiveBaseConditions(
         eventPropKey,
         eventPropValue,
         issueFilter,
+        smartCaptureStatus,
+        smartCaptureRuleId,
+        smartCaptureRuleName,
         lifecyclePreset,
         sessionWindowSize,
         conversionPreset,
@@ -367,6 +375,7 @@ function buildSessionArchiveBaseConditions(
     const recordingFilter = hasRecording;
     if (recordingFilter === 'true') {
         baseConditions.push(eq(sessions.replayAvailable, true));
+        baseConditions.push(or(isNull(sessions.replayRetentionState), eq(sessions.replayRetentionState, 'saved')));
     }
 
     const normalizedGeoCountry = typeof geoCountry === 'string' ? geoCountry.trim() : '';
@@ -436,6 +445,16 @@ function buildSessionArchiveBaseConditions(
     const normalizedIssueFilter = normalizeSessionArchiveIssueFilter(issueFilter);
     const issueFilterCondition = getSessionArchiveIssueFilterCondition(normalizedIssueFilter);
     if (issueFilterCondition) userFilterConditions.push(issueFilterCondition);
+
+    if (smartCaptureStatus && ['not_applicable', 'pending', 'kept', 'discarded'].includes(smartCaptureStatus)) {
+        userFilterConditions.push(eq(sessions.smartCaptureStatus, smartCaptureStatus));
+    }
+    if (smartCaptureRuleId) {
+        userFilterConditions.push(eq(sessions.smartCaptureRuleId, smartCaptureRuleId));
+    }
+    if (smartCaptureRuleName && smartCaptureRuleName.trim()) {
+        userFilterConditions.push(sql`lower(coalesce(${sessions.smartCaptureReason}, '')) like ${`%${smartCaptureRuleName.trim().toLowerCase()}%`}`);
+    }
 
     const normalizedWindowSize = Math.min(25, Math.max(1, parseInt(sessionWindowSize || '5', 10) || 5));
     const visitorIdentity = sql`coalesce(${sessions.deviceId}, ${sessions.anonymousHash}, ${sessions.userDisplayId})`;
@@ -1079,7 +1098,7 @@ async function resolvePublicReplayShareContext(shareToken: string, options: { ma
         .limit(1);
 
     if (!sessionResult) throw ApiError.notFound('Replay share not found');
-    if (sessionResult.session.recordingDeleted || sessionResult.session.isReplayExpired || !sessionResult.session.replayAvailable) {
+    if (!hasSuccessfulRecording(sessionResult.session)) {
         throw ApiError.notFound('Replay share not found');
     }
 
@@ -1425,7 +1444,7 @@ function buildSessionBasePayload(
     const sessionPresentationState = presentationState ?? deriveSessionPresentationState({
         status: session.status,
         platform: session.platform,
-        replayAvailable: session.replayAvailable,
+        replayAvailable: successfulRecording,
         recordingDeleted: session.recordingDeleted,
         isReplayExpired: session.isReplayExpired,
         lastIngestActivityAt: session.lastIngestActivityAt,
@@ -1501,7 +1520,7 @@ async function loadScreenshotReplayBootstrap(
     screenshotArtifactCount: number,
     frameUrlMode: ScreenshotFrameUrlMode
 ) {
-    const hasRecording = Boolean(session.replayAvailable) && !session.isReplayExpired && !session.recordingDeleted;
+    const hasRecording = hasSuccessfulRecording(session);
     if (!hasRecording) {
         return {
             hasRecording: false,
@@ -1554,7 +1573,7 @@ async function loadVisualReplayBootstrap(
     rrwebArtifacts: any[],
     frameUrlMode: ScreenshotFrameUrlMode
 ) {
-    const hasRecording = Boolean(session.replayAvailable) && !session.isReplayExpired && !session.recordingDeleted;
+    const hasRecording = hasSuccessfulRecording(session);
     if (!hasRecording) {
         return {
             hasRecording: false,
@@ -1594,7 +1613,7 @@ function buildDeferredVisualReplayBootstrap(
     screenshotArtifactCount: number,
     rrwebArtifacts: any[],
 ) {
-    const hasRecording = Boolean(session.replayAvailable) && !session.isReplayExpired && !session.recordingDeleted;
+    const hasRecording = hasSuccessfulRecording(session);
     if (!hasRecording) {
         return {
             hasRecording: false,
@@ -2632,7 +2651,7 @@ router.get(
             deriveSessionPresentationState({
                 status: session.status,
                 platform: session.platform,
-                replayAvailable: session.replayAvailable,
+                replayAvailable: hasSuccessfulRecording(session, metrics, screenshotArtifacts.length > 0),
                 recordingDeleted: session.recordingDeleted,
                 isReplayExpired: session.isReplayExpired,
                 lastIngestActivityAt: session.lastIngestActivityAt,
@@ -2813,7 +2832,7 @@ router.post(
         if (!canManageReplayShares(membership.role)) {
             throw ApiError.forbidden('Only team owners and admins can create unlisted replay links');
         }
-        if (session.recordingDeleted || session.isReplayExpired || !session.replayAvailable) {
+        if (!hasSuccessfulRecording(session)) {
             throw ApiError.badRequest('This replay is not available for sharing');
         }
 
@@ -2941,6 +2960,9 @@ router.get(
             eventPropKey,
             eventPropValue,
             issueFilter,
+            smartCaptureStatus,
+            smartCaptureRuleId,
+            smartCaptureRuleName,
             lifecyclePreset,
             sessionWindowSize,
             conversionPreset,
@@ -3003,6 +3025,9 @@ router.get(
                 eventPropKey,
                 eventPropValue,
                 issueFilter,
+                smartCaptureStatus,
+                smartCaptureRuleId,
+                smartCaptureRuleName,
                 lifecyclePreset,
                 sessionWindowSize,
                 conversionPreset,
@@ -3057,7 +3082,7 @@ router.get(
             const presentationState = deriveSessionPresentationState({
                 status: s.status,
                 platform: s.platform,
-                replayAvailable: s.replayAvailable,
+                replayAvailable: successfulRecording,
                 recordingDeleted: s.recordingDeleted,
                 isReplayExpired: s.isReplayExpired,
                 lastIngestActivityAt: s.lastIngestActivityAt,
@@ -3115,6 +3140,9 @@ router.get(
             eventPropKey,
             eventPropValue,
             issueFilter,
+            smartCaptureStatus,
+            smartCaptureRuleId,
+            smartCaptureRuleName,
             lifecyclePreset,
             sessionWindowSize,
             conversionPreset,
@@ -3178,6 +3206,9 @@ router.get(
                 eventPropKey,
                 eventPropValue,
                 issueFilter,
+                smartCaptureStatus,
+                smartCaptureRuleId,
+                smartCaptureRuleName,
                 lifecyclePreset,
                 sessionWindowSize,
                 conversionPreset,
@@ -3296,7 +3327,7 @@ router.get(
             const presentationState = deriveSessionPresentationState({
                 status: s.status,
                 platform: s.platform,
-                replayAvailable: s.replayAvailable,
+                replayAvailable: successfulRecording,
                 recordingDeleted: s.recordingDeleted,
                 isReplayExpired: s.isReplayExpired,
                 lastIngestActivityAt: s.lastIngestActivityAt,
@@ -3326,6 +3357,11 @@ router.get(
                 // playableDuration is now same as durationSeconds (background already excluded)
                 playableDuration: durationSec,
                 status: s.status,
+                replayRetentionState: s.replayRetentionState,
+                smartCaptureStatus: s.smartCaptureStatus,
+                smartCaptureReason: s.smartCaptureReason,
+                smartCaptureRuleId: s.smartCaptureRuleId,
+                smartCaptureDecidedAt: s.smartCaptureDecidedAt?.toISOString() ?? null,
                 ...buildSessionPresentationPayload(presentationState),
                 webReferral,
                 webLandingRoute,
@@ -3447,7 +3483,7 @@ router.get(
         const presentationState = deriveSessionPresentationState({
             status: session.status,
             platform: session.platform,
-            replayAvailable: session.replayAvailable,
+            replayAvailable: hasSuccessfulRecording(session, metrics, false),
             recordingDeleted: session.recordingDeleted,
             isReplayExpired: session.isReplayExpired,
             lastIngestActivityAt: session.lastIngestActivityAt,
@@ -3767,7 +3803,7 @@ router.get(
 
         const readyScreenshotArtifacts = artifactsList.some((artifact) => artifact.kind === 'screenshots');
         const hasRrwebReplay = rrwebReplay.eventCount > 0;
-        const hasRecording = Boolean(session.replayAvailable) && !session.isReplayExpired && !session.recordingDeleted;
+        const hasRecording = hasSuccessfulRecording(session, metrics, readyScreenshotArtifacts);
         const playbackMode = hasRecording
             ? (hasRrwebReplay ? 'rrweb' : 'screenshots')
             : 'none';
@@ -3968,7 +4004,7 @@ router.get(
             deriveSessionPresentationState({
                 status: session.status,
                 platform: session.platform,
-                replayAvailable: session.replayAvailable,
+                replayAvailable: hasSuccessfulRecording(session, metrics, screenshotArtifacts.length > 0),
                 recordingDeleted: session.recordingDeleted,
                 isReplayExpired: session.isReplayExpired,
                 lastIngestActivityAt: session.lastIngestActivityAt,
@@ -4070,7 +4106,7 @@ router.get(
             deriveSessionPresentationState({
                 status: session.status,
                 platform: session.platform,
-                replayAvailable: session.replayAvailable,
+                replayAvailable: hasSuccessfulRecording(session, metrics, screenshotArtifacts.length > 0),
                 recordingDeleted: session.recordingDeleted,
                 isReplayExpired: session.isReplayExpired,
                 lastIngestActivityAt: session.lastIngestActivityAt,

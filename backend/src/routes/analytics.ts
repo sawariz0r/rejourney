@@ -33,6 +33,7 @@ import {
     queryApiEndpointStatusRowsFromClickHouse,
     queryRegionStatsFromClickHouse,
 } from '../services/apiEndpointStatsClickHouse.js';
+import { canOpenReplayFromSessionFields } from '../services/replayAvailability.js';
 
 const router = Router();
 const redis = getRedis();
@@ -3023,6 +3024,7 @@ router.get(
                 id: sessions.id,
                 durationSeconds: sessions.durationSeconds,
                 replayAvailable: sessions.replayAvailable,
+                replayRetentionState: sessions.replayRetentionState,
                 recordingDeleted: sessions.recordingDeleted,
                 isReplayExpired: sessions.isReplayExpired,
                 screensVisited: sessionMetrics.screensVisited,
@@ -3130,7 +3132,7 @@ router.get(
             const apiTotal = Number(s.apiTotalCount || 0);
             const apiLatency = Number(s.apiAvgResponseMs || 0);
             const duration = Number(s.durationSeconds || 0);
-            const hasReplay = Boolean(s.replayAvailable) && !s.recordingDeleted && !s.isReplayExpired;
+            const hasReplay = canOpenReplayFromSessionFields(s);
             const hasError = crashes > 0 || anrs > 0 || apiErrors > 0;
 
             // Time to failure metrics

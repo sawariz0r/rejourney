@@ -244,6 +244,7 @@ function buildMetadataUpdates(
     if (!existing.replayQuotaBillingExhausted && options?.replayQuotaBillingExhausted === true) {
         updates.replayQuotaBillingExhausted = true;
         updates.replayAvailable = false;
+        updates.replayRetentionState = 'analytics_only';
     }
     if (existing.observeOnly && options?.replayQuotaBillingExhausted === true) {
         updates.observeOnly = false;
@@ -444,6 +445,7 @@ export async function ensureIngestSession(
             // Older SDK versions that predate this header default to false (normal recording).
             observeOnly: req?.headers?.['x-rj-observe-only'] === '1' && options?.replayQuotaBillingExhausted !== true,
             replayQuotaBillingExhausted: options?.replayQuotaBillingExhausted === true,
+            replayRetentionState: options?.replayQuotaBillingExhausted === true ? 'analytics_only' : 'not_available',
         }).onConflictDoNothing().returning({ id: sessions.id });
 
         created = inserted.length > 0;

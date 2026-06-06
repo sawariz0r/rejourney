@@ -891,6 +891,18 @@ spec:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
                   optional: true
+            - name: SUPERWALL_API_KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: SUPERWALL_API_KEY_ENCRYPTION_KEY
+                  optional: true
+            - name: REVENUECAT_API_KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: REVENUECAT_API_KEY_ENCRYPTION_KEY
+                  optional: true
             - name: PUSHGATEWAY_URL
               value: "http://pushgateway.rejourney.svc.cluster.local:9091"
           resources:

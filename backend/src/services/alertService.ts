@@ -107,11 +107,12 @@ async function recordAlertSent(
 /**
  * Get alert recipients with name and email for logging
  */
-async function getRecipientDetails(projectId: string): Promise<{ email: string; name: string | null }[]> {
+async function getRecipientDetails(projectId: string): Promise<{ email: string; name: string | null; timeZone: string | null }[]> {
     const recipients = await db
         .select({ 
             email: users.email,
             name: users.displayName,
+            timeZone: users.registrationTimezone,
         })
         .from(alertRecipients)
         .innerJoin(users, eq(alertRecipients.userId, users.id))
@@ -216,7 +217,7 @@ export async function triggerCrashAlert(
             logger.debug({ projectId }, 'No crash alert recipients');
             return;
         }
-        const recipients = recipientDetails.map(r => r.email);
+        const recipients = recipientDetails.map(r => ({ email: r.email, name: r.name, timeZone: r.timeZone }));
 
         // Fetch detailed issue data if issueId provided
         let stackTrace: string | undefined;
@@ -333,7 +334,7 @@ export async function triggerAnrAlert(
             logger.debug({ projectId }, 'No ANR alert recipients');
             return;
         }
-        const recipients = recipientDetails.map(r => r.email);
+        const recipients = recipientDetails.map(r => ({ email: r.email, name: r.name, timeZone: r.timeZone }));
 
         let stackTrace: string | undefined;
         let affectedVersions: Record<string, number> | undefined;
@@ -444,7 +445,7 @@ export async function triggerErrorSpikeAlert(
             logger.debug({ projectId }, 'No error spike alert recipients');
             return;
         }
-        const recipients = recipientDetails.map(r => r.email);
+        const recipients = recipientDetails.map(r => ({ email: r.email, name: r.name, timeZone: r.timeZone }));
 
         // Fetch top contributing errors in the last 24h
         const topErrors = await db
@@ -528,7 +529,7 @@ export async function triggerApiDegradationAlert(
             logger.debug({ projectId }, 'No API degradation alert recipients');
             return;
         }
-        const recipients = recipientDetails.map(r => r.email);
+        const recipients = recipientDetails.map(r => ({ email: r.email, name: r.name, timeZone: r.timeZone }));
 
         // Fetch slowest endpoints for today
         const today = new Date().toISOString().split('T')[0];
@@ -540,7 +541,7 @@ export async function triggerApiDegradationAlert(
 
         const projectName = await getProjectName(projectId);
         const baseUrl = config.PUBLIC_DASHBOARD_URL || 'http://localhost:8080';
-        const issueUrl = `${baseUrl}/projects/${projectId}/analytics`;
+        const issueUrl = `${baseUrl}/dashboard/api`;
 
         await sendApiDegradationAlertEmail(recipients, {
             projectId,

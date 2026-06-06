@@ -107,5 +107,5 @@ For the latest internal engineering visuals and deeper operator detail:
 
 For a graphics-only architecture page, open [`/docs/architecture/diagrams`](/docs/architecture/diagrams).
 
-For replay billing and future smart capture behavior, open
+For replay billing and Smart Capture behavior, open
 [`/docs/architecture/smart-capture-replay-billing`](/docs/architecture/smart-capture-replay-billing).

@@ -13,6 +13,7 @@ import {
     buildIngestDeviceRateLimitKey,
     buildIngestProjectRateLimitKey,
 } from '../utils/ingestRateLimitKey.js';
+import { getRequestIp } from '../utils/requestIp.js';
 
 /**
  * ioredis uses "reconnecting" (and "connect") after idle drops or network blips.
@@ -96,7 +97,7 @@ export function rateLimit(options: RateLimitOptions) {
 
         const key = keyGenerator
             ? keyGenerator(req)
-            : `rate:${req.ip}:${req.path}`;
+            : `rate:${rateLimitClientIp(req)}:${req.path}`;
 
         const applyInMemoryFallback = (event: string, err?: unknown): void => {
             const result = checkInMemoryRateLimit(key, windowMs, max);
@@ -241,6 +242,10 @@ function scopeRateLimitKey(
     return (req: Request) => `${baseKeyGenerator(req)}:bucket:${scope}`;
 }
 
+function rateLimitClientIp(req: Request): string {
+    return getRequestIp(req) || 'unknown';
+}
+
 /**
  * Pre-configured rate limiters
  */
@@ -250,7 +255,7 @@ function scopeRateLimitKey(
 // (same idea as dashboardStatsRateLimiter). Abuse risk is limited to logged-in users.
 export const dashboardRateLimiter = rateLimit({
     ...rateLimits.dashboard.perUser,
-    keyGenerator: (req) => `rate:dash:${req.user?.id || req.ip}`,
+    keyGenerator: (req) => `rate:dash:${req.user?.id || rateLimitClientIp(req)}`,
     failOpen: true,
     message: 'Too many requests. Please slow down.',
 });
@@ -258,14 +263,14 @@ export const dashboardRateLimiter = rateLimit({
 // Dashboard stats rate limiter (more restrictive)
 export const dashboardStatsRateLimiter = rateLimit({
     ...rateLimits.dashboard.stats,
-    keyGenerator: (req) => `rate:stats:${req.params.projectId || req.project?.id || req.ip}`,
+    keyGenerator: (req) => `rate:stats:${req.params.projectId || req.project?.id || rateLimitClientIp(req)}`,
     failOpen: true,
     message: 'Too many stats requests. Please wait before refreshing.',
 });
 
 export const queryBuilderUserRateLimiter = rateLimit({
     ...rateLimits.dashboard.queryBuilderUser,
-    keyGenerator: (req) => `rate:query-builder:user:${req.user?.id || req.ip || 'unknown'}`,
+    keyGenerator: (req) => `rate:query-builder:user:${req.user?.id || rateLimitClientIp(req)}`,
     failOpen: false,
     message: 'Too many AI query requests. Please wait before generating more queries.',
 });
@@ -279,7 +284,7 @@ export const queryBuilderProjectRateLimiter = rateLimit({
 
 export const queryBuilderIpRateLimiter = rateLimit({
     ...rateLimits.dashboard.queryBuilderIp,
-    keyGenerator: (req) => `rate:query-builder:ip:${req.ip || 'unknown'}`,
+    keyGenerator: (req) => `rate:query-builder:ip:${rateLimitClientIp(req)}`,
     failOpen: false,
     message: 'Too many AI query requests from this network. Please try again later.',
 });
@@ -347,7 +352,7 @@ export const ingestSegmentDeviceRateLimiter = rateLimit({
 // OTP send rate limiter
 export const otpSendRateLimiter = rateLimit({
     ...rateLimits.auth.otpSend,
-    keyGenerator: (req) => `rate:otp:send:${req.body?.email || req.ip}`,
+    keyGenerator: (req) => `rate:otp:send:${req.body?.email || rateLimitClientIp(req)}`,
     failOpen: false,
     redisUnavailableFallback: true,
     message: 'Too many OTP requests. Please wait before requesting another code.',
@@ -357,7 +362,7 @@ export const otpSendRateLimiter = rateLimit({
 export const otpSendIpRateLimiter = rateLimit({
     windowMs: 15 * 60_000,
     max: 40,
-    keyGenerator: (req) => `rate:otp:send:ip:${req.ip || 'unknown'}`,
+    keyGenerator: (req) => `rate:otp:send:ip:${rateLimitClientIp(req)}`,
     failOpen: false,
     redisUnavailableFallback: true,
     message: 'Too many OTP requests from this network. Please try again later.',
@@ -366,7 +371,7 @@ export const otpSendIpRateLimiter = rateLimit({
 // OTP verify rate limiter
 export const otpVerifyRateLimiter = rateLimit({
     ...rateLimits.auth.otpVerify,
-    keyGenerator: (req) => `rate:otp:verify:${req.body?.email || req.ip}`,
+    keyGenerator: (req) => `rate:otp:verify:${req.body?.email || rateLimitClientIp(req)}`,
     failOpen: false,
     redisUnavailableFallback: true,
     message: 'Too many verification attempts. Please try again later.',
@@ -376,7 +381,7 @@ export const otpVerifyRateLimiter = rateLimit({
 export const otpVerifyIpRateLimiter = rateLimit({
     windowMs: 60_000,
     max: 80,
-    keyGenerator: (req) => `rate:otp:verify:ip:${req.ip || 'unknown'}`,
+    keyGenerator: (req) => `rate:otp:verify:ip:${rateLimitClientIp(req)}`,
     failOpen: false,
     redisUnavailableFallback: true,
     message: 'Too many verification attempts from this network. Please try again later.',
@@ -386,7 +391,7 @@ export const otpVerifyIpRateLimiter = rateLimit({
 export const oauthRateLimiter = rateLimit({
     windowMs: 15 * 60_000,
     max: 60,
-    keyGenerator: (req) => `rate:oauth:${req.ip || 'unknown'}`,
+    keyGenerator: (req) => `rate:oauth:${rateLimitClientIp(req)}`,
     failOpen: false,
     message: 'Too many OAuth attempts. Please try again later.',
 });
@@ -395,7 +400,7 @@ export const oauthRateLimiter = rateLimit({
 export const writeApiRateLimiter = rateLimit({
     windowMs: 60_000,
     max: 120,
-    keyGenerator: (req) => `rate:write:${req.user?.id || req.ip || 'unknown'}`,
+    keyGenerator: (req) => `rate:write:${req.user?.id || rateLimitClientIp(req)}`,
     failOpen: false,
     message: 'Too many write operations. Please slow down.',
 });
@@ -404,7 +409,7 @@ export const writeApiRateLimiter = rateLimit({
 export const inviteRateLimiter = rateLimit({
     windowMs: 60 * 60_000,
     max: 40,
-    keyGenerator: (req) => `rate:invite:${req.user?.id || req.ip || 'unknown'}:${req.params.teamId || 'global'}`,
+    keyGenerator: (req) => `rate:invite:${req.user?.id || rateLimitClientIp(req)}:${req.params.teamId || 'global'}`,
     failOpen: false,
     message: 'Too many invitations sent. Please wait before sending more.',
 });
@@ -420,7 +425,7 @@ export const apiKeyRateLimiter = rateLimit({
 // Signed URL rate limiter
 export const signedUrlRateLimiter = rateLimit({
     ...rateLimits.signedUrl,
-    keyGenerator: (req) => `rate:signed:${req.project?.id || req.user?.id || req.ip}`,
+    keyGenerator: (req) => `rate:signed:${req.project?.id || req.user?.id || rateLimitClientIp(req)}`,
     failOpen: false,
     message: 'Too many signed URL requests.',
 });
@@ -433,7 +438,7 @@ export const replayShareRateLimiter = rateLimit({
         const tokenHash = token
             ? createHash('sha256').update(token).digest('hex').slice(0, 16)
             : 'unknown';
-        return `rate:replay-share:${req.ip || 'unknown'}:${tokenHash}`;
+        return `rate:replay-share:${rateLimitClientIp(req)}:${tokenHash}`;
     },
     failOpen: false,
     message: 'Too many replay share requests. Please slow down.',
@@ -442,7 +447,7 @@ export const replayShareRateLimiter = rateLimit({
 // Network grouping rate limiter
 export const networkRateLimiter = rateLimit({
     ...rateLimits.network,
-    keyGenerator: (req) => `rate:network:${req.project?.id || req.ip}`,
+    keyGenerator: (req) => `rate:network:${req.project?.id || rateLimitClientIp(req)}`,
     failOpen: true,
     message: 'Too many network aggregation requests.',
 });
@@ -450,7 +455,7 @@ export const networkRateLimiter = rateLimit({
 // Admin/billing rate limiter
 export const adminRateLimiter = rateLimit({
     ...rateLimits.admin,
-    keyGenerator: (req) => `rate:admin:${req.user?.id || req.project?.id || req.ip}`,
+    keyGenerator: (req) => `rate:admin:${req.user?.id || req.project?.id || rateLimitClientIp(req)}`,
     failOpen: false,
     message: 'Too many admin requests.',
 });

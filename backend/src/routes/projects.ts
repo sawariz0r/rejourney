@@ -23,6 +23,7 @@ import {
 import {
     createProjectSchema,
     updateProjectSchema,
+    smartCaptureConfigSchema,
     projectIdParamSchema,
     requestDeleteProjectOtpSchema,
     deleteProjectSchema,
@@ -35,6 +36,14 @@ import {
     enforceNewAccountActionLimit,
 } from '../services/abuseDetection.js';
 import { normalizeWebAllowedDomains } from '../utils/webAllowedDomains.js';
+import {
+    getSmartCapturePresetRules,
+    isSmartCaptureEntitled,
+    normalizeDecisionWindowHours,
+    normalizeSmartCaptureMode,
+    normalizeSmartCapturePreset,
+    normalizeSmartCaptureRules,
+} from '../services/smartCapture.js';
 
 function getProjectWebAllowedDomains(project: { webAllowedDomains?: string[] | null; webDomain?: string | null }): string[] {
     return normalizeWebAllowedDomains([
@@ -67,6 +76,11 @@ function getProjectAuditState(project: {
     sampleRate?: number | null;
     maxRecordingMinutes?: number | null;
     webMaxObservabilityMinutes?: number | null;
+    smartCaptureEnabled?: boolean | null;
+    smartCaptureMode?: string | null;
+    smartCapturePreset?: string | null;
+    smartCaptureRules?: Array<Record<string, unknown>> | null;
+    smartCaptureDecisionWindowHours?: number | null;
 }): Record<string, unknown> {
     return {
         name: project.name,
@@ -83,6 +97,49 @@ function getProjectAuditState(project: {
         sampleRate: project.sampleRate ?? null,
         maxRecordingMinutes: project.maxRecordingMinutes ?? null,
         webMaxObservabilityMinutes: project.webMaxObservabilityMinutes ?? null,
+        smartCaptureEnabled: project.smartCaptureEnabled ?? false,
+        smartCaptureMode: project.smartCaptureMode ?? 'record_all',
+        smartCapturePreset: project.smartCapturePreset ?? 'none',
+        smartCaptureRules: project.smartCaptureRules ?? [],
+        smartCaptureDecisionWindowHours: project.smartCaptureDecisionWindowHours ?? 168,
+    };
+}
+
+function serializeSmartCaptureConfig(project: {
+    id: string;
+    teamId: string;
+    smartCaptureEnabled: boolean;
+    smartCaptureMode: string;
+    smartCapturePreset: string;
+    smartCaptureRules: Array<Record<string, unknown>> | null;
+    smartCaptureDecisionWindowHours: number | null;
+}, entitled: boolean) {
+    const mode = normalizeSmartCaptureMode(project.smartCaptureMode);
+    const preset = normalizeSmartCapturePreset(project.smartCapturePreset);
+    const rules = normalizeSmartCaptureRules(project.smartCaptureRules);
+    const effectiveRules = rules.length > 0 ? rules : getSmartCapturePresetRules(preset);
+    const enabled = Boolean(project.smartCaptureEnabled && entitled);
+    const status = !entitled
+        ? 'scale_only'
+        : !enabled
+            ? 'off'
+            : mode === 'smart_capture' && effectiveRules.length === 0
+                ? 'pending_rules'
+                : 'active';
+
+    return {
+        enabled,
+        configuredEnabled: Boolean(project.smartCaptureEnabled),
+        mode,
+        preset,
+        rules,
+        effectiveRules,
+        decisionWindowHours: normalizeDecisionWindowHours(project.smartCaptureDecisionWindowHours),
+        status,
+        entitlement: {
+            smartCaptureEnabled: entitled,
+            requiredPlan: 'scale',
+        },
     };
 }
 
@@ -110,6 +167,10 @@ type QueryBuilderProjectContext = {
     recordingFps: number;
     maxRecordingMinutes: number;
     webMaxObservabilityMinutes: number;
+    smartCaptureEnabled: boolean;
+    smartCaptureMode: string;
+    smartCapturePreset: string;
+    smartCaptureRules: QueryBuilderSmartCaptureRuleContext[];
 };
 
 type CountOp = 'eq' | 'gt' | 'lt' | 'gte' | 'lte';
@@ -117,6 +178,21 @@ type QueryBuilderIssueFilter = 'crashes' | 'anrs' | 'errors' | 'rage' | 'dead_ta
 type QueryBuilderTimeRange = '24h' | '7d' | '30d' | '90d' | '1y';
 type QueryBuilderPlatform = 'ios' | 'android' | 'web';
 type QueryBuilderUtmField = 'source' | 'medium' | 'campaign' | 'campaignId' | 'term' | 'content' | 'sourcePlatform';
+type QueryBuilderSmartCaptureStatus = 'pending' | 'kept' | 'discarded';
+
+type QueryBuilderSmartCaptureRuleContext = {
+    id: string;
+    name: string;
+    label: string;
+    color: string;
+    type: string;
+    signal?: string;
+    immediate?: boolean;
+    operator?: string;
+    value?: string | number | boolean;
+    windowHours?: number;
+    captureRate?: number;
+};
 
 type QueryBuilderCondition =
     | { id: string; type: 'issue'; issueFilter: QueryBuilderIssueFilter }
@@ -129,7 +205,8 @@ type QueryBuilderCondition =
     | { id: string; type: 'lifecycle'; preset: 'early_user' | 'returning_user'; sessionWindowSize?: number; returnedCountOp?: CountOp; returnedCountValue?: string }
     | { id: string; type: 'conversion'; preset: 'checkout_bounced' | 'checkout_success' }
     | { id: string; type: 'platform'; platform: QueryBuilderPlatform }
-    | { id: string; type: 'journey'; steps: string[] };
+    | { id: string; type: 'journey'; steps: string[] }
+    | { id: string; type: 'smart_capture'; status?: QueryBuilderSmartCaptureStatus; ruleId?: string; ruleName?: string };
 
 type QueryBuilderGroup = {
     id: string;
@@ -140,6 +217,7 @@ const VALID_ISSUE_FILTERS = new Set(['crashes', 'anrs', 'errors', 'rage', 'dead_
 const VALID_TIME_RANGES = new Set(['24h', '7d', '30d', '90d', '1y']);
 const VALID_COUNT_OPS = new Set(['eq', 'gt', 'lt', 'gte', 'lte']);
 const VALID_UTM_FIELDS = new Set(['source', 'medium', 'campaign', 'campaignId', 'term', 'content', 'sourcePlatform']);
+const VALID_SMART_CAPTURE_STATUSES = new Set(['pending', 'kept', 'discarded']);
 const REFERRAL_METADATA_KEYS = ['webReferral', 'webReferrerDomain', 'webAttributionSource'] as const;
 const UTM_FIELD_METADATA_KEYS: Record<QueryBuilderUtmField, string[]> = {
     source: ['utm_source', 'webAttributionSource'],
@@ -279,7 +357,46 @@ function findMentionedMetadataValue(prompt: string, filters: AvailableProjectFil
     return prompt.match(/\b([a-z0-9-]+(?:\.[a-z0-9-]+)+)\b/i)?.[1];
 }
 
-function sanitizeQueryBuilderCondition(raw: any, filters: AvailableProjectFilters, prompt: string): QueryBuilderCondition | null {
+function inferSmartCaptureStatusFromPrompt(prompt: string): QueryBuilderSmartCaptureStatus | undefined {
+    const normalized = prompt.toLowerCase();
+    if (/\b(pending|waiting|buffered|decision window|not decided)\b/.test(normalized)) return 'pending';
+    if (/\b(discarded|deleted|dropped|not captured|not kept|analytics only|analytics-only)\b/.test(normalized)) return 'discarded';
+    if (/\b(captured|capture|kept|saved|recorded|has replay|with replay)\b/.test(normalized)) return 'kept';
+    return undefined;
+}
+
+function mentionsSmartCapturePrompt(prompt: string): boolean {
+    return /\b(smart capture|capture rule|capture rules|captured by|kept by|discarded by|rule name|notes column|replay notes)\b/i.test(prompt);
+}
+
+function findSmartCaptureRule(value: unknown, project: QueryBuilderProjectContext | null): QueryBuilderSmartCaptureRuleContext | undefined {
+    const normalized = normalizeString(value);
+    if (!normalized || !project?.smartCaptureRules?.length) return undefined;
+    const exactId = project.smartCaptureRules.find((rule) => rule.id === normalized);
+    if (exactId) return exactId;
+    const canonical = canonicalizeQueryLabel(normalized);
+    if (!canonical) return undefined;
+    return project.smartCaptureRules.find((rule) =>
+        canonicalizeQueryLabel(rule.name) === canonical
+        || canonicalizeQueryLabel(rule.label) === canonical
+        || canonicalizeQueryLabel(rule.id) === canonical
+    );
+}
+
+function findMentionedSmartCaptureRule(prompt: string, project: QueryBuilderProjectContext | null): QueryBuilderSmartCaptureRuleContext | undefined {
+    if (!project?.smartCaptureRules?.length) return undefined;
+    const normalizedPrompt = canonicalizeQueryLabel(prompt);
+    if (!normalizedPrompt) return undefined;
+    return project.smartCaptureRules
+        .map((rule) => ({
+            rule,
+            labels: [rule.name, rule.label, rule.id].map(canonicalizeQueryLabel).filter(Boolean),
+        }))
+        .filter(({ labels }) => labels.some((label) => label.length >= 3 && normalizedPrompt.includes(label)))
+        .sort((a, b) => Math.max(...b.labels.map((label) => label.length)) - Math.max(...a.labels.map((label) => label.length)))[0]?.rule;
+}
+
+function sanitizeQueryBuilderCondition(raw: any, filters: AvailableProjectFilters, prompt: string, project: QueryBuilderProjectContext | null): QueryBuilderCondition | null {
     if (!raw || typeof raw !== 'object') return null;
     const type = normalizeString(raw.type);
 
@@ -371,18 +488,37 @@ function sanitizeQueryBuilderCondition(raw: any, filters: AvailableProjectFilter
             if (uniqueOrderedSteps.length < 2) return null;
             return { id: randomUUID(), type: 'journey', steps: uniqueOrderedSteps.slice(0, 6) };
         }
+        case 'smart_capture': {
+            const rawStatus = normalizeString(raw.status);
+            const status = VALID_SMART_CAPTURE_STATUSES.has(rawStatus)
+                ? rawStatus as QueryBuilderSmartCaptureStatus
+                : inferSmartCaptureStatusFromPrompt(prompt);
+            const rule = findSmartCaptureRule(
+                raw.ruleId ?? raw.ruleName ?? raw.name ?? raw.label ?? raw.value,
+                project,
+            ) ?? findMentionedSmartCaptureRule(prompt, project);
+            const typedRuleName = normalizeString(raw.ruleName ?? raw.name ?? raw.label ?? raw.value).slice(0, 80);
+            if (!status && !rule && !typedRuleName && !mentionsSmartCapturePrompt(prompt)) return null;
+            return {
+                id: randomUUID(),
+                type: 'smart_capture',
+                status: status ?? 'kept',
+                ruleId: rule?.id,
+                ruleName: rule ? rule.name : (typedRuleName || undefined),
+            };
+        }
         default:
             return null;
     }
 }
 
-function sanitizeQueryBuilderGroups(rawGroups: unknown, filters: AvailableProjectFilters, prompt: string): QueryBuilderGroup[] {
+function sanitizeQueryBuilderGroups(rawGroups: unknown, filters: AvailableProjectFilters, prompt: string, project: QueryBuilderProjectContext | null): QueryBuilderGroup[] {
     const groups: unknown[] = Array.isArray(rawGroups) ? rawGroups : [];
     const sanitized = groups.slice(0, 4).map((rawGroup: any) => {
         const rawConditions: unknown[] = Array.isArray(rawGroup?.conditions) ? rawGroup.conditions : [];
         const conditions = rawConditions
             .slice(0, 8)
-            .map((condition) => sanitizeQueryBuilderCondition(condition, filters, prompt))
+            .map((condition) => sanitizeQueryBuilderCondition(condition, filters, prompt, project))
             .filter((condition): condition is QueryBuilderCondition => Boolean(condition));
         return { id: randomUUID(), conditions };
     }).filter((group) => group.conditions.length > 0);
@@ -427,6 +563,8 @@ function dedupeConditions(conditions: QueryBuilderCondition[]): QueryBuilderCond
                     return `utm:${condition.field}:${condition.value ?? ''}`;
                 case 'journey':
                     return `journey:${condition.steps.join('|').toLowerCase()}`;
+                case 'smart_capture':
+                    return `smart_capture:${condition.status ?? ''}:${condition.ruleId ?? ''}:${condition.ruleName ?? ''}`;
                 default:
                     return condition.type;
             }
@@ -504,6 +642,15 @@ function describeQueryBuilderCondition(condition: QueryBuilderCondition): string
             return `on ${condition.platform === 'ios' ? 'iOS' : condition.platform === 'android' ? 'Android' : 'Web'}`;
         case 'journey':
             return `followed ${condition.steps.join(' to ')}`;
+        case 'smart_capture': {
+            const statusLabel = condition.status === 'pending'
+                ? 'waiting on Smart Capture'
+                : condition.status === 'discarded'
+                    ? 'discarded by Smart Capture'
+                    : 'captured by Smart Capture';
+            const ruleLabel = condition.ruleName || condition.ruleId;
+            return ruleLabel ? `${statusLabel} rule ${ruleLabel}` : statusLabel;
+        }
     }
 }
 
@@ -519,7 +666,7 @@ function describeQueryBuilderGroups(groups: QueryBuilderGroup[]): string {
     return `Find sessions where ${descriptions.join(' or ')}.`;
 }
 
-function enrichQueryBuilderGroups(groups: QueryBuilderGroup[], filters: AvailableProjectFilters, prompt: string): QueryBuilderGroup[] {
+function enrichQueryBuilderGroups(groups: QueryBuilderGroup[], filters: AvailableProjectFilters, prompt: string, project: QueryBuilderProjectContext | null): QueryBuilderGroup[] {
     let next = groups.length > 0 ? groups : [{ id: randomUUID(), conditions: [] }];
     const inferredOutcome = inferScreenOutcomeFromPrompt(prompt);
 
@@ -566,6 +713,19 @@ function enrichQueryBuilderGroups(groups: QueryBuilderGroup[], filters: Availabl
         const preset = inferConversionFromPrompt(prompt);
         if (preset) {
             next = addToFirstGroup(next, { id: randomUUID(), type: 'conversion', preset });
+        }
+    }
+
+    if (!conditionExists(next, 'smart_capture')) {
+        const smartCaptureRule = findMentionedSmartCaptureRule(prompt, project);
+        if (mentionsSmartCapturePrompt(prompt) || smartCaptureRule) {
+            next = addToFirstGroup(next, {
+                id: randomUUID(),
+                type: 'smart_capture',
+                status: inferSmartCaptureStatusFromPrompt(prompt) ?? 'kept',
+                ruleId: smartCaptureRule?.id,
+                ruleName: smartCaptureRule?.name,
+            });
         }
     }
 
@@ -722,12 +882,23 @@ async function loadQueryBuilderProjectContext(projectId: string): Promise<QueryB
             recordingFps: projects.recordingFps,
             maxRecordingMinutes: projects.maxRecordingMinutes,
             webMaxObservabilityMinutes: projects.webMaxObservabilityMinutes,
+            smartCaptureEnabled: projects.smartCaptureEnabled,
+            smartCaptureMode: projects.smartCaptureMode,
+            smartCapturePreset: projects.smartCapturePreset,
+            smartCaptureRules: projects.smartCaptureRules,
         })
         .from(projects)
         .where(eq(projects.id, projectId))
         .limit(1);
 
-    return project ?? null;
+    if (!project) return null;
+    return {
+        ...project,
+        smartCaptureEnabled: Boolean(project.smartCaptureEnabled),
+        smartCaptureMode: project.smartCaptureMode ?? 'record_all',
+        smartCapturePreset: project.smartCapturePreset ?? 'none',
+        smartCaptureRules: buildSmartCaptureRuleQueryContext(project),
+    };
 }
 
 function buildGeminiGenerateContentUrl(model: string): string {
@@ -746,6 +917,29 @@ function extractGeminiOutputText(payload: any): string {
         }
     }
     return '';
+}
+
+function buildSmartCaptureRuleQueryContext(project: {
+    smartCapturePreset?: string | null;
+    smartCaptureRules?: unknown;
+}): QueryBuilderSmartCaptureRuleContext[] {
+    const explicitRules = normalizeSmartCaptureRules(project.smartCaptureRules);
+    const effectiveRules = explicitRules.length > 0
+        ? explicitRules
+        : getSmartCapturePresetRules(normalizeSmartCapturePreset(project.smartCapturePreset));
+    return effectiveRules.slice(0, 20).map((rule) => ({
+        id: rule.id,
+        name: rule.name || rule.label,
+        label: rule.label,
+        color: rule.color || 'cyan',
+        type: rule.type,
+        signal: rule.signal,
+        immediate: rule.immediate,
+        operator: rule.operator,
+        value: rule.value,
+        windowHours: rule.windowHours,
+        captureRate: rule.captureRate,
+    }));
 }
 
 function buildQueryBuilderPrompt(input: {
@@ -769,6 +963,7 @@ function buildQueryBuilderPrompt(input: {
                     .slice(0, 100)
                     .map(([key, values]) => [key, values.slice(0, 50)])
             ),
+            smartCaptureRules: input.project?.smartCaptureRules ?? [],
         },
         allowedConditionTypes: {
             issue: ['crashes', 'anrs', 'errors', 'rage', 'dead_taps', 'slow_start', 'slow_api'],
@@ -782,12 +977,13 @@ function buildQueryBuilderPrompt(input: {
             referral: 'web-only referral/referrer/source condition; referralValue should match observed webReferral/webReferrerDomain/webAttributionSource when possible',
             utm: 'web-only UTM condition with field one of source, medium, campaign, campaignId, term, content, sourcePlatform',
             journey: 'steps must come from screensOrPages in visit order',
+            smart_capture: 'status is pending, kept, or discarded; ruleId should come from smartCaptureRules when the request names a configured custom capture rule; ruleName may be used for text matching older or renamed rules',
         },
         outputRules: [
             'Return only query conditions that are supported by the allowed condition types.',
             'Use project setup only as context. Never add a platform condition unless the user explicitly says iOS, iPhone, iPad, Apple, Android, Pixel, Samsung, web, browser, website, or site.',
             'Every condition must be directly requested by the user. Do not add filters just because they are common, likely, or present in project setup.',
-            'Prefer the smallest accurate query. Do not duplicate the same screen, page, event, metadata, referral, UTM, platform, issue, lifecycle, conversion, or journey condition.',
+            'Prefer the smallest accurate query. Do not duplicate the same screen, page, event, metadata, referral, UTM, platform, issue, lifecycle, conversion, journey, or Smart Capture condition.',
             'Use available app-specific screens/pages, events, metadata keys, and event properties exactly as provided.',
             'If the user says page, route, view, or screen, match it to screensOrPages.',
             'Infer intent from synonyms and paraphrases, not only exact words.',
@@ -800,6 +996,8 @@ function buildQueryBuilderPrompt(input: {
             'When user asks for returning/reactivated/came-back users, map to lifecycle returning_user.',
             'When user asks for referral, referrer, referer, or traffic source on web sessions, use the referral condition. It is web-only, so do not also add platform=web for the same intent.',
             'When user asks for UTM or campaign tags on web sessions, use the utm condition. It is web-only, so do not also add platform=web for the same intent.',
+            'When user asks for Smart Capture, captured by a rule, kept/discarded by a rule, Notes rule labels, or a configured custom capture rule name, use smart_capture.',
+            'For custom Smart Capture rule names, prefer ruleId from smartCaptureRules. Use ruleName only when the request is a text search or no configured rule id matches.',
             'If the user asks for alternatives, represent them as multiple groups.',
             'If the request is too vague or impossible with the provided values, return an empty groups array and a concise explanation.',
         ],
@@ -869,6 +1067,14 @@ function buildQueryBuilderPrompt(input: {
                 output: [
                     { type: 'utm', field: 'campaign', value: 'spring-launch' },
                 ],
+            },
+            {
+                input: 'sessions captured by the High friction Smart Capture rule',
+                output: [{ type: 'smart_capture', status: 'kept', ruleId: 'matching High friction rule id' }],
+            },
+            {
+                input: 'discarded by smart capture',
+                output: [{ type: 'smart_capture', status: 'discarded' }],
             },
             {
                 input: 'users with plan pro',
@@ -1313,6 +1519,123 @@ router.get(
 );
 
 /**
+ * Get Smart Capture config
+ * GET /api/projects/:id/smart-capture
+ */
+router.get(
+    '/:id/smart-capture',
+    sessionAuth,
+    validate(projectIdParamSchema, 'params'),
+    requireProjectAccess,
+    asyncHandler(async (req, res) => {
+        const [project] = await db
+            .select({
+                id: projects.id,
+                teamId: projects.teamId,
+                smartCaptureEnabled: projects.smartCaptureEnabled,
+                smartCaptureMode: projects.smartCaptureMode,
+                smartCapturePreset: projects.smartCapturePreset,
+                smartCaptureRules: projects.smartCaptureRules,
+                smartCaptureDecisionWindowHours: projects.smartCaptureDecisionWindowHours,
+                deletedAt: projects.deletedAt,
+            })
+            .from(projects)
+            .where(eq(projects.id, req.params.id))
+            .limit(1);
+
+        if (!project || project.deletedAt) {
+            throw ApiError.notFound('Project not found');
+        }
+
+        const entitled = await isSmartCaptureEntitled(project.teamId);
+        res.json(serializeSmartCaptureConfig(project, entitled));
+    })
+);
+
+/**
+ * Update Smart Capture config
+ * PUT /api/projects/:id/smart-capture
+ */
+router.put(
+    '/:id/smart-capture',
+    sessionAuth,
+    writeApiRateLimiter,
+    validate(projectIdParamSchema, 'params'),
+    validate(smartCaptureConfigSchema),
+    requireProjectAccess,
+    asyncHandler(async (req, res) => {
+        const data = req.body;
+        const [currentProject] = await db
+            .select()
+            .from(projects)
+            .where(eq(projects.id, req.params.id))
+            .limit(1);
+
+        if (!currentProject || currentProject.deletedAt) {
+            throw ApiError.notFound('Project not found');
+        }
+
+        const entitled = await isSmartCaptureEntitled(currentProject.teamId);
+        const mode = normalizeSmartCaptureMode(data.mode);
+        const preset = normalizeSmartCapturePreset(data.preset);
+        const rules = normalizeSmartCaptureRules(data.rules);
+        const wantsSmartCapture = Boolean(data.enabled)
+            || mode !== 'record_all'
+            || preset !== 'none'
+            || rules.length > 0;
+
+        if (!entitled && wantsSmartCapture) {
+            throw ApiError.paymentRequired('Smart Capture is available on the Scale plan.');
+        }
+
+        const [project] = await db
+            .update(projects)
+            .set({
+                smartCaptureEnabled: Boolean(data.enabled && entitled),
+                smartCaptureMode: mode,
+                smartCapturePreset: preset,
+                smartCaptureRules: rules,
+                smartCaptureDecisionWindowHours: normalizeDecisionWindowHours(data.decisionWindowHours),
+                updatedAt: new Date(),
+            })
+            .where(eq(projects.id, req.params.id))
+            .returning();
+
+        try {
+            await getRedis().del(
+                `sdk:config:${currentProject.publicKey}`,
+                `sdk:config:v2:${currentProject.publicKey}`,
+                `sdk:config:v3:${currentProject.publicKey}`,
+                `sdk:config:v4:${currentProject.publicKey}`,
+                `sdk:config:v5:${currentProject.publicKey}`,
+                `sdk:config:v6:${currentProject.publicKey}`,
+            );
+        } catch {
+            // ignore cache errors
+        }
+
+        const changes = buildAuditFieldChanges(
+            getProjectAuditState(currentProject),
+            getProjectAuditState(project),
+        );
+        if (changes.changedFields.length > 0) {
+            await auditFromRequest(req, 'project_smart_capture_updated', {
+                targetType: 'project',
+                targetId: project.id,
+                teamId: project.teamId,
+                previousValue: changes.previousValue,
+                newValue: changes.newValue,
+                metadata: {
+                    changedFields: changes.changedFields,
+                },
+            });
+        }
+
+        res.json(serializeSmartCaptureConfig(project, entitled));
+    })
+);
+
+/**
  * Update project
  * PUT /api/projects/:id
  */
@@ -1718,6 +2041,9 @@ router.post(
                                                         returnedCountOp: { type: 'string' },
                                                         returnedCountValue: { type: 'string' },
                                                         platform: { type: 'string' },
+                                                        status: { type: 'string' },
+                                                        ruleId: { type: 'string' },
+                                                        ruleName: { type: 'string' },
                                                         steps: {
                                                             type: 'array',
                                                             items: { type: 'string' },
@@ -1759,9 +2085,10 @@ router.post(
         }
 
         const groups = enrichQueryBuilderGroups(
-            sanitizeQueryBuilderGroups(parsed?.groups, filters, prompt),
+            sanitizeQueryBuilderGroups(parsed?.groups, filters, prompt, projectContext),
             filters,
-            prompt
+            prompt,
+            projectContext
         );
         const explanation = describeQueryBuilderGroups(groups) || normalizeString(parsed?.explanation) || 'Built a query from your description.';
 

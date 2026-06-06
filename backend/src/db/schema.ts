@@ -198,6 +198,11 @@ export const projects = pgTable(
         recordingFps: integer('recording_fps').default(1).notNull(),
         maxRecordingMinutes: integer('max_recording_minutes').default(10).notNull(),
         webMaxObservabilityMinutes: integer('web_max_observability_minutes').default(30).notNull(),
+        smartCaptureEnabled: boolean('smart_capture_enabled').default(false).notNull(),
+        smartCaptureMode: varchar('smart_capture_mode', { length: 32 }).default('record_all').notNull(),
+        smartCapturePreset: varchar('smart_capture_preset', { length: 64 }).default('none').notNull(),
+        smartCaptureRules: jsonb('smart_capture_rules').$type<Array<Record<string, unknown>>>().default(sql`'[]'::jsonb`).notNull(),
+        smartCaptureDecisionWindowHours: integer('smart_capture_decision_window_hours').default(168).notNull(),
         deletedAt: timestamp('deleted_at'),
         createdAt: timestamp('created_at').defaultNow().notNull(),
         updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -500,6 +505,11 @@ export const sessions = pgTable(
          */
         replayQuotaBillingExhausted: boolean('replay_quota_billing_exhausted').default(false).notNull(),
         replayQuotaCountedAt: timestamp('replay_quota_counted_at'),
+        replayRetentionState: varchar('replay_retention_state', { length: 32 }),
+        smartCaptureStatus: varchar('smart_capture_status', { length: 32 }).default('not_applicable').notNull(),
+        smartCaptureReason: varchar('smart_capture_reason', { length: 120 }),
+        smartCaptureRuleId: varchar('smart_capture_rule_id', { length: 120 }),
+        smartCaptureDecidedAt: timestamp('smart_capture_decided_at'),
 
         // Geo location
         geoCity: varchar('geo_city', { length: 100 }),
@@ -541,10 +551,16 @@ export const sessions = pgTable(
         /** Speeds the session-backup-seed scan: orders 1M+ sessions by started_at without a full seq scan */
         index('sessions_seed_started_at_idx').on(table.startedAt, table.id),
         index('sessions_replay_available_idx').on(table.replayAvailable, table.startedAt),
+        index('sessions_replay_retention_state_started_idx').on(table.replayRetentionState, table.startedAt),
+        index('sessions_smart_capture_status_started_idx').on(table.smartCaptureStatus, table.startedAt),
         /** Speeds session archive list + count for replay-ready rows per project */
         index('sessions_archive_replay_idx')
             .on(table.projectId, table.startedAt)
             .where(sql`${table.replayAvailable} = true`),
+        /** Speeds saved replay archive list + count while Smart Capture buffers are hidden */
+        index('sessions_archive_saved_replay_idx')
+            .on(table.projectId, table.startedAt)
+            .where(sql`${table.replayAvailable} = true AND COALESCE(${table.replayRetentionState}, 'saved') = 'saved'`),
         /** Speeds “first session for device” checks on the archive list */
         index('sessions_project_device_started_idx').on(table.projectId, table.deviceId, table.startedAt),
         /** Speeds first-session checks (resolveArchiveFirstSessionIds), new_user filter NOT EXISTS, and live-badge visitor EXISTS — all use coalesce(device_id, anonymous_hash, user_display_id) */

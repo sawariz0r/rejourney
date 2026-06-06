@@ -44,6 +44,8 @@ describe('replay billing split migration', () => {
 
     it('keeps replay usage increments paused until the production cutover row exists', () => {
         expect(quotaCheckSource).toContain("REPLAY_USAGE_SPLIT_CUTOVER_NAME = 'replay_usage_split'");
+        expect(quotaCheckSource).toContain("to_regclass('public.billing_cutovers')");
+        expect(quotaCheckSource).toContain("reason: 'missing_cutover_table'");
         expect(quotaCheckSource).toContain('Replay usage split cutover is not finalized; replay usage increment skipped');
         expect(quotaCheckSource).toContain('row.startedAt < cutover.cutoverAt');
     });

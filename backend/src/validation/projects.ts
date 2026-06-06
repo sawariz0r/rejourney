@@ -50,6 +50,29 @@ const imageVideoMaskingSchema = z.enum(['none', 'all']);
 const recordingFpsSchema = z.number().int().min(1).max(3);
 const mobileMaxObservabilityMinutesSchema = z.number().int().min(1).max(10);
 const webMaxObservabilityMinutesSchema = z.number().int().min(1).max(30);
+export const smartCaptureModeSchema = z.enum(['record_all', 'smart_capture', 'analytics_only']);
+export const smartCapturePresetSchema = z.enum(['none', 'high_friction', 'onboarding_risk', 'churn_risk', 'checkout_risk', 'minimum_signal']);
+export const smartCaptureRuleSchema = z.object({
+    id: z.string().trim().min(1).max(120).optional(),
+    type: z.string().trim().min(1).max(64),
+    name: z.string().trim().min(1).max(80).optional(),
+    label: z.string().trim().min(1).max(120).optional(),
+    color: z.string().trim().min(1).max(24).optional(),
+    enabled: z.boolean().optional().default(true),
+    immediate: z.boolean().optional(),
+    condition: z.record(z.string(), z.unknown()).optional(),
+    operator: z.string().trim().max(24).optional(),
+    value: z.union([z.string().max(255), z.number(), z.boolean()]).optional(),
+    windowHours: z.number().int().min(1).max(168).optional(),
+    captureRate: z.number().min(0).max(100).optional(),
+}).passthrough();
+export const smartCaptureConfigSchema = z.object({
+    enabled: z.boolean().optional().default(false),
+    mode: smartCaptureModeSchema.optional().default('record_all'),
+    preset: smartCapturePresetSchema.optional().default('none'),
+    rules: z.array(smartCaptureRuleSchema).max(20).optional().default([]),
+    decisionWindowHours: z.number().int().min(1).max(168).optional().default(168),
+});
 const webAllowedDomainSchema = z
     .string()
     .trim()
@@ -131,3 +154,4 @@ export const deleteProjectSchema = z.object({
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
+export type SmartCaptureConfigInput = z.infer<typeof smartCaptureConfigSchema>;

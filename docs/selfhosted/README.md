@@ -312,7 +312,7 @@ The installer writes `.env.selfhosted`. These are the values you are most likely
 | Database | `DATABASE_URL`, `POSTGRES_*` |
 | Redis | `REDIS_URL`, `REDIS_PASSWORD` |
 | Storage | `STORAGE_BACKEND`, `S3_*`, `MINIO_*` |
-| Security | `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY` |
+| Security | `JWT_SECRET`, `JWT_SIGNING_KEY`, `INGEST_HMAC_SECRET`, `STORAGE_ENCRYPTION_KEY`, `SUPERWALL_API_KEY_ENCRYPTION_KEY`, `REVENUECAT_API_KEY_ENCRYPTION_KEY` |
 
 Optional integrations can stay blank until you need them:
 

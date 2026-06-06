@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import {
@@ -33,6 +34,7 @@ import { formatDeviceModel } from '~/shared/lib/deviceModelNames';
 export const IssueDetail: React.FC = () => {
     const { issueId } = useParams<{ issueId: string }>();
     const { projects } = useSessionData();
+    const manualRefreshVersion = useDashboardManualRefreshVersion();
     const navigate = useNavigate();
     const pathPrefix = usePathPrefix();
 
@@ -85,7 +87,7 @@ export const IssueDetail: React.FC = () => {
         };
 
         fetchIssue();
-    }, [issueId]);
+    }, [issueId, manualRefreshVersion]);
 
     const handleCopyStack = () => {
         const stackText = issue?.sampleStackTrace || '';

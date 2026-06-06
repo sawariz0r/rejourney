@@ -16,6 +16,7 @@ import {
   Smartphone,
   Sparkles,
 } from 'lucide-react';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { api } from '~/shared/api/client';
@@ -80,6 +81,7 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
   const projectId = propProjectId || paramProjectId;
 
   const { projects, isLoading: contextLoading } = useSessionData();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const navigate = useNavigate();
   const pathPrefix = usePathPrefix();
 
@@ -121,7 +123,7 @@ export const ErrorDetail: React.FC<{ errorId?: string; projectId?: string }> = (
     };
 
     fetchErrorDetails();
-  }, [errorId, currentProject, contextLoading]);
+  }, [errorId, currentProject, contextLoading, manualRefreshVersion]);
 
   const stackText = errorData?.stack || '';
   const canOpenReplay = Boolean(errorData?.sessionId && errorData?.canOpenReplay);

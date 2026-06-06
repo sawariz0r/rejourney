@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { getANRsOverview, type ANRRecord } from '~/shared/api/client';
@@ -39,6 +40,7 @@ const formatCompact = (value: number): string => {
 
 export const ANRsList: React.FC = () => {
   const { selectedProject } = useSessionData();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const { isDemoMode } = useDemoMode();
   const currentProject = selectedProject;
   const navigate = useNavigate();
@@ -75,7 +77,7 @@ export const ANRsList: React.FC = () => {
     };
 
     fetchAnrs();
-  }, [currentProject?.id, timeRange, isDemoMode, platform]);
+  }, [currentProject?.id, manualRefreshVersion, timeRange, isDemoMode, platform]);
 
   useEffect(() => {
     window.scrollTo(0, 0);

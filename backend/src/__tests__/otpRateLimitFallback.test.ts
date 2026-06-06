@@ -15,8 +15,10 @@ vi.mock('../logger.js', () => ({
     },
 }));
 
+import { checkRateLimit, getRedis, isRedisConnected } from '../db/redis.js';
 import {
     checkInMemoryRateLimit,
+    otpSendIpRateLimiter,
     rateLimit,
     resetInMemoryRateLimitFallbacksForTests,
 } from '../middleware/rateLimit.js';
@@ -36,6 +38,8 @@ describe('OTP rate-limit Redis fallback', () => {
     beforeEach(() => {
         process.env.NODE_ENV = 'production';
         resetInMemoryRateLimitFallbacksForTests();
+        vi.mocked(isRedisConnected).mockReturnValue(false);
+        vi.mocked(getRedis).mockReturnValue({ status: 'end' } as never);
     });
 
     afterEach(() => {
@@ -122,5 +126,38 @@ describe('OTP rate-limit Redis fallback', () => {
             remaining: 1,
             resetAt: 2200,
         });
+    });
+
+    it('keys OTP IP limits by the forwarded client IP instead of the internal proxy hop', async () => {
+        vi.mocked(isRedisConnected).mockReturnValue(true);
+        vi.mocked(getRedis).mockReturnValue({ status: 'ready' } as never);
+        vi.mocked(checkRateLimit).mockResolvedValue({
+            allowed: true,
+            remaining: 39,
+            resetAt: Date.now() + 15 * 60_000,
+        });
+
+        const req = {
+            ip: '10.42.3.37',
+            path: '/api/auth/otp/send',
+            headers: {
+                'cf-connecting-ip': '91.126.76.114',
+                'x-forwarded-for': '91.126.76.114, 10.0.0.3,10.42.3.37',
+                'x-real-ip': '10.0.0.3',
+            },
+            socket: { remoteAddress: '::ffff:10.42.3.101' },
+            body: { email: 'new@example.com' },
+        } as unknown as Request;
+        const res = createResponse();
+        const next = vi.fn() as unknown as NextFunction;
+
+        await otpSendIpRateLimiter(req, res, next);
+
+        expect(checkRateLimit).toHaveBeenCalledWith(
+            'rate:otp:send:ip:91.126.76.114',
+            15 * 60_000,
+            40,
+        );
+        expect(next).toHaveBeenCalledTimes(1);
     });
 });

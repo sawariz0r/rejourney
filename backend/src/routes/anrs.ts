@@ -10,6 +10,7 @@ import { eq, and, desc, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { db, anrs, projects, teamMembers, sessions } from '../db/client.js';
 import { sessionAuth, asyncHandler, ApiError } from '../middleware/index.js';
 import { generateANRFingerprint } from '../services/issueTracker.js';
+import { canOpenReplayFromSessionFields } from '../services/replayAvailability.js';
 import { resolveAnrStackTrace } from '../services/anrStack.js';
 
 const router = Router();
@@ -25,14 +26,6 @@ function excludeWebSyntheticLongTaskAnrs(): SQL {
         ${sessions.platform} = 'web'
         AND lower(coalesce(${anrs.threadState}, '') || ' ' || coalesce(${anrs.deviceMetadata}::text, '')) LIKE '%main_thread_long_task%'
     )`;
-}
-
-function canOpenReplayFromSessionFields(session: {
-    replayAvailable?: boolean | null;
-    recordingDeleted?: boolean | null;
-    isReplayExpired?: boolean | null;
-}): boolean {
-    return Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired;
 }
 
 /**
@@ -110,6 +103,7 @@ router.get(
                 anonymousHash: sessions.anonymousHash,
                 deviceId: sessions.deviceId,
                 replayAvailable: sessions.replayAvailable,
+                replayRetentionState: sessions.replayRetentionState,
                 recordingDeleted: sessions.recordingDeleted,
                 isReplayExpired: sessions.isReplayExpired,
             })
@@ -241,6 +235,7 @@ router.get(
             .select({
                 anr: anrs,
                 replayAvailable: sessions.replayAvailable,
+                replayRetentionState: sessions.replayRetentionState,
                 recordingDeleted: sessions.recordingDeleted,
                 isReplayExpired: sessions.isReplayExpired,
             })

@@ -13,6 +13,25 @@ const fingerprintSchema = z.object({
     platform: z.string().max(50).optional(),
 }).optional();
 
+function isValidTimeZone(value: string): boolean {
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone: value }).format(new Date());
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+const userTimeZoneSchema = z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
+    z.string()
+        .trim()
+        .max(100)
+        .refine(isValidTimeZone, 'Invalid time zone')
+        .nullable()
+        .optional(),
+);
+
 export const sendOtpSchema = z.object({
     email: z.string().email('Invalid email address'),
     fingerprint: fingerprintSchema,
@@ -29,7 +48,12 @@ export const oauthCallbackSchema = z.object({
     state: z.string().optional(),
 });
 
+export const updateMeSchema = z.object({
+    timezone: userTimeZoneSchema,
+});
+
 export type FingerprintData = z.infer<typeof fingerprintSchema>;
 export type SendOtpInput = z.infer<typeof sendOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type OAuthCallbackInput = z.infer<typeof oauthCallbackSchema>;
+export type UpdateMeInput = z.infer<typeof updateMeSchema>;

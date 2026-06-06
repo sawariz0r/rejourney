@@ -14,6 +14,7 @@ import {
   Smartphone,
   Sparkles,
 } from 'lucide-react';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { api, type ANRDetailRecord } from '~/shared/api/client';
@@ -41,6 +42,7 @@ export const ANRDetail: React.FC<{ anrId?: string; projectId?: string }> = ({
   const projectId = propProjectId || paramProjectId;
 
   const { projects, isLoading: contextLoading } = useSessionData();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const navigate = useNavigate();
   const pathPrefix = usePathPrefix();
 
@@ -82,7 +84,7 @@ export const ANRDetail: React.FC<{ anrId?: string; projectId?: string }> = ({
     };
 
     fetchANR();
-  }, [anrId, currentProject, contextLoading]);
+  }, [anrId, currentProject, contextLoading, manualRefreshVersion]);
 
   const threadState = anr?.threadState || '';
   const deviceMeta = anr?.deviceMetadata || {};

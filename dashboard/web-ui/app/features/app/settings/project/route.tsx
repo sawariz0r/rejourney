@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useTeam } from '~/shared/providers/TeamContext';
 import { useAuth } from '~/shared/providers/AuthContext';
 import { ImageIcon, Video } from 'lucide-react';
@@ -24,7 +25,7 @@ import {
   createApiKey,
   revokeApiKey,
   ApiKey,
-  CreatedApiKey
+  CreatedApiKey,
 } from '~/shared/api/client';
 
 interface SettingsProps {
@@ -259,6 +260,7 @@ const normalizeSampleRate = (value: unknown): number => {
 
 export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjectId }) => {
   const { projects, refreshSessions, selectedProject, setSelectedProject } = useSessionData();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const { currentTeam, teamMembers } = useTeam();
   const { user } = useAuth();
   const isSelfHosted = !!user?.isSelfHosted;
@@ -504,7 +506,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
     };
 
     loadProject();
-  }, [projectId, projects]);
+  }, [manualRefreshVersion, projectId, projects]);
 
   // Load API keys
   useEffect(() => {
@@ -525,7 +527,7 @@ export const ProjectSettings: React.FC<SettingsProps> = ({ projectId: propProjec
       }
     };
     loadData();
-  }, [projectId]);
+  }, [manualRefreshVersion, projectId]);
 
   const handleSaveName = async () => {
     if (!project || !appName.trim()) {

@@ -166,13 +166,35 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
   const isDemoDashboard = pathPrefix === '/demo';
   const sessionReplaysUsed = teamUsage?.sessionReplaysUsed ?? teamUsage?.sessionsUsed ?? 0;
   const sessionsCaptured = teamUsage?.sessionsCaptured ?? sessionReplaysUsed;
+  const replayLimit = teamUsage?.sessionReplayLimit ?? teamUsage?.sessionLimit ?? teamPlan?.sessionLimit ?? null;
+  const replayRemaining = teamUsage?.sessionReplaysRemaining ?? teamUsage?.sessionsRemaining ?? (
+    replayLimit && replayLimit > 0 ? Math.max(0, replayLimit - sessionReplaysUsed) : null
+  );
+  const hasFiniteReplayQuota = !isDemoDashboard
+    && !user?.isSelfHosted
+    && typeof replayLimit === 'number'
+    && Number.isFinite(replayLimit)
+    && replayLimit > 0;
+  const quotaRemainingPercent = hasFiniteReplayQuota
+    ? Math.max(0, Math.min(100, Math.round(((replayRemaining ?? 0) / replayLimit) * 100)))
+    : null;
+  const quotaChipLabel = quotaRemainingPercent === null
+    ? 'Replays: Unlimited'
+    : `Replays: ${quotaRemainingPercent}% remaining`;
+  const quotaChipClass = quotaRemainingPercent === null
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-950 hover:border-emerald-300 hover:bg-emerald-100'
+    : quotaRemainingPercent <= 20
+      ? 'border-rose-300 bg-rose-100 text-rose-950 hover:border-rose-400 hover:bg-rose-200'
+      : quotaRemainingPercent <= 50
+        ? 'border-amber-300 bg-amber-100 text-amber-950 hover:border-amber-400 hover:bg-amber-200'
+        : 'border-emerald-200 bg-emerald-50 text-emerald-950 hover:border-emerald-300 hover:bg-emerald-100';
 
   const planLabel = user?.isSelfHosted
     ? 'Self-Hosted'
     : (teamPlan?.planName ? teamPlan.planName.charAt(0).toUpperCase() + teamPlan.planName.slice(1) : 'Free');
-  const usageChipTitle = isDemoDashboard
-    ? `${currentTeam?.name ?? 'Demo team'} - demo plan - ${sessionReplaysUsed.toLocaleString()} session replays, ${sessionsCaptured.toLocaleString()} analytics sessions / ∞ this period. Open Plan & Billing.`
-    : `${currentTeam?.name ?? 'Team'} - ${planLabel} plan - ${sessionReplaysUsed.toLocaleString()} session replays, ${sessionsCaptured.toLocaleString()} sessions captured this period. Open Plan & Billing.`;
+  const usageChipTitle = quotaRemainingPercent === null || !replayLimit
+    ? `${currentTeam?.name ?? 'Team'} - ${planLabel} plan - replay quota is unlimited; ${sessionsCaptured.toLocaleString()} analytics sessions captured this period. Open Plan & Billing.`
+    : `${currentTeam?.name ?? 'Team'} - ${planLabel} plan - ${quotaRemainingPercent}% replay quota remaining (${(replayRemaining ?? 0).toLocaleString()} of ${replayLimit.toLocaleString()} replays left). ${sessionReplaysUsed.toLocaleString()} replays used; ${sessionsCaptured.toLocaleString()} analytics sessions captured this period. Open Plan & Billing.`;
 
   const compactRetentionLabel = teamPlan?.videoRetentionLabel
     ?.replace(/\s+days?$/i, 'd')
@@ -330,14 +352,12 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
         {user && currentTeam && (
           <Link
             to={`${pathPrefix}/billing`}
-            className="hidden h-8 min-w-8 shrink-0 items-center justify-center border border-emerald-100 bg-emerald-50 px-2 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-100 active:shadow-none lg:flex"
+            className={`hidden h-8 min-w-8 shrink-0 items-center justify-center whitespace-nowrap border px-2.5 shadow-sm transition-all active:shadow-none lg:flex ${quotaChipClass}`}
             title={usageChipTitle}
-            aria-label={`Open Plan & Billing for ${currentTeam.name}`}
+            aria-label={`${quotaChipLabel}. Open Plan & Billing for ${currentTeam.name}`}
           >
-            <span className="text-xs font-black text-black">
-              {isDemoDashboard
-                ? <>R {sessionReplaysUsed.toLocaleString()} / A {sessionsCaptured.toLocaleString()} / ∞</>
-                : <>R {sessionReplaysUsed.toLocaleString()} / S {sessionsCaptured.toLocaleString()}</>}
+            <span className="text-xs font-black">
+              {quotaChipLabel}
             </span>
           </Link>
         )}

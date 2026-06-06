@@ -1,43 +1,11 @@
-import { sql } from 'drizzle-orm';
-import { db, recordingArtifacts, sessions } from '../db/client.js';
+import { canOpenReplayFromSessionFields } from './replayAvailability.js';
+import { SESSION_LIVE_INGEST_WINDOW_MS } from './sessionEvidence.js';
 
-/** Inactivity window before fail-safe session finalization (no ingest touches). */
-export const SESSION_LIVE_INGEST_WINDOW_MS = 60_000;
-
-export type SessionWorkAggregate = {
-    readyScreenshotCount: number;
-    readyScreenshotBytes: number;
-    readyWebReplayCount: number;
-    readyWebReplayBytes: number;
-    readyHierarchyCount: number;
-    openArtifactCount: number;
-    activeJobCount: number;
-    openReplayArtifactCount: number;
-    activeReplayJobCount: number;
-    latestReplayArtifactEndMs: number | null;
-    latestEventArtifactEndMs: number | null;
-    latestReadyAt: Date | null;
-    readyEventArtifactMissingDerivedCount: number;
-    hasPendingProcessingWork: boolean;
-    hasPendingWork: boolean;
-    hasPendingReplayWork: boolean;
-};
-
-type SessionAggregateRow = {
-    readyScreenshotCount: number | string | null;
-    readyScreenshotBytes: number | string | null;
-    readyWebReplayCount: number | string | null;
-    readyWebReplayBytes: number | string | null;
-    readyHierarchyCount: number | string | null;
-    openArtifactCount: number | string | null;
-    activeJobCount: number | string | null;
-    openReplayArtifactCount: number | string | null;
-    activeReplayJobCount: number | string | null;
-    latestReplayArtifactEndMs: number | string | null;
-    latestEventArtifactEndMs: number | string | null;
-    latestReadyAt: Date | string | null;
-    readyEventArtifactMissingDerivedCount: number | string | null;
-};
+export {
+    SESSION_LIVE_INGEST_WINDOW_MS,
+    loadSessionWorkAggregate,
+    type SessionWorkAggregate,
+} from './sessionEvidence.js';
 
 export type SessionPresentationState = {
     effectiveStatus: string;
@@ -54,6 +22,7 @@ type DeriveSessionPresentationStateInput = {
     status?: string | null;
     platform?: string | null;
     replayAvailable?: boolean | null;
+    replayRetentionState?: string | null;
     recordingDeleted?: boolean | null;
     isReplayExpired?: boolean | null;
     lastIngestActivityAt?: Date | string | null;
@@ -90,135 +59,6 @@ function toDateOrNull(value: unknown): Date | null {
     return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
-export async function loadSessionWorkAggregate(sessionId: string): Promise<SessionWorkAggregate> {
-    const result = await db.execute(sql`
-        select
-            coalesce((
-                select count(*)::int
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind = 'screenshots'
-                  and ra.status = 'ready'
-            ), 0) as "readyScreenshotCount",
-            coalesce((
-                select sum(coalesce(ra.size_bytes, ra.declared_size_bytes, 0))::bigint
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind = 'screenshots'
-                  and ra.status = 'ready'
-            ), 0) as "readyScreenshotBytes",
-            coalesce((
-                select count(*)::int
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind = 'rrweb'
-                  and ra.status = 'ready'
-            ), 0) as "readyWebReplayCount",
-            coalesce((
-                select sum(coalesce(ra.size_bytes, ra.declared_size_bytes, 0))::bigint
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind = 'rrweb'
-                  and ra.status = 'ready'
-            ), 0) as "readyWebReplayBytes",
-            coalesce((
-                select count(*)::int
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind = 'hierarchy'
-                  and ra.status = 'ready'
-            ), 0) as "readyHierarchyCount",
-            coalesce((
-                select count(*)::int
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.status in ('pending', 'buffered', 'uploaded')
-            ), 0) as "openArtifactCount",
-            coalesce((
-                select count(*)::int
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.status = 'uploaded'
-            ), 0) as "activeJobCount",
-            coalesce((
-                select count(*)::int
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind in ('screenshots', 'hierarchy', 'rrweb')
-                  and ra.status in ('pending', 'buffered', 'uploaded')
-            ), 0) as "openReplayArtifactCount",
-            coalesce((
-                select count(*)::int
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind in ('screenshots', 'hierarchy', 'rrweb')
-                  and ra.status = 'uploaded'
-            ), 0) as "activeReplayJobCount",
-            (
-                select max(ra.end_time)
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind in ('screenshots', 'hierarchy', 'rrweb')
-            ) as "latestReplayArtifactEndMs",
-            (
-                select max(coalesce(ra.end_time, ra.timestamp))
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind = 'events'
-                  and ra.status = 'ready'
-            ) as "latestEventArtifactEndMs",
-            coalesce((
-                select count(*)::int
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind = 'events'
-                  and ra.status = 'ready'
-                  and (ra.start_time is null or ra.end_time is null)
-            ), 0) as "readyEventArtifactMissingDerivedCount",
-            (
-                select max(coalesce(ra.ready_at, ra.verified_at, ra.upload_completed_at, ra.created_at))
-                from ${recordingArtifacts} ra
-                where ra.session_id = s.id
-                  and ra.kind in ('screenshots', 'rrweb')
-                  and ra.status = 'ready'
-            ) as "latestReadyAt"
-        from ${sessions} s
-        where s.id = ${sessionId}
-    `);
-
-    const row = ((result as any).rows as SessionAggregateRow[] | undefined)?.[0];
-    const openArtifactCount = toFiniteNumber(row?.openArtifactCount) ?? 0;
-    const activeJobCount = toFiniteNumber(row?.activeJobCount) ?? 0;
-    const openReplayArtifactCount = toFiniteNumber(row?.openReplayArtifactCount) ?? 0;
-    const activeReplayJobCount = toFiniteNumber(row?.activeReplayJobCount) ?? 0;
-    const readyEventArtifactMissingDerivedCount = toFiniteNumber(row?.readyEventArtifactMissingDerivedCount) ?? 0;
-
-    const hasPendingProcessingWork =
-        activeJobCount > 0
-        || openReplayArtifactCount > 0
-        || activeReplayJobCount > 0
-        || readyEventArtifactMissingDerivedCount > 0;
-
-    return {
-        readyScreenshotCount: toFiniteNumber(row?.readyScreenshotCount) ?? 0,
-        readyScreenshotBytes: toFiniteNumber(row?.readyScreenshotBytes) ?? 0,
-        readyWebReplayCount: toFiniteNumber(row?.readyWebReplayCount) ?? 0,
-        readyWebReplayBytes: toFiniteNumber(row?.readyWebReplayBytes) ?? 0,
-        readyHierarchyCount: toFiniteNumber(row?.readyHierarchyCount) ?? 0,
-        openArtifactCount,
-        activeJobCount,
-        openReplayArtifactCount,
-        activeReplayJobCount,
-        latestReplayArtifactEndMs: toFiniteNumber(row?.latestReplayArtifactEndMs),
-        latestEventArtifactEndMs: toFiniteNumber(row?.latestEventArtifactEndMs),
-        latestReadyAt: toDateOrNull(row?.latestReadyAt),
-        readyEventArtifactMissingDerivedCount,
-        hasPendingProcessingWork,
-        hasPendingWork: openArtifactCount > 0 || activeJobCount > 0 || readyEventArtifactMissingDerivedCount > 0,
-        hasPendingReplayWork: openReplayArtifactCount > 0 || activeReplayJobCount > 0,
-    };
-}
-
 export function deriveSessionPresentationState(
     input: DeriveSessionPresentationStateInput
 ): SessionPresentationState {
@@ -230,7 +70,7 @@ export function deriveSessionPresentationState(
     const hasPendingWork = Boolean(input.hasPendingWork);
     const hasPendingProcessingWork = input.hasPendingProcessingWork ?? hasPendingWork;
     const hasPendingReplayWork = Boolean(input.hasPendingReplayWork);
-    const canOpenReplay = Boolean(input.replayAvailable) && !input.recordingDeleted && !input.isReplayExpired;
+    const canOpenReplay = canOpenReplayFromSessionFields(input);
     const status = input.status === 'pending' ? 'processing' : (input.status ?? 'processing');
     const hardTerminal = status === 'failed' || status === 'deleted';
     const superseded = Boolean(input.supersededByNewerVisitorSession);

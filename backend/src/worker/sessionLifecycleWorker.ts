@@ -9,7 +9,7 @@ import {
     startSessionEventRollupWorker,
 } from '../services/sessionEventRollupQueue.js';
 import { startSessionEffectsWorker } from '../services/sessionEffectsQueue.js';
-import { reconcileDueSessions } from '../services/sessionReconciliation.js';
+import { reconcileDueSessions, reconcileDueSmartCaptureSessions } from '../services/sessionReconciliation.js';
 import { SESSION_LIFECYCLE_WORKER } from './workerDefinitions.js';
 import { startPollingWorker } from './workerRuntime.js';
 
@@ -45,6 +45,7 @@ export function startSessionLifecycleWorker(): void {
                 SESSION_LIFECYCLE_WORKER.reconcileBatchSize,
                 SESSION_LIFECYCLE_WORKER.reconcileMaxBatches,
             );
+            const smartCaptureReconciled = await reconcileDueSmartCaptureSessions();
 
             if (
                 recoveredPendingReplay.checked > 0
@@ -52,6 +53,7 @@ export function startSessionLifecycleWorker(): void {
                 || recovered > 0
                 || eventRollupsQueued > 0
                 || reconciled > 0
+                || smartCaptureReconciled > 0
             ) {
                 logger.info({
                     abandoned,
@@ -60,6 +62,7 @@ export function startSessionLifecycleWorker(): void {
                     recoveredPendingReplay: recoveredPendingReplay.recovered,
                     stalePendingReplayChecked: recoveredPendingReplay.checked,
                     reconciled,
+                    smartCaptureReconciled,
                 }, 'session.reconcile_sweep');
             }
         },

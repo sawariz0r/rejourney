@@ -16,7 +16,7 @@ import {
     shouldTrustClientFrustrationCountsForPlatform,
     summarizeSessionEndMetrics,
 } from '../services/ingestSessionEnd.js';
-import { loadSessionWorkAggregate } from '../services/sessionPresentationState.js';
+import { loadSessionWorkAggregate } from '../services/sessionEvidence.js';
 import { hasStoredClosedTiming, resolveAuthoritativeSessionClose, selectMaxObservabilityMinutes } from '../services/sessionTiming.js';
 import { loadSuccessorSessionStartedAt } from '../services/sessionTimingQuery.js';
 import { markSessionIngestActivity, reconcileSessionState } from '../services/sessionReconciliation.js';

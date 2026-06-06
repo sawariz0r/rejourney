@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router';
 import { useTeam } from '~/shared/providers/TeamContext';
 import { useAuth } from '~/shared/providers/AuthContext';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useToast } from '~/shared/providers/ToastContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
@@ -25,6 +26,7 @@ import {
   Bell,
   ArrowRight,
   Building,
+  Minus,
   X,
 } from 'lucide-react';
 import {
@@ -73,6 +75,7 @@ const PLAN_DESCRIPTIONS: Record<string, string> = {
   starter: 'For Apps Growing Fast',
   growth: 'For Apps with more users',
   pro: 'For high-traffic applications',
+  scale: 'For high-scale replay teams with Smart Capture',
 };
 
 const PLAN_ACCENT_COLORS: Record<string, string> = {
@@ -80,10 +83,12 @@ const PLAN_ACCENT_COLORS: Record<string, string> = {
   starter: '#1a73e8',
   growth: '#188038',
   pro: '#9334e6',
+  scale: '#0f766e',
 };
 
 export const BillingSettings: React.FC = () => {
   const { isDemoMode } = useDemoMode();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const { user } = useAuth();
   const { showToast } = useToast();
   const { currentTeam, teamMembers, isLoading: teamsLoading } = useTeam();
@@ -195,7 +200,7 @@ export const BillingSettings: React.FC = () => {
     } finally {
       setIsLoadingBilling(false);
     }
-  }, [currentTeam?.id, isDemoMode]);
+  }, [currentTeam?.id, isDemoMode, manualRefreshVersion]);
 
   useEffect(() => {
     loadTeamBilling();
@@ -644,6 +649,7 @@ export const BillingSettings: React.FC = () => {
     { name: 'starter', displayName: 'Starter', sessionLimit: 25000, videoRetentionTier: 2, videoRetentionDays: 14, videoRetentionLabel: '14 days', priceCents: 500 },
     { name: 'growth', displayName: 'Growth', sessionLimit: 100000, videoRetentionTier: 3, videoRetentionDays: 30, videoRetentionLabel: '30 days', priceCents: 1500 },
     { name: 'pro', displayName: 'Pro', sessionLimit: 350000, videoRetentionTier: 4, videoRetentionDays: 60, videoRetentionLabel: '60 days', priceCents: 3500 },
+    { name: 'scale', displayName: 'Scale', sessionLimit: 1000000, videoRetentionTier: 4, videoRetentionDays: 60, videoRetentionLabel: '60 days', priceCents: 14900, smartCaptureEnabled: true },
   ];
   const currentPlanName = teamPlan?.planName?.toLowerCase() || 'free';
   const currentPlanDisplay = teamPlan?.displayName || teamPlan?.planName || 'Free';
@@ -876,11 +882,11 @@ export const BillingSettings: React.FC = () => {
             <p className="mt-1 text-xs font-medium text-slate-500">Compare monthly session replays and replay retention without leaving this screen.</p>
           </div>
           <div className="text-xs font-medium text-slate-500">
-            Need more? <a href="mailto:sales@rejourney.co" className="font-semibold text-slate-900 hover:underline">Contact Sales</a>
+            Need more? <a href="mailto:contact@rejourney.co" className="font-semibold text-slate-900 hover:underline">Contact Sales</a>
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {plansForDisplay.map((plan) => {
             const isCurrentPlan = currentPlanName === plan.name;
             const currentPlanIndex = plansForDisplay.findIndex(p => p.name === currentPlanName);
@@ -890,6 +896,7 @@ export const BillingSettings: React.FC = () => {
             const isFreePlanDisabled = plan.name === 'free' && isCurrentPlan;
             const isScheduledPlan = teamPlan?.scheduledPlanName?.toLowerCase() === plan.name;
             const price = plan.priceCents / 100;
+            const hasSmartCapture = Boolean(plan.smartCaptureEnabled || plan.name === 'scale');
             const actionLabel = isSavingPlan
               ? '...'
               : isDowngrade
@@ -925,24 +932,63 @@ export const BillingSettings: React.FC = () => {
                     {price > 0 && <span className="text-sm font-semibold text-slate-500">/mo</span>}
                   </div>
 
-                  <div className="mb-4 grid gap-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Check className="h-4 w-4 shrink-0 text-emerald-600" />
-                      <span className="min-w-0 flex-1 text-slate-600">
-                        <span className="font-mono font-semibold text-slate-950">{plan.sessionLimit.toLocaleString()}</span> session replays/mo
-                      </span>
+                  <div className="mb-4 grid gap-4 text-sm">
+                    <div>
+                      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Replays</div>
+                      <div className="grid gap-2">
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                          <span className="min-w-0 flex-1 text-slate-600">
+                            <span className="font-mono font-semibold text-slate-950">{plan.sessionLimit.toLocaleString()}</span> replays/mo
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                          <span className="min-w-0 flex-1 text-slate-600">
+                            <span className="font-mono font-semibold text-slate-950">{plan.videoRetentionLabel}</span> retention
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {hasSmartCapture ? (
+                            <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                          ) : (
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-300 text-slate-950">
+                              <Minus className="h-3 w-3 stroke-[3px]" aria-hidden />
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1 text-slate-600">
+                            {hasSmartCapture ? 'Smart Capture' : 'Standard capture controls'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Check className="h-4 w-4 shrink-0 text-emerald-600" />
-                      <span className="min-w-0 flex-1 text-slate-600">
-                        <span className="font-mono font-semibold text-slate-950">{plan.videoRetentionLabel}</span> replay retention
-                      </span>
+
+                    <div>
+                      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Analytics</div>
+                      <div className="grid gap-2">
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                          <span className="min-w-0 flex-1 text-slate-600">Unlimited DAU, MAU, events</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                          <span className="min-w-0 flex-1 text-slate-600">Funnels, cohorts, retention</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Check className="h-4 w-4 shrink-0 text-emerald-600" />
-                      <span className="min-w-0 flex-1 text-slate-600">
-                        <span className="font-semibold text-slate-950">Unlimited</span> analytics sessions
-                      </span>
+
+                    <div>
+                      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Features</div>
+                      <div className="grid gap-2">
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                          <span className="min-w-0 flex-1 text-slate-600">Query builder and journeys</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                          <span className="min-w-0 flex-1 text-slate-600">Crashes, heatmaps, geo</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 

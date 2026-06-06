@@ -561,6 +561,7 @@ router.get(
                 videoRetentionLabel: plan.videoRetentionLabel,
                 interval: plan.interval,
                 isCustom: plan.isCustom,
+                smartCaptureEnabled: plan.smartCaptureEnabled,
             })),
         });
     })
@@ -619,6 +620,7 @@ router.get(
                 videoRetentionDays: subscription.videoRetentionDays,
                 videoRetentionLabel: subscription.videoRetentionLabel,
                 isCustom: subscription.isCustom,
+                smartCaptureEnabled: subscription.smartCaptureEnabled,
                 subscriptionId: subscription.subscriptionId,
                 subscriptionStatus: subscription.subscriptionStatus,
                 cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,

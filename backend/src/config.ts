@@ -58,6 +58,11 @@ function initializeEnv() {
 // Initialize environment variables before schema parsing
 initializeEnv();
 
+const optionalHexEncryptionKey = z.preprocess(
+    (value) => value === '' ? undefined : value,
+    z.string().length(64).optional(),
+);
+
 const envSchema = z.object({
     // Server
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -130,6 +135,7 @@ const envSchema = z.object({
     STRIPE_SECRET_KEY: z.string().optional(),
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
     SUPERWALL_API_BASE_URL: z.string().default('https://api.superwall.com'),
+    REVENUECAT_API_BASE_URL: z.string().default('https://api.revenuecat.com/v2'),
 
     // AI query builder (optional)
     QUERY_BUILDER_KEY: z.string().optional(),
@@ -154,6 +160,12 @@ const envSchema = z.object({
 
     // Storage encryption
     STORAGE_ENCRYPTION_KEY: z.string().length(64).optional(), // 32-byte hex key
+
+    // Superwall API key encryption
+    SUPERWALL_API_KEY_ENCRYPTION_KEY: optionalHexEncryptionKey, // 32-byte hex key
+
+    // RevenueCat API key encryption
+    REVENUECAT_API_KEY_ENCRYPTION_KEY: optionalHexEncryptionKey, // 32-byte hex key
 
     // Logging
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),

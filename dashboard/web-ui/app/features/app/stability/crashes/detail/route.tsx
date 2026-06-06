@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api, CrashReport } from '~/shared/api/client';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { NeoBadge } from '~/shared/ui/core/neo/NeoBadge';
@@ -48,6 +49,7 @@ export const CrashDetail: React.FC<{ crashId?: string; projectId?: string }> = (
   const projectId = propProjectId || paramProjectId;
 
   const { projects, isLoading: contextLoading } = useSessionData();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const navigate = useNavigate();
   const pathPrefix = usePathPrefix();
 
@@ -89,7 +91,7 @@ export const CrashDetail: React.FC<{ crashId?: string; projectId?: string }> = (
     };
 
     fetchCrash();
-  }, [crashId, currentProject, contextLoading]);
+  }, [crashId, currentProject, contextLoading, manualRefreshVersion]);
 
   const stackTrace = crash?.stackTrace || '';
   const canOpenReplay = Boolean(crash?.sessionId && crash?.canOpenReplay);

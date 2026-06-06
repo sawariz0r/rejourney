@@ -7,6 +7,7 @@ import { dashboardRateLimiter, writeApiRateLimiter } from '../middleware/rateLim
 import { auditFromRequest } from '../services/auditLog.js';
 import {
     configureCustomEventRevenue,
+    connectRevenueCatRevenue,
     connectSuperwallRevenue,
     deleteManualRevenueEntry,
     disconnectGenericRevenueProvider,
@@ -260,24 +261,78 @@ revenueProjectRouter.post(
             return;
         }
 
-        const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey : '';
-        const organizationId = typeof req.body?.organizationId === 'string' ? req.body.organizationId : null;
-        const applicationId = typeof req.body?.applicationId === 'string' ? req.body.applicationId : null;
-        const result = await connectSuperwallRevenue({
-            projectId: req.project.id,
-            userId: req.user.id,
-            apiKey,
-            organizationId,
-            applicationId,
-        });
+        const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+        if (apiKey.length < 12) {
+            res.status(400).json({ error: 'BAD_REQUEST', message: 'A scoped Superwall API key is required' });
+            return;
+        }
 
-        await auditFromRequest(req, 'superwall_revenue_connected', {
-            targetType: 'revenue_source',
-            targetId: result.connectionId,
-            metadata: { projectId: req.project.id },
-        });
+        try {
+            const result = await connectSuperwallRevenue({
+                projectId: req.project.id,
+                userId: req.user.id,
+                apiKey,
+            });
 
-        res.json({ success: true, ...result });
+            await auditFromRequest(req, 'superwall_revenue_connected', {
+                targetType: 'revenue_source',
+                targetId: result.connectionId,
+                metadata: { projectId: req.project.id },
+            });
+
+            res.json({ success: true, ...result });
+        } catch (error) {
+            res.status(400).json({
+                error: 'BAD_REQUEST',
+                message: error instanceof Error ? error.message : 'Unable to connect Superwall revenue',
+            });
+        }
+    },
+);
+
+revenueProjectRouter.post(
+    '/revenuecat/connect',
+    sessionAuth,
+    writeApiRateLimiter,
+    requireProjectAccess,
+    requireRevenueManager,
+    async (req, res) => {
+        if (!req.project || !req.user) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+
+        const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+        const revenueCatProjectId = typeof req.body?.projectId === 'string' ? req.body.projectId.trim() : '';
+        if (!apiKey || !revenueCatProjectId) {
+            res.status(400).json({
+                error: 'BAD_REQUEST',
+                message: 'A RevenueCat v2 secret API key and project ID are required',
+            });
+            return;
+        }
+
+        try {
+            const result = await connectRevenueCatRevenue({
+                projectId: req.project.id,
+                userId: req.user.id,
+                apiKey,
+                revenueCatProjectId,
+            });
+
+            await auditFromRequest(req, 'revenuecat_revenue_connected', {
+                targetType: 'revenue_source',
+                targetId: result.connectionId,
+                metadata: { projectId: req.project.id, revenueCatProjectId },
+            });
+
+            res.json({ success: true, ...result });
+        } catch (error) {
+            res.status(400).json({
+                error: 'BAD_REQUEST',
+                message: error instanceof Error ? error.message : 'Unable to connect RevenueCat revenue',
+            });
+        }
     },
 );
 

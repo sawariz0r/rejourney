@@ -177,6 +177,7 @@ const englishContentCopy: ContentLocaleCopy = {
       starter: "For apps starting to see regular traffic.",
       growth: "For growing teams with heavier replay volume.",
       pro: "For high-traffic apps and mature web and mobile teams.",
+      scale: "For teams that need a million replays and Smart Capture control.",
       fallback: "For mobile teams building with Rejourney.",
     },
     sharedFeatures: [

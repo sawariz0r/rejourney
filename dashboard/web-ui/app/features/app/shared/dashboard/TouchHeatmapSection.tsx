@@ -9,6 +9,7 @@ import {
     MousePointer2,
     Smartphone,
 } from 'lucide-react';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
 import {
@@ -1113,7 +1114,7 @@ const HeatmapPreview: React.FC<{
             : 'w-full'
         : isWebViewer
             ? 'w-full'
-            : `mx-auto w-full ${compact ? 'max-w-[310px]' : 'max-w-[360px]'}`;
+            : `mx-auto w-full ${compact ? 'max-w-[340px]' : 'max-w-[440px]'}`;
     const frameClass = isWebViewer
         ? 'heatmap-browser-frame heatmap-web-document-frame overflow-hidden rounded-xl border-2 border-black bg-white shadow-neo'
         : 'heatmap-phone-frame rounded-[28px] border-2 border-black bg-black p-3 shadow-neo';
@@ -1329,6 +1330,7 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
     className = '',
 }) => {
     const { selectedProject } = useSessionData();
+    const manualRefreshVersion = useDashboardManualRefreshVersion();
     const { isDemoMode } = useDemoMode();
 
     const [screens, setScreens] = useState<EnrichedHeatmapScreen[]>([]);
@@ -1450,7 +1452,7 @@ export const TouchHeatmapSection: React.FC<TouchHeatmapSectionProps> = ({
         return () => {
             cancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform, isDemoMode]);
+    }, [selectedProject?.id, timeRange, platform, isDemoMode, manualRefreshVersion]);
 
     const sortedScreens = useMemo(() => (
         [...screens].sort((a, b) => {

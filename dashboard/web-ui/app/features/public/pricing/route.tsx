@@ -158,6 +158,18 @@ export default function Pricing() {
                                             serviceType: "Web and mobile analytics",
                                         },
                                     },
+                                    {
+                                        "@type": "Offer",
+                                        name: "Scale",
+                                        price: "149",
+                                        priceCurrency: "USD",
+                                        url: canonicalUrl,
+                                        itemOffered: {
+                                            "@type": "Service",
+                                            name: "Rejourney Scale",
+                                            serviceType: "Web and mobile analytics with Smart Capture",
+                                        },
+                                    },
                                 ],
                             },
                         ],

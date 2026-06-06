@@ -8,6 +8,7 @@ import { summarizeEventsArtifact } from './ingestEventArtifactProcessor.js';
 import { processAnrsArtifact, processCrashesArtifact } from './ingestFaultArtifactProcessors.js';
 import { processRecoveredReplayArtifact } from './ingestReplayArtifactProcessor.js';
 import { runArtifactCompletionEffects } from './artifactCompletionEffects.js';
+import { canOpenReplayFromSessionFields } from './replayAvailability.js';
 import { reconcileSessionState } from './sessionReconciliation.js';
 import { enqueueSessionEventRollupJob } from './sessionEventRollupQueue.js';
 import { enqueueSessionEffectsJob } from './sessionEffectsQueue.js';
@@ -322,7 +323,7 @@ export async function processArtifactJobFromBullMQ(
         const reconcileResult = await reconcileSessionState(session.id);
         await runArtifactCompletionEffects({
             kind,
-            replayAvailable: Boolean(reconcileResult?.replayAvailable),
+            replayAvailable: canOpenReplayFromSessionFields(reconcileResult),
             sessionId: session.id,
         });
         artifactLog.info('Artifact already ready; running completion effects');
@@ -400,7 +401,7 @@ export async function processArtifactJobFromBullMQ(
     const reconcileResult = await reconcileSessionState(session.id);
     await runArtifactCompletionEffects({
         kind,
-        replayAvailable: Boolean(reconcileResult?.replayAvailable),
+        replayAvailable: canOpenReplayFromSessionFields(reconcileResult),
         sessionId: session.id,
     });
 
@@ -426,11 +427,31 @@ export async function markArtifactFailedAfterExhausted(
     errMsg: string,
 ): Promise<void> {
     try {
-        await db.update(recordingArtifacts)
+        const [artifact] = await db.update(recordingArtifacts)
             .set({ status: 'failed' })
-            .where(eq(recordingArtifacts.id, artifactId));
+            .where(sql`${recordingArtifacts.id} = ${artifactId} and ${recordingArtifacts.status} <> 'ready'`)
+            .returning({
+                kind: recordingArtifacts.kind,
+                sessionId: recordingArtifacts.sessionId,
+            });
+        if (!artifact) {
+            logger.warn(
+                { event: 'artifact.exhausted_ignored', artifactId, errMsg: errMsg.slice(0, 400) },
+                'artifact.exhausted_ignored',
+            );
+            return;
+        }
+        if (isReplayArtifactKind(artifact.kind)) {
+            await reconcileSessionState(artifact.sessionId);
+        }
         logger.warn(
-            { event: 'artifact.exhausted', artifactId, errMsg: errMsg.slice(0, 400) },
+            {
+                event: 'artifact.exhausted',
+                artifactId,
+                errMsg: errMsg.slice(0, 400),
+                kind: artifact?.kind ?? null,
+                sessionId: artifact?.sessionId ?? null,
+            },
             'artifact.exhausted',
         );
     } catch (err) {

@@ -7,6 +7,7 @@ import {
     type SessionEffectsJobData,
 } from './artifactBullQueue.js';
 import { runArtifactCompletionEffects } from './artifactCompletionEffects.js';
+import { canOpenReplayFromSessionFields } from './replayAvailability.js';
 import { reconcileSessionState } from './sessionReconciliation.js';
 
 const DEFAULT_SESSION_EFFECTS_DELAY_MS = 15_000;
@@ -84,7 +85,7 @@ export async function processSessionEffectsJobFromBullMQ(
 
     await runArtifactCompletionEffects({
         kind: 'events',
-        replayAvailable: Boolean(reconcileResult.replayAvailable),
+        replayAvailable: canOpenReplayFromSessionFields(reconcileResult),
         sessionId,
     });
 

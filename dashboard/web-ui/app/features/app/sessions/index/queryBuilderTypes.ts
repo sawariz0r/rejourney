@@ -12,7 +12,8 @@ export type ConditionType =
   | 'lifecycle'
   | 'conversion'
   | 'platform'
-  | 'journey';
+  | 'journey'
+  | 'smart_capture';
 
 export type IssueCondition = {
   id: string;
@@ -98,6 +99,14 @@ export type JourneyCondition = {
   steps: string[];
 };
 
+export type SmartCaptureCondition = {
+  id: string;
+  type: 'smart_capture';
+  status?: 'pending' | 'kept' | 'discarded';
+  ruleId?: string;
+  ruleName?: string;
+};
+
 export type QueryCondition =
   | IssueCondition
   | DateCondition
@@ -109,7 +118,8 @@ export type QueryCondition =
   | LifecycleCondition
   | ConversionCondition
   | PlatformCondition
-  | JourneyCondition;
+  | JourneyCondition
+  | SmartCaptureCondition;
 
 export function generateConditionId(): string {
   return crypto.randomUUID();
@@ -209,6 +219,11 @@ export function conditionsToArchiveQuery(
         }
         break;
       }
+      case 'smart_capture':
+        if (cond.status) result.smartCaptureStatus = cond.status;
+        if (cond.ruleId) result.smartCaptureRuleId = cond.ruleId;
+        else if (cond.ruleName) result.smartCaptureRuleName = cond.ruleName;
+        break;
     }
   }
 
@@ -343,8 +358,10 @@ export function buildHumanSummary(conditions: QueryCondition[], logic: 'AND' | '
       case 'journey': {
         const steps = cond.steps.filter(Boolean);
         if (steps.length === 0) return 'journey (incomplete)';
-        return 'journey: ' + steps.join(' → ');
+        return 'journey: ' + steps.join(' -> ');
       }
+      case 'smart_capture':
+        return cond.ruleName || cond.ruleId || (cond.status ? `Smart Capture ${cond.status}` : 'Smart Capture rule');
     }
   });
 
@@ -382,8 +399,10 @@ export function getConditionShortLabel(cond: QueryCondition): string {
     case 'journey': {
       const steps = cond.steps.filter(Boolean);
       if (steps.length === 0) return 'Journey';
-      return steps.join(' → ');
+      return steps.join(' -> ');
     }
+    case 'smart_capture':
+      return cond.ruleName || cond.ruleId || (cond.status ? `Smart Capture ${cond.status}` : 'Smart Capture');
   }
 }
 
@@ -397,7 +416,8 @@ export type PresetConditionTemplate =
   | { type: 'utm'; field: UtmField; value?: string }
   | { type: 'lifecycle'; preset: 'early_user' | 'returning_user' }
   | { type: 'conversion'; preset: 'checkout_bounced' | 'checkout_success' }
-  | { type: 'platform'; platform: 'ios' | 'android' | 'web' };
+  | { type: 'platform'; platform: 'ios' | 'android' | 'web' }
+  | { type: 'smart_capture'; status?: 'pending' | 'kept' | 'discarded'; ruleId?: string; ruleName?: string };
 
 export type QueryPreset = {
   id: string;
@@ -570,5 +590,13 @@ export const CONDITION_TYPE_META: Record<ConditionType, ConditionTypeMeta> = {
     pillBorder: 'border-teal-200',
     pillText: 'text-teal-800',
     menuBg: 'bg-teal-50',
+  },
+  smart_capture: {
+    label: 'SMART CAPTURE',
+    description: 'Filter by Smart Capture rule or decision',
+    pillBg: 'bg-cyan-50',
+    pillBorder: 'border-cyan-200',
+    pillText: 'text-cyan-800',
+    menuBg: 'bg-cyan-50',
   },
 };

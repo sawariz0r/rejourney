@@ -1,6 +1,6 @@
 # Ingest + Session Recording Lifecycle (Visual)
 
-Last updated: 2026-06-02
+Last updated: 2026-06-06
 
 This doc is the ingest/runtime view: package start, upload lanes, relay, workers, Redis, and Postgres session state.
 
@@ -10,10 +10,17 @@ Shortest correct mental model:
 
 - The package usually creates a client-side `session_{timestamp}_{uuid}` ID and uploads under that ID.
 - The first successful presign materializes the session row and counts an unlimited captured analytics session once.
-- Replay quota is counted later, exactly once, when a session first becomes `replay_available=true`.
+- Replay quota is counted later, exactly once, when a replay receives a final
+  kept decision.
+- Smart Capture is backend-only. Scale projects can hold pending visual
+  artifacts in a hidden replay buffer while `replay_available=true` reflects
+  artifact presence; reconciliation or the lifecycle worker later keeps or
+  discards replay without changing package SDK APIs.
 - Postgres is the source of truth for session lifecycle, artifact lifecycle, metrics, and usage.
 - Redis is the write-ahead buffer + job queue plane: tiny relay uploads land in `artifact:buf:{artifactId}` first, then BullMQ workers flush them to S3 and process them.
-- Replay becomes visible when at least one screenshot or rrweb artifact reaches `ready`.
+- Replay becomes visible only when retained replay artifacts exist and the
+  retention decision is `saved`. Artifact readiness alone can produce a hidden
+  `buffered` Smart Capture replay or an `analytics_only` discard path.
 - Dashboard replay open should load the cheap session core first, then a replay manifest. rrweb segment bytes and materialized screenshot frames should normally come from signed object-storage URLs, with API proxy routes as fallback.
 - `/api/ingest/session/end` is a strong hint, but the backend must still work if the SDK never calls it.
 - The backend decides "live vs closed" from `ended_at`, `last_ingest_activity_at`, open replay work (`pending`, `buffered`, or `uploaded`), newer-session rollover, and the platform's finalization window; not from a single client callback.
@@ -28,6 +35,35 @@ Shortest correct mental model:
 - If a plain JavaScript customer passes a numeric user id, the web SDK normalizes it to a string. Identity set before `initRejourney()` is carried into the first initialized project, while re-initializing with a different public key does not reuse another project's identity.
 - Replay playback compresses both paired background/foreground gaps and final open-ended background tails. A user who leaves and never returns sees a short "user left" segment and then replay ends; the player must not show a long blank tail.
 - Visual replay duration comes from replay/session timing, not from every telemetry marker. Late analytics, close, or lifecycle events remain in the activity feed, but they must not stretch rrweb/screenshot playback or pile markers at the end of the timeline.
+
+## Replay State Architecture
+
+Replay/session state is intentionally layered so one field does not carry every
+meaning:
+
+```text
+sessionEvidence.ts
+  -> loads artifact/event readiness, pending event evidence, replay counts,
+     latest client evidence, and whether Smart Capture evidence has settled
+
+smartCapture.ts
+  -> normalizes project capture config
+  -> disabled Smart Capture maps to record_all behavior
+  -> evaluates normalized rule JSON only, regardless of AI/manual rule origin
+
+replayRetention.ts
+  -> converts evidence + Smart Capture decision + quota/buffer limits into
+     replay_available, replay_retention_state, and quota-count eligibility
+
+sessionPresentationState.ts + replayAvailability.ts
+  -> derives public fields such as canOpenReplay and live/background status
+  -> normal replay surfaces require replay_retention_state=saved
+```
+
+`reconcileSessionState()` is the coordinator. It should load evidence, evaluate
+capture policy, resolve retention, write denormalized session columns, then run
+side effects such as artifact discard, quota counting, and backup enqueue. It
+should not grow new rule/evidence/visibility logic inline.
 
 ## Web SDK Behavior Matrix
 
@@ -44,9 +80,12 @@ These are the case-by-case rules the web SDK and dashboard replay viewer should 
 | Behavior | SDK session decision | Upload / backend result | Replay result | Dashboard / developer expectation |
 | --- | --- | --- | --- | --- |
 | `initRejourney()` with `autoStart=false` | No session until `start()` is called. | No ingest until `start()`. | No replay. | SDK is initialized but not recording. |
-| `initRejourney()` with `autoStart=true`, or explicit `start()` | Starts a new session unless a same-tab stored session can be restored. | First successful presign materializes the backend row and counts a captured analytics session once. Replay quota counts when replay first becomes available. | Replay starts if sampled in and replay is enabled. | Session appears live once artifacts/events arrive. |
+| `initRejourney()` with `autoStart=true`, or explicit `start()` | Starts a new session unless a same-tab stored session can be restored. | First successful presign materializes the backend row and counts a captured analytics session once. Replay quota counts when replay is finally retained. | Replay starts if sampled in and replay is enabled. | Session appears live once artifacts/events arrive. |
 | Remote config disabled, hard billing/payment blocked, domain blocked, or bot suppressed | No session starts. | No ingest. | No replay. | Nothing should appear for that page load. |
 | Replay quota exhausted | Session can start with replay disabled by remote config. | Event lane uploads analytics; visual replay presign is skipped if any stale visual chunks arrive. Session row has `replay_quota_billing_exhausted=true` and `observe_only=false` so quota behavior is not confused with customer observe-only configuration. | No visual replay by design. | Missing rrweb/screenshots are expected quota behavior, not upload failure. |
+| Smart Capture pending | Session can start normally when the project is on Scale and Smart Capture is enabled. | Analytics/events/metrics are accepted and count in `project_usage.sessions`; visual artifacts are staged while `replay_available=true`, `replay_retention_state=buffered`, `smart_capture_status=pending`, and `replay_quota_counted_at` remains null. | Not shown in normal replay surfaces while buffered. | Buffered sessions are hidden, not quota-counted, not backed up, capped by `RJ_SMART_CAPTURE_BUFFER_MAX_REPLAYS` defaulting to `200000`, and decided within 7 days. |
+| Smart Capture discarded | Same SDK behavior; no package code change. | Analytics/events/metrics remain, visual replay artifacts are abandoned, `smart_capture_status=discarded`, and replay usage is not incremented. | No visual replay by design. | Non-matching sessions are analytics-only and should not look like failed uploads. |
+| Smart Capture kept | Same SDK behavior; no package code change. | Reconciliation sets `smart_capture_status=kept`, re-checks replay quota, keeps `replay_available=true`, and increments `project_usage.session_replays` exactly once. | Replay remains playable after promotion. | Kept sessions consume replay quota at promotion time, not at session creation. |
 | Sampled out but analytics still allowed | Session may start with `sampledIn=false`; replay is disabled. | Event lane can upload analytics; replay presign is skipped/rejected. | No visual replay. | Developer may see analytics-only data, not a playable replay. |
 | `observeOnly=true` or replay consent false | Session can start; `replayEnabled=false`. | Event lane uploads; rrweb is not started. | No visual replay. | Useful for analytics without replay capture. |
 | `setUserIdentity()` before `initRejourney()` | Identity is kept in memory and attached once a project is initialized. | First event batch carries the user id. | No direct visual change. | Refresh/new same-profile sessions re-identify under that project. |
@@ -298,7 +337,7 @@ Session-creation rules:
 
 - New sessions are inserted with `status='processing'` and a matching `session_metrics` row.
 - Captured analytics session counting happens only when the session row is first created.
-- Replay quota counting happens only when reconciliation first marks `replay_available=true` after the `billing_cutovers('replay_usage_split')` row exists; `sessions.replay_quota_counted_at` prevents duplicate increments. Pre-cutover sessions are covered by the preserved legacy replay ledger and may be marked counted without incrementing replay usage.
+- Replay quota counting happens only when reconciliation first marks `replay_retention_state='saved'` after the `billing_cutovers('replay_usage_split')` row exists; `sessions.replay_quota_counted_at` prevents duplicate increments. Pre-cutover sessions are covered by the preserved legacy replay ledger and may be marked counted without incrementing replay usage.
 - Replay-quota-exhausted sessions still count as captured analytics sessions, but they do not increment replay usage.
 - Replay screenshot uploads are rejected if the project disables recording or the session is sampled out.
 - The backend does not depend on `/session/end` to create or close sessions.
@@ -378,10 +417,12 @@ failed    -> pending      (SDK retries same clientUploadId)
 │ Session sweep interval: 10s between sweep runs                              │
 │                                                                              │
 │ Each sweep (at most every 10s):                                             │
-│   abandon expired pending artifacts (> 10m)                                 │
+│   abandon expired pending artifacts (> 10m) and reconcile affected replay   │
+│     sessions immediately                                                   │
 │   queueRecoverableArtifacts (uploaded artifacts + buffered flush jobs)      │
 │   queuePendingSessionEventRollups if explicitly enabled after safe indexing │
 │   reconcileDueSessions (batched)                                            │
+│   reconcileDueSmartCaptureSessions (pending/buffered decisions)             │
 │                                                                              │
 │ Stalled job recovery: BullMQ detects stalled workers automatically          │
 │   (stalledInterval = 30s, maxStalledCount = 3). No Postgres sweep needed.  │
@@ -412,6 +453,9 @@ Important worker nuance:
 - `events` artifact jobs only validate/summarize payloads and mark artifacts ready; `rj-session-event-rollup` serializes event metrics, heatmaps, and downstream analytics side effects per session.
 - `crashes` and `anrs` artifacts create issue rows and increment crash/ANR counters.
 - `screenshots`, `hierarchy`, and `rrweb` mostly affect replay availability and final session presentation.
+- Failed or abandoned replay artifacts immediately trigger session
+  reconciliation, so a stale row should not linger as playable until a later
+  lifecycle sweep or a newer app launch.
 - BullMQ job deduplication uses `jobId = artifact-{artifactId}`. A duplicate enqueue while a job is active/waiting returns without creating a second job.
 - Flush job deduplication uses `jobId = flush-{artifactId}`. If the Redis buffer is missing after TTL expiry or Redis loss, the flush worker marks the artifact failed instead of crashing or pretending S3 has the bytes.
 - The heavy full-table artifact lifecycle backfill is manual by default. Normal worker startup skips it unless `INGEST_ENABLE_STARTUP_BACKFILL=true`.
@@ -451,9 +495,19 @@ Relevant files:
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ reconcileSessionState(sessionId)                                            │
 │                                                                              │
-│ readyScreenshotCount > 0 ?                                                  │
-│   yes -> replay_available = true                                            │
-│   no  -> replay_available = false                                           │
+│ sessionEvidence                                                             │
+│   -> ready visual counts, pending replay work, pending event evidence       │
+│   -> hasReplayArtifacts + smartCaptureEvidenceSettled                       │
+│                                                                              │
+│ smartCapture decision                                                       │
+│   -> record_all / smart_capture / analytics_only                            │
+│   -> disabled Smart Capture is normalized to record_all                     │
+│   -> immediate/delayed rules return kept, pending, discarded, or n/a        │
+│                                                                              │
+│ replayRetention outcome                                                     │
+│   -> replay_available = retained replay artifact truth                      │
+│   -> replay_retention_state = saved | buffered | analytics_only | n/a       │
+│   -> replay quota count eligibility                                         │
 │                                                                              │
 │ deriveSessionPresentationState():                                           │
 │   - ended_at present => not live ingest                                     │
@@ -461,6 +515,7 @@ Relevant files:
 │   - last_ingest_activity_at older than 60s => not live ingest               │
 │   - open replay work blocks final ready state                               │
 │     (pending, buffered, or uploaded)                                        │
+│   - canOpenReplay comes from replayAvailability.ts                          │
 │                                                                              │
 │ shouldFinalize?                                                             │
 │   yes -> status = ready                                                     │
@@ -501,6 +556,9 @@ Relevant files:
 Important reconciliation rules:
 
 - Replay availability is artifact-driven, not `/session/end`-driven.
+- Replay openability is retention-driven: `replay_available=true` is not enough
+  when `replay_retention_state` is `buffered`, `analytics_only`, or
+  `not_available`.
 - `/session/end` is optional. The backend must still finalize a non-web row after 60 seconds of ingest inactivity even if the SDK never sends an end event. Web rows use the 60-second timeout only for the LIVE badge; finalization waits for explicit close, newer same-visitor session rollover, or the configured web max observability window.
 - The live-ingest window is 60 seconds. The lifecycle worker sweeps every 10 seconds.
 - `ended_at` plus positive `duration_seconds` is sticky close timing. Once those are stored, later replay uploads must not clear them.
@@ -527,6 +585,10 @@ Legacy compatibility fields may still exist physically in the schema, but they a
 Relevant files:
 
 - [`backend/src/services/sessionReconciliation.ts`](../backend/src/services/sessionReconciliation.ts)
+- [`backend/src/services/sessionEvidence.ts`](../backend/src/services/sessionEvidence.ts)
+- [`backend/src/services/replayRetention.ts`](../backend/src/services/replayRetention.ts)
+- [`backend/src/services/replayAvailability.ts`](../backend/src/services/replayAvailability.ts)
+- [`backend/src/services/smartCapture.ts`](../backend/src/services/smartCapture.ts)
 - [`backend/src/services/sessionTiming.ts`](../backend/src/services/sessionTiming.ts)
 - [`backend/src/routes/ingestLifecycle.ts`](../backend/src/routes/ingestLifecycle.ts)
 
@@ -609,7 +671,10 @@ What exactly is the auto-finalizer?
   Session-lifecycle worker sweep plus reconcileSessionState() after artifact jobs complete.
 
 What makes a replay visible?
-  At least one screenshot or rrweb artifact with status = ready.
+  A saved retention outcome:
+  replay_available = true
+  AND COALESCE(replay_retention_state, 'saved') = 'saved'
+  AND not deleted/expired/quota-exhausted/discarded.
 
 Can a ready/closed session reopen?
   Not logically. Later artifact work may still append to the session, but stored close timing
@@ -711,6 +776,10 @@ This is the critical rule that keeps "background for >60s, then reopen app" from
 - [`backend/src/services/ingestSessionLifecycle.ts`](../backend/src/services/ingestSessionLifecycle.ts)
 - [`backend/src/services/ingestArtifactLifecycle.ts`](../backend/src/services/ingestArtifactLifecycle.ts)
 - [`backend/src/services/sessionReconciliation.ts`](../backend/src/services/sessionReconciliation.ts)
+- [`backend/src/services/sessionEvidence.ts`](../backend/src/services/sessionEvidence.ts)
+- [`backend/src/services/replayRetention.ts`](../backend/src/services/replayRetention.ts)
+- [`backend/src/services/replayAvailability.ts`](../backend/src/services/replayAvailability.ts)
+- [`backend/src/services/smartCapture.ts`](../backend/src/services/smartCapture.ts)
 - [`backend/src/services/sessionTiming.ts`](../backend/src/services/sessionTiming.ts)
 - [`backend/src/services/sessionPresentationState.ts`](../backend/src/services/sessionPresentationState.ts)
 - [`backend/src/services/sessionIngestImmutability.ts`](../backend/src/services/sessionIngestImmutability.ts)

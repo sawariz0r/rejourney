@@ -200,4 +200,20 @@ describe('sessionPresentationState', () => {
         expect(state.isBackgroundProcessing).toBe(false);
         expect(state.canOpenReplay).toBe(true);
     });
+
+    it('does not make buffered Smart Capture artifacts openable', () => {
+        const state = deriveSessionPresentationState({
+            status: 'ready',
+            replayAvailable: true,
+            replayRetentionState: 'buffered',
+            recordingDeleted: false,
+            isReplayExpired: false,
+            lastIngestActivityAt: new Date(Date.now() - 3600_000),
+            startedAt: new Date(Date.now() - 7200_000),
+            hasPendingWork: false,
+            hasPendingReplayWork: false,
+        });
+
+        expect(state.canOpenReplay).toBe(false);
+    });
 });

@@ -53,6 +53,13 @@ set +a
 : "${INGEST_HMAC_SECRET:?INGEST_HMAC_SECRET is required}"
 : "${STORAGE_ENCRYPTION_KEY:?STORAGE_ENCRYPTION_KEY is required}"
 
+if [ -n "${SUPERWALL_API_KEY_ENCRYPTION_KEY:-}" ] && ! [[ "$SUPERWALL_API_KEY_ENCRYPTION_KEY" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    error "SUPERWALL_API_KEY_ENCRYPTION_KEY must be 64 hex characters when set. Generate with: openssl rand -hex 32"
+fi
+if [ -n "${REVENUECAT_API_KEY_ENCRYPTION_KEY:-}" ] && ! [[ "$REVENUECAT_API_KEY_ENCRYPTION_KEY" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    error "REVENUECAT_API_KEY_ENCRYPTION_KEY must be 64 hex characters when set. Generate with: openssl rand -hex 32"
+fi
+
 kubectl get namespace "$NAMESPACE" >/dev/null 2>&1 || kubectl create namespace "$NAMESPACE" >/dev/null
 
 log "Syncing local secrets from $ENV_FILE"
@@ -95,6 +102,13 @@ APP_SECRET_ARGS=(
     --from-literal=STORAGE_ENCRYPTION_KEY="$STORAGE_ENCRYPTION_KEY"
     --from-literal=SELF_HOSTED_MODE=false
 )
+
+if [ -n "${SUPERWALL_API_KEY_ENCRYPTION_KEY:-}" ]; then
+    APP_SECRET_ARGS+=(--from-literal=SUPERWALL_API_KEY_ENCRYPTION_KEY="$SUPERWALL_API_KEY_ENCRYPTION_KEY")
+fi
+if [ -n "${REVENUECAT_API_KEY_ENCRYPTION_KEY:-}" ]; then
+    APP_SECRET_ARGS+=(--from-literal=REVENUECAT_API_KEY_ENCRYPTION_KEY="$REVENUECAT_API_KEY_ENCRYPTION_KEY")
+fi
 
 if [ -n "${PUBLIC_DASHBOARD_URL:-}" ]; then
     APP_SECRET_ARGS+=(--from-literal=PUBLIC_DASHBOARD_URL="$PUBLIC_DASHBOARD_URL")

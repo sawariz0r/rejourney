@@ -257,6 +257,18 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
+            - name: SUPERWALL_API_KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: SUPERWALL_API_KEY_ENCRYPTION_KEY
+                  optional: true
+            - name: REVENUECAT_API_KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: REVENUECAT_API_KEY_ENCRYPTION_KEY
+                  optional: true
             - name: QUERY_BUILDER_KEY
               valueFrom:
                 secretKeyRef:
@@ -663,6 +675,18 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
+            - name: SUPERWALL_API_KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: SUPERWALL_API_KEY_ENCRYPTION_KEY
+                  optional: true
+            - name: REVENUECAT_API_KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: REVENUECAT_API_KEY_ENCRYPTION_KEY
+                  optional: true
             - name: QUERY_BUILDER_KEY
               valueFrom:
                 secretKeyRef:
@@ -977,6 +1001,18 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: STORAGE_ENCRYPTION_KEY
+            - name: SUPERWALL_API_KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: SUPERWALL_API_KEY_ENCRYPTION_KEY
+                  optional: true
+            - name: REVENUECAT_API_KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: REVENUECAT_API_KEY_ENCRYPTION_KEY
+                  optional: true
             - name: PUBLIC_INGEST_URL
               valueFrom:
                 secretKeyRef:

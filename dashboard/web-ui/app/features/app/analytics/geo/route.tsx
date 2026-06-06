@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ChevronsLeft, ChevronsRight, Globe, GripVertical, Monitor, Play, ShieldAlert, Smartphone, X } from 'lucide-react';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { DashboardPageHeader } from '~/shared/ui/core/DashboardPageHeader';
 import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { DashboardLensControls } from '~/shared/ui/core/DashboardLensControls';
@@ -1209,6 +1210,7 @@ function formatDateTime(value?: string | number | null): string {
 
 export const Geo: React.FC = () => {
     const { selectedProject } = useSessionData();
+    const manualRefreshVersion = useDashboardManualRefreshVersion();
     const { isDemoMode } = useDemoMode();
     const navigate = useNavigate();
     const pathPrefix = usePathPrefix();
@@ -1535,7 +1537,7 @@ export const Geo: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform]);
+    }, [manualRefreshVersion, selectedProject?.id, timeRange, platform]);
 
     useEffect(() => {
         if (!selectedProject?.id) {
@@ -1572,7 +1574,7 @@ export const Geo: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [platform, selectedProject?.id, timeRange]);
+    }, [manualRefreshVersion, platform, selectedProject?.id, timeRange]);
 
     const latencyByCountry = useMemo(() => {
         const countryToLatency = new Map<string, number>();
@@ -1735,7 +1737,7 @@ export const Geo: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [platform, selectedMarker, selectedProject?.id, timeRange]);
+    }, [manualRefreshVersion, platform, selectedMarker, selectedProject?.id, timeRange]);
 
     useEffect(() => {
         if (!selectedProject?.id || !selectedVisitor) {
@@ -1781,7 +1783,7 @@ export const Geo: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [selectedProject?.id, selectedVisitor]);
+    }, [manualRefreshVersion, selectedProject?.id, selectedVisitor]);
 
     const markerByLocation = useMemo(() => {
         const locationMap = new Map<string, GeoMarker>();

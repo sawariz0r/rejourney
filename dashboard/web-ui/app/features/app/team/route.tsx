@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTeam } from '~/shared/providers/TeamContext';
 import { useAuth } from '~/shared/providers/AuthContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { NeoButton } from '~/shared/ui/core/neo/NeoButton';
@@ -42,6 +43,7 @@ import { DashboardGhostLoader } from '~/shared/ui/core/DashboardGhostLoader';
 
 export const TeamSettings: React.FC = () => {
   const { user } = useAuth();
+  const manualRefreshVersion = useDashboardManualRefreshVersion();
   const { currentTeam, teamMembers, refreshMembers, refreshTeams, isLoading: teamsLoading } = useTeam();
   const pathPrefix = usePathPrefix();
   const navigate = useNavigate();
@@ -111,7 +113,7 @@ export const TeamSettings: React.FC = () => {
     } finally {
       setIsLoadingInvitations(false);
     }
-  }, [currentTeam?.id, isAdmin]);
+  }, [currentTeam?.id, isAdmin, manualRefreshVersion]);
 
   useEffect(() => {
     loadInvitations();
@@ -136,7 +138,7 @@ export const TeamSettings: React.FC = () => {
     };
 
     loadTeamPlan();
-  }, [currentTeam?.id, isOwner]);
+  }, [currentTeam?.id, isOwner, manualRefreshVersion]);
 
   const handleUpdateName = async () => {
     if (!currentTeam || !editNameValue.trim()) return;

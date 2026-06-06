@@ -19,12 +19,13 @@ import {
     oauthRateLimiter,
     writeApiRateLimiter,
 } from '../middleware/rateLimit.js';
-import { sendOtpSchema, verifyOtpSchema } from '../validation/auth.js';
+import { sendOtpSchema, updateMeSchema, verifyOtpSchema } from '../validation/auth.js';
 import { sendOtpEmail } from '../services/email.js';
 import { createAuditLog, type AuditAction, type TargetType } from '../services/auditLog.js';
 import { UAParser } from 'ua-parser-js';
 import { getSessionCookieOptions, getOAuthStateCookieOptions } from '../utils/cookies.js';
 import { isDisposableEmail } from '../utils/disposableEmail.js';
+import { getRequestIp } from '../utils/requestIp.js';
 import {
     enforceAccountCreationVelocity,
     enforceCredentialStuffingGuards,
@@ -82,6 +83,7 @@ router.post(
     asyncHandler(async (req, res) => {
         const { email, fingerprint } = req.body;
         const normalizedEmail = email.toLowerCase().trim();
+        const clientIp = getRequestIp(req) || null;
         const accountFingerprint =
             fingerprint?.browserFingerprint ||
             [fingerprint?.timezone, fingerprint?.platform, fingerprint?.screenResolution]
@@ -113,7 +115,7 @@ router.post(
             }
 
             await enforceAccountCreationVelocity({
-                ip: req.ip,
+                ip: clientIp,
                 fingerprint: accountFingerprint,
             });
 
@@ -122,7 +124,7 @@ router.post(
                 email: normalizedEmail,
                 authProvider: 'otp',
                 // Fingerprinting data
-                registrationIp: req.ip || null,
+                registrationIp: clientIp,
                 registrationUserAgent: userAgent || null,
                 registrationTimezone: fingerprint?.timezone || null,
                 browserFingerprint: fingerprint?.browserFingerprint || null,
@@ -230,11 +232,12 @@ router.post(
     asyncHandler(async (req, res) => {
         const { email, code, fingerprint } = req.body;
         const normalizedEmail = email.toLowerCase().trim();
+        const clientIp = getRequestIp(req) || null;
         const codeHash = createHash('sha256').update(code).digest('hex');
 
         await enforceCredentialStuffingGuards({
             email: normalizedEmail,
-            ip: req.ip,
+            ip: clientIp,
         });
 
         // Find OTP token with user
@@ -261,7 +264,7 @@ router.post(
             .limit(1);
 
         if (!otpToken) {
-            await recordFailedAuthAttempt({ email: normalizedEmail, ip: req.ip });
+            await recordFailedAuthAttempt({ email: normalizedEmail, ip: clientIp });
             await auditAuthEvent(req, {
                 action: 'login_failed',
                 metadata: {
@@ -277,7 +280,7 @@ router.post(
         // Check attempts
         if (otpToken.attempts >= 5) {
             await db.delete(otpTokens).where(eq(otpTokens.id, otpToken.id));
-            await recordFailedAuthAttempt({ email: normalizedEmail, ip: req.ip });
+            await recordFailedAuthAttempt({ email: normalizedEmail, ip: clientIp });
             await auditAuthEvent(req, {
                 action: 'login_failed',
                 userId: otpToken.user?.id,
@@ -299,7 +302,7 @@ router.post(
             await db.update(otpTokens)
                 .set({ attempts: sql`${otpTokens.attempts} + 1` })
                 .where(eq(otpTokens.id, otpToken.id));
-            await recordFailedAuthAttempt({ email: normalizedEmail, ip: req.ip });
+            await recordFailedAuthAttempt({ email: normalizedEmail, ip: clientIp });
             await auditAuthEvent(req, {
                 action: 'login_failed',
                 userId: otpToken.user?.id,
@@ -329,7 +332,7 @@ router.post(
 
             await db.update(users)
                 .set({
-                    registrationIp: req.ip || null,
+                    registrationIp: clientIp,
                     registrationUserAgent: userAgent || null,
                     registrationTimezone: fingerprint.timezone || null,
                     browserFingerprint: fingerprint.browserFingerprint || null,
@@ -351,7 +354,7 @@ router.post(
             userId: otpToken.user!.id,
             token: sessionToken,
             userAgent: req.headers['user-agent'],
-            ipAddress: req.ip,
+            ipAddress: clientIp,
             expiresAt: sessionExpiresAt,
         }).returning({
             id: userSessions.id,
@@ -411,6 +414,7 @@ router.get(
                 displayName: users.displayName,
                 avatarUrl: users.avatarUrl,
                 roles: users.roles,
+                registrationTimezone: users.registrationTimezone,
                 createdAt: users.createdAt,
             })
             .from(users)
@@ -443,6 +447,7 @@ router.get(
                 name: user.displayName || null,
                 displayName: user.displayName || null,
                 avatarUrl: user.avatarUrl,
+                timezone: user.registrationTimezone || null,
                 roles: user.roles,
                 // OTP login means email is verified
                 emailVerified: true,
@@ -459,6 +464,44 @@ router.get(
                     ...tm.team,
                     role: tm.role,
                 })),
+            },
+        });
+    })
+);
+
+/**
+ * Update current user's personal settings
+ * PATCH /api/auth/me
+ */
+router.patch(
+    '/me',
+    sessionAuth,
+    writeApiRateLimiter,
+    validate(updateMeSchema),
+    asyncHandler(async (req, res) => {
+        const { timezone } = req.body;
+
+        const [updatedUser] = await db
+            .update(users)
+            .set({
+                registrationTimezone: timezone ?? null,
+                updatedAt: new Date(),
+            })
+            .where(eq(users.id, req.user!.id))
+            .returning({
+                id: users.id,
+                registrationTimezone: users.registrationTimezone,
+            });
+
+        if (!updatedUser) {
+            throw ApiError.notFound('User not found');
+        }
+
+        res.json({
+            success: true,
+            user: {
+                id: updatedUser.id,
+                timezone: updatedUser.registrationTimezone || null,
             },
         });
     })
@@ -572,6 +615,7 @@ router.get(
     asyncHandler(async (req, res) => {
         const { code, state } = req.query;
         const storedState = req.cookies?.oauth_state;
+        const clientIp = getRequestIp(req) || null;
 
         // Clear state cookie
         res.clearCookie('oauth_state');
@@ -770,11 +814,11 @@ router.get(
                 }
 
                 try {
-                    await enforceAccountCreationVelocity({ ip: req.ip });
+                    await enforceAccountCreationVelocity({ ip: clientIp });
                 } catch (err) {
                     if (err instanceof ApiError) {
                         const dashboardUrl = config.PUBLIC_DASHBOARD_URL || 'https://rejourney.co';
-                        logger.warn({ ip: req.ip, email: normalizedEmail }, 'GitHub OAuth signup velocity check blocked');
+                        logger.warn({ ip: clientIp, email: normalizedEmail }, 'GitHub OAuth signup velocity check blocked');
                         await auditAuthEvent(req, {
                             action: 'login_failed',
                             metadata: {
@@ -801,7 +845,7 @@ router.get(
                     authProvider: 'github',
                     providerUserId: githubUserId,
                     // Fingerprinting data (no client-side fingerprint for OAuth redirects)
-                    registrationIp: req.ip || null,
+                    registrationIp: clientIp,
                     registrationUserAgent: userAgent || null,
                     languagePreference: req.headers['accept-language']?.split(',')[0] || null,
                     registrationPlatform: parsedPlatform || null,
@@ -849,7 +893,7 @@ router.get(
                 userId: existingUser.id,
                 token: sessionToken,
                 userAgent: req.headers['user-agent'],
-                ipAddress: req.ip,
+                ipAddress: clientIp,
                 expiresAt: sessionExpiresAt,
             }).returning({
                 id: userSessions.id,

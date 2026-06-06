@@ -1197,7 +1197,17 @@ export const demoReferralSourceSessions: RecordingSession[] = demoReferralSource
 );
 
 export const demoSessions: RecordingSession[] = [
-    ...demoBaseSessions,
+    ...demoBaseSessions.map((session) => (
+        session.id === DEMO_REPLAY_SESSION_IDS[0]
+            ? {
+                ...session,
+                smartCaptureStatus: 'kept' as const,
+                smartCaptureReason: 'High friction',
+                smartCaptureRuleId: 'demo-rule-1',
+                smartCaptureDecidedAt: new Date(DEMO_NOW - 20 * 60 * 1000).toISOString(),
+            }
+            : session
+    )),
     ...demoReferralSourceSessions,
 ];
 

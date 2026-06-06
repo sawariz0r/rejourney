@@ -19,9 +19,24 @@ import * as schema from './schema.js';
 
 const { Pool } = pg;
 
+const SENSITIVE_DB_PARAM_COLUMNS = [
+    'api_key_encrypted',
+    'access_token_encrypted',
+    'refresh_token_encrypted',
+    'hashed_key',
+];
+
+function hasSensitiveQueryParams(query: string): boolean {
+    const normalized = query.toLowerCase();
+    return SENSITIVE_DB_PARAM_COLUMNS.some((column) => normalized.includes(`"${column}"`));
+}
+
 const drizzleLogger = isDevelopment ? {
     logQuery: (query: string, params: unknown[]) => {
-        logger.debug({ query, params }, 'Database query');
+        logger.debug({
+            query,
+            params: hasSensitiveQueryParams(query) ? '[REDACTED_SENSITIVE_QUERY_PARAMS]' : params,
+        }, 'Database query');
     },
 } : undefined;
 

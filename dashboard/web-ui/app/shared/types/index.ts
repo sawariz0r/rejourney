@@ -45,6 +45,11 @@ export interface Project {
   sampleRate?: number;
   maxRecordingMinutes?: number;
   webMaxObservabilityMinutes?: number;
+  smartCaptureEnabled?: boolean;
+  smartCaptureMode?: 'record_all' | 'smart_capture' | 'analytics_only';
+  smartCapturePreset?: 'none' | 'high_friction' | 'onboarding_risk' | 'churn_risk' | 'checkout_risk' | 'minimum_signal';
+  smartCaptureRules?: Array<Record<string, unknown>>;
+  smartCaptureDecisionWindowHours?: number;
   createdAt: string;
   sessionsLast7Days: number;
   errorsLast7Days: number;
@@ -113,6 +118,11 @@ export interface RecordingSession {
   isReplayExpired?: boolean;
   // Canonical replay availability flag based on screenshot replay data existing.
   hasSuccessfulRecording?: boolean;
+  replayRetentionState?: 'saved' | 'buffered' | 'analytics_only' | 'not_available' | null;
+  smartCaptureStatus?: 'not_applicable' | 'pending' | 'kept' | 'discarded';
+  smartCaptureReason?: string | null;
+  smartCaptureRuleId?: string | null;
+  smartCaptureDecidedAt?: string | null;
   effectiveStatus?: SessionStatus;
   isLiveIngest?: boolean;
   isBackgroundProcessing?: boolean;

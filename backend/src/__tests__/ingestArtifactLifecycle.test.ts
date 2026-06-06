@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
         projectId: 'sessions.project_id',
     } as any,
     markSessionIngestActivity: vi.fn(),
+    reconcileSessionState: vi.fn(),
     logger: {
         info: vi.fn(),
         warn: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock('../db/client.js', () => ({
 
 vi.mock('../services/sessionReconciliation.js', () => ({
     markSessionIngestActivity: mocks.markSessionIngestActivity,
+    reconcileSessionState: mocks.reconcileSessionState,
 }));
 
 vi.mock('../logger.js', () => ({
@@ -77,6 +79,7 @@ vi.mock('../services/artifactBullQueue.js', () => ({
 import {
     queueRecoverableArtifacts,
     recoverStalePendingReplayArtifacts,
+    abandonExpiredPendingArtifacts,
     markArtifactBuffered,
     markArtifactUploadStored,
     markArtifactUploadInterrupted,
@@ -137,6 +140,33 @@ describe('ingestArtifactLifecycle', () => {
             })),
         }));
         mocks.getObjectSizeBytesForArtifact.mockReset();
+    });
+
+    it('reconciles sessions when expired pending replay artifacts are abandoned', async () => {
+        simpleSelectResult([
+            {
+                id: 'artifact_screenshot',
+                sessionId: 'session_1',
+                kind: 'screenshots',
+                clientUploadId: 'seg_session_1_screenshots_1000_na',
+                s3ObjectKey: 'tenant/team/project/session/screenshots/1000.tar.gz',
+            },
+            {
+                id: 'artifact_events',
+                sessionId: 'session_1',
+                kind: 'events',
+                clientUploadId: 'batch_session_1_events_0',
+                s3ObjectKey: 'tenant/team/project/session/events/events_0.json.gz',
+            },
+        ]);
+
+        const count = await abandonExpiredPendingArtifacts(10);
+
+        expect(count).toBe(2);
+        expect(mocks.removeArtifactJobIfQueued).toHaveBeenCalledWith('artifact_screenshot', 'screenshots');
+        expect(mocks.removeArtifactJobIfQueued).toHaveBeenCalledWith('artifact_events', 'events');
+        expect(mocks.reconcileSessionState).toHaveBeenCalledTimes(1);
+        expect(mocks.reconcileSessionState).toHaveBeenCalledWith('session_1');
     });
 
     it('skips replay upload when the segment is already ready', async () => {

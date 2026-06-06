@@ -53,7 +53,7 @@
 │          quota-exhausted sessions still count here                           │
 │                                                                              │
 │  5) Replay Quota Counting (single replay increment)                          │
-│     when reconciliation first sets replay_available=true                     │
+│     when reconciliation reaches a final kept replay decision                 │
 │       -> incrementProjectSessionReplayIfNeeded(sessionId)                    │
 │          writes project_usage.session_replays                                │
 │          sets sessions.replay_quota_counted_at                               │
@@ -132,9 +132,10 @@ sessionReplayPercentUsed
 │                                      ▼                                       │
 │                 Replay visibility no longer mutates at session end           │
 │                                      │                                       │
-│             Session appears in replay archive iff visual replay data exists  │
-│             (screenshots or rrweb), replay is not deleted/expired, and the   │
-│             session was not forced analytics-only by replay quota exhaustion │
+│             Session appears in replay archive iff replay retention is saved  │
+│             and retained visual replay data exists. Artifact readiness alone │
+│             is not enough: Smart Capture can keep artifacts hidden as        │
+│             buffered while a decision is pending.                            │
 │                                                                              │
 │        Quota-exhausted sessions remain analytics sessions and carry          │
 │        sessions.replay_quota_billing_exhausted=true so missing visuals are   │
@@ -142,10 +143,23 @@ sessionReplayPercentUsed
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## [B4a] Future Smart Capture Decision Layer
+## [B4a] Smart Capture Decision Layer
 
-The replay usage split is intentionally shaped so server-side smart capture can
-be added without changing iOS, RN iOS, RN Android, or Web packages.
+Smart Capture is server-side and project-level. It does not require changes to
+iOS, RN iOS, RN Android, or Web packages.
+
+The intended architecture is:
+
+```text
+sessionEvidence.ts
+  -> artifact/event readiness, pending event evidence, replay counts
+smartCapture.ts
+  -> normalize config, evaluate rules, return side-effect-free decision
+replayRetention.ts
+  -> apply quota/buffer constraints and choose retention state
+replayAvailability.ts
+  -> derive canOpenReplay for routes/workers
+```
 
 The intended order is:
 
@@ -170,49 +184,81 @@ Replay quota gate
        sessions.replay_available = false
        do not increment project_usage.session_replays
 
-Smart capture rules
+Smart Capture config + rules
+  -> Scale entitlement comes from Stripe plan metadata smart_capture_enabled=true
+  -> project config comes from GET/PUT /api/projects/:id/smart-capture
+  -> if disabled or not entitled, effective mode is record_all
+  -> dashboard edits live in the Replays page capture modal
   -> if replay quota remains:
-       evaluate server-side keep/toss rules
+       evaluate server-side keep/discard rules
        examples: minimum session duration, rage/dead taps, crashes, ANRs,
                  failed onboarding return, churn/retention outcome, sampled
                  funnels, requested customer predicates
   -> if qualified:
        retain replay artifacts
        sessions.replay_available = true
+       sessions.replay_retention_state = saved
        incrementProjectSessionReplayIfNeeded(sessionId)
        project_usage.session_replays += 1 exactly once
+  -> if delayed decision is still pending:
+       keep replay artifacts in a hidden buffer
+       sessions.replay_available = true
+       sessions.replay_retention_state = buffered
+       sessions.smart_capture_status = pending
+       do not increment project_usage.session_replays yet
   -> if not qualified:
        keep analytics/events/metrics
        do not expose replay
+       sessions.replay_available = false
+       sessions.replay_retention_state = analytics_only
        do not increment project_usage.session_replays
-       optionally purge visual artifacts after the decision window
+       abandon visual replay artifacts after the decision window
 ```
 
 Important semantics:
 
+- Canonical replay state column semantics live in
+  [`dev_docs/replay-state-columns.md`](./replay-state-columns.md).
 - Sampling and explicit observe-only/no-record decisions are first-layer controls.
 - Replay quota exhaustion is not observe-only mode; it uses
   `replay_quota_billing_exhausted` as the audit marker.
-- Smart capture should run after hard first-layer gates and after replay quota is
-  known to be available.
-- `replay_available=true` should mean "this replay was intentionally retained
-  and is available to view."
+- Smart Capture runs after hard first-layer gates and replay artifact readiness.
+- `replay_available=true` is retained artifact truth: visual replay artifacts
+  currently exist and are technically playable. Dashboard replay surfaces still require
+  `replay_retention_state=saved`, so buffered Smart Capture replays are hidden.
+- `replay_retention_state=buffered` is capped by
+  `RJ_SMART_CAPTURE_BUFFER_MAX_REPLAYS`, defaulting to `200000`.
+- The deploy migration leaves historical `sessions.replay_retention_state` as
+  `NULL` instead of rewriting the hot `sessions` table. `NULL` means legacy row:
+  use the old `replay_available`, `recording_deleted`, `is_replay_expired`, and
+  quota guards. New app code writes precise states as sessions reconcile, and
+  optional cleanup can run later outside the deploy path.
 - `replay_quota_counted_at` should normally be set only for retained, available
   replays that count toward replay usage. The exception is pre-cutover sessions
   covered by the preserved legacy ledger; those may be lazily marked counted
   without incrementing usage.
-- Some smart capture rules are immediate (`duration >= N seconds`, crash, rage
+- Some Smart Capture rules are immediate (`duration >= N seconds`, crash, rage
   tap); others are delayed/offline (`failed to return after onboarding`,
-  churned later). Delayed rules need a decision window before visual artifacts
-  are purged.
+  churned later). Delayed rules have a maximum 7-day decision window before
+  visual artifacts are saved or purged.
+- Rule JSON is normalized before evaluation. Manual rules and AI-created rules
+  share the same backend evaluator, including compound `all` clauses and scoped
+  metrics such as rage taps on a screen/page.
 
-Likely future schema for full auditability:
+Implemented schema:
 
 ```text
-sessions.smart_capture_decision        kept | discarded | pending
-sessions.smart_capture_reason          min_duration | rage_tap | crash | ...
-sessions.smart_capture_decided_at      timestamp
-sessions.smart_capture_discarded_at    timestamp null
+projects.smart_capture_enabled                  boolean
+projects.smart_capture_mode                     record_all | smart_capture | analytics_only
+projects.smart_capture_preset                   preset key
+projects.smart_capture_rules                    jsonb rule list
+projects.smart_capture_decision_window_hours    integer
+
+sessions.replay_retention_state                 NULL legacy | saved | buffered | analytics_only | not_available
+sessions.smart_capture_status                   not_applicable | pending | kept | discarded
+sessions.smart_capture_reason                   min_duration | rage_tap | ...
+sessions.smart_capture_rule_id                  matched rule id
+sessions.smart_capture_decided_at               timestamp
 ```
 
 Do not overload `observe_only` for smart capture. Observe-only means the customer
@@ -259,7 +305,7 @@ Mismatch pattern:
 │ sessions > 0 but project_usage empty -> Top Bar shows sessions, Billing 0   │
 │                                                                              │
 │ New ingest flow in [B2] prevents this for new captured sessions.            │
-│ Replay usage only rises after replay_available=true and counted_at is set. │
+│ Replay usage only rises after a final kept replay decision sets counted_at. │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -326,7 +372,9 @@ Pricing/public pages should describe plans as `session replays/mo` and include
 ┌───────────┐
 │ sessions  │  (analytics/session timeline)
 └─────┬─────┘
-      ├────────────▶ replay_promoted / replay_promoted_reason (promotion only)
+      ├────────────▶ replay_available (retained artifact truth)
+      ├────────────▶ replay_retention_state (saved/buffered/analytics_only/not_available)
+      ├────────────▶ smart_capture_status / reason / rule_id / decided_at
       ├────────────▶ replay_quota_billing_exhausted (analytics-only by quota)
       └────────────▶ replay_quota_counted_at (idempotent replay quota count)
 ```
@@ -341,7 +389,10 @@ SDK screenshots
    -> project_usage.sessions updated
    -> /api/ingest/segment/complete
    -> session_metrics.screenshot_segment_count += 1
-   -> replay archive visibility becomes true
+   -> reconcileSessionState()
+   -> sessionEvidence sees ready replay artifacts
+   -> replayRetention sets replay_retention_state=saved
+   -> replay archive visibility becomes true through canOpenReplay
    -> incrementProjectSessionReplayIfNeeded(sessionId)
    -> project_usage.session_replays += 1
    -> sessions.replay_quota_counted_at set
@@ -354,6 +405,7 @@ upload and the row is marked:
 ```text
 sessions.replay_quota_billing_exhausted = true
 sessions.replay_available = false
+sessions.replay_retention_state = analytics_only
 ```
 
 `GET /api/sdk/config` represents replay quota exhaustion as
@@ -411,7 +463,7 @@ still running during deploy. After the cutover row exists, sessions that started
 before `cutover_at` are treated as covered by the preserved ledger and may be
 lazily marked `replay_quota_counted_at` without incrementing replay usage.
 Sessions that start after `cutover_at` increment `project_usage.session_replays`
-once when they first become `replay_available=true`.
+once when they first become `replay_retention_state=saved`.
 
 Stripe metadata stays backward compatible. Active prices may keep `session_limit`;
 that key now means monthly session replay limit. Add `session_replay_limit` only
@@ -456,6 +508,7 @@ available:
 ```sql
 observe_only = false
 AND replay_quota_billing_exhausted = false
+AND COALESCE(replay_retention_state, 'saved') = 'saved'
 ```
 
 Quota-exhausted analytics-only rows are excluded because their missing
@@ -466,12 +519,17 @@ screenshots/rrweb are expected billing behavior, not upload failure.
 1. Run local tests and type checks for backend/dashboard billing paths.
 2. Push/merge only after local verification passes.
 3. Wait for CI to go green.
-4. After production SSH is provided, finalize the replay usage cutover:
+4. Let CI apply the Smart Capture migration. It only adds columns and does not
+   update every `sessions` row or build blocking session indexes.
+5. Build Smart Capture session indexes out of band from a non-transactional SQL
+   client:
+   - `backend/drizzle/manual/smart-capture-session-indexes-concurrent.sql`
+6. After production SSH is provided, finalize the replay usage cutover:
    - confirm the Drizzle migration applied.
    - raise `project_usage.session_replays` and `billing_usage.session_replays` with `GREATEST(session_replays, sessions)`.
    - insert `billing_cutovers('replay_usage_split')`.
    - optionally run a later low-priority batched `sessions.replay_quota_counted_at` historical marker backfill.
-5. Verify in production:
+7. Verify in production:
    - no existing current-period replay usage was reset or lowered.
    - replay quota checks use `project_usage.session_replays`.
    - captured sessions continue beyond replay quota.

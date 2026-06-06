@@ -29,6 +29,7 @@ import { config } from '../config.js';
 import { OVERVIEW_CACHE_TTL_SECONDS, buildOverviewCacheKey, persistOverviewCachePayload } from '../services/dashboardOverviewCache.js';
 import { boundedTimeRangeToDays } from '../utils/analyticsTimeRange.js';
 import { buildRetentionCohortRows } from '../services/retentionCohorts.js';
+import { canOpenReplayFromSessionFields } from '../services/replayAvailability.js';
 import { generateAnonymousName } from '../utils/anonymousName.js';
 import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
 import { normalizeHeatmapScreenName, normalizeHeatmapScreenPath } from '../utils/heatmapScreens.js';
@@ -432,6 +433,7 @@ async function loadSessionPreview(projectIds: string[], timeRange?: string, plat
     const conditions = [
         inArray(sessions.projectId, projectIds),
         eq(sessions.replayAvailable, true),
+        sql`COALESCE(${sessions.replayRetentionState}, 'saved') = 'saved'`,
         eq(sessions.recordingDeleted, false),
         eq(sessions.isReplayExpired, false),
     ];
@@ -486,6 +488,7 @@ async function loadSessionPreview(projectIds: string[], timeRange?: string, plat
                 retentionTier: sessions.retentionTier,
                 isReplayExpired: sessions.isReplayExpired,
                 replayAvailable: sessions.replayAvailable,
+                replayRetentionState: sessions.replayRetentionState,
             },
             metrics: {
                 totalEvents: sessionMetrics.totalEvents,
@@ -593,11 +596,11 @@ async function loadSessionPreview(projectIds: string[], timeRange?: string, plat
             retentionDays: session.retentionDays ?? undefined,
             retentionTier: session.retentionTier ?? undefined,
             isReplayExpired: session.isReplayExpired,
-            hasSuccessfulRecording: Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired,
+            hasSuccessfulRecording: canOpenReplayFromSessionFields(session),
             effectiveStatus: session.status,
             isLiveIngest: false,
             isBackgroundProcessing: false,
-            canOpenReplay: Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired,
+            canOpenReplay: canOpenReplayFromSessionFields(session),
             userFirstSeenAt: userFirstSeenAt?.toISOString(),
         };
     });
@@ -690,6 +693,7 @@ async function loadTopUsersPreview(projectIds: string[], timeRange?: string, pla
                 ${sessions.retentionTier},
                 ${sessions.isReplayExpired},
                 ${sessions.replayAvailable},
+                ${sessions.replayRetentionState},
                 CASE
                     WHEN nullif(trim(${sessions.userDisplayId}), '') IS NOT NULL THEN 'user:' || nullif(trim(${sessions.userDisplayId}), '')
                     WHEN nullif(trim(${sessions.anonymousDisplayId}), '') IS NOT NULL THEN 'anon:' || nullif(trim(${sessions.anonymousDisplayId}), '')
@@ -702,6 +706,7 @@ async function loadTopUsersPreview(projectIds: string[], timeRange?: string, pla
               ${startedAfterClause}
               ${platformClause}
               AND ${sessions.replayAvailable} = true
+              AND COALESCE(${sessions.replayRetentionState}, 'saved') = 'saved'
               AND ${sessions.recordingDeleted} = false
               AND ${sessions.isReplayExpired} = false
         ),
@@ -757,7 +762,8 @@ async function loadTopUsersPreview(projectIds: string[], timeRange?: string, pla
             latest.retention_days,
             latest.retention_tier,
             latest.is_replay_expired,
-            latest.replay_available
+            latest.replay_available,
+            latest.replay_retention_state
         FROM ranked
         JOIN latest ON latest.user_key = ranked.user_key
         ORDER BY ranked.session_count DESC, ranked.latest_started_at DESC
@@ -798,6 +804,7 @@ async function loadTopUsersPreview(projectIds: string[], timeRange?: string, pla
         retention_tier: string | null;
         is_replay_expired: boolean;
         replay_available: boolean | null;
+        replay_retention_state: string | null;
     }> = Array.isArray(topRows) ? topRows : ((topRows as any).rows ?? []);
 
     if (topResult.length === 0) return [];
@@ -821,6 +828,12 @@ async function loadTopUsersPreview(projectIds: string[], timeRange?: string, pla
                 ? `hash:${latest.anonymous_hash}`
                 : `device:${latest.device_id}`;
         const userFirstSeenAt = firstSeenMap.get(identityKey);
+        const canOpenReplay = canOpenReplayFromSessionFields({
+            replayAvailable: latest.replay_available,
+            replayRetentionState: latest.replay_retention_state,
+            recordingDeleted: latest.recording_deleted,
+            isReplayExpired: latest.is_replay_expired,
+        });
 
         return {
             sessionCount: latest.session_count,
@@ -861,11 +874,11 @@ async function loadTopUsersPreview(projectIds: string[], timeRange?: string, pla
                 retentionDays: latest.retention_days ?? undefined,
                 retentionTier: latest.retention_tier ?? undefined,
                 isReplayExpired: latest.is_replay_expired,
-                hasSuccessfulRecording: Boolean(latest.replay_available) && !latest.recording_deleted && !latest.is_replay_expired,
+                hasSuccessfulRecording: canOpenReplay,
                 effectiveStatus: latest.status,
                 isLiveIngest: false,
                 isBackgroundProcessing: false,
-                canOpenReplay: Boolean(latest.replay_available) && !latest.recording_deleted && !latest.is_replay_expired,
+                canOpenReplay,
                 userFirstSeenAt: userFirstSeenAt?.toISOString(),
                 // Minimal metric stubs — Top Users display doesn't need these
                 totalEvents: 0,
@@ -1081,6 +1094,7 @@ async function loadHeatmapIterationSummary(projectId: string, timeRange?: string
             appVersion: sessions.appVersion,
             startedAt: sessions.startedAt,
             replayAvailable: sessions.replayAvailable,
+            replayRetentionState: sessions.replayRetentionState,
             recordingDeleted: sessions.recordingDeleted,
             isReplayExpired: sessions.isReplayExpired,
             screensVisited: sessionMetrics.screensVisited,
@@ -1095,7 +1109,7 @@ async function loadHeatmapIterationSummary(projectId: string, timeRange?: string
         .limit(5000);
 
     const replayReadySessionIds = Array.from(
-        new Set(rows.filter((row) => Boolean(row.replayAvailable) && !row.recordingDeleted && !row.isReplayExpired).map((row) => row.sessionId)),
+        new Set(rows.filter((row) => canOpenReplayFromSessionFields(row)).map((row) => row.sessionId)),
     );
     const screenshotSessionIds = new Set<string>();
 
@@ -1135,7 +1149,7 @@ async function loadHeatmapIterationSummary(projectId: string, timeRange?: string
         if (visitedScreens.length === 0) continue;
 
         const appVersion = row.appVersion?.trim() || 'Unknown';
-        const replayReady = Boolean(row.replayAvailable) && !row.recordingDeleted && !row.isReplayExpired;
+        const replayReady = canOpenReplayFromSessionFields(row);
         const evidenceSessionId = replayReady ? row.sessionId : null;
         const screenshotSessionId = replayReady && screenshotSessionIds.has(row.sessionId) ? row.sessionId : null;
         const perScreenTouches = Math.ceil((row.touchCount || 0) / visitedScreens.length);
@@ -1478,6 +1492,7 @@ async function loadWebAttentionHeatmap(projectId: string, screenName: string, ti
         eq(sessions.projectId, projectId),
         eq(sessions.platform, 'web'),
         eq(sessions.replayAvailable, true),
+        sql`COALESCE(${sessions.replayRetentionState}, 'saved') = 'saved'`,
         eq(sessions.recordingDeleted, false),
         eq(sessions.isReplayExpired, false),
     ];
@@ -1632,6 +1647,7 @@ async function loadMobileAttentionHeatmap(projectId: string, screenName: string,
         eq(sessions.projectId, projectId),
         platformCondition,
         eq(sessions.replayAvailable, true),
+        sql`COALESCE(${sessions.replayRetentionState}, 'saved') = 'saved'`,
         eq(sessions.recordingDeleted, false),
         eq(sessions.isReplayExpired, false),
     ];
@@ -1795,14 +1811,6 @@ async function loadAttentionHeatmap(projectId: string, screenName: string, timeR
 const STABILITY_OVERVIEW_FP_LIMIT = 50;
 const STABILITY_OVERVIEW_DETAIL_LIMIT = 500;
 
-function canOpenReplayFromSessionFields(session: {
-    replayAvailable?: boolean | null;
-    recordingDeleted?: boolean | null;
-    isReplayExpired?: boolean | null;
-}): boolean {
-    return Boolean(session.replayAvailable) && !session.recordingDeleted && !session.isReplayExpired;
-}
-
 async function loadErrorsOverview(projectIds: string[], timeRange?: string, platform?: string) {
     if (projectIds.length === 0) {
         return {
@@ -1859,6 +1867,7 @@ async function loadErrorsOverview(projectIds: string[], timeRange?: string, plat
             stack: jsErrors.stack,
             screenName: jsErrors.screenName,
             replayAvailable: sessions.replayAvailable,
+            replayRetentionState: sessions.replayRetentionState,
             recordingDeleted: sessions.recordingDeleted,
             isReplayExpired: sessions.isReplayExpired,
             userDisplayId: sessions.userDisplayId,
@@ -2012,6 +2021,7 @@ async function loadCrashesOverview(projectIds: string[], timeRange?: string, pla
             timestamp: appCrashes.timestamp,
             deviceMetadata: appCrashes.deviceMetadata,
             replayAvailable: sessions.replayAvailable,
+            replayRetentionState: sessions.replayRetentionState,
             recordingDeleted: sessions.recordingDeleted,
             isReplayExpired: sessions.isReplayExpired,
             userDisplayId: sessions.userDisplayId,

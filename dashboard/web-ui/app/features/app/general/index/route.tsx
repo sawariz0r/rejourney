@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     BookOpen,
     ChevronDown,
@@ -48,6 +48,7 @@ import {
     getUserEngagementTrends,
     configureCustomEventRevenue,
     CustomRevenueEventConfig,
+    connectRevenueCatRevenue,
     connectSuperwallRevenue,
     deleteManualRevenueEntry,
     disconnectRevenueSource,
@@ -81,6 +82,7 @@ import { CountryFlag } from '~/shared/ui/core/CountryFlag';
 import { buildProjectAIIntegrationPrompt } from '~/shared/constants/aiPrompts';
 import { RecordingSession } from '~/shared/types';
 import { useDemoMode } from '~/shared/providers/DemoModeContext';
+import { useDashboardManualRefreshVersion } from '~/shared/providers/DashboardManualRefreshContext';
 import { DEMO_REPLAY_SESSION_IDS, getDemoReplayCoverPhotoUrl } from '~/shared/data/demoData';
 
 const toUtcDateKey = (value: string): string | null => {
@@ -239,6 +241,18 @@ function buildDemoRevenueOverview(trendRows: TrendChartRow[]): RevenueOverview |
             {
                 provider: 'superwall',
                 label: 'Superwall',
+                configured: true,
+                status: 'not_connected',
+                accountId: null,
+                accountName: null,
+                connectedAt: null,
+                lastSyncStartedAt: null,
+                lastSyncCompletedAt: null,
+                lastSyncError: null,
+            },
+            {
+                provider: 'revenuecat',
+                label: 'RevenueCat',
                 configured: true,
                 status: 'not_connected',
                 accountId: null,
@@ -661,6 +675,12 @@ const REVENUE_PROVIDER_META: Record<RevenueProvider, {
         description: 'Use a scoped read-only Superwall API key.',
         logo: '/brands/superwall/superwall-logo.svg',
     },
+    revenuecat: {
+        label: 'RevenueCat',
+        shortLabel: 'RevenueCat',
+        description: 'Sync authoritative RevenueCat v2 revenue charts.',
+        logo: '/brands/revenuecat/revenuecat-logo.svg',
+    },
 };
 
 const DEFAULT_CUSTOM_REVENUE_CONFIG: CustomRevenueEventConfig = {
@@ -686,6 +706,7 @@ type RevenueActionState = {
         | 'select_provider'
         | 'sync'
         | 'connect_superwall'
+        | 'connect_revenuecat'
         | 'save_custom_events'
         | 'save_manual'
         | 'delete_manual'
@@ -1568,7 +1589,8 @@ const RevenueImpactSection: React.FC<{
     onSync: (provider: RevenueProvider) => void;
     onDisconnect: (provider: RevenueProvider) => void;
     onSelectProvider: (provider: RevenueProvider) => void;
-    onSaveSuperwall: (input: { apiKey: string; organizationId?: string; applicationId?: string }) => void;
+    onSaveSuperwall: (input: { apiKey: string }) => void;
+    onSaveRevenueCat: (input: { apiKey: string; revenueCatProjectId: string }) => void;
     onSaveCustomEvents: (input: typeof DEFAULT_CUSTOM_REVENUE_CONFIG) => void;
     onSaveManualEntry: (input: { entryId?: string; date: string; amountCents: number; currency: string; transactionCount: number; note?: string | null }) => void;
     onDeleteManualEntry: (entryId: string) => void;
@@ -1588,6 +1610,7 @@ const RevenueImpactSection: React.FC<{
     onDisconnect,
     onSelectProvider,
     onSaveSuperwall,
+    onSaveRevenueCat,
     onSaveCustomEvents,
     onSaveManualEntry,
     onDeleteManualEntry,
@@ -1609,8 +1632,8 @@ const RevenueImpactSection: React.FC<{
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [settingsProvider, setSettingsProvider] = useState<RevenueProvider>('custom_events');
     const [superwallApiKey, setSuperwallApiKey] = useState('');
-    const [superwallOrganizationId, setSuperwallOrganizationId] = useState('');
-    const [superwallApplicationId, setSuperwallApplicationId] = useState('');
+    const [revenueCatApiKey, setRevenueCatApiKey] = useState('');
+    const [revenueCatProjectId, setRevenueCatProjectId] = useState('');
     const [customConfig, setCustomConfig] = useState(DEFAULT_CUSTOM_REVENUE_CONFIG);
     const [copiedCustomSetupPrompt, setCopiedCustomSetupPrompt] = useState(false);
     const [isManualFormOpen, setIsManualFormOpen] = useState(false);
@@ -1646,13 +1669,18 @@ const RevenueImpactSection: React.FC<{
     const isActiveProviderAction = Boolean(activeProvider && actionProvider === activeProvider);
     const isSyncPending = actionState?.kind === 'sync' && isActiveProviderAction;
     const isDisconnectPending = actionState?.kind === 'disconnect' && isActiveProviderAction;
-    const isSavingSource = actionState?.kind === 'connect_superwall' || actionState?.kind === 'save_custom_events' || actionState?.kind === 'select_provider';
+    const isSavingSource = actionState?.kind === 'connect_superwall'
+        || actionState?.kind === 'connect_revenuecat'
+        || actionState?.kind === 'save_custom_events'
+        || actionState?.kind === 'select_provider';
     const actionMessage = actionState?.kind === 'sync'
         ? 'Syncing revenue now...'
         : actionState?.kind === 'disconnect'
             ? 'Disconnecting revenue source...'
             : actionState?.kind === 'connect_superwall'
                 ? 'Connecting Superwall and starting sync...'
+                : actionState?.kind === 'connect_revenuecat'
+                    ? 'Connecting RevenueCat and starting sync...'
                 : actionState?.kind === 'save_custom_events'
                     ? 'Saving custom event mapping and syncing...'
                     : actionState?.kind === 'save_manual'
@@ -1672,6 +1700,7 @@ const RevenueImpactSection: React.FC<{
     const isRevenueSyncInProgress = status === 'syncing'
         || actionState?.kind === 'sync'
         || actionState?.kind === 'connect_superwall'
+        || actionState?.kind === 'connect_revenuecat'
         || actionState?.kind === 'save_custom_events';
     const changeClass = grossChange === null || grossChange === 0
         ? 'text-slate-600'
@@ -1944,7 +1973,7 @@ const RevenueImpactSection: React.FC<{
                     ? 'Syncing'
                     : isProviderPending && actionState?.kind === 'disconnect'
                         ? 'Disconnecting'
-                        : isProviderPending && (actionState?.kind === 'connect_superwall' || actionState?.kind === 'save_custom_events' || actionState?.kind === 'select_provider')
+                        : isProviderPending && (actionState?.kind === 'connect_superwall' || actionState?.kind === 'connect_revenuecat' || actionState?.kind === 'save_custom_events' || actionState?.kind === 'select_provider')
                             ? 'Saving'
                             : !configured
                     ? 'Unavailable'
@@ -1960,10 +1989,12 @@ const RevenueImpactSection: React.FC<{
                         : 'border-[#dadce0] bg-[#f8fafc] text-slate-600';
                 const markSurfaceClass = provider === 'superwall'
                     ? 'border-[#111827] bg-[#111827]'
+                    : provider === 'revenuecat'
+                        ? 'border-[#1f1f47] bg-white'
                     : 'border-[#dadce0] bg-white';
                 const markSizeClass = provider === 'custom_events'
                     ? 'w-16'
-                    : provider === 'superwall'
+                    : provider === 'superwall' || provider === 'revenuecat'
                         ? 'w-36'
                         : 'w-24';
                 const markHeightClass = provider === 'custom_events' ? 'h-14' : 'h-10';
@@ -2031,26 +2062,26 @@ const RevenueImpactSection: React.FC<{
                             className="grid gap-3 md:grid-cols-2"
                             onSubmit={(event) => {
                                 event.preventDefault();
+                                const apiKey = superwallApiKey;
+                                setSuperwallApiKey('');
                                 setIsSettingsOpen(false);
                                 setIsManualFormOpen(false);
                                 onSaveSuperwall({
-                                    apiKey: superwallApiKey,
-                                    organizationId: superwallOrganizationId || undefined,
-                                    applicationId: superwallApplicationId || undefined,
+                                    apiKey,
                                 });
                             }}
                         >
                             <div className="md:col-span-2 border border-[#dadce0] bg-white p-3 text-[11px] font-semibold leading-5 text-slate-600">
                                 <div className="text-xs font-bold uppercase text-slate-700">Superwall setup checklist</div>
                                 <div className="mt-1">
-                                    Create a scoped read-only Superwall API key for reporting or analytics access, then paste it here. Avoid SDK keys, admin keys, unrestricted keys, or keys that can mutate paywalls, products, users, or campaigns.
+                                    Create a scoped organization API key with projects:read and data:read, then paste it here. Avoid SDK keys, admin keys, unrestricted keys, or keys that can mutate paywalls, products, users, or campaigns.
                                 </div>
                                 <div className="mt-2">
-                                    Application ID narrows syncs to one app. Organization ID helps identify the account when your Superwall workspace has multiple apps.
+                                    Rejourney uses projects:read to find the organization ID, then data:read to sync revenue. Restrict project access in Superwall to the project Rejourney should read.
                                 </div>
                             </div>
-                            <label className="space-y-1">
-                                <span className="dashboard-label">Read-only API key</span>
+                            <label className="space-y-1 md:col-span-2">
+                                <span className="dashboard-label">projects:read + data:read API key</span>
                                 <input
                                     value={superwallApiKey}
                                     onChange={(event) => setSuperwallApiKey(event.target.value)}
@@ -2059,29 +2090,7 @@ const RevenueImpactSection: React.FC<{
                                     className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none focus:border-black focus:ring-2 focus:ring-cyan-100"
                                 />
                                 <span className="block text-[11px] font-semibold leading-4 text-slate-500">
-                                    Use a key scoped to read/reporting access only.
-                                </span>
-                            </label>
-                            <label className="space-y-1">
-                                <span className="dashboard-label">Application ID</span>
-                                <input
-                                    value={superwallApplicationId}
-                                    onChange={(event) => setSuperwallApplicationId(event.target.value)}
-                                    className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none focus:border-black focus:ring-2 focus:ring-cyan-100"
-                                />
-                                <span className="block text-[11px] font-semibold leading-4 text-slate-500">
-                                    Optional, but recommended for one-app syncs.
-                                </span>
-                            </label>
-                            <label className="space-y-1">
-                                <span className="dashboard-label">Organization ID</span>
-                                <input
-                                    value={superwallOrganizationId}
-                                    onChange={(event) => setSuperwallOrganizationId(event.target.value)}
-                                    className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none focus:border-black focus:ring-2 focus:ring-cyan-100"
-                                />
-                                <span className="block text-[11px] font-semibold leading-4 text-slate-500">
-                                    Optional account label for audits and support.
+                                    Use a secret organization key that starts with sk_.
                                 </span>
                             </label>
                             <div className="md:col-span-2">
@@ -2092,6 +2101,84 @@ const RevenueImpactSection: React.FC<{
                                 >
                                     <Check className="h-3.5 w-3.5" />
                                     Connect Superwall
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    {settingsProvider === 'revenuecat' && (
+                        <form
+                            className="grid gap-3 md:grid-cols-2"
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                const apiKey = revenueCatApiKey;
+                                const projectId = revenueCatProjectId;
+                                setRevenueCatApiKey('');
+                                setRevenueCatProjectId('');
+                                setIsSettingsOpen(false);
+                                setIsManualFormOpen(false);
+                                onSaveRevenueCat({
+                                    apiKey,
+                                    revenueCatProjectId: projectId,
+                                });
+                            }}
+                        >
+                            <div className="md:col-span-2 border border-[#dadce0] bg-white p-3 text-[11px] font-semibold leading-5 text-slate-600">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="text-xs font-bold uppercase text-slate-700">RevenueCat setup checklist</div>
+                                    <a
+                                        href="https://www.revenuecat.com/docs/api-v2"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-[#576cdb] hover:text-black"
+                                    >
+                                        API v2 docs
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                </div>
+                                <div className="mt-1">
+                                    Create a RevenueCat V2 key with charts_metrics:overview:read and charts_metrics:charts:read, then paste it with the RevenueCat project ID.
+                                </div>
+                                <div className="mt-2">
+                                    Rejourney validates overview access first, then syncs the revenue chart as daily revenue rows. Do not use SDK public keys, OAuth tokens, or write-enabled customer/project permissions.
+                                </div>
+                            </div>
+                            <label className="space-y-1">
+                                <span className="dashboard-label">RevenueCat project ID</span>
+                                <input
+                                    value={revenueCatProjectId}
+                                    onChange={(event) => setRevenueCatProjectId(event.target.value)}
+                                    type="text"
+                                    required
+                                    placeholder="proj..."
+                                    className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none placeholder:text-slate-400 focus:border-black focus:ring-2 focus:ring-cyan-100"
+                                />
+                                <span className="block text-[11px] font-semibold leading-4 text-slate-500">
+                                    Find it in RevenueCat Project settings or the RevenueCat API URL.
+                                </span>
+                            </label>
+                            <label className="space-y-1 md:col-span-2">
+                                <span className="dashboard-label">V2 charts_metrics:overview:read + charts_metrics:charts:read API key</span>
+                                <input
+                                    value={revenueCatApiKey}
+                                    onChange={(event) => setRevenueCatApiKey(event.target.value)}
+                                    type="password"
+                                    required
+                                    placeholder="sk_..."
+                                    className="h-9 w-full border border-[#dadce0] bg-white px-2 text-sm font-semibold outline-none placeholder:text-slate-400 focus:border-black focus:ring-2 focus:ring-cyan-100"
+                                />
+                                <span className="block text-[11px] font-semibold leading-4 text-slate-500">
+                                    Use a server-side secret key only; it stays encrypted in Rejourney.
+                                </span>
+                            </label>
+                            <div className="md:col-span-2">
+                                <button
+                                    type="submit"
+                                    disabled={isActionLoading}
+                                    className="inline-flex h-8 items-center gap-1.5 border border-black bg-black px-3 text-[10px] font-black uppercase text-white transition hover:bg-[#576cdb] disabled:cursor-wait disabled:opacity-70"
+                                >
+                                    <Check className="h-3.5 w-3.5" />
+                                    Connect RevenueCat
                                 </button>
                             </div>
                         </form>
@@ -2684,6 +2771,7 @@ const RevenueImpactSection: React.FC<{
 export const GeneralOverview: React.FC = () => {
     const { selectedProject } = useSessionData();
     const { isDemoMode } = useDemoMode();
+    const manualRefreshVersion = useDashboardManualRefreshVersion();
     const pathPrefix = usePathPrefix();
     const navigate = useNavigate();
     const { timeRange, setTimeRange } = useSharedRejourneyTimeRange(selectedProject?.id);
@@ -2730,12 +2818,17 @@ export const GeneralOverview: React.FC = () => {
     const [customEventSelectionTouched, setCustomEventSelectionTouched] = useState(false);
     const [customEventSearchQuery, setCustomEventSearchQuery] = useState('');
     const [hydratedCustomEventSelectionKey, setHydratedCustomEventSelectionKey] = useState<string | null>(null);
+    const overviewDataScopeRef = useRef<string | null>(null);
+    const sessionDataScopeRef = useRef<string | null>(null);
+    const topUsersDataScopeRef = useRef<string | null>(null);
+    const referralDataScopeRef = useRef<string | null>(null);
 
     useEffect(() => {
         setRevenueCurrency(null);
     }, [selectedProject?.id]);
 
-    const loadRevenue = useCallback(async () => {
+    const loadRevenue = useCallback(async (options: { showLoading?: boolean } = {}) => {
+        const showLoading = options.showLoading ?? true;
         if (!selectedProject?.id || isDemoMode) {
             setRevenue(null);
             setRevenueError(null);
@@ -2743,7 +2836,7 @@ export const GeneralOverview: React.FC = () => {
             return;
         }
 
-        setIsRevenueLoading(true);
+        if (showLoading) setIsRevenueLoading(true);
         setRevenueError(null);
         try {
             const data = await getRevenueOverview(selectedProject.id, timeRange, revenueOverviewCurrency);
@@ -2788,18 +2881,24 @@ export const GeneralOverview: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [isDemoMode, selectedProject?.id, timeRange, revenueOverviewCurrency]);
+    }, [isDemoMode, manualRefreshVersion, selectedProject?.id, timeRange, revenueOverviewCurrency]);
 
     useEffect(() => {
         if (!selectedProject?.id || isDemoMode || revenueOverview?.connection.status !== 'syncing') return;
-        const timeout = window.setTimeout(() => {
-            void loadRevenue();
+        let isPolling = false;
+        const interval = window.setInterval(() => {
+            if (isPolling) return;
+            isPolling = true;
+            void loadRevenue({ showLoading: false }).finally(() => {
+                isPolling = false;
+            });
         }, 2500);
-        return () => window.clearTimeout(timeout);
+        return () => window.clearInterval(interval);
     }, [isDemoMode, loadRevenue, revenueOverview?.connection.status, selectedProject?.id]);
 
     useEffect(() => {
         if (!selectedProject?.id) {
+            overviewDataScopeRef.current = null;
             setSectionStatus(buildGeneralSectionStatuses('idle'));
             setFailedSections([]);
             setTrends(null);
@@ -2815,15 +2914,20 @@ export const GeneralOverview: React.FC = () => {
         const normalizedPlatform = platform && platform !== 'all' ? platform : undefined;
         const observabilityRange = timeRange === 'all' ? undefined : timeRange;
         const observabilityMode = normalizedPlatform ? 'full' : 'summary';
+        const dataScope = `${selectedProject.id}:${timeRange}:${normalizedPlatform ?? 'all'}`;
+        const shouldClearCurrentData = overviewDataScopeRef.current !== dataScope;
+        overviewDataScopeRef.current = dataScope;
 
         setSectionStatus(buildGeneralSectionStatuses('loading'));
         setFailedSections([]);
-        setTrends(null);
-        setOverviewObs(null);
-        setDeepMetrics(null);
-        setEngagementTrends(null);
-        setGeoSummary(null);
-        setRetentionCohortRows([]);
+        if (shouldClearCurrentData) {
+            setTrends(null);
+            setOverviewObs(null);
+            setDeepMetrics(null);
+            setEngagementTrends(null);
+            setGeoSummary(null);
+            setRetentionCohortRows([]);
+        }
 
         const markReady = (key: GeneralSectionKey) => {
             setSectionStatus((current) => ({ ...current, [key]: 'ready' }));
@@ -2909,18 +3013,24 @@ export const GeneralOverview: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform]);
+    }, [manualRefreshVersion, selectedProject?.id, timeRange, platform]);
 
     useEffect(() => {
         if (!selectedProject?.id) {
+            sessionDataScopeRef.current = null;
             setSessions([]);
             setIsSessionsLoading(false);
             return;
         }
 
         let isCancelled = false;
+        const dataScope = `${selectedProject.id}:${timeRange}:${platform ?? 'all'}`;
+        const shouldClearCurrentData = sessionDataScopeRef.current !== dataScope;
+        sessionDataScopeRef.current = dataScope;
         setIsSessionsLoading(true);
-        setSessions([]);
+        if (shouldClearCurrentData) {
+            setSessions([]);
+        }
 
         getDashboardOverviewHeavy(selectedProject.id, timeRange, platform, 'sessions')
             .then((heavyData) => {
@@ -2940,18 +3050,24 @@ export const GeneralOverview: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform]);
+    }, [manualRefreshVersion, selectedProject?.id, timeRange, platform]);
 
     useEffect(() => {
         if (!selectedProject?.id || isDemoMode) {
+            topUsersDataScopeRef.current = null;
             setTopUsersFromBackend([]);
             setIsTopUsersLoading(false);
             return;
         }
 
         let isCancelled = false;
+        const dataScope = `${selectedProject.id}:${timeRange}:${platform ?? 'all'}`;
+        const shouldClearCurrentData = topUsersDataScopeRef.current !== dataScope;
+        topUsersDataScopeRef.current = dataScope;
         setIsTopUsersLoading(true);
-        setTopUsersFromBackend([]);
+        if (shouldClearCurrentData) {
+            setTopUsersFromBackend([]);
+        }
 
         getDashboardOverviewHeavy(selectedProject.id, timeRange, platform, 'topUsers')
             .then((heavyData) => {
@@ -2971,22 +3087,30 @@ export const GeneralOverview: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [isDemoMode, selectedProject?.id, timeRange, platform]);
+    }, [isDemoMode, manualRefreshVersion, selectedProject?.id, timeRange, platform]);
 
     useEffect(() => {
         if (!selectedProject?.id) {
+            referralDataScopeRef.current = null;
             setIsReferralLoading(false);
             setWebReferralSessions([]);
             return;
         }
         if (platform === 'mobile') {
+            referralDataScopeRef.current = null;
             setIsReferralLoading(false);
             setWebReferralSessions([]);
             return;
         }
 
         let isCancelled = false;
+        const dataScope = `${selectedProject.id}:${timeRange}:${platform ?? 'all'}`;
+        const shouldClearCurrentData = referralDataScopeRef.current !== dataScope;
+        referralDataScopeRef.current = dataScope;
         setIsReferralLoading(true);
+        if (shouldClearCurrentData) {
+            setWebReferralSessions([]);
+        }
 
         getSessionsPaginated({
             projectId: selectedProject.id,
@@ -3014,7 +3138,7 @@ export const GeneralOverview: React.FC = () => {
         return () => {
             isCancelled = true;
         };
-    }, [selectedProject?.id, timeRange, platform]);
+    }, [manualRefreshVersion, selectedProject?.id, timeRange, platform]);
 
     const trendChartData = useMemo<TrendChartRow[]>(() => {
         if (!trends?.daily?.length) return [];
@@ -3569,7 +3693,7 @@ export const GeneralOverview: React.FC = () => {
         }
     }, [isDemoMode, loadRevenue, revenueOverview, selectedProject?.id]);
 
-    const handleSaveSuperwallRevenue = useCallback(async (input: { apiKey: string; organizationId?: string; applicationId?: string }) => {
+    const handleSaveSuperwallRevenue = useCallback(async (input: { apiKey: string }) => {
         if (!selectedProject?.id) return;
         if (isDemoMode) return;
         const previousRevenue = revenueOverview;
@@ -3578,8 +3702,8 @@ export const GeneralOverview: React.FC = () => {
         setRevenueError(null);
         setRevenue((current) => patchRevenueProviderStatus(current, 'superwall', {
             status: 'syncing',
-            accountId: input.applicationId || input.organizationId || null,
-            accountName: input.applicationId || input.organizationId || 'Superwall',
+            accountId: null,
+            accountName: 'Superwall',
             connectedAt: now,
             lastSyncStartedAt: now,
             lastSyncError: null,
@@ -3590,6 +3714,32 @@ export const GeneralOverview: React.FC = () => {
         } catch (error) {
             setRevenue(previousRevenue);
             setRevenueError(error instanceof Error ? error.message : 'Unable to connect Superwall revenue.');
+        } finally {
+            setRevenueActionState(null);
+        }
+    }, [isDemoMode, loadRevenue, revenueOverview, selectedProject?.id]);
+
+    const handleSaveRevenueCatRevenue = useCallback(async (input: { apiKey: string; revenueCatProjectId: string }) => {
+        if (!selectedProject?.id) return;
+        if (isDemoMode) return;
+        const previousRevenue = revenueOverview;
+        const now = new Date().toISOString();
+        setRevenueActionState({ kind: 'connect_revenuecat', provider: 'revenuecat' });
+        setRevenueError(null);
+        setRevenue((current) => patchRevenueProviderStatus(current, 'revenuecat', {
+            status: 'syncing',
+            accountId: input.revenueCatProjectId,
+            accountName: 'RevenueCat',
+            connectedAt: now,
+            lastSyncStartedAt: now,
+            lastSyncError: null,
+        }, { activeProvider: 'revenuecat', updateConnection: true }));
+        try {
+            await connectRevenueCatRevenue(selectedProject.id, input);
+            await loadRevenue();
+        } catch (error) {
+            setRevenue(previousRevenue);
+            setRevenueError(error instanceof Error ? error.message : 'Unable to connect RevenueCat revenue.');
         } finally {
             setRevenueActionState(null);
         }
@@ -3795,6 +3945,7 @@ export const GeneralOverview: React.FC = () => {
                         onDisconnect={handleDisconnectRevenue}
                         onSelectProvider={handleSelectRevenueProvider}
                         onSaveSuperwall={handleSaveSuperwallRevenue}
+                        onSaveRevenueCat={handleSaveRevenueCatRevenue}
                         onSaveCustomEvents={handleSaveCustomEventRevenue}
                         onSaveManualEntry={handleSaveManualRevenueEntry}
                         onDeleteManualEntry={handleDeleteManualRevenueEntry}

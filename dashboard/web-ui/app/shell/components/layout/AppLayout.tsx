@@ -6,6 +6,7 @@ import { Project, Platform } from '~/shared/types';
 import { ApiProject } from '~/shared/api/client';
 import { useTeam } from '~/shared/providers/TeamContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
+import { DashboardManualRefreshProvider } from '~/shared/providers/DashboardManualRefreshContext';
 import { DASHBOARD_MANUAL_REFRESH_COMPLETE } from '~/shared/constants/events';
 import { FolderPlus, Layers3 } from 'lucide-react';
 import { trackRejourneyDashboardContext } from '~/shared/compliance/rejourneyWebsiteTelemetry';
@@ -64,7 +65,6 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
     () => `${currentTeam?.id ?? 'no-team'}:${selectedProject?.id ?? 'no-project'}`,
     [currentTeam?.id, selectedProject?.id],
   );
-  const contentScopeKey = `${routeScopeKey}:refresh-${manualRefreshCycle}`;
   const isProjectDependentRoute = useMemo(() => (
     routeWithoutPrefix.startsWith('/general')
     || routeWithoutPrefix.startsWith('/sessions')
@@ -102,9 +102,12 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
     };
   }, [setSelectedProject, refreshSessions]);
 
-  // Manual topbar refresh should remount page content so route-level fetchers run again.
+  // Manual topbar refresh is exposed as data state so routes can refetch without
+  // throwing away their rendered surface.
   useEffect(() => {
-    const handleManualRefreshComplete = () => {
+    const handleManualRefreshComplete = (event: Event) => {
+      const didFail = event instanceof CustomEvent && event.detail?.success === false;
+      if (didFail) return;
       setManualRefreshCycle(prev => prev + 1);
     };
 
@@ -169,45 +172,45 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
           </div>
         )}
         <div
-          key={contentScopeKey}
           className="dashboard-content dashboard-surface-mix min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
         >
-          {hasNoTeam ? (
-            <div className="mx-auto flex h-full w-full max-w-4xl items-center justify-center p-4 sm:p-8">
-              <div className="w-full border-2 border-black bg-white p-5 shadow-neo sm:p-8">
-                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center border-2 border-black bg-[#67e8f9] text-black shadow-neo-sm">
-                  <Layers3 className="h-6 w-6 stroke-[3]" />
-                </div>
-                <h2 className="text-xl font-extrabold text-black">Create a team to start</h2>
-                <p className="mt-3 text-base font-medium text-slate-600">
-                  Teams hold your projects, members, and billing. Once a team exists, you can add a project and data will appear here.
-                </p>
-                <div className="mt-8 flex flex-wrap gap-4">
-                  <button
-                    onClick={openCreateTeamModal}
-                    className="inline-flex items-center gap-2 border-2 border-black bg-black px-5 py-2.5 text-sm font-bold text-white shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo"
-                  >
-                    Create Team
-                  </button>
+          <DashboardManualRefreshProvider value={manualRefreshCycle}>
+            {hasNoTeam ? (
+              <div className="mx-auto flex h-full w-full max-w-4xl items-center justify-center p-4 sm:p-8">
+                <div className="w-full border-2 border-black bg-white p-5 shadow-neo sm:p-8">
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center border-2 border-black bg-[#67e8f9] text-black shadow-neo-sm">
+                    <Layers3 className="h-6 w-6 stroke-[3]" />
+                  </div>
+                  <h2 className="text-xl font-extrabold text-black">Create a team to start</h2>
+                  <p className="mt-3 text-base font-medium text-slate-600">
+                    Teams hold your projects, members, and billing. Once a team exists, you can add a project and data will appear here.
+                  </p>
+                  <div className="mt-8 flex flex-wrap gap-4">
+                    <button
+                      onClick={openCreateTeamModal}
+                      className="inline-flex items-center gap-2 border-2 border-black bg-black px-5 py-2.5 text-sm font-bold text-white shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo"
+                    >
+                      Create Team
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : shouldShowNoProjectState ? (
-            <div className="mx-auto flex h-full w-full max-w-4xl items-center justify-center p-4 sm:p-8">
-              <div className="w-full border-2 border-black bg-white p-5 shadow-neo sm:p-8">
-                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center border-2 border-black bg-[#86efac] text-black shadow-neo-sm">
-                  <FolderPlus className="h-6 w-6 stroke-[3]" />
-                </div>
-                <h2 className="text-xl font-extrabold text-black">Empty Team Workspace</h2>
-                <p className="mt-3 text-base font-medium text-slate-600">
-                  You can create a project now, or continue managing your team and come back later.
-                </p>
-                <div className="mt-8 flex flex-wrap gap-4">
-                  <button
-                    onClick={openCreateProjectModal}
-                    className="inline-flex items-center gap-2 border-2 border-black bg-[#67e8f9] px-5 py-2.5 text-sm font-bold text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo"
-                  >
-                    <FolderPlus className="h-4 w-4 stroke-[3]" />
+            ) : shouldShowNoProjectState ? (
+              <div className="mx-auto flex h-full w-full max-w-4xl items-center justify-center p-4 sm:p-8">
+                <div className="w-full border-2 border-black bg-white p-5 shadow-neo sm:p-8">
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center border-2 border-black bg-[#86efac] text-black shadow-neo-sm">
+                    <FolderPlus className="h-6 w-6 stroke-[3]" />
+                  </div>
+                  <h2 className="text-xl font-extrabold text-black">Empty Team Workspace</h2>
+                  <p className="mt-3 text-base font-medium text-slate-600">
+                    You can create a project now, or continue managing your team and come back later.
+                  </p>
+                  <div className="mt-8 flex flex-wrap gap-4">
+                    <button
+                      onClick={openCreateProjectModal}
+                      className="inline-flex items-center gap-2 border-2 border-black bg-[#67e8f9] px-5 py-2.5 text-sm font-bold text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:shadow-neo"
+                    >
+                      <FolderPlus className="h-4 w-4 stroke-[3]" />
                     Create Project
                   </button>
                   <button
@@ -219,7 +222,8 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
                 </div>
               </div>
             </div>
-          ) : children}
+            ) : children}
+          </DashboardManualRefreshProvider>
         </div>
       </div>
     </div>
