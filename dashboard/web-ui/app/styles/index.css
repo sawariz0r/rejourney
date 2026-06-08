@@ -4606,12 +4606,12 @@
   display: none;
 }
 
-@container (min-width: 1180px) {
-  .sessions-list-shell .sessions-mobile-list {
+@media (min-width: 768px) {
+  .sessions-mobile-list {
     display: none;
   }
 
-  .sessions-list-shell .sessions-desktop-table {
+  .sessions-desktop-table {
     display: block;
   }
 }

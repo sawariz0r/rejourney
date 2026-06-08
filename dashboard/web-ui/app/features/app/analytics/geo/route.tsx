@@ -1243,6 +1243,7 @@ export const Geo: React.FC = () => {
     const [mapZoom, setMapZoom] = useState(2.05);
     const [geoSidebarWidth, setGeoSidebarWidth] = useState(getInitialGeoSidebarWidth);
     const [isGeoSidebarCollapsed, setIsGeoSidebarCollapsed] = useState(getInitialGeoSidebarCollapsed);
+    const [isGeoMobileDrawerOpen, setIsGeoMobileDrawerOpen] = useState(false);
     const renderZoom = React.useDeferredValue(mapZoom);
     const mapZoomFrameRef = React.useRef<number | null>(null);
     const pendingMapZoomRef = React.useRef(mapZoom);
@@ -1956,11 +1957,13 @@ export const Geo: React.FC = () => {
 	        setSelectedVisitor(null);
 	        setActiveSessionId(null);
 	        setHoveredMarkerId(null);
+	        setIsGeoMobileDrawerOpen(false);
 	        focusMapOnOverview();
 	    };
 	    const selectVisitor = (session: GeoSessionRow) => {
 	        setSelectedVisitor(session);
 	        setActiveSessionId(session.id);
+	        setIsGeoMobileDrawerOpen(true);
         setSelectedClusterId(null);
         const marker = markerByLocation.get(getSessionLocationKey(session));
         if (marker) {
@@ -1973,6 +1976,7 @@ export const Geo: React.FC = () => {
         setSelectedClusterId(null);
         setSelectedVisitor(null);
         setActiveSessionId(null);
+        setIsGeoMobileDrawerOpen(true);
         focusMapOnMarker(marker);
     };
 
@@ -1986,6 +1990,7 @@ export const Geo: React.FC = () => {
         setSelectedVisitor(null);
         setActiveSessionId(null);
         setSelectedMarkerId(null);
+        setIsGeoMobileDrawerOpen(true);
         focusMapOnCluster(cluster);
     };
 
@@ -2027,14 +2032,38 @@ export const Geo: React.FC = () => {
                     </div>
                 ) : (
                     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden border-t border-slate-200 bg-[#f8fafc] lg:flex-row">
+                        {isGeoMobileDrawerOpen && (
+                            <button
+                                type="button"
+                                className="fixed inset-0 z-[34] bg-slate-950/20 backdrop-blur-[1px] lg:hidden"
+                                onClick={() => setIsGeoMobileDrawerOpen(false)}
+                                aria-label="Close geographic sessions panel"
+                            />
+                        )}
                         <aside
-                            className="geo-side-panel relative z-20 flex max-h-[42dvh] w-full shrink-0 flex-col border-b border-slate-200 bg-white transition-[width] duration-200 sm:max-h-[38dvh] lg:h-full lg:max-h-none lg:w-[var(--geo-sidebar-width)] lg:border-b-0 lg:border-r"
+                            id="geo-mobile-sessions-panel"
+                            className={`geo-side-panel fixed inset-x-3 bottom-3 z-[35] flex max-h-[78dvh] shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl transition-transform duration-200 ease-out lg:relative lg:inset-auto lg:z-20 lg:h-full lg:max-h-none lg:w-[var(--geo-sidebar-width)] lg:rounded-none lg:border-b-0 lg:border-l-0 lg:border-r lg:border-t-0 lg:shadow-none ${isGeoMobileDrawerOpen ? 'translate-y-0' : 'translate-y-[calc(100%+1rem)] lg:translate-y-0'}`}
                             style={
                                 {
                                     '--geo-sidebar-width': `${isGeoSidebarCollapsed ? GEO_SIDEBAR_COLLAPSED_WIDTH : geoSidebarWidth}px`,
                                 } as React.CSSProperties
                             }
                         >
+                            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-2 lg:hidden">
+                                <div className="min-w-0">
+                                    <div className="dashboard-label">Geographic Sessions</div>
+                                    <div className="mt-0.5 truncate text-xs font-semibold text-slate-500">{scopeDetail}</div>
+                                </div>
+                                <button
+                                    type="button"
+                                    className={`${GEO_ICON_BUTTON_CLASS} h-8 w-8`}
+                                    onClick={() => setIsGeoMobileDrawerOpen(false)}
+                                    aria-label="Close geographic sessions panel"
+                                    title="Close panel"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
                             {isGeoSidebarCollapsed && (
                                 <div className="hidden h-full min-h-0 flex-col bg-white lg:flex">
                                     <div className="flex flex-1 flex-col items-center px-2 py-3">
@@ -2392,6 +2421,19 @@ export const Geo: React.FC = () => {
                                     {loadError}
                                 </div>
                             )}
+                            <button
+                                type="button"
+                                className="dashboard-pill absolute bottom-4 left-4 z-20 inline-flex max-w-[calc(100%-2rem)] items-center gap-2 bg-white/95 px-3 py-2 text-xs font-bold text-slate-900 shadow-lg backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-white lg:hidden"
+                                onClick={() => setIsGeoMobileDrawerOpen(true)}
+                                aria-controls="geo-mobile-sessions-panel"
+                                aria-expanded={isGeoMobileDrawerOpen}
+                            >
+                                <Globe className="h-4 w-4 shrink-0 text-slate-600" />
+                                <span className="min-w-0 truncate">{activeScopeLabel}</span>
+                                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                                    {formatCompactNumber(activeSidebarSessions.length)}
+                                </span>
+                            </button>
                         </section>
                     </div>
                 )}

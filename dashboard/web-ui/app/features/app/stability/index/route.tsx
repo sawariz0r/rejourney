@@ -458,6 +458,209 @@ const ApiSpikeTrendline: React.FC<{ spike: ApiErrorSpikeRecord; height?: number 
   );
 };
 
+const DetailedApiSpikeChart: React.FC<{ spike: ApiErrorSpikeRecord; rateChangeLabel: string }> = ({ spike, rateChangeLabel }) => {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const gradientId = useMemo(() => `api-spike-area-${spike.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`, [spike.id]);
+  const chart = useMemo(() => {
+    const trend = spike.trend.length > 0
+      ? spike.trend
+      : [{ bucket: spike.detectedAt, errorCount: 0, totalCount: Math.max(spike.affectedSessions, 1), errorRate: spike.currentRate }];
+    const width = Math.max(560, Math.min(920, 72 + Math.max(1, spike.trend.length - 1) * 40));
+    const height = 210;
+    const margin = { top: 22, right: 28, bottom: 44, left: 42 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const rates = trend.map((bucket) => bucket.errorRate);
+    const maxObservedRate = Math.max(...rates, spike.currentRate, spike.previousRate, 1);
+    const yMax = Math.ceil(maxObservedRate * 1.25);
+    const maxTotalCount = Math.max(...trend.map((bucket) => bucket.totalCount), 1);
+    const baselineY = margin.top + (1 - Math.min(spike.previousRate, yMax) / yMax) * plotHeight;
+    const points = trend.map((bucket, index) => {
+      const x = margin.left + (index / Math.max(1, trend.length - 1)) * plotWidth;
+      const y = margin.top + (1 - Math.min(bucket.errorRate, yMax) / yMax) * plotHeight;
+      const volumeHeight = Math.max(4, (bucket.totalCount / maxTotalCount) * 34);
+      const errorShareHeight = Math.max(2, bucket.errorCount > 0 ? (bucket.errorCount / Math.max(bucket.totalCount, 1)) * volumeHeight : 0);
+      return { bucket, index, x, y, volumeHeight, errorShareHeight };
+    });
+    const peakPoint = points.reduce((peak, point) => point.bucket.errorRate > peak.bucket.errorRate ? point : peak, points[0]);
+    const currentPoint = points[points.length - 1];
+    const activePoint = points[hoverIndex ?? peakPoint.index] ?? peakPoint;
+    const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+    const areaPath = `${linePath} L${points[points.length - 1].x.toFixed(1)},${(margin.top + plotHeight).toFixed(1)} L${points[0].x.toFixed(1)},${(margin.top + plotHeight).toFixed(1)} Z`;
+    return { width, height, margin, plotWidth, plotHeight, yMax, baselineY, points, peakPoint, currentPoint, activePoint, linePath, areaPath };
+  }, [hoverIndex, spike.affectedSessions, spike.currentRate, spike.detectedAt, spike.previousRate, spike.trend]);
+
+  if (spike.trend.length < 2) {
+    return <p className="text-sm text-slate-400">Not enough data to render trend.</p>;
+  }
+
+  const tooltip = chart.activePoint;
+  const tooltipWidth = 182;
+  const tooltipX = Math.min(Math.max(tooltip.x - tooltipWidth / 2, 8), chart.width - tooltipWidth - 8);
+  const tooltipY = tooltip.y > 92 ? tooltip.y - 86 : tooltip.y + 18;
+  const activeDelta = tooltip.bucket.errorRate - spike.previousRate;
+  const tickRates = [chart.yMax, chart.yMax / 2, 0];
+
+  return (
+    <div className="w-full">
+      <div className="grid grid-cols-2 gap-2 px-4 pt-4 sm:grid-cols-4">
+        <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+          <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Baseline</div>
+          <div className="mt-1 font-mono text-sm font-bold text-slate-800">{spike.previousRate.toFixed(1)}%</div>
+        </div>
+        <div className="rounded-md border border-red-100 bg-red-50 px-3 py-2">
+          <div className="text-[9px] font-bold uppercase tracking-wide text-red-400">Current</div>
+          <div className="mt-1 font-mono text-sm font-bold text-red-700">{spike.currentRate.toFixed(1)}%</div>
+        </div>
+        <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+          <div className="text-[9px] font-bold uppercase tracking-wide text-sky-500">Calls</div>
+          <div className="mt-1 font-mono text-sm font-bold text-sky-800">{spike.affectedSessions.toLocaleString()}</div>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+          <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Peak</div>
+          <div className="mt-1 font-mono text-sm font-bold text-slate-800">{chart.peakPoint.bucket.errorRate.toFixed(1)}%</div>
+        </div>
+      </div>
+      <div className="overflow-x-auto px-4 py-4">
+        <svg
+          width={chart.width}
+          height={chart.height}
+          viewBox={`0 0 ${chart.width} ${chart.height}`}
+          className="mx-auto block max-w-full overflow-visible"
+          role="img"
+          aria-label={`API error rate trend from ${spike.previousRate.toFixed(1)}% baseline to ${spike.currentRate.toFixed(1)}% current`}
+          onMouseLeave={() => setHoverIndex(null)}
+        >
+          <defs>
+            <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.03" />
+            </linearGradient>
+          </defs>
+
+          {tickRates.map((rate) => {
+            const y = chart.margin.top + (1 - rate / chart.yMax) * chart.plotHeight;
+            return (
+              <g key={rate.toFixed(2)}>
+                <line x1={chart.margin.left} x2={chart.width - chart.margin.right} y1={y} y2={y} stroke="#e2e8f0" strokeDasharray={rate === 0 ? undefined : '3 4'} />
+                <text x={chart.margin.left - 10} y={y + 3} textAnchor="end" className="fill-slate-400 text-[9px] font-semibold">
+                  {rate.toFixed(rate >= 10 ? 0 : 1)}%
+                </text>
+              </g>
+            );
+          })}
+
+          <line
+            x1={chart.margin.left}
+            x2={chart.width - chart.margin.right}
+            y1={chart.baselineY}
+            y2={chart.baselineY}
+            stroke="#f97316"
+            strokeWidth="1.5"
+            strokeDasharray="5 4"
+          />
+          <text x={chart.width - chart.margin.right} y={Math.max(12, chart.baselineY - 6)} textAnchor="end" className="fill-orange-600 text-[9px] font-bold">
+            baseline {spike.previousRate.toFixed(1)}%
+          </text>
+
+          <g aria-hidden="true">
+            {chart.points.map((point) => (
+              <g key={`volume:${point.index}`}>
+                <rect
+                  x={point.x - 5}
+                  y={chart.margin.top + chart.plotHeight + 6 + (34 - point.volumeHeight)}
+                  width={10}
+                  height={point.volumeHeight}
+                  rx={2}
+                  fill="#bae6fd"
+                />
+                <rect
+                  x={point.x - 5}
+                  y={chart.margin.top + chart.plotHeight + 6 + (34 - point.errorShareHeight)}
+                  width={10}
+                  height={point.errorShareHeight}
+                  rx={2}
+                  fill="#fb7185"
+                />
+              </g>
+            ))}
+          </g>
+
+          <path d={chart.areaPath} fill={`url(#${gradientId})`} />
+          <path d={chart.linePath} fill="none" stroke="#0ea5e9" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+          {chart.points.map((point) => {
+            const isPeak = point.index === chart.peakPoint.index;
+            const isCurrent = point.index === chart.currentPoint.index;
+            const isActive = point.index === tooltip.index;
+            return (
+              <g key={`point:${point.index}`}>
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r={isActive ? 5 : isPeak || isCurrent ? 4 : 2.5}
+                  fill={isPeak ? '#ef4444' : isCurrent ? '#0284c7' : '#0ea5e9'}
+                  stroke="white"
+                  strokeWidth="1.5"
+                />
+                <rect
+                  x={point.x - 12}
+                  y={chart.margin.top - 12}
+                  width={24}
+                  height={chart.plotHeight + 58}
+                  fill="transparent"
+                  onMouseEnter={() => setHoverIndex(point.index)}
+                  onFocus={() => setHoverIndex(point.index)}
+                  tabIndex={0}
+                >
+                  <title>{`${new Date(point.bucket.bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${point.bucket.errorRate.toFixed(1)}% error rate, ${point.bucket.errorCount.toLocaleString()} errors from ${point.bucket.totalCount.toLocaleString()} calls`}</title>
+                </rect>
+              </g>
+            );
+          })}
+
+          <line x1={tooltip.x} x2={tooltip.x} y1={chart.margin.top} y2={chart.margin.top + chart.plotHeight + 40} stroke="#0f172a" strokeOpacity="0.18" strokeDasharray="3 3" />
+          <g transform={`translate(${tooltipX}, ${tooltipY})`} pointerEvents="none">
+            <rect width={tooltipWidth} height={72} rx={8} fill="white" stroke="#cbd5e1" filter="drop-shadow(0 8px 18px rgba(15,23,42,0.12))" />
+            <text x={10} y={17} className="fill-slate-500 text-[9px] font-bold uppercase tracking-wide">
+              {new Date(tooltip.bucket.bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </text>
+            <text x={10} y={36} className="fill-slate-950 text-[14px] font-bold">
+              {tooltip.bucket.errorRate.toFixed(1)}% error rate
+            </text>
+            <text x={10} y={54} className="fill-slate-600 text-[10px] font-semibold">
+              {tooltip.bucket.errorCount.toLocaleString()} errors / {tooltip.bucket.totalCount.toLocaleString()} calls
+            </text>
+            <text x={10} y={66} className={`text-[9px] font-bold ${activeDelta >= 0 ? 'fill-red-600' : 'fill-emerald-600'}`}>
+              {activeDelta >= 0 ? '+' : ''}{activeDelta.toFixed(1)} pts vs baseline
+            </text>
+          </g>
+
+        </svg>
+        <div
+          className="mx-auto mt-2 grid max-w-full grid-cols-[1fr_auto_1fr] items-center gap-3 text-[9px] font-semibold text-slate-400"
+          style={{ width: chart.width }}
+        >
+          <span className="truncate">
+            {new Date(spike.trend[0].bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+          <span className="whitespace-nowrap font-bold text-red-500">peak {chart.peakPoint.bucket.errorRate.toFixed(1)}%</span>
+          <span className="truncate text-right">
+            {new Date(spike.trend[spike.trend.length - 1].bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 px-4 py-2 text-[10px] font-semibold text-slate-500">
+        <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-500" /> Error rate</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2 w-4 rounded-sm bg-sky-200" /> API calls</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2 w-4 rounded-sm bg-rose-400" /> Errors</span>
+        <span className="inline-flex items-center gap-1"><span className="h-px w-5 border-t border-dashed border-orange-500" /> Baseline</span>
+        <span className="ml-auto text-sky-700">{spike.previousRate.toFixed(1)}% → {spike.currentRate.toFixed(1)}% ({rateChangeLabel})</span>
+      </div>
+    </div>
+  );
+};
+
 export const Stability: React.FC = () => {
   const { selectedProject, projectsLoading } = useSessionData();
   const manualRefreshVersion = useDashboardManualRefreshVersion();
@@ -959,8 +1162,6 @@ export const Stability: React.FC = () => {
     if (row.kind === 'api_spikes') {
     const spike = row.source;
     const rateChangeLabel = formatApiRateChange(spike);
-    const chartWidth = Math.max(220, Math.min(720, 48 + Math.max(1, spike.trend.length - 1) * 28));
-    const chartHeight = 72;
     return (
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
         <div className="flex flex-col gap-4 lg:col-span-3">
@@ -975,49 +1176,7 @@ export const Stability: React.FC = () => {
                 {spike.previousRate.toFixed(1)}% → {spike.currentRate.toFixed(1)}% ({rateChangeLabel})
               </span>
             </div>
-            <div className="flex items-end gap-1 px-4 py-5">
-              {spike.trend.length > 1 ? (
-                <div className="w-full">
-                  <div className="w-full overflow-x-auto pb-1">
-                  <svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="mx-auto block max-w-full">
-                    {(() => {
-                      const maxRate = Math.max(...spike.trend.map(t => t.errorRate), 1);
-                      const pts = spike.trend.map((t, i) => {
-                        const x = 12 + (i / Math.max(1, spike.trend.length - 1)) * (chartWidth - 24);
-                        const y = 6 + (1 - t.errorRate / maxRate) * (chartHeight - 18);
-                        return { x, y, t };
-                      });
-                      const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y.toFixed(1)}`).join(' ');
-                      const fillD = `${pathD} L${pts[pts.length - 1].x},${chartHeight - 6} L${pts[0].x},${chartHeight - 6} Z`;
-                      return (
-                        <>
-                          <path d={fillD} fill="rgba(14,165,233,0.1)" />
-                          <path d={pathD} fill="none" stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          {pts.map((p, i) => (
-                            <rect key={i} x={p.x - 8} y={0} width={16} height={chartHeight} fill="transparent">
-                              <title>{`${new Date(p.t.bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — ${p.t.errorRate.toFixed(1)}% error rate (${p.t.errorCount}/${p.t.totalCount})`}</title>
-                            </rect>
-                          ))}
-                          {/* peak marker */}
-                          {(() => {
-                            const peak = pts.reduce((a, b) => b.t.errorRate > a.t.errorRate ? b : a, pts[0]);
-                            return peak ? <circle cx={peak.x} cy={peak.y} r={4} fill="#ef4444" stroke="white" strokeWidth="1.5" /> : null;
-                          })()}
-                        </>
-                      );
-                    })()}
-                  </svg>
-                  </div>
-                  <div className="mx-auto mt-1 flex max-w-full justify-between text-[9px] font-medium text-slate-400" style={{ width: chartWidth }}>
-                    <span>{new Date(spike.trend[0].bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    <span className="font-bold text-red-500">Peak: {Math.max(...spike.trend.map(t => t.errorRate)).toFixed(1)}%</span>
-                    <span>{new Date(spike.trend[spike.trend.length - 1].bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">Not enough data to render trend.</p>
-              )}
-            </div>
+            <DetailedApiSpikeChart spike={spike} rateChangeLabel={rateChangeLabel} />
           </NeoCard>
 
           {/* Top failing endpoints */}

@@ -1184,27 +1184,26 @@ export const RecordingsList: React.FC = () => {
           )}
         </div>
 
-        <div className="sessions-desktop-table dashboard-mobile-scroll overflow-x-auto">
-          <div className="w-full min-w-[1160px] overflow-hidden border-2 border-black bg-white shadow-neo">
+        <div className="sessions-desktop-table dashboard-mobile-scroll overflow-x-auto pb-2">
+          <div className="w-full min-w-[900px] overflow-hidden border-2 border-black bg-white shadow-neo lg:min-w-[1020px] xl:min-w-0">
           <table className="w-full table-fixed border-collapse">
             <thead>
               <tr className="border-b-2 border-black bg-[#cffafe]">
-                <th className="sticky top-0 z-40 bg-[#cffafe] w-10 py-3 pl-4 pr-2" />
-                <th className="sticky top-0 z-40 bg-[#cffafe] text-left py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[280px]">User</th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] hidden lg:table-cell text-left py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-32"><SortableHeader label="Date" sortKey="date" /></th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] hidden xl:table-cell text-left py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-44">Device</th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] hidden lg:table-cell text-left py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-36">Location</th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] hidden lg:table-cell text-right py-3 px-2 text-[10px] font-black text-slate-600 uppercase tracking-widest w-24"><SortableHeader label="Screens" sortKey="screens" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] hidden md:table-cell text-right py-3 px-2 text-[10px] font-black text-slate-600 uppercase tracking-widest w-28 min-w-[7rem]"><SortableHeader label="Duration" sortKey="duration" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] text-right py-3 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-36"><SortableHeader label="Notes" sortKey="crashes" align="right" /></th>
-                <th className="sticky top-0 z-40 bg-[#cffafe] w-12 py-3 pl-2 pr-4" />
-                <th className="sticky top-0 z-40 bg-[#cffafe] w-12 py-3 pl-2 pr-6" />
+                <th className="sticky top-0 z-40 bg-[#cffafe] w-9 py-3 pl-3 pr-1" />
+                <th className="sticky top-0 z-40 bg-[#cffafe] text-left py-3 px-2.5 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[250px]">User</th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] hidden lg:table-cell text-left py-3 px-2.5 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[112px]"><SortableHeader label="Date" sortKey="date" /></th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] hidden xl:table-cell text-left py-3 px-2.5 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[150px]">Device</th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] hidden lg:table-cell text-left py-3 px-2.5 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[132px]">Location</th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] hidden lg:table-cell text-right py-3 px-2 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[76px]"><SortableHeader label="Screens" sortKey="screens" align="right" /></th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] hidden md:table-cell text-right py-3 px-2 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[92px]"><SortableHeader label="Duration" sortKey="duration" align="right" /></th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] text-right py-3 px-2.5 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[150px]"><SortableHeader label="Notes" sortKey="crashes" align="right" /></th>
+                <th className="sticky top-0 z-40 bg-[#cffafe] w-[68px] py-3 pl-1 pr-3" />
               </tr>
             </thead>
             <tbody className="divide-y-2 divide-black/15">
             {paginatedSessions.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-16 text-center">
+                <td colSpan={9} className="py-16 text-center">
                   <div className="inline-flex items-center justify-center p-4 bg-[#86efac] border-2 border-black shadow-neo-sm mb-4">
                     <Smartphone className="w-8 h-8 text-black" />
                   </div>
@@ -1307,7 +1306,7 @@ export const RecordingsList: React.FC = () => {
                   onClick={(e) => toggleExpand(e, session.id)}
                 >
 	                    {/* Visual Indicator */}
-	                    <td className="w-10 py-2.5 pl-4 pr-2 align-middle text-center">
+	                    <td className="w-9 py-2.5 pl-3 pr-1 align-middle text-center">
 	                      <div
 	                        className={`mx-auto inline-flex h-7 w-7 items-center justify-center ${isReplayBlocked ? 'opacity-60' : ''}`}
 	                        title={`${fingerprintLabel} fingerprint · ${platformLabel} session${hasIssues ? ' with issues' : ''}`}
@@ -1317,7 +1316,7 @@ export const RecordingsList: React.FC = () => {
 	                    </td>
 
                     {/* User */}
-                    <td className="w-[280px] py-2.5 px-3 align-middle overflow-hidden min-w-0">
+                    <td className="w-[250px] py-2.5 px-2.5 align-middle overflow-hidden min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <h3
                           className={`font-bold text-sm text-slate-900 font-mono truncate shrink min-w-0 ${isReplayBlocked ? 'opacity-50' : ''}`}
@@ -1337,13 +1336,13 @@ export const RecordingsList: React.FC = () => {
 	                    </td>
 
                     {/* Date (Desktop) */}
-                    <td className="hidden lg:table-cell py-2.5 px-3 align-middle w-32">
+                    <td className="hidden lg:table-cell py-2.5 px-2.5 align-middle w-[112px]">
                       <div className="text-xs font-black text-slate-900">{new Date(session.startedAt).toLocaleDateString()}</div>
                       <div className="text-[10px] text-slate-400 font-mono tracking-tight">{new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                     </td>
 
                     {/* Device */}
-                    <td className="hidden xl:table-cell py-2.5 px-3 align-middle text-left w-44">
+                    <td className="hidden xl:table-cell py-2.5 px-2.5 align-middle text-left w-[150px]">
                       <div className={`flex min-w-0 items-center gap-2 ${isReplayBlocked ? 'opacity-50' : ''}`} title={deviceColumn.title}>
                         {deviceColumn.kind === 'web' ? (
                           <BrowserBrandIcon browserName={deviceColumn.iconName} className="h-4 w-4 shrink-0" />
@@ -1358,7 +1357,7 @@ export const RecordingsList: React.FC = () => {
                     </td>
 
                     {/* Location */}
-                    <td className="hidden lg:table-cell py-2.5 px-3 align-middle w-36 overflow-hidden">
+                    <td className="hidden lg:table-cell py-2.5 px-2.5 align-middle w-[132px] overflow-hidden">
                       <div className={`leading-tight ${isReplayBlocked ? 'opacity-50' : ''}`}>
                         {geoDisplay.hasLocation ? (
                           <>
@@ -1377,7 +1376,7 @@ export const RecordingsList: React.FC = () => {
                     </td>
 
                     {/* Screens */}
-                    <td className="hidden lg:table-cell py-2.5 px-2 align-middle text-right w-24">
+                    <td className="hidden lg:table-cell py-2.5 px-2 align-middle text-right w-[76px]">
                       {screensCount > 0 ? (
                         <span className="inline-block border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-xs font-mono font-bold text-slate-700">{screensCount}</span>
                       ) : (
@@ -1386,7 +1385,7 @@ export const RecordingsList: React.FC = () => {
                     </td>
 
                     {/* Duration: LIVE REPLAY while ingest / replay preparing; MM:SS once replay is playable (or session ended) and not live-ingesting */}
-                    <td className="hidden md:table-cell py-2.5 px-2 align-middle text-right w-28 min-w-[7rem]">
+                    <td className="hidden md:table-cell py-2.5 px-2 align-middle text-right w-[92px]">
                       {showLiveReplayInDurationColumn ? (
                         <span className="inline-flex items-center justify-end whitespace-nowrap border-2 border-black bg-[#86efac] px-1.5 py-1 text-[9px] font-black leading-none text-black shadow-neo-sm animate-pulse">
                           LIVE REPLAY
@@ -1399,7 +1398,7 @@ export const RecordingsList: React.FC = () => {
                     </td>
 
                     {/* Notes */}
-                    <td className="py-2.5 px-3 align-middle text-right w-36">
+                    <td className="py-2.5 px-2.5 align-middle text-right w-[150px]">
                       <div className="flex justify-end gap-1.5 items-center flex-wrap min-h-[28px]">
                       {session.isFirstSession && (
                         <span
@@ -1425,48 +1424,48 @@ export const RecordingsList: React.FC = () => {
                       </div>
                     </td>
 
-                    {/* Play - icon only, no box */}
-                    <td className="w-12 py-2.5 pl-2 pr-4 align-middle text-center">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (canNavigateToSession) {
-                            navigate(`${pathPrefix}/sessions/${session.id}`);
+                    <td className="w-[68px] py-2.5 pl-1 pr-3 align-middle">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (canNavigateToSession) {
+                              navigate(`${pathPrefix}/sessions/${session.id}`);
+                            }
+                          }}
+                          disabled={!canNavigateToSession}
+                          className={`inline-flex items-center justify-center border-2 border-transparent p-1.5 transition-all group/play ${isReplayBlocked ? 'cursor-not-allowed opacity-40 text-slate-300' : 'text-slate-700 hover:border-black hover:bg-[#67e8f9] hover:text-black hover:shadow-neo-sm'}`}
+                          title={
+                            !canNavigateToSession
+                              ? 'Replay unavailable for this session'
+                              : !canOpenReplay
+                                ? 'Open session — visual replay may still be preparing'
+                                : isLiveIngest
+                                  ? 'Open Live Replay'
+                                  : isBackgroundProcessing
+                                    ? 'Open session while processing continues'
+                                    : 'Open Replay'
                           }
-                        }}
-                        disabled={!canNavigateToSession}
-                        className={`inline-flex items-center justify-center border-2 border-transparent p-1.5 transition-all group/play ${isReplayBlocked ? 'cursor-not-allowed opacity-40 text-slate-300' : 'text-slate-700 hover:border-black hover:bg-[#67e8f9] hover:text-black hover:shadow-neo-sm'}`}
-                        title={
-                          !canNavigateToSession
-                            ? 'Replay unavailable for this session'
-                            : !canOpenReplay
-                              ? 'Open session — visual replay may still be preparing'
-                              : isLiveIngest
-                                ? 'Open Live Replay'
-                                : isBackgroundProcessing
-                                  ? 'Open session while processing continues'
-                                  : 'Open Replay'
-                        }
-                      >
-                        <Play size={16} className={isReplayBlocked ? "" : "group-hover/play:fill-current"} />
-                      </button>
-                    </td>
-
-                    {/* Expand Toggle - icon only, no box, extra right padding */}
-                    <td className="w-12 py-2.5 pl-2 pr-6 align-middle">
-                      <button
-                        onClick={(e) => toggleExpand(e, session.id)}
-                        className={`flex items-center justify-center border-2 border-transparent p-1.5 transition-all mx-auto ${isExpanded ? 'border-black bg-[#67e8f9] text-black shadow-neo-sm' : 'text-slate-600 hover:border-black hover:bg-[#ecfeff] hover:text-black hover:shadow-neo-sm'}`}
-                      >
-                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </button>
+                        >
+                          <Play size={16} className={isReplayBlocked ? "" : "group-hover/play:fill-current"} />
+                        </button>
+                        <button
+                          onClick={(e) => toggleExpand(e, session.id)}
+                          className={`inline-flex items-center justify-center border-2 border-transparent p-1.5 transition-all ${isExpanded ? 'border-black bg-[#67e8f9] text-black shadow-neo-sm' : 'text-slate-600 hover:border-black hover:bg-[#ecfeff] hover:text-black hover:shadow-neo-sm'}`}
+                          title={isExpanded ? 'Collapse details' : 'Expand details'}
+                          aria-label={isExpanded ? 'Collapse replay details' : 'Expand replay details'}
+                          aria-expanded={isExpanded}
+                        >
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </button>
+                      </div>
                     </td>
                 </tr>
 
                   {/* Expanded Details - full-width row */}
                   {isExpanded && (
                     <tr>
-                      <td colSpan={10} className="border-b-2 border-black bg-[#f8fafc] p-0 align-top">
+                      <td colSpan={9} className="border-b-2 border-black bg-[#f8fafc] p-0 align-top">
                         <div className="px-5 sm:px-7 pb-5 pt-3 space-y-3">
 
                           {/* ── Top stats strip ── */}

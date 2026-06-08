@@ -3496,7 +3496,7 @@ export interface ApiErrorSpikesResponse {
 }
 
 export async function getApiErrorSpikes(projectId: string, timeRange?: string): Promise<ApiErrorSpikesResponse> {
-    if (isDemoMode()) return { spikes: [] };
+    if (isDemoMode()) return demoApiData.demoApiErrorSpikesResponse;
     const params = new URLSearchParams({ projectId });
     if (timeRange) params.set('timeRange', timeRange);
     const endpoint = `/api/overview/api-error-spikes?${params.toString()}`;

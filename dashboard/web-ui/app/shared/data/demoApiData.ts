@@ -24,6 +24,7 @@ import {
     ObservabilityDeepMetrics,
     RetentionCohortsResponse,
     UserEngagementTrends,
+    ApiErrorSpikesResponse,
 } from '~/shared/api/client';
 
 import { Issue, IssueSession } from '~/shared/types';
@@ -132,6 +133,48 @@ export const demoApiEndpointStats: ApiEndpointStats = {
         avgLatency: 312,
         errorRate: 1.8,
     },
+};
+
+const demoApiSpikeDetectedAt = new Date(DEMO_NOW - 12 * 60 * 1000);
+const demoApiSpikeBucketIso = (minutesAgo: number) => new Date(DEMO_NOW - minutesAgo * 60 * 1000).toISOString();
+
+export const demoApiErrorSpikesResponse: ApiErrorSpikesResponse = {
+    ignoredApiEndpoints: [],
+    spikes: [
+        {
+            id: 'demo-api-spike-checkout-payment',
+            detectedAt: demoApiSpikeDetectedAt.toISOString(),
+            currentRate: 8.4,
+            previousRate: 2.1,
+            percentIncrease: 300,
+            affectedSessions: 412,
+            trend: [
+                { bucket: demoApiSpikeBucketIso(90), errorCount: 2, totalCount: 93, errorRate: 2.2 },
+                { bucket: demoApiSpikeBucketIso(85), errorCount: 1, totalCount: 88, errorRate: 1.1 },
+                { bucket: demoApiSpikeBucketIso(80), errorCount: 2, totalCount: 95, errorRate: 2.1 },
+                { bucket: demoApiSpikeBucketIso(75), errorCount: 3, totalCount: 112, errorRate: 2.7 },
+                { bucket: demoApiSpikeBucketIso(70), errorCount: 2, totalCount: 103, errorRate: 1.9 },
+                { bucket: demoApiSpikeBucketIso(65), errorCount: 2, totalCount: 97, errorRate: 2.1 },
+                { bucket: demoApiSpikeBucketIso(60), errorCount: 1, totalCount: 91, errorRate: 1.1 },
+                { bucket: demoApiSpikeBucketIso(55), errorCount: 3, totalCount: 106, errorRate: 2.8 },
+                { bucket: demoApiSpikeBucketIso(50), errorCount: 2, totalCount: 98, errorRate: 2.0 },
+                { bucket: demoApiSpikeBucketIso(45), errorCount: 2, totalCount: 101, errorRate: 2.0 },
+                { bucket: demoApiSpikeBucketIso(40), errorCount: 4, totalCount: 118, errorRate: 3.4 },
+                { bucket: demoApiSpikeBucketIso(35), errorCount: 7, totalCount: 109, errorRate: 6.4 },
+                { bucket: demoApiSpikeBucketIso(30), errorCount: 10, totalCount: 116, errorRate: 8.6 },
+                { bucket: demoApiSpikeBucketIso(25), errorCount: 11, totalCount: 126, errorRate: 8.7 },
+                { bucket: demoApiSpikeBucketIso(20), errorCount: 13, totalCount: 132, errorRate: 9.8 },
+                { bucket: demoApiSpikeBucketIso(15), errorCount: 11, totalCount: 124, errorRate: 8.9 },
+                { bucket: demoApiSpikeBucketIso(10), errorCount: 9, totalCount: 111, errorRate: 8.1 },
+                { bucket: demoApiSpikeBucketIso(5), errorCount: 8, totalCount: 98, errorRate: 8.2 },
+            ],
+            topEndpoints: [
+                { method: 'POST', endpoint: '/api/payment/validate', errorCount: 37 },
+                { method: 'GET', endpoint: '/api/inventory/check', errorCount: 22 },
+                { method: 'POST', endpoint: '/api/checkout/process', errorCount: 16 },
+            ],
+        },
+    ],
 };
 
 type DemoApiLatencyLocation = NonNullable<ApiLatencyByLocationResponse['locations']>[number];
