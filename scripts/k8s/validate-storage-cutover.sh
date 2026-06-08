@@ -34,6 +34,7 @@ require_file "k8s/postgres-service-aliases.yaml"
 require_file "k8s/storage-class-db-local.yaml"
 require_file "k8s/cnpg-backups.yaml"
 require_file "k8s/cnpg/postgres-cnpg.yaml"
+require_file "k8s/clickhouse-backups.yaml"
 require_file "scripts/k8s/validate-storage-cutover.sh"
 
 require_absent "k8s/manual"
@@ -47,6 +48,12 @@ require_match 'cnpg.io/cluster: postgres-local' "k8s/postgres-service-aliases.ya
 require_match 'cnpg.io/podRole: instance' "k8s/postgres-service-aliases.yaml"
 require_match 'name: postgres-daily-backup' "k8s/cnpg-backups.yaml"
 require_match 'name: postgres-local' "k8s/cnpg-backups.yaml"
+require_match 'destinationPath: s3://rejourney-db-backups-1/postgres/cnpg' "k8s/cnpg/postgres-cnpg.yaml"
+require_match 'endpointURL: https://s3.us-west-or.io.cloud.ovh.us' "k8s/cnpg/postgres-cnpg.yaml"
+require_match 'name: db-backup-secret' "k8s/cnpg/postgres-cnpg.yaml"
+require_match 'name: clickhouse-daily-backup' "k8s/clickhouse-backups.yaml"
+require_match 'BACKUP DATABASE' "backend/scripts/backupClickHouse.ts"
+require_match 'BACKUP_S3_ENDPOINT' "scripts/k8s/k8s-sync-secrets.sh"
 require_match 'CNPG_CLUSTER_NAME="${CNPG_CLUSTER_NAME:-postgres-local}"' "scripts/k8s/deploy-release.sh"
 require_match 'PGBOUNCER_URL=' "scripts/k8s/k8s-sync-secrets.sh"
 require_match '@postgres-app-rw:5432/' "scripts/k8s/k8s-sync-secrets.sh"
@@ -59,6 +66,7 @@ files = [
   'k8s/storage-class-db-local.yaml',
   'k8s/cnpg-backups.yaml',
   'k8s/cnpg/postgres-cnpg.yaml',
+  'k8s/clickhouse-backups.yaml',
 ]
 
 files.each do |path|

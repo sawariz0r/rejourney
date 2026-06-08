@@ -8,7 +8,36 @@ import {
     buildSuperwallRevenueQuery,
     extractSuperwallOrganizationId,
     parseRevenueCatRevenueChartRows,
+    resolveGenericRevenueSyncWindow,
 } from '../services/revenueSources.js';
+
+describe('generic revenue sync windows', () => {
+    const now = new Date('2026-06-07T12:00:00.000Z');
+
+    it('uses a full backfill when a manual retry has no imported provider rows', () => {
+        const window = resolveGenericRevenueSyncWindow({
+            mode: 'manual',
+            newestSyncedAt: new Date('2026-06-06T12:00:00.000Z'),
+            hasProviderTransactions: false,
+            now,
+        });
+
+        expect(window.fullBackfill).toBe(true);
+        expect(window.startDate.toISOString()).toBe('2025-06-07T12:00:00.000Z');
+    });
+
+    it('uses the 48 hour overlap only after provider rows exist', () => {
+        const window = resolveGenericRevenueSyncWindow({
+            mode: 'manual',
+            newestSyncedAt: new Date('2026-06-06T12:00:00.000Z'),
+            hasProviderTransactions: true,
+            now,
+        });
+
+        expect(window.fullBackfill).toBe(false);
+        expect(window.startDate.toISOString()).toBe('2026-06-04T12:00:00.000Z');
+    });
+});
 
 describe('Superwall revenue source helpers', () => {
     it('builds the current organization-scoped query endpoint', () => {
@@ -90,6 +119,7 @@ describe('RevenueCat revenue source helpers', () => {
             measures: [{ id: 'gross_revenue' }, { id: 'transactions' }],
             values: [
                 ['2026-06-01', 12.34, 3],
+                ['2026-06-03', 0, 0],
                 { date: '2026-06-02', revenue: 7.5, transactions: 2, currency: 'EUR' },
             ],
         });

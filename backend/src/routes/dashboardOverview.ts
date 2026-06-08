@@ -19,6 +19,7 @@ import {
     crashes as appCrashes,
     screenTouchHeatmaps,
     alertHistory,
+    alertSettings,
 } from '../db/client.js';
 import { getClickHouseClient, isClickHouseReadsEnabled } from '../db/clickhouse.js';
 import { getRedis } from '../db/redis.js';
@@ -33,6 +34,7 @@ import { canOpenReplayFromSessionFields } from '../services/replayAvailability.j
 import { generateAnonymousName } from '../utils/anonymousName.js';
 import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
 import { normalizeHeatmapScreenName, normalizeHeatmapScreenPath } from '../utils/heatmapScreens.js';
+import { buildClickHouseIgnoredEndpointCondition, normalizeIgnoredApiEndpointPatterns } from '../utils/apiEndpointIgnoreRules.js';
 import {
     buildWebAttentionHeatmap,
     dimensionsFromRrwebEnvelope,
@@ -2769,36 +2771,91 @@ router.get(
             return res.json({ spikes: [] });
         }
 
-        const spikes = await Promise.all(
+        const [settings] = await dbRead
+            .select({ ignoredApiEndpoints: alertSettings.ignoredApiEndpoints })
+            .from(alertSettings)
+            .where(eq(alertSettings.projectId, projectId))
+            .limit(1);
+        const ignoredApiEndpoints = normalizeIgnoredApiEndpointPatterns(settings?.ignoredApiEndpoints ?? []);
+        const ignoredEndpointCondition = buildClickHouseIgnoredEndpointCondition(ignoredApiEndpoints, 'endpoint', 'overviewIgnoredEndpoint', 'method', 'path');
+
+        const computedSpikes = await Promise.all(
             recentSpikes.map(async (spike) => {
                 const spikeTime = spike.sentAt;
                 const windowStart = new Date(spikeTime.getTime() - 90 * 60 * 1000);
                 const windowEnd = new Date(spikeTime.getTime() + 15 * 60 * 1000);
 
-                // Per-5-minute bucketed error rate for the sparkline trend
-                const trendRows = await dbRead.execute(sql`
-                SELECT
-                    date_trunc('hour', s.started_at) + INTERVAL '5 min' * FLOOR(EXTRACT(MINUTE FROM s.started_at) / 5) AS bucket,
-                    sum(sm.api_error_count)::int  AS error_count,
-                    sum(sm.api_total_count)::int  AS total_count,
-                    CASE WHEN sum(sm.api_total_count) > 0
-                         THEN round((sum(sm.api_error_count)::numeric / sum(sm.api_total_count)) * 100, 2)
-                         ELSE 0
-                    END AS error_rate
-                FROM sessions s
-                JOIN session_metrics sm ON sm.session_id = s.id
-                WHERE s.project_id = ${projectId}
-                  AND s.started_at BETWEEN ${windowStart} AND ${windowEnd}
-                GROUP BY 1
-                ORDER BY 1
-            `);
+                let trend: Array<{ bucket: string; errorCount: number; totalCount: number; errorRate: number }> = [];
+                let clickHouseTrendLoaded = false;
 
-                const trend = (trendRows.rows as Array<{ bucket: Date; error_count: number; total_count: number; error_rate: number }>).map((r) => ({
-                    bucket: r.bucket instanceof Date ? r.bucket.toISOString() : String(r.bucket),
-                    errorCount: Number(r.error_count),
-                    totalCount: Number(r.total_count),
-                    errorRate: Number(r.error_rate),
-                }));
+                // Per-5-minute bucketed error rate for the sparkline trend. Prefer
+                // endpoint events so user ignored endpoints can be excluded.
+                if (isClickHouseReadsEnabled()) {
+                    try {
+                        const ch = getClickHouseClient();
+                        const trendResult = await ch.query({
+                            query: `
+                                SELECT
+                                    toString(toStartOfInterval(event_time, INTERVAL 5 minute)) AS bucket,
+                                    countIf(is_error = 1) AS error_count,
+                                    count() AS total_count,
+                                    if(count() > 0, round((countIf(is_error = 1) / count()) * 100, 2), 0) AS error_rate
+                                FROM rejourney.api_endpoint_request_events
+                                WHERE project_id = {projectId: String}
+                                  AND event_time BETWEEN {start: DateTime64(3)} AND {end: DateTime64(3)}
+                                  ${ignoredEndpointCondition.condition}
+                                GROUP BY bucket
+                                ORDER BY bucket
+                            `,
+                            query_params: {
+                                projectId,
+                                start: windowStart.toISOString().replace('T', ' ').replace('Z', ''),
+                                end: windowEnd.toISOString().replace('T', ' ').replace('Z', ''),
+                                ...ignoredEndpointCondition.queryParams,
+                            },
+                            format: 'JSONEachRow',
+                        });
+                        const rows = await trendResult.json<{ bucket: string; error_count: string; total_count: string; error_rate: string }>();
+                        trend = rows.map((r) => ({
+                            bucket: (() => {
+                                const parsed = new Date(`${r.bucket.replace(' ', 'T')}Z`);
+                                return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : r.bucket;
+                            })(),
+                            errorCount: Number(r.error_count),
+                            totalCount: Number(r.total_count),
+                            errorRate: Number(r.error_rate),
+                        }));
+                        clickHouseTrendLoaded = true;
+                    } catch {
+                        clickHouseTrendLoaded = false;
+                    }
+                }
+
+                if (!clickHouseTrendLoaded) {
+                    const trendRows = await dbRead.execute(sql`
+                    SELECT
+                        date_trunc('hour', s.started_at) + INTERVAL '5 min' * FLOOR(EXTRACT(MINUTE FROM s.started_at) / 5) AS bucket,
+                        sum(sm.api_error_count)::int  AS error_count,
+                        sum(sm.api_total_count)::int  AS total_count,
+                        CASE WHEN sum(sm.api_total_count) > 0
+                             THEN round((sum(sm.api_error_count)::numeric / sum(sm.api_total_count)) * 100, 2)
+                             ELSE 0
+                        END AS error_rate
+                    FROM sessions s
+                    JOIN session_metrics sm ON sm.session_id = s.id
+                    WHERE s.project_id = ${projectId}
+                      AND s.started_at BETWEEN ${windowStart} AND ${windowEnd}
+                    GROUP BY 1
+                    ORDER BY 1
+                `);
+
+                    trend = (trendRows.rows as Array<{ bucket: Date; error_count: number; total_count: number; error_rate: number }>).map((r) => ({
+                        bucket: r.bucket instanceof Date ? r.bucket.toISOString() : String(r.bucket),
+                        errorCount: Number(r.error_count),
+                        totalCount: Number(r.total_count),
+                        errorRate: Number(r.error_rate),
+                    }));
+                }
 
                 // Current window (last 15 min before spike) vs baseline (prev 60 min)
                 const currentBuckets = trend.filter((t) => new Date(t.bucket) >= new Date(spikeTime.getTime() - 15 * 60 * 1000));
@@ -2809,7 +2866,9 @@ router.get(
                 };
                 const currentRate = avgRate(currentBuckets);
                 const previousRate = avgRate(baselineBuckets);
-                const percentIncrease = previousRate > 0 ? ((currentRate - previousRate) / previousRate) * 100 : 100;
+                const percentIncrease = previousRate > 0 && currentRate > previousRate
+                    ? ((currentRate - previousRate) / previousRate) * 100
+                    : null;
                 const affectedSessions = trend.reduce((s, b) => s + b.totalCount, 0);
 
                 // Top failing endpoints from ClickHouse (best-effort, skip if not configured)
@@ -2823,6 +2882,7 @@ router.get(
                             FROM rejourney.api_endpoint_request_events
                             WHERE project_id = {projectId: String}
                               AND event_time BETWEEN {start: DateTime64(3)} AND {end: DateTime64(3)}
+                              ${ignoredEndpointCondition.condition}
                             GROUP BY method, endpoint
                             HAVING error_count > 0
                             ORDER BY error_count DESC
@@ -2832,6 +2892,7 @@ router.get(
                                 projectId,
                                 start: windowStart.toISOString().replace('T', ' ').replace('Z', ''),
                                 end: windowEnd.toISOString().replace('T', ' ').replace('Z', ''),
+                                ...ignoredEndpointCondition.queryParams,
                             },
                             format: 'JSONEachRow',
                         });
@@ -2851,15 +2912,18 @@ router.get(
                     detectedAt: spikeTime.toISOString(),
                     currentRate: Math.round(currentRate * 10) / 10,
                     previousRate: Math.round(previousRate * 10) / 10,
-                    percentIncrease: Math.round(percentIncrease),
+                    percentIncrease: percentIncrease === null ? null : Math.round(percentIncrease),
                     affectedSessions,
                     trend,
                     topEndpoints,
+                    ignoredApiEndpoints,
                 };
             }),
         );
 
-        return res.json({ spikes });
+        const spikes = computedSpikes.filter((spike) => spike.currentRate > 0 && spike.currentRate > spike.previousRate);
+
+        return res.json({ spikes, ignoredApiEndpoints });
     }),
 );
 

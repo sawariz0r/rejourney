@@ -11,10 +11,13 @@ import {
   Download,
   Loader,
   Play,
+  Plus,
   Search,
+  SlidersHorizontal,
   Smartphone,
   TrendingUp,
   Wifi,
+  X,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
@@ -25,9 +28,12 @@ import {
   type CrashReport,
   type ErrorOverviewGroup,
   getANRsOverview,
+  getApiEndpointStats,
   getApiErrorSpikes,
   getCrashesOverview,
   getErrorsOverview,
+  getProjectAlertSettings,
+  updateProjectAlertSettings,
 } from '~/shared/api/client';
 import { platformLensToSessionPlatform, useSharedPlatformLens } from '~/shared/hooks/useSharedPlatformLens';
 import { formatAge, formatLastSeen } from '~/shared/lib/formatDates';
@@ -46,6 +52,13 @@ import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 
 type StabilityIssueKind = 'crashes' | 'errors' | 'anrs' | 'api_spikes';
+
+type IgnoredEndpointOption = {
+  pattern: string;
+  totalCalls: number;
+  totalErrors: number;
+  errorRate: number;
+};
 
 type StabilityIssueRow =
   | {
@@ -234,6 +247,32 @@ const compactStrings = (values: Array<string | null | undefined>): string[] => (
   values.filter((value): value is string => Boolean(value))
 );
 
+const normalizeIgnoredEndpointPatterns = (values: Array<string | null | undefined>): string[] => {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  values.forEach((value) => {
+    const pattern = (value || '').trim().replace(/\s+/g, ' ');
+    if (!pattern) return;
+    const key = pattern.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    normalized.push(pattern);
+  });
+
+  return normalized.slice(0, 50);
+};
+
+const endpointPatternFromTopEndpoint = (endpoint: { method: string; endpoint: string }): string => {
+  const method = endpoint.method.trim().toUpperCase();
+  const pathOrLabel = endpoint.endpoint.trim();
+  return pathOrLabel.toUpperCase().startsWith(`${method} `) ? pathOrLabel : `${method} ${pathOrLabel}`;
+};
+
+const formatEndpointOptionLabel = (option: IgnoredEndpointOption): string => (
+  `${option.pattern} (${formatCompact(option.totalCalls)} calls${option.totalErrors > 0 ? `, ${formatCompact(option.totalErrors)} errors` : ''})`
+);
+
 const getTimestampMs = (value: string): number => {
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
@@ -347,10 +386,14 @@ const buildAnrRow = (anr: ANRRecord): StabilityIssueRow => {
   };
 };
 
+const formatApiRateChange = (spike: ApiErrorSpikeRecord): string => (
+  spike.percentIncrease === null ? 'from 0% baseline' : `+${spike.percentIncrease}%`
+);
+
 const buildApiSpikeRow = (spike: ApiErrorSpikeRecord): StabilityIssueRow => ({
   key: `api_spike:${spike.id}`,
   kind: 'api_spikes',
-  title: `API error rate +${spike.percentIncrease}%`,
+  title: spike.percentIncrease === null ? 'New API error activity' : `API error rate +${spike.percentIncrease}%`,
   subtitle: `${spike.currentRate.toFixed(1)}% error rate vs ${spike.previousRate.toFixed(1)}% baseline · ${spike.affectedSessions} API calls`,
   firstSeen: spike.detectedAt,
   lastOccurred: spike.detectedAt,
@@ -439,6 +482,12 @@ export const Stability: React.FC = () => {
   const [expandedIssueKey, setExpandedIssueKey] = useState<string | null>(null);
   const [crashDetails, setCrashDetails] = useState<Record<string, CrashReport | null>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [ignoredEndpointPatterns, setIgnoredEndpointPatterns] = useState<string[]>([]);
+  const [isIgnoredEndpointPanelOpen, setIsIgnoredEndpointPanelOpen] = useState(false);
+  const [recordedEndpointOptions, setRecordedEndpointOptions] = useState<IgnoredEndpointOption[]>([]);
+  const [selectedEndpointPattern, setSelectedEndpointPattern] = useState('');
+  const [isSavingIgnoredEndpoints, setIsSavingIgnoredEndpoints] = useState(false);
+  const [ignoreSettingsError, setIgnoreSettingsError] = useState<string | null>(null);
 
   useEffect(() => {
     const projectId = currentProject?.id || (isDemoMode ? 'demo' : '');
@@ -446,6 +495,10 @@ export const Stability: React.FC = () => {
       setCrashGroups([]);
       setErrorGroups([]);
       setAnrs([]);
+      setApiSpikes([]);
+      setIgnoredEndpointPatterns([]);
+      setRecordedEndpointOptions([]);
+      setSelectedEndpointPattern('');
       setIsLoading(false);
       return;
     }
@@ -458,7 +511,11 @@ export const Stability: React.FC = () => {
       getErrorsOverview(projectId, timeRange, platform),
       getANRsOverview(projectId, timeRange, platform),
       getApiErrorSpikes(projectId, timeRange),
-    ]).then(([crashesResult, errorsResult, anrsResult, spikesResult]) => {
+      getApiEndpointStats(projectId, 'all'),
+      isDemoMode
+        ? Promise.resolve({ ignoredApiEndpoints: [] } as unknown as Awaited<ReturnType<typeof getProjectAlertSettings>>)
+        : getProjectAlertSettings(projectId),
+    ]).then(([crashesResult, errorsResult, anrsResult, spikesResult, endpointStatsResult, alertSettingsResult]) => {
       if (cancelled) return;
 
       if (crashesResult.status === 'fulfilled') setCrashGroups(crashesResult.value.groups || []);
@@ -481,6 +538,37 @@ export const Stability: React.FC = () => {
 
       if (spikesResult.status === 'fulfilled') setApiSpikes(spikesResult.value.spikes || []);
       else setApiSpikes([]);
+
+      if (endpointStatsResult.status === 'fulfilled') {
+        const seen = new Set<string>();
+        const options = (endpointStatsResult.value.allEndpoints || [])
+          .map((endpoint) => ({
+            pattern: endpoint.endpoint.trim(),
+            totalCalls: endpoint.totalCalls || 0,
+            totalErrors: endpoint.totalErrors || 0,
+            errorRate: endpoint.errorRate || 0,
+          }))
+          .filter((option) => {
+            if (!option.pattern) return false;
+            const key = option.pattern.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .sort((a, b) => b.totalErrors - a.totalErrors || b.totalCalls - a.totalCalls || a.pattern.localeCompare(b.pattern))
+          .slice(0, 200);
+        setRecordedEndpointOptions(options);
+      } else {
+        setRecordedEndpointOptions([]);
+      }
+
+      if (alertSettingsResult.status === 'fulfilled') {
+        const patterns = normalizeIgnoredEndpointPatterns(alertSettingsResult.value.ignoredApiEndpoints || []);
+        setIgnoredEndpointPatterns(patterns);
+        setIgnoreSettingsError(null);
+      } else {
+        setIgnoredEndpointPatterns([]);
+      }
     }).finally(() => {
       if (!cancelled) setIsLoading(false);
     });
@@ -515,10 +603,16 @@ export const Stability: React.FC = () => {
     });
   }, [activeKindSet, allRows, searchQuery]);
 
-  const visibleEventCount = useMemo(
-    () => filteredRows.reduce((total, row) => total + row.eventCount, 0),
-    [filteredRows],
-  );
+  const availableEndpointOptions = useMemo(() => {
+    const ignored = new Set(ignoredEndpointPatterns.map((pattern) => pattern.toLowerCase()));
+    return recordedEndpointOptions.filter((option) => !ignored.has(option.pattern.toLowerCase()));
+  }, [ignoredEndpointPatterns, recordedEndpointOptions]);
+
+  const selectedEndpointOption = useMemo(() => {
+    const query = selectedEndpointPattern.trim().toLowerCase();
+    if (!query) return null;
+    return availableEndpointOptions.find((option) => option.pattern.toLowerCase() === query) || null;
+  }, [availableEndpointOptions, selectedEndpointPattern]);
 
   useEffect(() => {
     if (!focusId || isLoading || allRows.length === 0) return;
@@ -606,6 +700,46 @@ export const Stability: React.FC = () => {
     link.download = `${prefix}-${id}-${Date.now()}.txt`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const saveIgnoredEndpointPatterns = async (patterns: string[]) => {
+    const projectId = currentProject?.id || (isDemoMode ? 'demo' : '');
+    if (!projectId || isDemoMode) return;
+
+    const normalized = normalizeIgnoredEndpointPatterns(patterns);
+    setIsSavingIgnoredEndpoints(true);
+    setIgnoreSettingsError(null);
+
+    try {
+      const updated = await updateProjectAlertSettings(projectId, { ignoredApiEndpoints: normalized });
+      const nextPatterns = normalizeIgnoredEndpointPatterns(updated.ignoredApiEndpoints || normalized);
+      setIgnoredEndpointPatterns(nextPatterns);
+      const spikes = await getApiErrorSpikes(projectId, timeRange);
+      setApiSpikes(spikes.spikes || []);
+    } catch (error) {
+      console.error('Failed to update ignored API endpoints:', error);
+      setIgnoreSettingsError('Could not save ignored endpoints.');
+    } finally {
+      setIsSavingIgnoredEndpoints(false);
+    }
+  };
+
+  const handleAddSelectedIgnoredEndpoint = () => {
+    if (!selectedEndpointOption) return;
+    const pattern = selectedEndpointOption.pattern;
+    setSelectedEndpointPattern('');
+    void saveIgnoredEndpointPatterns([...ignoredEndpointPatterns, pattern]);
+  };
+
+  const handleIgnoreEndpoint = (endpoint: { method: string; endpoint: string }, event: React.MouseEvent) => {
+    event.stopPropagation();
+    const pattern = endpointPatternFromTopEndpoint(endpoint);
+    void saveIgnoredEndpointPatterns([...ignoredEndpointPatterns, pattern]);
+  };
+
+  const handleRemoveIgnoredEndpoint = (pattern: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    void saveIgnoredEndpointPatterns(ignoredEndpointPatterns.filter((item) => item.toLowerCase() !== pattern.toLowerCase()));
   };
 
   const renderReplayCard = (row: StabilityIssueRow) => {
@@ -824,6 +958,9 @@ export const Stability: React.FC = () => {
 
     if (row.kind === 'api_spikes') {
     const spike = row.source;
+    const rateChangeLabel = formatApiRateChange(spike);
+    const chartWidth = Math.max(220, Math.min(720, 48 + Math.max(1, spike.trend.length - 1) * 28));
+    const chartHeight = 72;
     return (
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
         <div className="flex flex-col gap-4 lg:col-span-3">
@@ -835,32 +972,29 @@ export const Stability: React.FC = () => {
                 API Error Rate — 90 min window
               </h4>
               <span className="rounded border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700">
-                {spike.previousRate.toFixed(1)}% → {spike.currentRate.toFixed(1)}% (+{spike.percentIncrease}%)
+                {spike.previousRate.toFixed(1)}% → {spike.currentRate.toFixed(1)}% ({rateChangeLabel})
               </span>
             </div>
             <div className="flex items-end gap-1 px-4 py-5">
               {spike.trend.length > 1 ? (
                 <div className="w-full">
-                  <svg
-                    viewBox={`0 0 ${spike.trend.length * 20} 60`}
-                    preserveAspectRatio="none"
-                    className="h-20 w-full"
-                  >
+                  <div className="w-full overflow-x-auto pb-1">
+                  <svg width={chartWidth} height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="mx-auto block max-w-full">
                     {(() => {
                       const maxRate = Math.max(...spike.trend.map(t => t.errorRate), 1);
                       const pts = spike.trend.map((t, i) => {
-                        const x = i * 20 + 10;
-                        const y = 4 + (1 - t.errorRate / maxRate) * 52;
+                        const x = 12 + (i / Math.max(1, spike.trend.length - 1)) * (chartWidth - 24);
+                        const y = 6 + (1 - t.errorRate / maxRate) * (chartHeight - 18);
                         return { x, y, t };
                       });
                       const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y.toFixed(1)}`).join(' ');
-                      const fillD = `${pathD} L${pts[pts.length - 1].x},60 L${pts[0].x},60 Z`;
+                      const fillD = `${pathD} L${pts[pts.length - 1].x},${chartHeight - 6} L${pts[0].x},${chartHeight - 6} Z`;
                       return (
                         <>
                           <path d={fillD} fill="rgba(14,165,233,0.1)" />
                           <path d={pathD} fill="none" stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                           {pts.map((p, i) => (
-                            <rect key={i} x={p.x - 8} y={0} width={16} height={60} fill="transparent">
+                            <rect key={i} x={p.x - 8} y={0} width={16} height={chartHeight} fill="transparent">
                               <title>{`${new Date(p.t.bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — ${p.t.errorRate.toFixed(1)}% error rate (${p.t.errorCount}/${p.t.totalCount})`}</title>
                             </rect>
                           ))}
@@ -873,7 +1007,8 @@ export const Stability: React.FC = () => {
                       );
                     })()}
                   </svg>
-                  <div className="mt-1 flex justify-between text-[9px] font-medium text-slate-400">
+                  </div>
+                  <div className="mx-auto mt-1 flex max-w-full justify-between text-[9px] font-medium text-slate-400" style={{ width: chartWidth }}>
                     <span>{new Date(spike.trend[0].bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     <span className="font-bold text-red-500">Peak: {Math.max(...spike.trend.map(t => t.errorRate)).toFixed(1)}%</span>
                     <span>{new Date(spike.trend[spike.trend.length - 1].bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -895,22 +1030,84 @@ export const Stability: React.FC = () => {
                 </h4>
               </div>
               <div className="divide-y divide-slate-100">
-                {spike.topEndpoints.map((ep, i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                    <span className="shrink-0 rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-500">
-                      {ep.method}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700" title={ep.endpoint}>
-                      {ep.endpoint}
-                    </span>
-                    <span className="shrink-0 rounded border border-red-200 bg-red-50 px-2 py-0.5 font-mono text-[10px] font-semibold text-red-700">
-                      {ep.errorCount} errors
-                    </span>
-                  </div>
-                ))}
+                {spike.topEndpoints.map((ep, i) => {
+                  const endpointPattern = endpointPatternFromTopEndpoint(ep);
+                  const isIgnored = ignoredEndpointPatterns.some((pattern) => pattern.toLowerCase() === endpointPattern.toLowerCase());
+                  return (
+                    <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="shrink-0 rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-500">
+                        {ep.method}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700" title={ep.endpoint}>
+                        {ep.endpoint}
+                      </span>
+                      <span className="shrink-0 rounded border border-red-200 bg-red-50 px-2 py-0.5 font-mono text-[10px] font-semibold text-red-700">
+                        {ep.errorCount} errors
+                      </span>
+                      <NeoButton
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<Plus size={12} />}
+                        disabled={isIgnored || isSavingIgnoredEndpoints}
+                        onClick={(event) => handleIgnoreEndpoint(ep, event)}
+                        className="h-7 shrink-0 px-2 text-xs"
+                      >
+                        {isIgnored ? 'Ignored' : 'Ignore'}
+                      </NeoButton>
+                    </div>
+                  );
+                })}
               </div>
             </NeoCard>
           )}
+
+          <NeoCard variant="flat" disablePadding className="overflow-hidden border border-slate-200 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+              <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-700">
+                <X size={14} className="text-sky-500" />
+                Ignored Endpoints
+              </h4>
+            </div>
+            <div className="space-y-3 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  list="stability-recorded-api-endpoints"
+                  value={selectedEndpointPattern}
+                  onChange={(event) => setSelectedEndpointPattern(event.target.value)}
+                  disabled={availableEndpointOptions.length === 0 || isSavingIgnoredEndpoints}
+                  placeholder={availableEndpointOptions.length === 0 ? 'No recorded endpoints available' : 'Search recorded endpoints'}
+                  className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 font-mono text-xs text-slate-800 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                />
+                <NeoButton
+                  variant="primary"
+                  size="sm"
+                  leftIcon={isSavingIgnoredEndpoints ? <Loader size={13} className="animate-spin" /> : <Plus size={13} />}
+                  disabled={!selectedEndpointOption || isSavingIgnoredEndpoints}
+                  onClick={handleAddSelectedIgnoredEndpoint}
+                  className="h-9 justify-center px-3 text-xs"
+                >
+                  Add
+                </NeoButton>
+              </div>
+              {ignoredEndpointPatterns.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {ignoredEndpointPatterns.map((pattern) => (
+                    <button
+                      key={pattern}
+                      type="button"
+                      onClick={(event) => handleRemoveIgnoredEndpoint(pattern, event)}
+                      disabled={isSavingIgnoredEndpoints}
+                      className="inline-flex max-w-full items-center gap-1.5 rounded border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[11px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white disabled:opacity-60"
+                    >
+                      <span className="truncate">{pattern}</span>
+                      <X size={12} className="shrink-0 text-slate-400" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {ignoreSettingsError && <p className="text-xs font-medium text-red-600">{ignoreSettingsError}</p>}
+            </div>
+          </NeoCard>
         </div>
 
         <div className="flex flex-col gap-4 lg:col-span-1">
@@ -928,8 +1125,8 @@ export const Stability: React.FC = () => {
                 <dd className="font-medium text-slate-800">{spike.currentRate.toFixed(1)}% <span className="text-slate-400">(was {spike.previousRate.toFixed(1)}%)</span></dd>
               </div>
               <div>
-                <dt className="mb-0.5 text-slate-500">Increase</dt>
-                <dd className="font-bold text-red-600">+{spike.percentIncrease}%</dd>
+                <dt className="mb-0.5 text-slate-500">Change</dt>
+                <dd className="font-bold text-red-600">{rateChangeLabel}</dd>
               </div>
               <div>
                 <dt className="mb-0.5 text-slate-500">API Calls in Window</dt>
@@ -1047,9 +1244,13 @@ export const Stability: React.FC = () => {
 
       <div className="mx-auto w-full max-w-[1800px] px-6 pt-6">
         <NeoCard variant="flat" disablePadding className="overflow-hidden bg-white">
-          <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center">
-              <div className="relative w-full lg:w-80">
+          <div className="flex items-center gap-3 overflow-x-auto border-b border-slate-200 bg-slate-50 px-4 py-3">
+            <datalist id="stability-recorded-api-endpoints">
+              {availableEndpointOptions.map((option) => (
+                <option key={option.pattern} value={option.pattern} label={formatEndpointOptionLabel(option)} />
+              ))}
+            </datalist>
+            <div className="relative w-80 shrink-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
@@ -1060,7 +1261,7 @@ export const Stability: React.FC = () => {
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5" aria-label="Stability issue type filters">
+              <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap" aria-label="Stability issue type filters">
                 <button
                   type="button"
                   onClick={() => updateKindFilter([])}
@@ -1096,16 +1297,90 @@ export const Stability: React.FC = () => {
                   );
                 })}
               </div>
-            </div>
 
-            <div className="flex items-center gap-4 text-sm font-medium text-slate-500">
-              <span>{filteredRows.length} Issues</span>
-              <span className="hidden md:inline">|</span>
-              <span className="hidden rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-700 md:inline">
-                {formatCompact(visibleEventCount)} Total Events
-              </span>
+            <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium text-slate-500">
+              <NeoButton
+                variant="ghost"
+                size="sm"
+                leftIcon={<SlidersHorizontal size={13} />}
+                onClick={() => setIsIgnoredEndpointPanelOpen((open) => !open)}
+                className={`h-8 whitespace-nowrap border px-2.5 text-xs ${isIgnoredEndpointPanelOpen ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'}`}
+              >
+                Ignored endpoints
+                {ignoredEndpointPatterns.length > 0 && (
+                  <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${isIgnoredEndpointPanelOpen ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    {ignoredEndpointPatterns.length}
+                  </span>
+                )}
+              </NeoButton>
             </div>
           </div>
+
+          {isIgnoredEndpointPanelOpen && (
+            <div className="border-b border-slate-200 bg-white px-4 py-4">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                <div className="min-w-0 space-y-2">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-700">
+                      <SlidersHorizontal size={14} className="text-sky-500" />
+                      Ignored API Endpoints
+                    </h3>
+                    <p className="mt-1 text-xs font-medium leading-5 text-slate-500">
+                      Select from API endpoints already recorded for this project.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      list="stability-recorded-api-endpoints"
+                      value={selectedEndpointPattern}
+                      onChange={(event) => setSelectedEndpointPattern(event.target.value)}
+                      disabled={availableEndpointOptions.length === 0 || isSavingIgnoredEndpoints}
+                      placeholder={availableEndpointOptions.length === 0 ? 'No recorded endpoints available' : 'Search recorded endpoints'}
+                      className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 font-mono text-xs text-slate-800 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                    />
+                    <NeoButton
+                      variant="primary"
+                      size="sm"
+                      leftIcon={isSavingIgnoredEndpoints ? <Loader size={13} className="animate-spin" /> : <Plus size={13} />}
+                      disabled={!selectedEndpointOption || isSavingIgnoredEndpoints}
+                      onClick={handleAddSelectedIgnoredEndpoint}
+                      className="h-9 justify-center px-3 text-xs sm:w-auto"
+                    >
+                      Add
+                    </NeoButton>
+                  </div>
+                  {ignoredEndpointPatterns.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {ignoredEndpointPatterns.map((pattern) => (
+                        <button
+                          key={pattern}
+                          type="button"
+                          onClick={(event) => handleRemoveIgnoredEndpoint(pattern, event)}
+                          disabled={isSavingIgnoredEndpoints}
+                          className="inline-flex max-w-full items-center gap-1.5 rounded border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[11px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white disabled:opacity-60"
+                        >
+                          <span className="truncate">{pattern}</span>
+                          <X size={12} className="shrink-0 text-slate-400" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {ignoreSettingsError && <p className="text-xs font-medium text-red-600">{ignoreSettingsError}</p>}
+                </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  <NeoButton
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<X size={13} />}
+                    onClick={() => setIsIgnoredEndpointPanelOpen(false)}
+                    className="h-8 px-3 text-xs"
+                  >
+                    Close
+                  </NeoButton>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="border-b border-slate-200 bg-white px-4">
             <div className="flex items-center gap-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">

@@ -1,0 +1,108 @@
+# Native ClickHouse database backups to the OVH database-backup bucket.
+# The active production ClickHouseInstallation uses replicated tables, so this
+# job backs up one healthy replica through the service instead of running
+# duplicate BACKUP commands on every replica.
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: clickhouse-daily-backup
+  namespace: rejourney
+  labels:
+    app.kubernetes.io/part-of: rejourney
+    app.kubernetes.io/component: clickhouse
+spec:
+  schedule: "30 3 * * *"
+  startingDeadlineSeconds: 1800
+  suspend: false
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 3600
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: clickhouse-daily-backup
+            app.kubernetes.io/component: clickhouse
+        spec:
+          restartPolicy: OnFailure
+          imagePullSecrets:
+            - name: ghcr-secret
+          affinity:
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  preference:
+                    matchExpressions:
+                      - key: rejourney.co/datacenter
+                        operator: In
+                        values: ["hel1"]
+          containers:
+            - name: backup
+              image: ghcr.io/rejourneyco/rejourney/migration:latest
+              imagePullPolicy: Always
+              command: ["node", "--import", "tsx", "scripts/backupClickHouse.ts"]
+              env:
+                - name: NODE_ENV
+                  value: production
+                - name: CLICKHOUSE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: clickhouse-secret
+                      key: CLICKHOUSE_URL
+                - name: CLICKHOUSE_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: clickhouse-secret
+                      key: CLICKHOUSE_USER
+                - name: CLICKHOUSE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: clickhouse-secret
+                      key: CLICKHOUSE_PASSWORD
+                - name: CLICKHOUSE_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: clickhouse-secret
+                      key: CLICKHOUSE_DATABASE
+                - name: CLICKHOUSE_BACKUP_PREFIX
+                  value: clickhouse/rejourney
+                - name: CLICKHOUSE_BACKUP_REQUEST_TIMEOUT_MS
+                  value: "3600000"
+                - name: BACKUP_S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-backup-secret
+                      key: BACKUP_S3_ENDPOINT
+                - name: BACKUP_S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-backup-secret
+                      key: BACKUP_S3_BUCKET
+                - name: BACKUP_S3_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-backup-secret
+                      key: BACKUP_S3_REGION
+                      optional: true
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-backup-secret
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-backup-secret
+                      key: AWS_SECRET_ACCESS_KEY
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 512Mi
+                limits:
+                  cpu: "2"
+                  memory: 2Gi

@@ -1,6 +1,6 @@
-# PostgreSQL Backup + Restore (CNPG + R2)
+# PostgreSQL Backup + Restore (CNPG + OVH S3)
 
-Last updated: 2026-04-22
+Last updated: 2026-06-08
 
 This is the operator runbook for the current production PostgreSQL backup and restore path after the local-storage cutover.
 
@@ -18,12 +18,12 @@ Production Postgres is now:
 
 Backups now come from CloudNativePG itself, not a custom `postgres-backup` CronJob:
 
-- continuous WAL archive to Cloudflare R2 from `k8s/cnpg/postgres-cnpg.yaml`
+- continuous WAL archive to OVH Object Storage from `k8s/cnpg/postgres-cnpg.yaml`
 - daily CNPG `ScheduledBackup` named `postgres-daily-backup` from `k8s/cnpg-backups.yaml`
 - current schedule: `0 0 3 * * *` (03:00:00 UTC, six-field CNPG cron format)
 - CNPG retention policy in the cluster spec: `30d`
 
-Important detail: the object-store path is `s3://rejourney-backup/cnpg-wal`, but CNPG/Barman use that location for both the base-backup catalog and WAL archive. The name is historical; treat it as the whole physical-backup recovery source.
+Important detail: the object-store path is `s3://rejourney-db-backups-1/postgres/cnpg`, and CNPG/Barman use that location for both the base-backup catalog and WAL archive. Treat it as the whole physical-backup recovery source.
 
 ## What to check routinely
 
@@ -59,13 +59,13 @@ If the cluster was created recently and the first 03:00 UTC backup window has no
   - `postgres-secret`
   - `postgres-exporter-secret`
   - `postgres-app-secret`
-  - `r2-backup-secret`
+  - `db-backup-secret`
 
 `postgres-app-secret` is the CNPG bootstrap/app-owner secret. `postgres-secret` is the application wiring secret used by the rest of the stack.
 
 ## Restore manifest template
 
-Use a new CNPG `Cluster` with `bootstrap.recovery`. This example restores from the current R2 backup catalog while keeping the source backup server name pinned to `postgres-local`.
+Use a new CNPG `Cluster` with `bootstrap.recovery`. This example restores from the current OVH backup catalog while keeping the source backup server name pinned to `postgres-local`.
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -116,14 +116,14 @@ spec:
     - name: postgres-local-backup
       barmanObjectStore:
         serverName: postgres-local
-        destinationPath: s3://rejourney-backup/cnpg-wal
-        endpointURL: https://bea95e0d46f34ef18361f2537571d720.eu.r2.cloudflarestorage.com
+        destinationPath: s3://rejourney-db-backups-1/postgres/cnpg
+        endpointURL: https://s3.us-west-or.io.cloud.ovh.us
         s3Credentials:
           accessKeyId:
-            name: r2-backup-secret
+            name: db-backup-secret
             key: AWS_ACCESS_KEY_ID
           secretAccessKey:
-            name: r2-backup-secret
+            name: db-backup-secret
             key: AWS_SECRET_ACCESS_KEY
         wal:
           maxParallel: 8
@@ -165,7 +165,7 @@ Use this when you want proof that backups are restorable without changing produc
 5. Check a few real tables and counts, not just cluster health.
 6. Delete the test cluster when finished.
 
-This is the preferred periodic recovery drill because it proves the R2 backup catalog is actually usable.
+This is the preferred periodic recovery drill because it proves the OVH backup catalog is actually usable.
 
 ## Production replacement restore flow
 
@@ -178,7 +178,7 @@ Use this when the live `postgres-local` PVC is no longer trustworthy and you nee
    - latest available WAL
    - PITR to a specific UTC timestamp using `recoveryTarget.targetTime`
 3. Preserve any secrets you still need.
-   At minimum keep `postgres-secret`, `postgres-exporter-secret`, `postgres-app-secret`, and `r2-backup-secret`.
+   At minimum keep `postgres-secret`, `postgres-exporter-secret`, `postgres-app-secret`, and `db-backup-secret`.
 4. Remove the broken live cluster if you want to keep the stable production cluster name.
    CNPG cannot recover in place on an existing `Cluster`.
 5. Apply the same restore manifest, but set:

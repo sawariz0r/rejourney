@@ -10,7 +10,7 @@
  * - High crash/ANR rates
  */
 
-import { eq, gte, and, sql, desc } from 'drizzle-orm';
+import { eq, gte, and, sql, desc, lte } from 'drizzle-orm';
 import { db, pool, sessions, sessionMetrics, issues } from '../db/client.js';
 import { getRedis, initRedis, closeRedis } from '../db/redis.js';
 import { logger } from '../logger.js';
@@ -37,13 +37,16 @@ interface ProjectMetrics {
     errorRate: number;
     avgLatencyMs: number;
     sessionCount: number;
+    windowStart: Date;
+    windowEnd: Date;
 }
 
 /**
  * Get metrics for the last N minutes for all active projects
  */
-async function getRecentMetrics(minutesAgo: number): Promise<ProjectMetrics[]> {
-    const cutoff = new Date(Date.now() - minutesAgo * 60 * 1000);
+async function getRecentMetrics(windowMinutes: number, offsetMinutes = 0): Promise<ProjectMetrics[]> {
+    const windowEnd = new Date(Date.now() - offsetMinutes * 60 * 1000);
+    const windowStart = new Date(windowEnd.getTime() - windowMinutes * 60 * 1000);
 
     const results = await db
         .select({
@@ -54,7 +57,7 @@ async function getRecentMetrics(minutesAgo: number): Promise<ProjectMetrics[]> {
         })
         .from(sessions)
         .leftJoin(sessionMetrics, eq(sessions.id, sessionMetrics.sessionId))
-        .where(gte(sessions.startedAt, cutoff))
+        .where(and(gte(sessions.startedAt, windowStart), lte(sessions.startedAt, windowEnd)))
         .groupBy(sessions.projectId);
 
     return results.map(r => ({
@@ -62,6 +65,8 @@ async function getRecentMetrics(minutesAgo: number): Promise<ProjectMetrics[]> {
         errorRate: r.errorRate || 0,
         avgLatencyMs: r.avgLatencyMs || 0,
         sessionCount: r.sessionCount || 0,
+        windowStart,
+        windowEnd,
     }));
 }
 
@@ -73,8 +78,8 @@ async function checkForSpikes(): Promise<void> {
         // Get metrics for last 15 minutes (current)
         const currentMetrics = await getRecentMetrics(15);
 
-        // Get metrics for previous hour (45 min before current window)
-        const baselineMetrics = await getRecentMetrics(60);
+        // Get metrics for the hour before the current window.
+        const baselineMetrics = await getRecentMetrics(60, 15);
 
         // Create lookup for baseline
         const baselineLookup = new Map<string, ProjectMetrics>();
@@ -102,7 +107,13 @@ async function checkForSpikes(): Promise<void> {
                     await triggerErrorSpikeAlert(
                         current.projectId,
                         current.errorRate * 100,
-                        baseline.errorRate * 100
+                        baseline.errorRate * 100,
+                        {
+                            currentWindowStart: current.windowStart,
+                            currentWindowEnd: current.windowEnd,
+                            baselineWindowStart: baseline.windowStart,
+                            baselineWindowEnd: baseline.windowEnd,
+                        },
                     );
                 }
             }

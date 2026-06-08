@@ -2803,7 +2803,20 @@
   box-shadow: 0 22px 48px rgba(17, 24, 39, 0.26) !important;
 }
 
+.heatmap-tablet-frame {
+  width: min(920px, 100%);
+  max-width: 100%;
+  margin-inline: auto;
+  border-color: #101827 !important;
+  border-radius: 28px !important;
+  box-shadow: 0 22px 48px rgba(17, 24, 39, 0.24) !important;
+}
+
 .heatmap-phone-screen {
+  border: 0 !important;
+}
+
+.heatmap-tablet-screen {
   border: 0 !important;
 }
 
@@ -2910,6 +2923,10 @@
     width: min(420px, 100%, 38dvh);
   }
 
+  .rejourney-heatmaps-page .heatmap-primary-stage:not(.heatmap-web-scroll-stage) .heatmap-tablet-frame {
+    width: min(920px, 100%, calc((100cqh - 1.5rem) * var(--heatmap-frame-ratio, 0.75)));
+  }
+
   .rejourney-heatmaps-page .heatmap-side-panel {
     position: relative;
     top: auto;
@@ -2944,6 +2961,10 @@
 @media (min-width: 1280px) and (max-height: 760px) {
   .rejourney-heatmaps-page .heatmap-primary-stage:not(.heatmap-web-scroll-stage) .heatmap-phone-frame {
     width: min(360px, 100%, 35dvh);
+  }
+
+  .rejourney-heatmaps-page .heatmap-primary-stage:not(.heatmap-web-scroll-stage) .heatmap-tablet-frame {
+    width: min(840px, 100%, calc((100cqh - 1.25rem) * var(--heatmap-frame-ratio, 0.75)));
   }
 
   .rejourney-heatmaps-page .heatmap-page-hero-inner,

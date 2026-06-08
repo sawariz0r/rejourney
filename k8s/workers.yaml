@@ -598,22 +598,22 @@ spec:
                 - name: R2_ENDPOINT
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: R2_ENDPOINT
                 - name: R2_BUCKET
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: R2_BUCKET
                 - name: R2_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: AWS_ACCESS_KEY_ID
                 - name: R2_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: AWS_SECRET_ACCESS_KEY
                 - name: JWT_SECRET
                   valueFrom:

@@ -145,6 +145,7 @@ DEPLOY_CLICKHOUSE=false by default
   -> when true, the operator config is patched to watch the rejourney namespace before CR readiness is expected
   -> when true, clickhouse.yaml and clickhouse-setup.yaml are applied explicitly and removed from the bulk prune path
   -> clickhouse-backfill-api-rollups runs only when RUN_CLICKHOUSE_ROLLUP_BACKFILL=true
+  -> clickhouse-daily-backup is a normal CronJob manifest and applies through the root prune path
   -> after the cutover, production expects ClickHouse to exist and app flags to be true; this deploy gate is for fresh clusters/rebuilds and normal non-ClickHouse releases
 ```
 
@@ -339,6 +340,7 @@ npm run ci:local
 npm run ci:local:fast
 npm run ci:local:checks
 npm run ci:local:deploy
+npm run dev:resume
 ./scripts/local-k8s/deploy.sh down
 bash scripts/k8s/deploy-release.sh <image-tag> [repository]
 DEPLOY_CLICKHOUSE=true RUN_CLICKHOUSE_ROLLUP_BACKFILL=true bash scripts/k8s/deploy-release.sh <image-tag> [repository]
@@ -353,6 +355,7 @@ Primary files:
 - [`scripts/local-k8s/deploy.sh`](../scripts/local-k8s/deploy.sh)
 - [`k8s/api.yaml`](../k8s/api.yaml)
 - [`k8s/clickhouse.yaml`](../k8s/clickhouse.yaml)
+- [`k8s/clickhouse-backups.yaml`](../k8s/clickhouse-backups.yaml)
 - [`k8s/clickhouse-setup.yaml`](../k8s/clickhouse-setup.yaml)
 - [`k8s/clickhouse-backfill-api-rollups.yaml`](../k8s/clickhouse-backfill-api-rollups.yaml)
 - [`local-k8s/api.yaml`](../local-k8s/api.yaml)

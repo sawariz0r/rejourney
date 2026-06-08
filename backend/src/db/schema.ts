@@ -1375,6 +1375,7 @@ export const alertSettings = pgTable('alert_settings', {
     apiDegradationThresholdPercent: integer('api_degradation_threshold_percent').default(100), // 100% (2x) increase triggers alert
     apiLatencyThresholdMs: integer('api_latency_threshold_ms').default(3000), // 3 seconds
     emailRules: jsonb('email_rules').$type<EmailAlertRule[]>().default(sql`'[]'::jsonb`).notNull(),
+    ignoredApiEndpoints: jsonb('ignored_api_endpoints').$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

@@ -124,9 +124,39 @@ cluster_exists() {
     k3d cluster list 2>/dev/null | awk '{print $1}' | grep -qx "$CLUSTER_NAME"
 }
 
-create_cluster() {
-    if cluster_exists; then
-        log "k3d cluster '$CLUSTER_NAME' already exists"
+cluster_container_exists() {
+    docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "k3d-${CLUSTER_NAME}-server-0"
+}
+
+cluster_running() {
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "k3d-${CLUSTER_NAME}-server-0"
+}
+
+wait_for_kube_api() {
+    local deadline
+    deadline=$(( $(date +%s) + 120 ))
+
+    while true; do
+        if kubectl get namespace default >/dev/null 2>&1; then
+            return
+        fi
+
+        if [ "$(date +%s)" -ge "$deadline" ]; then
+            error "Timed out waiting for k3d Kubernetes API"
+        fi
+
+        sleep 2
+    done
+}
+
+create_or_start_cluster() {
+    if cluster_exists || cluster_container_exists; then
+        if cluster_running; then
+            log "k3d cluster '$CLUSTER_NAME' already running"
+        else
+            log "Starting existing k3d cluster '$CLUSTER_NAME'"
+            k3d cluster start "$CLUSTER_NAME" >/dev/null
+        fi
         return
     fi
 
@@ -237,8 +267,9 @@ init() {
     require_bin kubectl
     require_bin k3d
     require_bin docker
-    create_cluster
+    create_or_start_cluster
     ensure_context
+    wait_for_kube_api
     apply_file "$LOCAL_K8S_DIR/namespace.yaml"
     log "Cluster and namespace are ready."
 }

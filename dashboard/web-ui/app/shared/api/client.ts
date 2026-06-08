@@ -3483,14 +3483,16 @@ export interface ApiErrorSpikeRecord {
     detectedAt: string;
     currentRate: number;
     previousRate: number;
-    percentIncrease: number;
+    percentIncrease: number | null;
     affectedSessions: number;
     trend: ApiErrorSpikeTrendBucket[];
     topEndpoints: Array<{ method: string; endpoint: string; errorCount: number }>;
+    ignoredApiEndpoints?: string[];
 }
 
 export interface ApiErrorSpikesResponse {
     spikes: ApiErrorSpikeRecord[];
+    ignoredApiEndpoints?: string[];
 }
 
 export async function getApiErrorSpikes(projectId: string, timeRange?: string): Promise<ApiErrorSpikesResponse> {
@@ -3498,8 +3500,47 @@ export async function getApiErrorSpikes(projectId: string, timeRange?: string): 
     const params = new URLSearchParams({ projectId });
     if (timeRange) params.set('timeRange', timeRange);
     const endpoint = `/api/overview/api-error-spikes?${params.toString()}`;
-    const cacheKey = `overview:api-error-spikes:${projectId}:${timeRange || 'all'}:v1`;
+    const cacheKey = `overview:api-error-spikes:${projectId}:${timeRange || 'all'}:v2`;
     return fetchWithCache<ApiErrorSpikesResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
+}
+
+export interface ProjectAlertSettings {
+    id: string;
+    projectId: string;
+    crashAlertsEnabled: boolean;
+    anrAlertsEnabled: boolean;
+    errorSpikeAlertsEnabled: boolean;
+    apiDegradationAlertsEnabled: boolean;
+    errorSpikeThresholdPercent: number;
+    apiDegradationThresholdPercent: number;
+    apiLatencyThresholdMs: number;
+    emailRules: unknown[];
+    ignoredApiEndpoints: string[];
+}
+
+export async function getProjectAlertSettings(projectId: string): Promise<ProjectAlertSettings> {
+    const cacheKey = `project-alert-settings:${projectId}:v1`;
+    const response = await fetchWithCache<{ settings: ProjectAlertSettings }>(
+        `/api/projects/${projectId}/alert-settings`,
+        {},
+        cacheKey,
+        CACHE_TTL,
+    );
+    return response.settings;
+}
+
+export async function updateProjectAlertSettings(
+    projectId: string,
+    settings: Partial<Pick<ProjectAlertSettings, 'ignoredApiEndpoints'>>,
+): Promise<ProjectAlertSettings> {
+    const cacheKey = `project-alert-settings:${projectId}:v1`;
+    clearCache(cacheKey);
+    clearCacheMatching((key) => key.startsWith(`overview:api-error-spikes:${projectId}:`));
+    const response = await fetchJson<{ settings: ProjectAlertSettings }>(`/api/projects/${projectId}/alert-settings`, {
+        method: 'PUT',
+        body: JSON.stringify(settings),
+    });
+    return response.settings;
 }
 
 export async function getRetentionCohorts(projectId?: string, timeRange?: string, platform?: string): Promise<RetentionCohortsResponse> {
@@ -4892,6 +4933,8 @@ export const api = {
     getCrashesOverview,
     getANRsOverview,
     getApiErrorSpikes,
+    getProjectAlertSettings,
+    updateProjectAlertSettings,
     getRetentionCohorts,
     getIssues,
     getIssue,

@@ -2465,22 +2465,22 @@ spec:
                 - name: R2_ENDPOINT
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: R2_ENDPOINT
                 - name: R2_BUCKET
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: R2_BUCKET
                 - name: AWS_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: AWS_ACCESS_KEY_ID
                 - name: AWS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: AWS_SECRET_ACCESS_KEY
                 - name: SESSION_BACKUP_BATCH_SIZE
                   value: "120"
@@ -2596,22 +2596,22 @@ spec:
                 - name: R2_ENDPOINT
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: R2_ENDPOINT
                 - name: R2_BUCKET
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: R2_BUCKET
                 - name: AWS_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: AWS_ACCESS_KEY_ID
                 - name: AWS_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
-                      name: r2-backup-secret
+                      name: db-backup-secret
                       key: AWS_SECRET_ACCESS_KEY
                 - name: SESSION_BACKUP_SEED_BATCH_SIZE
                   value: "2000"

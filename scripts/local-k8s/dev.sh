@@ -444,7 +444,7 @@ host-restart)
         start_host_services
         print_status
         ;;
-    restart)
+    resume|restart)
         update_local_urls
         "$SCRIPT_DIR/deploy.sh" infra "$ENV_FILE"
         sync_db_schema
@@ -459,7 +459,7 @@ host-restart)
         print_status
         ;;
     *)
-        echo "Usage: $0 [up|restart|host-restart|down|destroy|logs [name]]"
+        echo "Usage: $0 [up|resume|restart|host-restart|down|destroy|logs [name]]"
         exit 1
         ;;
 esac

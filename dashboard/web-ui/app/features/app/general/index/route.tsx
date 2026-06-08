@@ -1697,6 +1697,13 @@ const RevenueImpactSection: React.FC<{
     const syncScanLabel = syncPreview
         ? `${formatCompact(syncPreview.scannedSessionCount)} total sessions scanned from this project`
         : null;
+    const revenueSyncEmptyText = activeProvider === 'custom_events'
+        ? 'No synced revenue data yet. Save the mapping and run Sync when your app is sending purchase events.'
+        : activeProvider === 'revenuecat'
+            ? 'No RevenueCat revenue returned for this range yet. Run Sync to backfill again, or switch to All time.'
+            : activeProvider === 'superwall'
+                ? 'No Superwall revenue returned for this range yet. Run Sync to backfill again, or switch to All time.'
+                : 'No synced revenue data yet. Connect a revenue source and run Sync.';
     const isRevenueSyncInProgress = status === 'syncing'
         || actionState?.kind === 'sync'
         || actionState?.kind === 'connect_superwall'
@@ -2741,7 +2748,9 @@ const RevenueImpactSection: React.FC<{
                                                 <RefreshCw className="mx-auto h-6 w-6 animate-spin text-[#1a73e8]" />
                                                 <div className="mt-3 text-sm font-bold text-slate-950">Syncing revenue data</div>
                                                 <div className="mt-1 text-xs font-semibold leading-5 text-slate-600">
-                                                    {syncPreviewLabel || 'Looking for mapped purchase events in your sessions.'}
+                                                    {syncPreviewLabel || (activeProvider === 'custom_events'
+                                                        ? 'Looking for mapped purchase events in your sessions.'
+                                                        : 'Backfilling provider revenue rows.')}
                                                 </div>
                                                 {syncScanLabel && (
                                                     <div className="mt-1 text-[11px] font-semibold text-slate-500">{syncScanLabel}.</div>
@@ -2753,7 +2762,7 @@ const RevenueImpactSection: React.FC<{
                                         </div>
                                     ) : (
                                         <div className="flex h-full items-center justify-center border-2 border-dashed border-[#dadce0] bg-[#f8fafc] p-4 text-center text-sm font-semibold text-slate-500">
-                                            No synced revenue data yet. Save the mapping and run Sync when your app is sending purchase events.
+                                            {revenueSyncEmptyText}
                                         </div>
                                     )}
                                 </div>

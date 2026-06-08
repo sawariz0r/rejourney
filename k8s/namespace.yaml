@@ -90,10 +90,13 @@ metadata:
 #   --from-literal=SMTP_FROM="Rejourney <noreply@rejourney.co>" \
 #   --from-literal=SMTP_SECURE=false
 #
-# 9. R2 Backup secrets (for PostgreSQL backups to Cloudflare R2):
-# kubectl create secret generic r2-backup-secret \
+# 9. Database backup object-store secret (PostgreSQL CNPG + ClickHouse):
+# kubectl create secret generic db-backup-secret \
 #   --namespace rejourney \
-#   --from-literal=R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com \
-#   --from-literal=R2_BUCKET=<YOUR_BACKUP_BUCKET> \
-#   --from-literal=AWS_ACCESS_KEY_ID=<YOUR_R2_ACCESS_KEY> \
-#   --from-literal=AWS_SECRET_ACCESS_KEY=<YOUR_R2_SECRET_KEY>
+#   --from-literal=BACKUP_S3_ENDPOINT=https://s3.us-west-or.io.cloud.ovh.us \
+#   --from-literal=BACKUP_S3_BUCKET=rejourney-db-backups-1 \
+#   --from-literal=BACKUP_S3_REGION=us-west-or \
+#   --from-literal=AWS_ACCESS_KEY_ID=<YOUR_OVH_ACCESS_KEY> \
+#   --from-literal=AWS_SECRET_ACCESS_KEY=<YOUR_OVH_SECRET_KEY> \
+#   --from-literal=R2_ENDPOINT=https://s3.us-west-or.io.cloud.ovh.us \
+#   --from-literal=R2_BUCKET=rejourney-db-backups-1

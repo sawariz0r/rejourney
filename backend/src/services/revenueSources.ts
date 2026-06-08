@@ -166,9 +166,32 @@ const MANUAL_REVENUE_SOURCE = 'manual_historical';
 const GENERIC_REVENUE_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const GENERIC_REVENUE_SYNC_STALE_MS = 60 * 60 * 1000;
 const GENERIC_REVENUE_UPSERT_BATCH_SIZE = 500;
+const GENERIC_REVENUE_BACKFILL_DAYS = 365;
+const GENERIC_REVENUE_INCREMENTAL_OVERLAP_MS = 48 * 60 * 60 * 1000;
 
 const runningProviderSyncs = new Set<string>();
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
+
+interface GenericRevenueProviderSyncResult {
+    importedDateCount: number;
+    transactionCount: number;
+    fullBackfill: boolean;
+}
+
+export function resolveGenericRevenueSyncWindow(input: {
+    mode: RevenueSyncMode;
+    newestSyncedAt?: Date | null;
+    hasProviderTransactions: boolean;
+    now?: Date;
+}): { startDate: Date; fullBackfill: boolean } {
+    const now = input.now ?? new Date();
+    const newestSyncedAt = input.newestSyncedAt ?? null;
+    const fullBackfill = input.mode === 'initial' || !newestSyncedAt || !input.hasProviderTransactions;
+    const startDate = fullBackfill
+        ? new Date(now.getTime() - GENERIC_REVENUE_BACKFILL_DAYS * 24 * 60 * 60 * 1000)
+        : new Date(newestSyncedAt.getTime() - GENERIC_REVENUE_INCREMENTAL_OVERLAP_MS);
+    return { startDate, fullBackfill };
+}
 let initialSchedulerTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function providerSyncKey(projectId: string, provider: RevenueProvider): string {
@@ -272,6 +295,24 @@ async function getActiveProvider(projectId: string): Promise<RevenueProvider | n
 
 function isRevenueProvider(value: unknown): value is RevenueProvider {
     return (SUPPORTED_REVENUE_PROVIDERS as readonly string[]).includes(String(value));
+}
+
+async function providerHasRevenueTransactions(projectId: string, provider: RevenueProvider): Promise<boolean> {
+    const rows = await dbRead
+        .select({ id: revenueProviderTransactions.id })
+        .from(revenueProviderTransactions)
+        .where(and(
+            eq(revenueProviderTransactions.projectId, projectId),
+            eq(revenueProviderTransactions.provider, provider),
+            sql`(
+                ${revenueProviderTransactions.amountCents} <> 0
+                OR ${revenueProviderTransactions.grossAmountCents} <> 0
+                OR ${revenueProviderTransactions.refundAmountCents} <> 0
+                OR ${revenueProviderTransactions.netCents} <> 0
+            )`,
+        ))
+        .limit(1);
+    return rows.length > 0;
 }
 
 export async function setProjectRevenueActiveProvider(
@@ -783,7 +824,7 @@ export function parseRevenueCatRevenueChartRows(payload: unknown): GenericRevenu
     return values.flatMap((point) => {
         let dateKey: string | null = null;
         let amountCents: number | null = null;
-        let transactionCount = 1;
+        let transactionCount = 0;
         let currency = chartCurrency;
 
         if (Array.isArray(point)) {
@@ -800,7 +841,7 @@ export function parseRevenueCatRevenueChartRows(payload: unknown): GenericRevenu
                 measures,
                 [/transaction/, /purchase/, /count/],
                 2,
-            )) || 1;
+            ));
         } else {
             const pointRecord = asRecord(point);
             if (!pointRecord) return [];
@@ -826,11 +867,12 @@ export function parseRevenueCatRevenueChartRows(payload: unknown): GenericRevenu
                 'purchase_count',
                 'purchases',
                 'count',
-            ])) || 1;
+            ]));
             currency = normalizeCurrency(pointRecord.currency ?? pointRecord.currency_code, chartCurrency);
         }
 
-        if (!dateKey || amountCents === null) return [];
+        if (!dateKey || amountCents === null || amountCents === 0) return [];
+        const effectiveTransactionCount = transactionCount || 1;
         const occurredAt = new Date(`${dateKey}T00:00:00Z`);
         const reportingCategory = amountCents < 0 ? 'refund' : 'revenue';
         return [{
@@ -847,7 +889,7 @@ export function parseRevenueCatRevenueChartRows(payload: unknown): GenericRevenu
             metadata: {
                 source: 'revenuecat_revenue_chart',
                 chart: 'revenue',
-                transactionCount,
+                transactionCount: effectiveTransactionCount,
             },
         } satisfies GenericRevenueTransaction];
     });
@@ -1536,7 +1578,7 @@ export async function connectSuperwallRevenue(input: {
     return { connectionId: connection.id };
 }
 
-async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): Promise<void> {
+async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): Promise<GenericRevenueProviderSyncResult> {
     if (!isSuperwallRevenueSourceConfigured()) {
         throw new Error('SUPERWALL_API_KEY_ENCRYPTION_KEY is required for Superwall API key storage');
     }
@@ -1551,9 +1593,13 @@ async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): P
     }
 
     const connectionConfig = asRecord(connection.connectionConfig) || {};
-    const since = mode === 'initial' || !connection.newestSyncedAt
-        ? new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
-        : new Date(connection.newestSyncedAt.getTime() - 48 * 60 * 60 * 1000);
+    const hasProviderTransactions = await providerHasRevenueTransactions(projectId, 'superwall');
+    const syncWindow = resolveGenericRevenueSyncWindow({
+        mode,
+        newestSyncedAt: connection.newestSyncedAt,
+        hasProviderTransactions,
+    });
+    const since = syncWindow.startDate;
     let organizationId = nullableTrim(connectionConfig.organizationId);
     if (!organizationId) {
         organizationId = await discoverSuperwallOrganizationId(apiKey);
@@ -1602,7 +1648,7 @@ async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): P
                 const row = JSON.parse(line) as Record<string, unknown>;
                 const occurredAt = parseIsoDate(row.date);
                 const amount = minorFromMajorAmount(row.gross_amount);
-                if (!occurredAt || amount === null) return [];
+                if (!occurredAt || amount === null || amount === 0) return [];
                 const currency = normalizeCurrency(row.currency, 'usd');
                 const reportingCategory = amount < 0 ? 'refund' : 'revenue';
                 return [{
@@ -1624,7 +1670,7 @@ async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): P
         });
 
     const rebuildDateKeys = transactions.map((row) => toUtcDateKey(row.occurredAt));
-    if (mode === 'initial') {
+    if (syncWindow.fullBackfill) {
         const existingRows = await dbRead
             .select({
                 id: revenueProviderTransactions.id,
@@ -1650,7 +1696,12 @@ async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): P
     }
 
     await upsertGenericRevenueTransactions(connection, 'superwall', transactions);
-    await rebuildGenericProviderDailyRollups(projectId, 'superwall', rebuildDateKeys);
+    const importedDateCount = await rebuildGenericProviderDailyRollups(projectId, 'superwall', rebuildDateKeys);
+    return {
+        importedDateCount,
+        transactionCount: transactions.length,
+        fullBackfill: syncWindow.fullBackfill,
+    };
 }
 
 export async function connectRevenueCatRevenue(input: {
@@ -1770,7 +1821,7 @@ async function replaceRevenueProviderTransactionsForDateRange(
     ];
 }
 
-async function syncRevenueCatRevenue(projectId: string, mode: RevenueSyncMode): Promise<void> {
+async function syncRevenueCatRevenue(projectId: string, mode: RevenueSyncMode): Promise<GenericRevenueProviderSyncResult> {
     if (!isRevenueCatRevenueSourceConfigured()) {
         throw new Error('REVENUECAT_API_KEY_ENCRYPTION_KEY is required for RevenueCat API key storage');
     }
@@ -1790,9 +1841,13 @@ async function syncRevenueCatRevenue(projectId: string, mode: RevenueSyncMode): 
         throw new Error('RevenueCat project ID is unavailable');
     }
 
-    const startDate = mode === 'initial' || !connection.newestSyncedAt
-        ? new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
-        : new Date(connection.newestSyncedAt.getTime() - 48 * 60 * 60 * 1000);
+    const hasProviderTransactions = await providerHasRevenueTransactions(projectId, 'revenuecat');
+    const syncWindow = resolveGenericRevenueSyncWindow({
+        mode,
+        newestSyncedAt: connection.newestSyncedAt,
+        hasProviderTransactions,
+    });
+    const startDate = syncWindow.startDate;
     const startDateKey = toUtcDateKey(startDate);
     const endDateKey = toUtcDateKey(new Date());
     const response = await fetch(buildRevenueCatRevenueChartEndpoint({
@@ -1833,7 +1888,12 @@ async function syncRevenueCatRevenue(projectId: string, mode: RevenueSyncMode): 
         startDateKey,
         endDateKey,
     );
-    await rebuildGenericProviderDailyRollups(projectId, 'revenuecat', rebuildDateKeys);
+    const importedDateCount = await rebuildGenericProviderDailyRollups(projectId, 'revenuecat', rebuildDateKeys);
+    return {
+        importedDateCount,
+        transactionCount: transactions.length,
+        fullBackfill: syncWindow.fullBackfill,
+    };
 }
 
 export async function configureCustomEventRevenue(input: {
@@ -2421,7 +2481,11 @@ export async function syncGenericRevenueProvider(
     runningProviderSyncs.add(key);
 
     const startedAt = new Date();
-    let importedDateCount = 0;
+    let syncResult: GenericRevenueProviderSyncResult = {
+        importedDateCount: 0,
+        transactionCount: 0,
+        fullBackfill: mode === 'initial',
+    };
     try {
         const connection = await getProviderConnection(projectId, provider);
         if (!connection || connection.status === 'disconnected') {
@@ -2429,16 +2493,18 @@ export async function syncGenericRevenueProvider(
         }
 
         if (provider === 'superwall') {
-            await syncSuperwallRevenue(projectId, mode);
+            syncResult = await syncSuperwallRevenue(projectId, mode);
         } else if (provider === 'revenuecat') {
-            await syncRevenueCatRevenue(projectId, mode);
+            syncResult = await syncRevenueCatRevenue(projectId, mode);
         } else if (provider === 'custom_events') {
             const normalizedConfig = normalizeCustomEventConfig(connection.customEventConfig);
+            const fullBackfill = mode === 'initial' || !connection.newestSyncedAt;
+            let importedDateCount = 0;
             if (normalizedConfig) {
                 const since = mode === 'initial'
                     ? null
                     : (connection.newestSyncedAt
-                        ? new Date(connection.newestSyncedAt.getTime() - 48 * 60 * 60 * 1000)
+                        ? new Date(connection.newestSyncedAt.getTime() - GENERIC_REVENUE_INCREMENTAL_OVERLAP_MS)
                         : null);
                 importedDateCount = await rebuildCustomEventRevenueTransactions(connection, normalizedConfig, since);
             } else {
@@ -2459,16 +2525,30 @@ export async function syncGenericRevenueProvider(
                     manualDateRows.map((row) => row.date).filter(Boolean),
                 );
             }
+            syncResult = {
+                importedDateCount,
+                transactionCount: importedDateCount,
+                fullBackfill,
+            };
         }
 
         const completedAt = new Date();
+        const latestTransactionConditions = [
+            eq(revenueProviderTransactions.projectId, projectId),
+            eq(revenueProviderTransactions.provider, provider),
+        ];
+        if (provider === 'superwall' || provider === 'revenuecat') {
+            latestTransactionConditions.push(sql`(
+                ${revenueProviderTransactions.amountCents} <> 0
+                OR ${revenueProviderTransactions.grossAmountCents} <> 0
+                OR ${revenueProviderTransactions.refundAmountCents} <> 0
+                OR ${revenueProviderTransactions.netCents} <> 0
+            )`);
+        }
         const latestTransaction = await dbRead
             .select({ occurredAt: revenueProviderTransactions.occurredAt })
             .from(revenueProviderTransactions)
-            .where(and(
-                eq(revenueProviderTransactions.projectId, projectId),
-                eq(revenueProviderTransactions.provider, provider),
-            ))
+            .where(and(...latestTransactionConditions))
             .orderBy(desc(revenueProviderTransactions.occurredAt))
             .limit(1);
 
@@ -2479,7 +2559,7 @@ export async function syncGenericRevenueProvider(
                 lastSyncStartedAt: startedAt,
                 lastSyncCompletedAt: completedAt,
                 lastSyncError: null,
-                newestSyncedAt: latestTransaction[0]?.occurredAt ?? completedAt,
+                newestSyncedAt: latestTransaction[0]?.occurredAt ?? null,
                 updatedAt: completedAt,
             })
             .where(and(
@@ -2487,7 +2567,15 @@ export async function syncGenericRevenueProvider(
                 eq(projectRevenueConnections.provider, provider),
             ));
 
-        logger.info({ projectId, provider, mode, importedDateCount }, 'Revenue provider sync completed');
+        logger.info({
+            projectId,
+            provider,
+            mode,
+            importedDateCount: syncResult.importedDateCount,
+            transactionCount: syncResult.transactionCount,
+            fullBackfill: syncResult.fullBackfill,
+            newestSyncedAt: latestTransaction[0]?.occurredAt ?? null,
+        }, 'Revenue provider sync completed');
     } catch (err) {
         const errorText = err instanceof Error ? err.message : String(err);
         await db

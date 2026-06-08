@@ -45,7 +45,7 @@ graph TD
     end
 
     S3["S3-compatible object storage\nHetzner · OVH · Scaleway via storage_endpoints"]
-    R2["Cloudflare R2\nWAL archive · session backups"]
+    Backups["OVH Object Storage\nPostgres WAL/base · ClickHouse backups"]
 
     USER --> CF
     CF --> LB
@@ -57,7 +57,7 @@ graph TD
     APIDASH -->|"reads (heavy): pgbouncer-ro → standby"| STANDBY
     FSN1_SVC -->|"WAL stream · sync replication"| STANDBY
     FSN1_SVC --> S3
-    FSN1_SVC -->|"WAL archive"| R2
+    FSN1_SVC -->|"WAL/base backups"| Backups
     WORKERS --> FSN1_SVC
     WORKERS --> S3
 
@@ -281,8 +281,8 @@ A backward-compat `api` Service still exists and aliases `api-ingest` so anythin
 - 2 instances: `postgres-local-1` (primary, FSN1) + `postgres-local-2` (sync standby, worker-1).
 - `synchronous_commit = remote_write`, `minSyncReplicas: 1`, `maxSyncReplicas: 1`. Adds ~25ms to write commits. `maxSyncReplicas: 1` means postgres degrades to async rather than blocking if standby is down.
 - **SyncRep is the write throughput ceiling.** 33 concurrent SyncRep waits = 33 blocked connections. Ingest workers mitigate with `SET LOCAL synchronous_commit = local`. For any new write-heavy path: check `pg_stat_activity WHERE wait_event = 'SyncRep'` first.
-- WAL archived to Cloudflare R2 (gzip). See `postgres-backup-and-restore.md`.
-- Storage: `rejourney-db-local-retain` (local-path, Retain). Data is on the node's local disk — not Hetzner cloud volumes. PVCs survive pod/cluster deletion. Standby + R2 WAL archive are the recovery paths.
+- WAL/base backups are archived to OVH Object Storage (gzip WAL). See `postgres-backup-and-restore.md`.
+- Storage: `rejourney-db-local-retain` (local-path, Retain). Data is on the node's local disk — not Hetzner cloud volumes. PVCs survive pod/cluster deletion. Standby + OVH WAL/base backups are the recovery paths.
 
 ### ClickHouse analytics projection (production cutover complete)
 
@@ -294,6 +294,7 @@ Production deployment remains gated for fresh clusters or disaster rebuilds:
 - App flags default off: `CLICKHOUSE_ENABLED=false`, `CLICKHOUSE_DUAL_WRITE_ENABLED=false`, `CLICKHOUSE_READS_ENABLED=false`.
 - All app/workers ClickHouse secret refs are `optional: true`, so the application can deploy before ClickHouse exists.
 - `api-ingest` and SDK request handlers must never synchronously depend on ClickHouse. If ClickHouse is down, session capture must continue.
+- `clickhouse-daily-backup` backs up the `rejourney` ClickHouse database to OVH Object Storage using the native ClickHouse `BACKUP ... TO S3(...)` command.
 
 Topology when enabled:
 
@@ -451,7 +452,7 @@ Local k8s uses the same idea with `http:` allowed for MinIO/local endpoints. Buc
 
 10. **SyncRep is the write throughput ceiling.** Every committed write waits ~25ms for standby ACK. For any new write-heavy path that becomes slow: check `pg_stat_activity WHERE wait_event = 'SyncRep'` first, then add `SET LOCAL synchronous_commit = local` if the path is safe to skip (idempotent retries are acceptable). The BullMQ migration eliminated the former hottest path (`ingest_jobs` INSERT/UPDATE churn) — artifact job dispatch now goes through Redis, and only the `recording_artifacts` status update remains in Postgres.
 
-11. **DB storage is local-path, not Hetzner cloud volumes.** PVCs survive pod deletion (Retain) but permanent node destruction loses local data. Standby + R2 WAL archive are the recovery paths.
+11. **DB storage is local-path, not Hetzner cloud volumes.** PVCs survive pod deletion (Retain) but permanent node destruction loses local data. Standby + OVH WAL/base backups are the recovery paths.
 
 12. **CoreDNS replica count may reset on k3s upgrades.** Verify after any upgrade and re-apply `k8s/coredns-config.yaml`.
 

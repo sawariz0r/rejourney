@@ -127,7 +127,7 @@ function emailDashboardHomeUrl(): string {
 }
 
 /** Routes under the dashboard app, e.g. /billing, /general/:id */
-function emailDashboardAppPath(path: string): string {
+export function emailDashboardAppPath(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
   if (emailUseLocalOrigins()) {
     return `${DEV_APP_ORIGIN}/dashboard${p}`;

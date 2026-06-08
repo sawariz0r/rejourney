@@ -720,6 +720,7 @@ const HeatmapPreview: React.FC<{
         }
         : screen;
     const frameDimensions = getHeatmapFrameDimensions(previewScreen, isWebViewer);
+    const isTabletViewer = !isWebViewer && frameDimensions.viewportWidth >= 700;
     const viewportGuideStops = useMemo(
         () => isWebViewer && !tile
             ? buildViewportGuideStops(frameDimensions.pageHeight, frameDimensions.viewportHeight)
@@ -1114,13 +1115,19 @@ const HeatmapPreview: React.FC<{
             : 'w-full'
         : isWebViewer
             ? 'w-full'
-            : `mx-auto w-full ${compact ? 'max-w-[340px]' : 'max-w-[440px]'}`;
+            : isTabletViewer
+                ? 'mx-auto w-full max-w-[920px]'
+                : `mx-auto w-full ${compact ? 'max-w-[340px]' : 'max-w-[440px]'}`;
     const frameClass = isWebViewer
         ? 'heatmap-browser-frame heatmap-web-document-frame overflow-hidden rounded-xl border-2 border-black bg-white shadow-neo'
-        : 'heatmap-phone-frame rounded-[28px] border-2 border-black bg-black p-3 shadow-neo';
+        : isTabletViewer
+            ? 'heatmap-tablet-frame rounded-[24px] border-2 border-black bg-black p-2 shadow-neo'
+            : 'heatmap-phone-frame rounded-[28px] border-2 border-black bg-black p-3 shadow-neo';
     const screenClass = isWebViewer
         ? 'heatmap-browser-screen heatmap-web-document-screen relative overflow-hidden bg-white'
-        : 'heatmap-phone-screen relative aspect-[9/19] overflow-hidden rounded-[24px] bg-slate-800';
+        : isTabletViewer
+            ? 'heatmap-tablet-screen relative overflow-hidden rounded-[18px] bg-slate-800'
+            : 'heatmap-phone-screen relative aspect-[9/19] overflow-hidden rounded-[24px] bg-slate-800';
     const tileScreenClass = isWebViewer
         ? 'heatmap-tile-screen heatmap-web-tile-screen heatmap-web-document-tile relative overflow-hidden rounded-lg border-2 border-black bg-white shadow-neo-sm'
         : 'heatmap-tile-screen relative mx-auto aspect-[9/19] max-h-[500px] w-full max-w-[184px] overflow-hidden rounded-2xl border-2 border-black bg-slate-800 shadow-neo-sm';
@@ -1128,6 +1135,9 @@ const HeatmapPreview: React.FC<{
     const placeholderClass = isWebViewer
         ? 'bg-transparent'
         : 'bg-[#111827]';
+    const previewWrapperStyle = !isWebViewer
+        ? ({ '--heatmap-frame-ratio': `${frameDimensions.pageWidth / Math.max(frameDimensions.pageHeight, 1)}` } as React.CSSProperties)
+        : undefined;
 
     const previewInner = (
         <>
@@ -1282,7 +1292,7 @@ const HeatmapPreview: React.FC<{
     );
 
     return (
-        <div className={`${widthClass} shrink-0`}>
+        <div className={`${widthClass} shrink-0`} style={previewWrapperStyle}>
             {tile ? (
                 <div ref={containerRef} className={tileScreenClass} style={tileAspectStyle}>
                     {previewInner}

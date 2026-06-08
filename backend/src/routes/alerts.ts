@@ -13,6 +13,7 @@ import { validate } from '../middleware/validation.js';
 import { dashboardRateLimiter, writeApiRateLimiter } from '../middleware/rateLimit.js';
 import { auditFromRequest, buildAuditFieldChanges } from '../services/auditLog.js';
 import { buildDefaultEmailAlertRules, getEmailAlertRules } from '../services/emailAlertRules.js';
+import { normalizeIgnoredApiEndpointPatterns } from '../utils/apiEndpointIgnoreRules.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -26,6 +27,7 @@ function getAlertSettingsAuditState(settings?: {
     apiDegradationThresholdPercent?: number | null;
     apiLatencyThresholdMs?: number | null;
     emailRules?: unknown[] | null;
+    ignoredApiEndpoints?: unknown[] | null;
 } | null): Record<string, unknown> {
     return {
         crashAlertsEnabled: settings?.crashAlertsEnabled ?? true,
@@ -36,6 +38,7 @@ function getAlertSettingsAuditState(settings?: {
         apiDegradationThresholdPercent: settings?.apiDegradationThresholdPercent ?? 100,
         apiLatencyThresholdMs: settings?.apiLatencyThresholdMs ?? 3000,
         emailRules: settings?.emailRules ?? [],
+        ignoredApiEndpoints: normalizeIgnoredApiEndpointPatterns(settings?.ignoredApiEndpoints ?? []),
     };
 }
 
@@ -72,6 +75,7 @@ const updateAlertSettingsSchema = z.object({
     apiDegradationThresholdPercent: z.number().min(10).max(1000).optional(),
     apiLatencyThresholdMs: z.number().min(500).max(30000).optional(),
     emailRules: z.array(emailAlertRuleSchema).max(20).optional(),
+    ignoredApiEndpoints: z.array(z.string().min(1).max(180)).max(50).optional(),
 });
 
 const addRecipientSchema = z.object({
@@ -119,6 +123,7 @@ router.get(
             settings: {
                 ...settings,
                 emailRules: getEmailAlertRules(settings),
+                ignoredApiEndpoints: normalizeIgnoredApiEndpointPatterns(settings.ignoredApiEndpoints),
             },
         });
     })
@@ -138,7 +143,12 @@ router.put(
     dashboardRateLimiter,
     asyncHandler(async (req, res) => {
         const projectId = req.params.projectId;
-        const data = req.body;
+        const data = {
+            ...req.body,
+            ...(Array.isArray(req.body.ignoredApiEndpoints)
+                ? { ignoredApiEndpoints: normalizeIgnoredApiEndpointPatterns(req.body.ignoredApiEndpoints) }
+                : {}),
+        };
 
         // Ensure settings exist first
         const [existing] = await db
@@ -185,6 +195,7 @@ router.put(
             settings: {
                 ...settings,
                 emailRules: getEmailAlertRules(settings),
+                ignoredApiEndpoints: normalizeIgnoredApiEndpointPatterns(settings.ignoredApiEndpoints),
             },
         });
     })

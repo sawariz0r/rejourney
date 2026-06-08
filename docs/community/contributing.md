@@ -81,6 +81,10 @@ loops:
 # Restart the host-side API, upload relay, workers, and hot-reload dashboard.
 npm run dev
 
+# After restarting Docker Desktop, wake the existing local cluster/data and
+# restart the host-side services without CI checks or Docker image rebuilds.
+npm run dev:resume
+
 # Stop host-side services. Local infra/data are preserved.
 npm run dev:down
 

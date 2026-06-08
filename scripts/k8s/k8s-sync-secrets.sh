@@ -278,16 +278,25 @@ else
     info "Turnstile secrets not provided, skipping turnstile-secret"
 fi
 
-# 11. Cloudflare R2 Backup Secret (PostgreSQL Backups)
-if [ -n "$R2_ENDPOINT" ] && [ -n "$R2_ACCESS_KEY_ID" ] && [ -n "$R2_SECRET_ACCESS_KEY" ]; then
-    log "Creating r2-backup-secret..."
-    create_or_update_secret r2-backup-secret \
-        --from-literal=R2_ENDPOINT="$R2_ENDPOINT" \
-        --from-literal=R2_BUCKET="${R2_BUCKET:-rejourney-backup}" \
-        --from-literal=AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
-        --from-literal=AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+# 11. Database backup object-store secret (PostgreSQL CNPG + ClickHouse)
+BACKUP_S3_ENDPOINT="${BACKUP_S3_ENDPOINT:-${R2_ENDPOINT:-}}"
+BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-${R2_BUCKET:-rejourney-db-backups-1}}"
+BACKUP_S3_REGION="${BACKUP_S3_REGION:-us-west-or}"
+BACKUP_S3_ACCESS_KEY_ID="${BACKUP_S3_ACCESS_KEY_ID:-${R2_ACCESS_KEY_ID:-}}"
+BACKUP_S3_SECRET_ACCESS_KEY="${BACKUP_S3_SECRET_ACCESS_KEY:-${R2_SECRET_ACCESS_KEY:-}}"
+
+if [ -n "$BACKUP_S3_ENDPOINT" ] && [ -n "$BACKUP_S3_ACCESS_KEY_ID" ] && [ -n "$BACKUP_S3_SECRET_ACCESS_KEY" ]; then
+    log "Creating db-backup-secret..."
+    create_or_update_secret db-backup-secret \
+        --from-literal=BACKUP_S3_ENDPOINT="$BACKUP_S3_ENDPOINT" \
+        --from-literal=BACKUP_S3_BUCKET="$BACKUP_S3_BUCKET" \
+        --from-literal=BACKUP_S3_REGION="$BACKUP_S3_REGION" \
+        --from-literal=AWS_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID" \
+        --from-literal=AWS_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY" \
+        --from-literal=R2_ENDPOINT="$BACKUP_S3_ENDPOINT" \
+        --from-literal=R2_BUCKET="$BACKUP_S3_BUCKET"
 else
-    info "R2 backup credentials not provided, skipping r2-backup-secret"
+    info "Database backup credentials not provided, skipping db-backup-secret"
 fi
 
 # 12. Monitoring Auth Secret (Uptime Kuma Basic Auth)

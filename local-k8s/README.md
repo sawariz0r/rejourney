@@ -50,6 +50,18 @@ LAN-safe URLs, syncs secrets, and runs the API, web, and workers from source on
 the host. The dashboard is served from the hot-reload dev server on
 `http://127.0.0.1:8080`.
 
+After restarting Docker Desktop, use the lighter resume path when the local
+cluster/data already exist:
+
+```bash
+npm run dev:resume
+```
+
+That starts the existing `k3d` cluster if Docker left it stopped, reapplies the
+infra manifests, syncs the database schema and storage endpoint, and restarts
+the host-side API, upload relay, workers, and dashboard dev server. It skips
+CI checks, Docker image builds/imports, and first-run seeding.
+
 ## Full In-Cluster Flow
 
 ```bash
@@ -89,6 +101,7 @@ It also exposes:
 
 - `npm run ci:local`: first-run bootstrap plus local CI-parity validation
 - `npm run dev`: hot-reload daily flow with infra in Kubernetes and app services on the host
+- `npm run dev:resume`: wake an existing local cluster/data set after Docker Desktop restarts
 - `npm run dev:logs`: host-process logs for the hybrid workflow
 - `npm run dev:down`: stop host services and remove the local namespace
 - `npm run ci:local:fast`: rebuild/redeploy/rerun migrations without reinstalling npm dependencies

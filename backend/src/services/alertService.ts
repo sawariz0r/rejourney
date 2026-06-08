@@ -7,9 +7,10 @@
 
 import { eq, and, gte, sql, desc } from 'drizzle-orm';
 import { db, alertSettings, alertRecipients, alertHistory, emailLogs, projects, users, issues } from '../db/client.js';
+import { getClickHouseClient, isClickHouseReadsEnabled } from '../db/clickhouse.js';
 import { logger } from '../logger.js';
-import { config } from '../config.js';
 import {
+    emailDashboardAppPath,
     sendCrashAlertEmail,
     sendAnrAlertEmail,
     sendErrorSpikeAlertEmail,
@@ -17,6 +18,7 @@ import {
 } from './email.js';
 import { shouldSendForEmailRules } from './emailAlertRules.js';
 import { querySlowestApiEndpointsFromClickHouse } from './apiEndpointStatsClickHouse.js';
+import { buildClickHouseIgnoredEndpointCondition, normalizeIgnoredApiEndpointPatterns } from '../utils/apiEndpointIgnoreRules.js';
 
 // Rate limiting constants
 const SAME_ISSUE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
@@ -25,6 +27,57 @@ const DAILY_ALERT_CAP = 20;
 
 // Alert types
 type AlertType = 'crash' | 'anr' | 'error_spike' | 'api_degradation';
+
+interface ErrorSpikeAlertWindowOptions {
+    currentWindowStart: Date;
+    currentWindowEnd: Date;
+    baselineWindowStart: Date;
+    baselineWindowEnd: Date;
+}
+
+async function queryEndpointErrorRateForAlert(params: {
+    projectId: string;
+    start: Date;
+    end: Date;
+    ignoredApiEndpoints: string[];
+}): Promise<{ errorRate: number; errorCount: number; totalCount: number } | null> {
+    if (!isClickHouseReadsEnabled()) return null;
+
+    const ignoredCondition = buildClickHouseIgnoredEndpointCondition(
+        params.ignoredApiEndpoints,
+        'endpoint',
+        'alertIgnoredEndpoint',
+        'method',
+        'path',
+    );
+
+    const result = await getClickHouseClient().query({
+        query: `
+            SELECT
+                countIf(is_error = 1) AS error_count,
+                count() AS total_count,
+                if(count() > 0, round((countIf(is_error = 1) / count()) * 100, 4), 0) AS error_rate
+            FROM rejourney.api_endpoint_request_events
+            WHERE project_id = {projectId: String}
+              AND event_time BETWEEN {start: DateTime64(3)} AND {end: DateTime64(3)}
+              ${ignoredCondition.condition}
+        `,
+        query_params: {
+            projectId: params.projectId,
+            start: params.start.toISOString().replace('T', ' ').replace('Z', ''),
+            end: params.end.toISOString().replace('T', ' ').replace('Z', ''),
+            ...ignoredCondition.queryParams,
+        },
+        format: 'JSONEachRow',
+    });
+    const [row] = await result.json<{ error_count: string; total_count: string; error_rate: string }>();
+    if (!row) return { errorRate: 0, errorCount: 0, totalCount: 0 };
+    return {
+        errorRate: Number(row.error_rate || 0),
+        errorCount: Number(row.error_count || 0),
+        totalCount: Number(row.total_count || 0),
+    };
+}
 
 /**
  * Check if an alert should be sent based on rate limits
@@ -263,8 +316,7 @@ export async function triggerCrashAlert(
         }
 
         const projectName = await getProjectName(projectId);
-        const baseUrl = config.PUBLIC_DASHBOARD_URL || 'http://localhost:8080';
-        const issueUrl = `${baseUrl}/dashboard/general/${issueId || ''}`;
+        const issueUrl = emailDashboardAppPath(issueId ? `/general/${issueId}` : '/general');
 
         await sendCrashAlertEmail(recipients, {
             projectId,
@@ -373,8 +425,7 @@ export async function triggerAnrAlert(
         }
 
         const projectName = await getProjectName(projectId);
-        const baseUrl = config.PUBLIC_DASHBOARD_URL || 'http://localhost:8080';
-        const issueUrl = `${baseUrl}/dashboard/general/${issueId || ''}`;
+        const issueUrl = emailDashboardAppPath(issueId ? `/general/${issueId}` : '/general');
 
         await sendAnrAlertEmail(recipients, {
             projectId,
@@ -416,12 +467,59 @@ export async function triggerAnrAlert(
 export async function triggerErrorSpikeAlert(
     projectId: string,
     currentRate: number,
-    previousRate: number
+    previousRate: number,
+    options?: ErrorSpikeAlertWindowOptions
 ): Promise<void> {
     try {
         const settings = await getProjectAlertSettings(projectId);
         if (!settings?.errorSpikeAlertsEnabled) {
             logger.debug({ projectId }, 'Error spike alerts disabled');
+            return;
+        }
+
+        const ignoredApiEndpoints = normalizeIgnoredApiEndpointPatterns(settings.ignoredApiEndpoints ?? []);
+        if (ignoredApiEndpoints.length > 0) {
+            if (!options) {
+                logger.debug({ projectId, ignoredApiEndpoints }, 'Error spike alert skipped because ignored endpoints could not be applied without a time window');
+                return;
+            }
+
+            try {
+                const [currentEndpointRate, previousEndpointRate] = await Promise.all([
+                    queryEndpointErrorRateForAlert({
+                        projectId,
+                        start: options.currentWindowStart,
+                        end: options.currentWindowEnd,
+                        ignoredApiEndpoints,
+                    }),
+                    queryEndpointErrorRateForAlert({
+                        projectId,
+                        start: options.baselineWindowStart,
+                        end: options.baselineWindowEnd,
+                        ignoredApiEndpoints,
+                    }),
+                ]);
+
+                if (!currentEndpointRate || !previousEndpointRate) {
+                    logger.debug({ projectId, ignoredApiEndpoints }, 'Error spike alert skipped because ignored endpoint rates could not be read from ClickHouse');
+                    return;
+                }
+
+                if (currentEndpointRate.totalCount === 0 || previousEndpointRate.totalCount === 0) {
+                    logger.debug({ projectId, currentEndpointRate, previousEndpointRate }, 'Error spike alert skipped because ignored endpoint filtering left no comparable API traffic');
+                    return;
+                }
+
+                currentRate = currentEndpointRate.errorRate;
+                previousRate = previousEndpointRate.errorRate;
+            } catch (error) {
+                logger.warn({ projectId, error }, 'Error spike alert skipped because ignored endpoint filtering failed');
+                return;
+            }
+        }
+
+        if (currentRate <= previousRate) {
+            logger.debug({ projectId, currentRate, previousRate }, 'Error spike alert skipped because error rate did not increase');
             return;
         }
 
@@ -459,10 +557,9 @@ export async function triggerErrorSpikeAlert(
             .limit(5);
 
         const projectName = await getProjectName(projectId);
-        const baseUrl = config.PUBLIC_DASHBOARD_URL || 'http://localhost:8080';
         // Link to the sessions list so users can see the affected sessions directly,
         // rather than the general overview which shows crashes/ANRs (a different thing).
-        const issueUrl = `${baseUrl}/dashboard/sessions`;
+        const issueUrl = emailDashboardAppPath('/sessions');
 
         await sendErrorSpikeAlertEmail(recipients, {
             projectId,
@@ -540,8 +637,7 @@ export async function triggerApiDegradationAlert(
         });
 
         const projectName = await getProjectName(projectId);
-        const baseUrl = config.PUBLIC_DASHBOARD_URL || 'http://localhost:8080';
-        const issueUrl = `${baseUrl}/dashboard/api`;
+        const issueUrl = emailDashboardAppPath('/api');
 
         await sendApiDegradationAlertEmail(recipients, {
             projectId,

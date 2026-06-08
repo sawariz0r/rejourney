@@ -1,6 +1,6 @@
 {
   "name": "rejourney-monorepo",
-  "version": "3.1.1",
+  "version": "3.1.11",
   "private": true,
   "description": "Rejourney Monorepo - Session Recording Platform",
   "workspaces": [
@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "dev": "./scripts/local-k8s/dev.sh",
+    "dev:resume": "./scripts/local-k8s/dev.sh resume",
     "dev:full": "./scripts/local-k8s/deploy.sh full",
     "ci:local": "./scripts/local-k8s/rejourney-ci.sh full",
     "ci:local:fast": "./scripts/local-k8s/rejourney-ci.sh fast",

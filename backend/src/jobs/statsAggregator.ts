@@ -558,6 +558,10 @@ async function checkAlertsAfterRollup(projectIds: string[], targetDate: Date): P
     const sevenDaysAgo = new Date(targetDate);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+    const currentWindowStart = new Date(`${dateStr}T00:00:00.000Z`);
+    const currentWindowEnd = new Date(currentWindowStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const baselineWindowStart = new Date(`${sevenDaysAgoStr}T00:00:00.000Z`);
+    const baselineWindowEnd = new Date(currentWindowStart.getTime() - 1);
 
     for (const projectId of projectIds) {
         try {
@@ -600,7 +604,12 @@ async function checkAlertsAfterRollup(projectIds: string[], targetDate: Date): P
             // Check for error spike
             const todayErrorRate = todayStats.avgApiErrorRate || 0;
             if (avgErrorRate > 0 && todayErrorRate > avgErrorRate) {
-                await triggerErrorSpikeAlert(projectId, todayErrorRate * 100, avgErrorRate * 100);
+                await triggerErrorSpikeAlert(projectId, todayErrorRate * 100, avgErrorRate * 100, {
+                    currentWindowStart,
+                    currentWindowEnd,
+                    baselineWindowStart,
+                    baselineWindowEnd,
+                });
             }
 
             // Check for API degradation
@@ -737,4 +746,3 @@ export function stopStatsAggregationJob(): void {
 export function getStatsJobStatus(): { lastRunTime: Date | null; lastDailyRollupTime: Date | null; isRunning: boolean } {
     return { lastRunTime, lastDailyRollupTime, isRunning };
 }
-
