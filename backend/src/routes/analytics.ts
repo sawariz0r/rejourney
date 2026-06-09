@@ -837,7 +837,7 @@ router.get(
             return;
         }
 
-        // Broader ranges: merge app_daily_stats.geo_country_breakdown (O(days)) + tail sessions after last rollup day.
+        // Broader ranges: merge ClickHouse daily country rollups (O(days)) + tail sessions after last rollup day.
         const lastRolledUpDate = await getLastRolledUpDate();
 
         let startDateStr: string | undefined;
@@ -4542,7 +4542,7 @@ router.get(
         }
 
         const engagementPlatform = typeof req.query.platform === 'string' && req.query.platform !== 'all' ? req.query.platform : undefined;
-        // Summary mode reads from the pre-aggregated appDailyStats rollup, which keeps
+        // Summary mode reads from the pre-aggregated ClickHouse product rollup, which keeps
         // wide windows (30d/90d) fast for high-volume projects instead of scanning raw
         // sessions. The rollup has no per-platform engagement split, so a platform
         // filter forces the exact (raw-scan) path.

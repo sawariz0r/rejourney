@@ -535,7 +535,7 @@ router.get(
 /**
  * GET /api/insights/alltime-heatmap
  * 
- * All-time aggregated touch heatmaps from the screen_touch_heatmaps table.
+ * All-time aggregated touch heatmaps from ClickHouse product rollups.
  * Independent of time filter - aggregates all historical touch data.
  * Cached for 5 minutes for performance.
  */
@@ -565,7 +565,7 @@ router.get(
             return;
         }
 
-        // Query all heatmap data from screen_touch_heatmaps (no date filter - all time)
+        // Query all heatmap data from ClickHouse (no date filter - all time)
         const heatmapData = await queryScreenTouchHeatmapsFromClickHouse({ projectIds });
 
         // Aggregate heatmap data by screen (combine all days)

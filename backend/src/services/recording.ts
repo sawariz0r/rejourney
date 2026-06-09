@@ -9,7 +9,7 @@ import {
 
 /**
  * Update device usage metrics (atomic upsert for scalability)
- * Tracks bytes uploaded, request count, sessions started, minutes recorded per device per project per day.
+ * Tracks bytes uploaded, request count, sessions started, and minutes recorded per project per day without storing device identity.
  */
 export async function updateDeviceUsage(
     deviceId: string | null,

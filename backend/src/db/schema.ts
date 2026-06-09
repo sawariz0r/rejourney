@@ -19,7 +19,6 @@ import {
     jsonb,
     uniqueIndex,
     index,
-    primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm/_relations';
@@ -344,78 +343,6 @@ export const projectRevenueDaily = pgTable(
         uniqueIndex('project_revenue_daily_project_source_date_currency_unique').on(table.projectId, table.sourceProvider, table.date, table.currency),
         index('project_revenue_daily_project_source_date_idx').on(table.projectId, table.sourceProvider, table.date),
         index('project_revenue_daily_project_source_currency_idx').on(table.projectId, table.sourceProvider, table.currency),
-    ]
-);
-
-// =============================================================================
-// NOTE: deviceRegistrations table was removed along with the dead ECDSA auth flow.
-// The device_usage table now uses varchar device IDs (SHA-256 fingerprints)
-// scoped per project instead of FK-ing to a registration table.
-
-export const appAllTimeStats = pgTable('app_all_time_stats', {
-    projectId: uuid('project_id').primaryKey().references(() => projects.id, { onDelete: 'cascade' }),
-    totalSessions: bigint('total_sessions', { mode: 'bigint' }).default(sql`0`),
-    totalUsers: bigint('total_users', { mode: 'bigint' }).default(sql`0`),
-    totalEvents: bigint('total_events', { mode: 'bigint' }).default(sql`0`),
-    totalErrors: bigint('total_errors', { mode: 'bigint' }).default(sql`0`),
-    avgSessionDurationSeconds: doublePrecision('avg_session_duration_seconds').default(0),
-    avgInteractionScore: doublePrecision('avg_interaction_score').default(0),
-    avgUxScore: doublePrecision('avg_ux_score').default(0),
-    avgApiErrorRate: doublePrecision('avg_api_error_rate').default(0),
-    totalRageTaps: bigint('total_rage_taps', { mode: 'bigint' }).default(sql`0`),
-    totalDeadTaps: bigint('total_dead_taps', { mode: 'bigint' }).default(sql`0`),
-
-    // Engagement Segments
-    totalBouncers: bigint('total_bouncers', { mode: 'bigint' }).default(sql`0`),
-    totalCasuals: bigint('total_casuals', { mode: 'bigint' }).default(sql`0`),
-    totalExplorers: bigint('total_explorers', { mode: 'bigint' }).default(sql`0`),
-    totalLoyalists: bigint('total_loyalists', { mode: 'bigint' }).default(sql`0`),
-
-    // Interaction Breakdown (All Time)
-    totalTouches: bigint('total_touches', { mode: 'bigint' }).default(sql`0`),
-    totalScrolls: bigint('total_scrolls', { mode: 'bigint' }).default(sql`0`),
-    totalGestures: bigint('total_gestures', { mode: 'bigint' }).default(sql`0`),
-    totalInteractions: bigint('total_interactions', { mode: 'bigint' }).default(sql`0`),
-
-    // Device Breakdowns (JSONB: { "model": count })
-    deviceModelBreakdown: json('device_model_breakdown').$type<Record<string, number>>().default({}),
-    osVersionBreakdown: json('os_version_breakdown').$type<Record<string, number>>().default({}),
-    platformBreakdown: json('platform_breakdown').$type<Record<string, number>>().default({}),
-    appVersionBreakdown: json('app_version_breakdown').$type<Record<string, number>>().default({}),
-
-    // Journey Breakdowns (JSONB)
-    screenViewBreakdown: json('screen_view_breakdown').$type<Record<string, number>>().default({}),
-    screenTransitionBreakdown: json('screen_transition_breakdown').$type<Record<string, number>>().default({}),
-    entryScreenBreakdown: json('entry_screen_breakdown').$type<Record<string, number>>().default({}),
-    exitScreenBreakdown: json('exit_screen_breakdown').$type<Record<string, number>>().default({}),
-
-    // Geo Breakdown
-    geoCountryBreakdown: json('geo_country_breakdown').$type<Record<string, number>>().default({}),
-
-    // Custom Events
-    customEventBreakdown: json('custom_event_breakdown').$type<Record<string, number>>().default({}),
-
-    // Unique Users
-    uniqueUserCount: bigint('unique_user_count', { mode: 'bigint' }).default(sql`0`),
-
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-export const deviceUsage = pgTable(
-    'device_usage',
-    {
-        deviceId: varchar('device_id', { length: 64 }).notNull(), // SHA-256 fingerprint
-        projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-        period: date('period').notNull(), // daily granularity (YYYY-MM-DD)
-        bytesUploaded: bigint('bytes_uploaded', { mode: 'bigint' }).default(sql`0`).notNull(),
-        minutesRecorded: integer('minutes_recorded').default(0).notNull(),
-        sessionsStarted: integer('sessions_started').default(0).notNull(),
-        requestCount: integer('request_count').default(0).notNull(),
-    },
-    (table) => [
-        primaryKey({ columns: [table.deviceId, table.projectId, table.period] }),
-        index('device_usage_project_idx').on(table.projectId),
-        index('device_usage_period_idx').on(table.period),
     ]
 );
 
@@ -957,108 +884,6 @@ export const billingNotifications = pgTable(
 
 
 // =============================================================================
-// Analytics Models
-// =============================================================================
-
-
-
-export const appDailyStats = pgTable(
-    'app_daily_stats',
-    {
-        id: uuid('id').primaryKey().defaultRandom(),
-        projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-        date: date('date').notNull(),
-        totalSessions: integer('total_sessions').default(0).notNull(),
-        completedSessions: integer('completed_sessions').default(0).notNull(),
-        avgDurationSeconds: doublePrecision('avg_duration_seconds'),
-        avgInteractionScore: doublePrecision('avg_interaction_score'),
-        avgUxScore: doublePrecision('avg_ux_score'),
-        avgApiErrorRate: doublePrecision('avg_api_error_rate'),
-        avgApiResponseMs: doublePrecision('avg_api_response_ms'),
-        p50Duration: doublePrecision('p50_duration'),
-        p90Duration: doublePrecision('p90_duration'),
-        p50InteractionScore: doublePrecision('p50_interaction_score'),
-        p90InteractionScore: doublePrecision('p90_interaction_score'),
-        totalErrors: integer('total_errors').default(0).notNull(),
-        totalRageTaps: integer('total_rage_taps').default(0).notNull(),
-        totalDeadTaps: integer('total_dead_taps').default(0).notNull(),
-        totalCrashes: integer('total_crashes').default(0).notNull(),
-        totalAnrs: integer('total_anrs').default(0).notNull(),
-        // Engagement Segments
-        totalBouncers: integer('total_bouncers').default(0).notNull(),
-        totalCasuals: integer('total_casuals').default(0).notNull(),
-        totalExplorers: integer('total_explorers').default(0).notNull(),
-        totalLoyalists: integer('total_loyalists').default(0).notNull(),
-        // Interaction Breakdown
-        totalTouches: integer('total_touches').default(0).notNull(),
-        totalScrolls: integer('total_scrolls').default(0).notNull(),
-        totalGestures: integer('total_gestures').default(0).notNull(),
-        totalInteractions: integer('total_interactions').default(0).notNull(),
-
-        // Device Breakdowns (JSONB: { "model": count })
-        deviceModelBreakdown: json('device_model_breakdown').$type<Record<string, number>>().default({}),
-        osVersionBreakdown: json('os_version_breakdown').$type<Record<string, number>>().default({}),
-        platformBreakdown: json('platform_breakdown').$type<Record<string, number>>().default({}),
-        appVersionBreakdown: json('app_version_breakdown').$type<Record<string, number>>().default({}),
-
-        // Journey Breakdowns (JSONB)
-        screenViewBreakdown: json('screen_view_breakdown').$type<Record<string, number>>().default({}),
-        screenTransitionBreakdown: json('screen_transition_breakdown').$type<Record<string, number>>().default({}),
-        entryScreenBreakdown: json('entry_screen_breakdown').$type<Record<string, number>>().default({}),
-        exitScreenBreakdown: json('exit_screen_breakdown').$type<Record<string, number>>().default({}),
-
-        // Geo Breakdown
-        geoCountryBreakdown: json('geo_country_breakdown').$type<Record<string, number>>().default({}),
-
-        // Custom Events
-        customEventBreakdown: json('custom_event_breakdown').$type<Record<string, number>>().default({}),
-
-        // Unique Users
-        uniqueUserCount: integer('unique_user_count').default(0).notNull(),
-        uniqueUserIds: json('unique_user_ids').$type<string[]>().default([]),
-    },
-    (table) => [
-        uniqueIndex('app_daily_stats_project_date_unique').on(table.projectId, table.date),
-    ]
-);
-
-// Screen Touch Heatmaps - Aggregated touch coordinates per screen for real heatmap visualization
-export const screenTouchHeatmaps = pgTable(
-    'screen_touch_heatmaps',
-    {
-        id: uuid('id').primaryKey().defaultRandom(),
-        projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-        screenName: varchar('screen_name', { length: 255 }).notNull(),
-        date: date('date').notNull(),
-        // Touch coordinates bucketed into grid cells (normalized 0-1)
-        // Format: { "0.1,0.2": 5, "0.5,0.8": 12 } where key is "x,y" bucket
-        touchBuckets: json('touch_buckets').$type<Record<string, number>>().default({}),
-        // Rage tap coordinates (separate for intensity coloring)
-        rageTapBuckets: json('rage_tap_buckets').$type<Record<string, number>>().default({}),
-        totalTouches: integer('total_touches').default(0).notNull(),
-        totalRageTaps: integer('total_rage_taps').default(0).notNull(),
-        // Sample session ID for cover frame reference
-        sampleSessionId: varchar('sample_session_id', { length: 64 }),
-        // Timestamp (in ms since epoch) when this screen was first seen in the sample session
-        // Used to extract the correct replay thumbnail frame for this screen
-        screenFirstSeenMs: bigint('screen_first_seen_ms', { mode: 'number' }),
-        // Largest observed document and viewport dimensions for web routes.
-        // Native screens leave these null and continue using viewport-normalized buckets.
-        pageWidth: integer('page_width'),
-        pageHeight: integer('page_height'),
-        viewportWidth: integer('viewport_width'),
-        viewportHeight: integer('viewport_height'),
-        updatedAt: timestamp('updated_at').defaultNow().notNull(),
-    },
-    (table) => [
-        uniqueIndex('screen_touch_heatmaps_unique').on(table.projectId, table.screenName, table.date),
-        index('screen_touch_heatmaps_project_date_idx').on(table.projectId, table.date),
-        index('screen_touch_heatmaps_screen_idx').on(table.projectId, table.screenName),
-    ]
-);
-
-
-// =============================================================================
 // Webhook Model
 // =============================================================================
 
@@ -1510,7 +1335,6 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     sessions: many(sessions),
     replayShareLinks: many(replayShareLinks),
     projectUsage: many(projectUsage),
-    appDailyStats: many(appDailyStats),
     storageEndpoints: many(storageEndpoints),
     revenueDaily: many(projectRevenueDaily),
 }));
@@ -1549,10 +1373,6 @@ export const projectRevenueDailyRelations = relations(projectRevenueDaily, ({ on
     project: one(projects, { fields: [projectRevenueDaily.projectId], references: [projects.id] }),
 }));
 
-export const deviceUsageRelations = relations(deviceUsage, ({ one }) => ({
-    project: one(projects, { fields: [deviceUsage.projectId], references: [projects.id] }),
-}));
-
 export const projectFunnelStatsRelations = relations(projectFunnelStats, ({ one }) => ({
     project: one(projects, { fields: [projectFunnelStats.projectId], references: [projects.id] }),
 }));
@@ -1570,11 +1390,6 @@ export const billingUsageRelations = relations(billingUsage, ({ one }) => ({
     team: one(teams, { fields: [billingUsage.teamId], references: [teams.id] }),
 }));
 
-
-
-export const appDailyStatsRelations = relations(appDailyStats, ({ one }) => ({
-    project: one(projects, { fields: [appDailyStats.projectId], references: [projects.id] }),
-}));
 
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({

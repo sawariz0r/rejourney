@@ -1433,14 +1433,14 @@ data:
     # Performance notes:
     #   users / teams are small tables (<1M rows) — full scans are fine.
     #   billing_usage is tiny (one row per team per month) — fast aggregates.
-    #   rejourney_platform_sessions_daily uses app_daily_stats (rolled-up,
-    #   much cheaper than scanning sessions directly).
+    #   Session counters use project_usage (small, one row per project/period)
+    #   now that product analytics rollups live in ClickHouse.
 
     # Scalar platform-wide counters. No labels → low cardinality.
     # Scraped every 30 s so VictoriaMetrics accumulates a real time-series
     # that Grafana can plot as growth trends.
-    # Sessions / active teams use app_daily_stats (pre-rolled per project per day)
-    # rather than billing_usage (which only populates at billing cycle end).
+    # Sessions / active teams use project_usage current-period counters rather
+    # than dropped Postgres product analytics rollup tables.
     rejourney_platform_stats:
       query: >
         SELECT
@@ -1451,15 +1451,24 @@ data:
           (SELECT count(*)::bigint FROM teams)                                                  AS total_teams,
           (SELECT count(*)::bigint FROM teams WHERE stripe_subscription_id IS NOT NULL)        AS paid_teams,
           (SELECT count(*)::bigint FROM teams WHERE payment_failed_at      IS NOT NULL)        AS teams_payment_failed,
-          (SELECT COALESCE(SUM(total_sessions), 0)::bigint
-             FROM app_daily_stats WHERE date >= CURRENT_DATE - 30)                             AS sessions_30d,
+          (SELECT COALESCE(SUM(pu.sessions), 0)::bigint
+             FROM (SELECT DISTINCT ON (project_id) project_id, sessions
+                   FROM project_usage
+                   WHERE period = TO_CHAR(NOW(), 'YYYY-MM')
+                   ORDER BY project_id, quota_version DESC) pu)                                AS sessions_30d,
           (SELECT COUNT(DISTINCT p.team_id)::bigint
-             FROM app_daily_stats ads
-             JOIN projects p ON p.id = ads.project_id
-             WHERE ads.date >= CURRENT_DATE - 30 AND ads.total_sessions > 0)                  AS active_teams_30d,
-          (SELECT COUNT(DISTINCT project_id)::bigint
-             FROM app_daily_stats
-             WHERE date >= CURRENT_DATE - 30 AND total_sessions > 0)                          AS active_projects_30d,
+             FROM projects p
+             JOIN (SELECT DISTINCT ON (project_id) project_id, sessions
+                   FROM project_usage
+                   WHERE period = TO_CHAR(NOW(), 'YYYY-MM')
+                   ORDER BY project_id, quota_version DESC) pu ON pu.project_id = p.id
+             WHERE pu.sessions > 0)                                                           AS active_teams_30d,
+          (SELECT COUNT(*)::bigint
+             FROM (SELECT DISTINCT ON (project_id) project_id, sessions
+                   FROM project_usage
+                   WHERE period = TO_CHAR(NOW(), 'YYYY-MM')
+                   ORDER BY project_id, quota_version DESC) pu
+             WHERE pu.sessions > 0)                                                           AS active_projects_30d,
           (SELECT COALESCE(SUM(pu.storage_bytes), 0)::bigint
              FROM (SELECT DISTINCT ON (project_id) storage_bytes
                    FROM project_usage
@@ -1500,21 +1509,24 @@ data:
             usage: "GAUGE"
             description: "Total storage bytes used across all projects this billing period (from project_usage)"
 
-    # Top 25 teams by session volume over the last 30 days.
-    # Uses app_daily_stats (pre-aggregated) joined to projects → teams.
+    # Top 25 teams by current-period session volume.
+    # Uses project_usage joined to projects -> teams.
     # Label: team = billing_email (falls back to team UUID).
     rejourney_top_teams_by_sessions:
       query: >
         WITH team_sessions AS (
           SELECT p.team_id,
-                 COALESCE(SUM(ads.total_sessions), 0)::bigint AS sessions,
-                 COUNT(DISTINCT ads.project_id)::bigint        AS active_projects
+                 COALESCE(SUM(pu.sessions), 0)::bigint AS sessions,
+                 COUNT(*) FILTER (WHERE COALESCE(pu.sessions, 0) > 0)::bigint AS active_projects
           FROM projects p
-          LEFT JOIN app_daily_stats ads
-            ON ads.project_id = p.id
-           AND ads.date >= CURRENT_DATE - 30
+          LEFT JOIN (
+            SELECT DISTINCT ON (project_id) project_id, sessions
+            FROM project_usage
+            WHERE period = TO_CHAR(NOW(), 'YYYY-MM')
+            ORDER BY project_id, quota_version DESC
+          ) pu ON pu.project_id = p.id
           GROUP BY p.team_id
-          HAVING COALESCE(SUM(ads.total_sessions), 0) > 0
+          HAVING COALESCE(SUM(pu.sessions), 0) > 0
         ),
         team_storage AS (
           SELECT p.team_id,
@@ -1550,10 +1562,10 @@ data:
             description: "paid or free"
         - sessions:
             usage: "GAUGE"
-            description: "Sessions started by this team in the last 30 days"
+            description: "Sessions started by this team in the current billing period"
         - active_projects:
             usage: "GAUGE"
-            description: "Number of active projects for this team in the last 30 days"
+            description: "Number of active projects for this team in the current billing period"
         - storage_bytes:
             usage: "GAUGE"
             description: "Storage bytes used by this team this billing period (project_usage)"
@@ -1580,30 +1592,6 @@ data:
         - signups:
             usage: "GAUGE"
             description: "New user registrations on this day"
-
-    # Daily session totals (platform-wide) — last 30 days from the pre-rolled
-    # app_daily_stats table (much cheaper than scanning sessions directly).
-    rejourney_platform_sessions_daily:
-      query: >
-        SELECT
-          date::text AS day,
-          SUM(total_sessions)::bigint     AS total_sessions,
-          SUM(completed_sessions)::bigint AS completed_sessions
-        FROM app_daily_stats
-        WHERE date >= CURRENT_DATE - 30
-        GROUP BY date
-        ORDER BY date DESC
-        LIMIT 31
-      metrics:
-        - day:
-            usage: "LABEL"
-            description: "Calendar day (YYYY-MM-DD)"
-        - total_sessions:
-            usage: "GAUGE"
-            description: "Sessions started platform-wide on this day"
-        - completed_sessions:
-            usage: "GAUGE"
-            description: "Sessions that completed normally on this day"
 
 ---
 apiVersion: apps/v1
