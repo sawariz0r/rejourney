@@ -17,7 +17,6 @@ import {
     teamMembers,
     errors as jsErrors,
     crashes as appCrashes,
-    screenTouchHeatmaps,
     alertHistory,
     alertSettings,
 } from '../db/client.js';
@@ -35,6 +34,9 @@ import { generateAnonymousName } from '../utils/anonymousName.js';
 import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
 import { normalizeHeatmapScreenName, normalizeHeatmapScreenPath } from '../utils/heatmapScreens.js';
 import { buildClickHouseIgnoredEndpointCondition, normalizeIgnoredApiEndpointPatterns } from '../utils/apiEndpointIgnoreRules.js';
+import {
+    queryScreenTouchHeatmapsFromClickHouse,
+} from '../services/productRollupsClickHouse.js';
 import {
     buildWebAttentionHeatmap,
     dimensionsFromRrwebEnvelope,
@@ -1435,26 +1437,10 @@ function mobileAttentionFromPriorOrEmpty(prior: WebAttentionPrior, normalizedScr
 
 async function loadWebAttentionPrior(projectId: string, normalizedScreenName: string, timeRange?: string): Promise<WebAttentionPrior> {
     const startedAfter = buildStartedAfter(timeRange);
-    const rows = await db
-        .select({
-            screenName: screenTouchHeatmaps.screenName,
-            touchBuckets: screenTouchHeatmaps.touchBuckets,
-            rageTapBuckets: screenTouchHeatmaps.rageTapBuckets,
-            totalTouches: screenTouchHeatmaps.totalTouches,
-            totalRageTaps: screenTouchHeatmaps.totalRageTaps,
-            pageWidth: screenTouchHeatmaps.pageWidth,
-            pageHeight: screenTouchHeatmaps.pageHeight,
-            viewportWidth: screenTouchHeatmaps.viewportWidth,
-            viewportHeight: screenTouchHeatmaps.viewportHeight,
-        })
-        .from(screenTouchHeatmaps)
-        .where(
-            and(
-                eq(screenTouchHeatmaps.projectId, projectId),
-                startedAfter ? gte(screenTouchHeatmaps.date, startedAfter.toISOString().split('T')[0] as any) : undefined,
-            ),
-        )
-        .limit(5000);
+    const rows = await queryScreenTouchHeatmapsFromClickHouse({
+        projectIds: [projectId],
+        startDate: startedAfter?.toISOString().split('T')[0],
+    });
 
     const matched = rows.filter((row) => normalizeHeatmapScreenName(row.screenName) === normalizedScreenName);
     const prior: WebAttentionPrior = {

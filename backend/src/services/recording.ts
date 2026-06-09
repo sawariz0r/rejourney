@@ -1,7 +1,11 @@
-import { eq, sql } from 'drizzle-orm';
-import { db, sessions, deviceUsage } from '../db/client.js';
+import { eq } from 'drizzle-orm';
+import { db, sessions } from '../db/client.js';
 import { logger } from '../logger.js';
 import { lookupGeoIpFromMmdb } from './geoIpMmdb.js';
+import {
+    buildClickHouseDeviceUsageDailyRollupRow,
+    writeDeviceUsageDailyRollupToClickHouse,
+} from './clickhouseProductRollupsSink.js';
 
 /**
  * Update device usage metrics (atomic upsert for scalability)
@@ -17,38 +21,18 @@ export async function updateDeviceUsage(
         minutesRecorded?: number;
     }
 ): Promise<void> {
-    if (!deviceId) return;
-
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
     try {
-        await db.insert(deviceUsage)
-            .values({
-                deviceId,
-                projectId,
-                period: today,
-                bytesUploaded: BigInt(updates.bytesUploaded || 0),
-                requestCount: updates.requestCount || 0,
-                sessionsStarted: updates.sessionsStarted || 0,
-                minutesRecorded: updates.minutesRecorded || 0,
-            })
-            .onConflictDoUpdate({
-                target: [deviceUsage.deviceId, deviceUsage.projectId, deviceUsage.period],
-                set: {
-                    bytesUploaded: updates.bytesUploaded
-                        ? sql`${deviceUsage.bytesUploaded} + ${updates.bytesUploaded}`
-                        : deviceUsage.bytesUploaded,
-                    requestCount: updates.requestCount
-                        ? sql`${deviceUsage.requestCount} + ${updates.requestCount}`
-                        : deviceUsage.requestCount,
-                    sessionsStarted: updates.sessionsStarted
-                        ? sql`${deviceUsage.sessionsStarted} + ${updates.sessionsStarted}`
-                        : deviceUsage.sessionsStarted,
-                    minutesRecorded: updates.minutesRecorded
-                        ? sql`${deviceUsage.minutesRecorded} + ${updates.minutesRecorded}`
-                        : deviceUsage.minutesRecorded,
-                },
-            });
+        await writeDeviceUsageDailyRollupToClickHouse(buildClickHouseDeviceUsageDailyRollupRow({
+            projectId,
+            period: today,
+            bytesUploaded: updates.bytesUploaded || 0,
+            requestCount: updates.requestCount || 0,
+            sessionsStarted: updates.sessionsStarted || 0,
+            minutesRecorded: updates.minutesRecorded || 0,
+            source: 'device_usage_increment',
+        }));
     } catch (err) {
         // Non-blocking - usage tracking should not fail uploads
         logger.warn({ err, deviceId, projectId }, 'Failed to update device usage');

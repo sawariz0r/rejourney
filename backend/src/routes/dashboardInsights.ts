@@ -6,8 +6,8 @@
  */
 
 import { Router } from 'express';
-import { eq, gte, lte, and, desc, asc, inArray, sql, type SQL } from 'drizzle-orm';
-import { db, sessions, sessionMetrics, projects, teamMembers, appDailyStats, recordingArtifacts, screenTouchHeatmaps } from '../db/client.js';
+import { eq, gte, and, desc, asc, inArray, sql, type SQL } from 'drizzle-orm';
+import { db, sessions, sessionMetrics, projects, teamMembers, recordingArtifacts } from '../db/client.js';
 import { getRedis } from '../db/redis.js';
 import { asyncHandler, ApiError } from '../middleware/index.js';
 import { logger } from '../logger.js';
@@ -16,6 +16,10 @@ import { boundedTimeRangeToDays } from '../utils/analyticsTimeRange.js';
 import { buildRetentionCohortRows } from '../services/retentionCohorts.js';
 import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
 import { queryDailyApiCallsFromClickHouse } from '../services/apiEndpointStatsClickHouse.js';
+import {
+    queryProductDailyStatsFromClickHouse,
+    queryScreenTouchHeatmapsFromClickHouse,
+} from '../services/productRollupsClickHouse.js';
 import { normalizeHeatmapScreenName, normalizeHeatmapScreenPath } from '../utils/heatmapScreens.js';
 
 const router = Router();
@@ -23,6 +27,10 @@ const redis = getRedis();
 const CACHE_TTL = 300; // 5 minutes - matches analytics, reduces cold cache on tab switch
 const RETENTION_COHORT_WEEKS = 6;
 const RETENTION_COHORT_ROWS = 6;
+
+function productRollupSourceKey(): string {
+    return 'ch-product-rollup';
+}
 
 /**
  * Returns the last date (YYYY-MM-DD) for which daily rollups are guaranteed
@@ -157,7 +165,7 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const cacheKey = `insights:friction:${projectIds.sort().join(',')}:${isRealtime ? 'realtime' : (timeRange || '7d')}:${platform || 'all'}:v5`;
+        const cacheKey = `insights:friction:${productRollupSourceKey()}:${projectIds.sort().join(',')}:${isRealtime ? 'realtime' : (timeRange || '7d')}:${platform || 'all'}:v5`;
 
         // For realtime, use shorter cache TTL
         if (!isRealtime) {
@@ -285,26 +293,10 @@ router.get(
         // into the same normalized candidate names used by session paths.
         const candidateScreenNames = new Set(candidateScreens.map(([name]) => name));
         const heatmapData = candidateScreenNames.size > 0
-            ? await db
-                .select({
-                    screenName: screenTouchHeatmaps.screenName,
-                    touchBuckets: screenTouchHeatmaps.touchBuckets,
-                    rageTapBuckets: screenTouchHeatmaps.rageTapBuckets,
-                    totalTouches: screenTouchHeatmaps.totalTouches,
-                    totalRageTaps: screenTouchHeatmaps.totalRageTaps,
-                    sampleSessionId: screenTouchHeatmaps.sampleSessionId,
-                    screenFirstSeenMs: screenTouchHeatmaps.screenFirstSeenMs,
-                    pageWidth: screenTouchHeatmaps.pageWidth,
-                    pageHeight: screenTouchHeatmaps.pageHeight,
-                    viewportWidth: screenTouchHeatmaps.viewportWidth,
-                    viewportHeight: screenTouchHeatmaps.viewportHeight,
-                })
-                .from(screenTouchHeatmaps)
-                .where(and(
-                    inArray(screenTouchHeatmaps.projectId, projectIds),
-                    startedAfter ? gte(screenTouchHeatmaps.date, startedAfter.toISOString().split('T')[0] as any) : undefined
-                ))
-                .limit(5000)
+            ? await queryScreenTouchHeatmapsFromClickHouse({
+                projectIds,
+                startDate: startedAfter?.toISOString().split('T')[0],
+            })
             : [];
 
         // Aggregate heatmap data by screen (combine multiple days)
@@ -566,7 +558,7 @@ router.get(
             throw ApiError.forbidden('Access denied');
         }
 
-        const cacheKey = `insights:alltime-heatmap:${projectIds.sort().join(',')}:v5`;
+        const cacheKey = `insights:alltime-heatmap:${productRollupSourceKey()}:${projectIds.sort().join(',')}:v5`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -574,22 +566,7 @@ router.get(
         }
 
         // Query all heatmap data from screen_touch_heatmaps (no date filter - all time)
-        const heatmapData = await db
-            .select({
-                screenName: screenTouchHeatmaps.screenName,
-                touchBuckets: screenTouchHeatmaps.touchBuckets,
-                rageTapBuckets: screenTouchHeatmaps.rageTapBuckets,
-                totalTouches: screenTouchHeatmaps.totalTouches,
-                totalRageTaps: screenTouchHeatmaps.totalRageTaps,
-                sampleSessionId: screenTouchHeatmaps.sampleSessionId,
-                screenFirstSeenMs: screenTouchHeatmaps.screenFirstSeenMs,
-                pageWidth: screenTouchHeatmaps.pageWidth,
-                pageHeight: screenTouchHeatmaps.pageHeight,
-                viewportWidth: screenTouchHeatmaps.viewportWidth,
-                viewportHeight: screenTouchHeatmaps.viewportHeight,
-            })
-            .from(screenTouchHeatmaps)
-            .where(inArray(screenTouchHeatmaps.projectId, projectIds));
+        const heatmapData = await queryScreenTouchHeatmapsFromClickHouse({ projectIds });
 
         // Aggregate heatmap data by screen (combine all days)
         const screenHeatmapMap = new Map<string, {
@@ -969,7 +946,7 @@ router.get(
             : undefined;
 
         // Redis caching for fast page loads
-        const cacheKey = `insights:trends:${projectIds.sort().join(',')}:${normalizedTimeRange || '30d'}:${normalizedPlatform || 'all'}:v6-country-dau`;
+        const cacheKey = `insights:trends:${productRollupSourceKey()}:${projectIds.sort().join(',')}:${normalizedTimeRange || '30d'}:${normalizedPlatform || 'all'}:v6-country-dau`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -1178,16 +1155,11 @@ router.get(
             return;
         }
 
-        const dailyConditions = [inArray(appDailyStats.projectId, projectIds), lte(appDailyStats.date, lastRolledUpDate)];
-        if (startStr) {
-            dailyConditions.push(gte(appDailyStats.date, startStr));
-        }
-
-        const stats = await db
-            .select()
-            .from(appDailyStats)
-            .where(and(...dailyConditions))
-            .orderBy(asc(appDailyStats.date));
+        const stats = await queryProductDailyStatsFromClickHouse({
+            projectIds,
+            startDate: startStr,
+            endDate: lastRolledUpDate,
+        });
 
         // Aggregate by date
         const dailyMap: Record<string, {
@@ -1245,17 +1217,20 @@ router.get(
             dailyMap[date].apiErrorRate += (s.avgApiErrorRate || 0) * s.totalSessions;
             dailyMap[date].avgDurationSeconds += (s.avgDurationSeconds || 0) * s.totalSessions;
             dailyMap[date].errorCount += s.totalErrors || 0;
+            dailyMap[date].dau += Number(s.uniqueUserCount || 0);
 
             // Merge app version breakdown
             if (s.appVersionBreakdown) {
                 for (const [version, count] of Object.entries(s.appVersionBreakdown)) {
                     dailyMap[date].appVersionBreakdown[version] = (dailyMap[date].appVersionBreakdown[version] || 0) + count;
+                    dailyMap[date].appVersionDauBreakdown[version] = (dailyMap[date].appVersionDauBreakdown[version] || 0) + count;
                 }
             }
 
-            // Merge unique user IDs for DAU
-            if (s.uniqueUserIds && Array.isArray(s.uniqueUserIds)) {
-                (s.uniqueUserIds as string[]).forEach((uid: string) => dailyMap[date].uniqueUserIds.add(uid));
+            if (s.geoCountryBreakdown) {
+                for (const [country, count] of Object.entries(s.geoCountryBreakdown)) {
+                    dailyMap[date].countryDauBreakdown[country] = (dailyMap[date].countryDauBreakdown[country] || 0) + count;
+                }
             }
         }
 
@@ -1292,95 +1267,6 @@ router.get(
             dailyMap[date].totalApiCalls += Number(s.totalCalls);
         }
 
-        // Build true DAU-by-version directly from raw sessions:
-        // count distinct users (deviceId) per day + app version.
-        const versionDauConditions = [
-            inArray(sessions.projectId, projectIds),
-            sql`DATE(${sessions.startedAt}) <= ${lastRolledUpDate}`,
-            sql`${sessions.deviceId} IS NOT NULL`,
-        ];
-        if (startStr) {
-            versionDauConditions.push(sql`DATE(${sessions.startedAt}) >= ${startStr}`);
-        }
-
-        const sessionDate = sql<string>`DATE(${sessions.startedAt})`;
-        const normalizedVersion = sql<string>`COALESCE(NULLIF(${sessions.appVersion}, ''), 'Unknown')`;
-
-        const versionDauRows = await db
-            .select({
-                date: sessionDate,
-                version: normalizedVersion,
-                uniqueUsers: sql<number>`COUNT(DISTINCT ${sessions.deviceId})::int`,
-            })
-            .from(sessions)
-            .where(and(...versionDauConditions))
-            .groupBy(sessionDate, normalizedVersion);
-
-        for (const row of versionDauRows) {
-            if (!dailyMap[row.date]) {
-                dailyMap[row.date] = {
-                    sessions: 0,
-                    crashes: 0,
-                    rageTaps: 0,
-                    deadTaps: 0,
-                    avgUxScore: 0,
-                    count: 0,
-                    uniqueUserIds: new Set<string>(),
-                    dau: 0,
-                    avgApiResponseMs: 0,
-                    apiErrorRate: 0,
-                    avgDurationSeconds: 0,
-                    errorCount: 0,
-                    appVersionBreakdown: {} as Record<string, number>,
-                    appVersionDauBreakdown: {} as Record<string, number>,
-                    countryDauBreakdown: {} as Record<string, number>,
-                    totalApiCalls: 0,
-                };
-            }
-            dailyMap[row.date].appVersionDauBreakdown[row.version] = Number(row.uniqueUsers) || 0;
-        }
-
-        const normalizedCountry = sql<string>`COALESCE(NULLIF(${sessions.geoCountry}, ''), 'Unknown')`;
-
-        const countryDauRows = await db
-            .select({
-                date: sessionDate,
-                country: normalizedCountry,
-                uniqueUsers: sql<number>`COUNT(DISTINCT ${sessions.deviceId})::int`,
-            })
-            .from(sessions)
-            .where(and(...versionDauConditions, sql`${sessions.geoCountry} IS NOT NULL`))
-            .groupBy(sessionDate, normalizedCountry);
-
-        for (const row of countryDauRows) {
-            if (!dailyMap[row.date]) {
-                dailyMap[row.date] = {
-                    sessions: 0,
-                    crashes: 0,
-                    rageTaps: 0,
-                    deadTaps: 0,
-                    avgUxScore: 0,
-                    count: 0,
-                    uniqueUserIds: new Set<string>(),
-                    dau: 0,
-                    avgApiResponseMs: 0,
-                    apiErrorRate: 0,
-                    avgDurationSeconds: 0,
-                    errorCount: 0,
-                    appVersionBreakdown: {} as Record<string, number>,
-                    appVersionDauBreakdown: {} as Record<string, number>,
-                    countryDauBreakdown: {} as Record<string, number>,
-                    totalApiCalls: 0,
-                };
-            }
-            dailyMap[row.date].countryDauBreakdown[row.country] = Number(row.uniqueUsers) || 0;
-        }
-
-        // Calculate DAU for each day
-        Object.values(dailyMap).forEach(day => {
-            day.dau = day.uniqueUserIds.size;
-        });
-
         // Convert to sorted array of all dates (including the buffer period)
         const allDates = Object.keys(dailyMap).sort();
         const dateIndex = new Map(allDates.map((date, index) => [date, index]));
@@ -1392,7 +1278,7 @@ router.get(
                 const data = dailyMap[date];
 
                 // Calculate MAU: Sliding window of last 30 days ending on `date`
-                const mauSet = new Set<string>();
+                let aggregateMau = 0;
 
                 // Find index of current date
                 const currentIndex = dateIndex.get(date) ?? 0;
@@ -1405,7 +1291,8 @@ router.get(
 
                     if (daysDiff <= 30) {
                         // Add IDs from this past day
-                        dailyMap[lookbackDate]?.uniqueUserIds.forEach(uid => mauSet.add(uid));
+                        const lookbackDay = dailyMap[lookbackDate];
+                        aggregateMau += lookbackDay?.dau || 0;
                     } else {
                         break;
                     }
@@ -1428,7 +1315,7 @@ router.get(
                     deadTaps: data.deadTaps,
                     avgUxScore: avgUxScore,
                     dau: data.dau,
-                    mau: mauSet.size,
+                    mau: aggregateMau,
                     // NEW fields
                     avgApiResponseMs,
                     apiErrorRate,

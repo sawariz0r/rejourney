@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { db, sessions, sessionMetrics, anrs, crashes, appDailyStats } from '../db/client.js';
+import { db, sessions, sessionMetrics, anrs, crashes } from '../db/client.js';
 import { trackANRAsIssue, trackCrashAsIssue } from './issueTracker.js';
 import { mergeAnrDeviceMetadata, resolveAnrStackTrace } from './anrStack.js';
 
@@ -72,17 +72,6 @@ export async function processCrashesArtifact(job: any, _session: any, projectId:
         .set({ crashCount: sql`${sessionMetrics.crashCount} + ${crashList.length} ` })
         .where(eq(sessionMetrics.sessionId, crashSessionId));
 
-
-    // Update daily stats
-    const period = new Date().toISOString().split('T')[0];
-    await db.insert(appDailyStats).values({
-        projectId,
-        date: period as any,
-        totalCrashes: crashList.length
-    }).onConflictDoUpdate({
-        target: [appDailyStats.projectId, appDailyStats.date],
-        set: { totalCrashes: sql`${appDailyStats.totalCrashes} + ${crashList.length} ` }
-    });
 
     log.debug({ crashCount: crashList.length }, 'Crashes artifact processed');
 }
@@ -162,17 +151,6 @@ export async function processAnrsArtifact(job: any, _session: any, projectId: st
 
     log.info({ anrSessionId, anrCount: anrList.length, updateResult }, 'Updated session_metrics anrCount');
 
-
-    // Update daily stats
-    const period = new Date().toISOString().split('T')[0];
-    await db.insert(appDailyStats).values({
-        projectId,
-        date: period as any,
-        totalAnrs: anrList.length
-    }).onConflictDoUpdate({
-        target: [appDailyStats.projectId, appDailyStats.date],
-        set: { totalAnrs: sql`COALESCE(${appDailyStats.totalAnrs}, 0) + ${anrList.length} ` }
-    });
 
     log.info({ anrCount: anrList.length, anrSessionId, projectId }, 'ANRs artifact processed');
 }

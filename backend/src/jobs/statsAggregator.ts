@@ -1,15 +1,17 @@
 /**
  * Stats Aggregator Job
  * 
- * Handles daily rollup at midnight UTC to populate app_daily_stats table.
+ * Handles daily product analytics rollups at midnight UTC.
  */
 
-import { eq, gte, and, isNotNull, sql, lte, desc } from 'drizzle-orm';
-import { db, sessions, sessionMetrics, appDailyStats, appAllTimeStats } from '../db/client.js';
+import { eq, gte, and, lte } from 'drizzle-orm';
+import { db, sessions, sessionMetrics } from '../db/client.js';
 import { getRedis } from '../db/redis.js';
 import { logger } from '../logger.js';
 import { triggerErrorSpikeAlert, triggerApiDegradationAlert } from '../services/alertService.js';
 import { pingWorker } from '../services/monitoring.js';
+import { writeProductAnalyticsDailyRollupInputToClickHouse } from '../services/clickhouseProductRollupsSink.js';
+import { queryProductDailyStatsFromClickHouse } from '../services/productRollupsClickHouse.js';
 
 // Track last run time
 let lastRunTime: Date | null = null;
@@ -17,8 +19,6 @@ let lastDailyRollupTime: Date | null = null;
 let isRunning = false;
 
 const redis = getRedis();
-
-
 
 /**
  * Compute percentile values for a given array
@@ -59,6 +59,8 @@ async function computeDailyRollup(projectId: string, date: Date): Promise<void> 
                 apiErrorCount: sessionMetrics.apiErrorCount,
                 apiTotalCount: sessionMetrics.apiTotalCount,
                 errorCount: sessionMetrics.errorCount,
+                crashCount: sessionMetrics.crashCount,
+                anrCount: sessionMetrics.anrCount,
                 rageTapCount: sessionMetrics.rageTapCount,
                 deadTapCount: sessionMetrics.deadTapCount,
                 touchCount: sessionMetrics.touchCount,
@@ -105,7 +107,6 @@ async function computeDailyRollup(projectId: string, date: Date): Promise<void> 
         const exitScreenBreakdown: Record<string, number> = {};
         const geoCountryBreakdown: Record<string, number> = {};
         const customEventBreakdown: Record<string, number> = {};
-        const uniqueUserIds: string[] = [];
         const uniqueUserSet = new Set<string>();
 
         for (const s of daySessions) {
@@ -153,9 +154,8 @@ async function computeDailyRollup(projectId: string, date: Date): Promise<void> 
             }
 
             // Unique users tracking
-            if (s.deviceId && !uniqueUserSet.has(s.deviceId)) {
+            if (s.deviceId) {
                 uniqueUserSet.add(s.deviceId);
-                uniqueUserIds.push(s.deviceId);
             }
 
             // Screen visit breakdowns
@@ -213,6 +213,8 @@ async function computeDailyRollup(projectId: string, date: Date): Promise<void> 
             : null;
 
         const totalErrors = daySessions.reduce((acc, s) => acc + (s.errorCount || 0), 0);
+        const totalCrashes = daySessions.reduce((acc, s) => acc + (s.crashCount || 0), 0);
+        const totalAnrs = daySessions.reduce((acc, s) => acc + (s.anrCount || 0), 0);
         const totalRageTaps = daySessions.reduce((acc, s) => acc + (s.rageTapCount || 0), 0);
         const totalDeadTaps = daySessions.reduce((acc, s) => acc + (s.deadTapCount || 0), 0);
 
@@ -228,270 +230,51 @@ async function computeDailyRollup(projectId: string, date: Date): Promise<void> 
         const totalGestures = daySessions.reduce((sum, s) => sum + (s.gestureCount || 0), 0);
         const totalInteractions = totalTouches + totalScrolls + totalGestures + daySessions.reduce((sum, s) => sum + (s.inputCount || 0), 0);
 
-        // Upsert into app_daily_stats
-        await db
-            .insert(appDailyStats)
-            .values({
-                projectId,
-                date: dateStr,
-                totalSessions,
-                completedSessions,
-                avgDurationSeconds,
-                avgInteractionScore,
-                avgUxScore,
-                avgApiErrorRate,
-                avgApiResponseMs,
-                p50Duration,
-                p90Duration,
-                p50InteractionScore,
-                p90InteractionScore,
-                totalErrors,
-                totalRageTaps,
-                totalDeadTaps,
-                // Engagement Segments
-                totalBouncers: bouncers,
-                totalCasuals: casuals,
-                totalExplorers: explorers,
-                totalLoyalists: loyalists,
-                // Interaction Breakdown
-                totalTouches,
-                totalScrolls,
-                totalGestures,
-                totalInteractions,
-                // JSONB Breakdowns
-                deviceModelBreakdown,
-                osVersionBreakdown,
-                platformBreakdown,
-                appVersionBreakdown,
-                screenViewBreakdown,
-                screenTransitionBreakdown,
-                entryScreenBreakdown,
-                exitScreenBreakdown,
-                geoCountryBreakdown,
-                customEventBreakdown,
-                uniqueUserCount: uniqueUserSet.size,
-                uniqueUserIds,
-            })
-            .onConflictDoUpdate({
-                target: [appDailyStats.projectId, appDailyStats.date],
-                set: {
-                    totalSessions,
-                    completedSessions,
-                    avgDurationSeconds,
-                    avgInteractionScore,
-                    avgUxScore,
-                    avgApiErrorRate,
-                    avgApiResponseMs,
-                    p50Duration,
-                    p90Duration,
-                    p50InteractionScore,
-                    p90InteractionScore,
-                    totalErrors,
-                    totalRageTaps,
-                    totalDeadTaps,
-                    // Engagement Segments
-                    totalBouncers: bouncers,
-                    totalCasuals: casuals,
-                    totalExplorers: explorers,
-                    totalLoyalists: loyalists,
-                    // Interaction Breakdown
-                    totalTouches,
-                    totalScrolls,
-                    totalGestures,
-                    totalInteractions,
-                    // JSONB Breakdowns
-                    deviceModelBreakdown,
-                    osVersionBreakdown,
-                    platformBreakdown,
-                    appVersionBreakdown,
-                    screenViewBreakdown,
-                    screenTransitionBreakdown,
-                    entryScreenBreakdown,
-                    exitScreenBreakdown,
-                    geoCountryBreakdown,
-                    customEventBreakdown,
-                    uniqueUserCount: uniqueUserSet.size,
-                    uniqueUserIds,
-                },
-            });
-
-        // =========================================================================
-        // Compute All-Time Stats (Efficiently Aggregated from Daily + Unique Users)
-        // =========================================================================
-
-        try {
-            // 1. Get all daily stats to aggregate weighted averages
-            const allDaily = await db
-                .select()
-                .from(appDailyStats)
-                .where(eq(appDailyStats.projectId, projectId));
-
-            let grandTotalSessions = 0;
-            let grandTotalErrors = 0;
-            let grandTotalRage = 0;
-            let grandTotalDeadTaps = 0;
-            // Interaction Breakdown
-            let grandTotalTouches = 0;
-            let grandTotalScrolls = 0;
-            let grandTotalGestures = 0;
-            let grandTotalInteractions = 0;
-
-            let grandTotalBouncers = 0;
-            let grandTotalCasuals = 0;
-            let grandTotalExplorers = 0;
-            let grandTotalLoyalists = 0;
-
-            let wSumDuration = 0;
-            let wSumInteraction = 0;
-            let wSumUx = 0;
-            let wSumApiError = 0;
-
-            // Aggregated JSONB breakdowns
-            const aggDeviceModelBreakdown: Record<string, number> = {};
-            const aggOsVersionBreakdown: Record<string, number> = {};
-            const aggPlatformBreakdown: Record<string, number> = {};
-            const aggAppVersionBreakdown: Record<string, number> = {};
-            const aggScreenViewBreakdown: Record<string, number> = {};
-            const aggScreenTransitionBreakdown: Record<string, number> = {};
-            const aggEntryScreenBreakdown: Record<string, number> = {};
-            const aggExitScreenBreakdown: Record<string, number> = {};
-            const aggGeoCountryBreakdown: Record<string, number> = {};
-            const aggCustomEventBreakdown: Record<string, number> = {};
-
-            // Helper to merge breakdowns
-            const mergeBreakdowns = (target: Record<string, number>, source: Record<string, number> | null) => {
-                if (!source) return;
-                for (const [key, value] of Object.entries(source)) {
-                    target[key] = (target[key] || 0) + value;
-                }
-            };
-
-            for (const d of allDaily) {
-                const n = d.totalSessions;
-                grandTotalSessions += n;
-                grandTotalErrors += d.totalErrors;
-                grandTotalRage += d.totalRageTaps;
-                grandTotalDeadTaps += (d.totalDeadTaps || 0);
-                // Interaction Breakdown
-                grandTotalTouches += (d.totalTouches || 0);
-                grandTotalScrolls += (d.totalScrolls || 0);
-                grandTotalGestures += (d.totalGestures || 0);
-                grandTotalInteractions += (d.totalInteractions || 0);
-
-                grandTotalBouncers += (d.totalBouncers || 0);
-                grandTotalCasuals += (d.totalCasuals || 0);
-                grandTotalExplorers += (d.totalExplorers || 0);
-                grandTotalLoyalists += (d.totalLoyalists || 0);
-
-                wSumDuration += (d.avgDurationSeconds || 0) * n;
-                wSumInteraction += (d.avgInteractionScore || 0) * n;
-                wSumUx += (d.avgUxScore || 0) * n;
-                wSumApiError += (d.avgApiErrorRate || 0) * n;
-
-                // Merge JSONB breakdowns
-                mergeBreakdowns(aggDeviceModelBreakdown, d.deviceModelBreakdown);
-                mergeBreakdowns(aggOsVersionBreakdown, d.osVersionBreakdown);
-                mergeBreakdowns(aggPlatformBreakdown, d.platformBreakdown);
-                mergeBreakdowns(aggAppVersionBreakdown, d.appVersionBreakdown);
-                mergeBreakdowns(aggScreenViewBreakdown, d.screenViewBreakdown);
-                mergeBreakdowns(aggScreenTransitionBreakdown, d.screenTransitionBreakdown);
-                mergeBreakdowns(aggEntryScreenBreakdown, d.entryScreenBreakdown);
-                mergeBreakdowns(aggExitScreenBreakdown, d.exitScreenBreakdown);
-                mergeBreakdowns(aggGeoCountryBreakdown, d.geoCountryBreakdown);
-                mergeBreakdowns(aggCustomEventBreakdown, d.customEventBreakdown);
-            }
-
-            // 2. Count distinct users (Expensive but necessary for accuracy)
-            // Note: In high scale, replace with HyperLogLog or HLL extension
-            const uniqueUserResult = await db
-                .select({ count: sql`count(distinct ${sessions.deviceId})` })
-                .from(sessions)
-                .where(and(eq(sessions.projectId, projectId), isNotNull(sessions.deviceId)));
-
-            const totalUsers = Number(uniqueUserResult[0]?.count || 0);
-
-            // 3. Upsert All-Time Stats
-            await db
-                .insert(appAllTimeStats)
-                .values({
-                    projectId,
-                    totalSessions: BigInt(grandTotalSessions),
-                    totalUsers: BigInt(totalUsers),
-                    totalErrors: BigInt(grandTotalErrors),
-                    totalRageTaps: BigInt(grandTotalRage),
-                    totalDeadTaps: BigInt(grandTotalDeadTaps),
-                    // Interaction Breakdown
-                    totalTouches: BigInt(grandTotalTouches),
-                    totalScrolls: BigInt(grandTotalScrolls),
-                    totalGestures: BigInt(grandTotalGestures),
-                    totalInteractions: BigInt(grandTotalInteractions),
-                    totalBouncers: BigInt(grandTotalBouncers),
-                    totalCasuals: BigInt(grandTotalCasuals),
-                    totalExplorers: BigInt(grandTotalExplorers),
-                    totalLoyalists: BigInt(grandTotalLoyalists),
-                    avgSessionDurationSeconds: grandTotalSessions > 0 ? wSumDuration / grandTotalSessions : 0,
-                    avgInteractionScore: grandTotalSessions > 0 ? wSumInteraction / grandTotalSessions : 0,
-                    avgUxScore: grandTotalSessions > 0 ? wSumUx / grandTotalSessions : 0,
-                    avgApiErrorRate: grandTotalSessions > 0 ? wSumApiError / grandTotalSessions : 0,
-                    // JSONB Breakdowns
-                    deviceModelBreakdown: aggDeviceModelBreakdown,
-                    osVersionBreakdown: aggOsVersionBreakdown,
-                    platformBreakdown: aggPlatformBreakdown,
-                    appVersionBreakdown: aggAppVersionBreakdown,
-                    screenViewBreakdown: aggScreenViewBreakdown,
-                    screenTransitionBreakdown: aggScreenTransitionBreakdown,
-                    entryScreenBreakdown: aggEntryScreenBreakdown,
-                    exitScreenBreakdown: aggExitScreenBreakdown,
-                    geoCountryBreakdown: aggGeoCountryBreakdown,
-                    customEventBreakdown: aggCustomEventBreakdown,
-                    uniqueUserCount: BigInt(totalUsers),
-                })
-                .onConflictDoUpdate({
-                    target: appAllTimeStats.projectId,
-                    set: {
-                        totalSessions: BigInt(grandTotalSessions),
-                        totalUsers: BigInt(totalUsers),
-                        totalErrors: BigInt(grandTotalErrors),
-                        totalRageTaps: BigInt(grandTotalRage),
-                        totalDeadTaps: BigInt(grandTotalDeadTaps),
-                        // Interaction Breakdown
-                        totalTouches: BigInt(grandTotalTouches),
-                        totalScrolls: BigInt(grandTotalScrolls),
-                        totalGestures: BigInt(grandTotalGestures),
-                        totalInteractions: BigInt(grandTotalInteractions),
-                        totalBouncers: BigInt(grandTotalBouncers),
-                        totalCasuals: BigInt(grandTotalCasuals),
-                        totalExplorers: BigInt(grandTotalExplorers),
-                        totalLoyalists: BigInt(grandTotalLoyalists),
-                        avgSessionDurationSeconds: grandTotalSessions > 0 ? wSumDuration / grandTotalSessions : 0,
-                        avgInteractionScore: grandTotalSessions > 0 ? wSumInteraction / grandTotalSessions : 0,
-                        avgUxScore: grandTotalSessions > 0 ? wSumUx / grandTotalSessions : 0,
-                        avgApiErrorRate: grandTotalSessions > 0 ? wSumApiError / grandTotalSessions : 0,
-                        // JSONB Breakdowns
-                        deviceModelBreakdown: aggDeviceModelBreakdown,
-                        osVersionBreakdown: aggOsVersionBreakdown,
-                        platformBreakdown: aggPlatformBreakdown,
-                        appVersionBreakdown: aggAppVersionBreakdown,
-                        screenViewBreakdown: aggScreenViewBreakdown,
-                        screenTransitionBreakdown: aggScreenTransitionBreakdown,
-                        entryScreenBreakdown: aggEntryScreenBreakdown,
-                        exitScreenBreakdown: aggExitScreenBreakdown,
-                        geoCountryBreakdown: aggGeoCountryBreakdown,
-                        customEventBreakdown: aggCustomEventBreakdown,
-                        uniqueUserCount: BigInt(totalUsers),
-                        updatedAt: new Date()
-                    }
-                });
-
-            logger.debug({ projectId, totalSessions: grandTotalSessions }, 'All-time stats updated');
-
-        } catch (error) {
-            logger.error({ error, projectId }, 'Failed to update all-time stats');
-        }
+        await writeProductAnalyticsDailyRollupInputToClickHouse({
+            projectId,
+            date: dateStr,
+            totalSessions,
+            completedSessions,
+            avgDurationSeconds,
+            avgInteractionScore,
+            avgUxScore,
+            avgApiErrorRate,
+            avgApiResponseMs,
+            p50Duration,
+            p90Duration,
+            p50InteractionScore,
+            p90InteractionScore,
+            totalErrors,
+            totalRageTaps,
+            totalDeadTaps,
+            totalCrashes,
+            totalAnrs,
+            totalBouncers: bouncers,
+            totalCasuals: casuals,
+            totalExplorers: explorers,
+            totalLoyalists: loyalists,
+            totalTouches,
+            totalScrolls,
+            totalGestures,
+            totalInteractions,
+            uniqueUserCount: uniqueUserSet.size,
+            deviceModelBreakdown,
+            osVersionBreakdown,
+            platformBreakdown,
+            appVersionBreakdown,
+            screenViewBreakdown,
+            screenTransitionBreakdown,
+            entryScreenBreakdown,
+            exitScreenBreakdown,
+            geoCountryBreakdown,
+            customEventBreakdown,
+            source: 'stats_aggregator',
+        });
 
         logger.debug({ projectId, date: dateStr, totalSessions }, 'Daily rollup completed');
     } catch (err) {
         logger.error({ err, projectId, date: dateStr }, 'Failed to compute daily rollup');
+        throw err;
     }
 }
 
@@ -565,31 +348,18 @@ async function checkAlertsAfterRollup(projectIds: string[], targetDate: Date): P
 
     for (const projectId of projectIds) {
         try {
-            // Get today's stats
-            const [todayStats] = await db
-                .select()
-                .from(appDailyStats)
-                .where(and(
-                    eq(appDailyStats.projectId, projectId),
-                    eq(appDailyStats.date, dateStr)
-                ))
-                .limit(1);
+            const dailyStats = await queryProductDailyStatsFromClickHouse({
+                projectIds: [projectId],
+                startDate: sevenDaysAgoStr,
+                endDate: dateStr,
+            });
+            const previousStats = dailyStats.sort((a, b) => b.date.localeCompare(a.date));
+            const todayStats = previousStats.find((row) => row.date === dateStr);
 
             if (!todayStats || todayStats.totalSessions < 10) {
                 // Skip projects with insufficient data
                 continue;
             }
-
-            // Get previous 7 days stats for comparison
-            const previousStats = await db
-                .select()
-                .from(appDailyStats)
-                .where(and(
-                    eq(appDailyStats.projectId, projectId),
-                    gte(appDailyStats.date, sevenDaysAgoStr),
-                    lte(appDailyStats.date, dateStr)
-                ))
-                .orderBy(desc(appDailyStats.date));
 
             // Need at least 3 days of data for comparison
             if (previousStats.length < 3) {

@@ -78,6 +78,34 @@ function prepareClusterStatement(statement: string): string {
         );
     }
 
+    if (/\bapp_daily_rollups\b/i.test(prepared)) {
+        prepared = prepared.replace(
+            /\bENGINE\s*=\s*ReplacingMergeTree\s*\(\s*updated_at\s*\)/i,
+            "ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/{database}/app_daily_rollups', '{replica}', updated_at)",
+        );
+    }
+
+    if (/\bapp_dimension_daily_rollups\b/i.test(prepared)) {
+        prepared = prepared.replace(
+            /\bENGINE\s*=\s*ReplacingMergeTree\s*\(\s*updated_at\s*\)/i,
+            "ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/{database}/app_dimension_daily_rollups', '{replica}', updated_at)",
+        );
+    }
+
+    if (/\bscreen_touch_heatmap_daily_rollups\b/i.test(prepared)) {
+        prepared = prepared.replace(
+            /\bENGINE\s*=\s*SummingMergeTree\s*\(\s*\(\s*bucket_count\s*\)\s*\)/i,
+            "ENGINE = ReplicatedSummingMergeTree('/clickhouse/tables/{shard}/{database}/screen_touch_heatmap_daily_rollups', '{replica}', (bucket_count))",
+        );
+    }
+
+    if (/\bdevice_usage_daily_rollups\b/i.test(prepared)) {
+        prepared = prepared.replace(
+            /\bENGINE\s*=\s*SummingMergeTree\s*\(\s*\(\s*bytes_uploaded\s*,\s*minutes_recorded\s*,\s*sessions_started\s*,\s*request_count\s*\)\s*\)/i,
+            "ENGINE = ReplicatedSummingMergeTree('/clickhouse/tables/{shard}/{database}/device_usage_daily_rollups', '{replica}', (bytes_uploaded, minutes_recorded, sessions_started, request_count))",
+        );
+    }
+
     return prepared;
 }
 

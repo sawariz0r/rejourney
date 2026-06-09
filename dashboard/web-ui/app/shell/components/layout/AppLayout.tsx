@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { Project, Platform } from '~/shared/types';
@@ -8,7 +8,7 @@ import { useTeam } from '~/shared/providers/TeamContext';
 import { useSessionData } from '~/shared/providers/SessionContext';
 import { DashboardManualRefreshProvider } from '~/shared/providers/DashboardManualRefreshContext';
 import { DASHBOARD_MANUAL_REFRESH_COMPLETE } from '~/shared/constants/events';
-import { FolderPlus, Layers3 } from 'lucide-react';
+import { FolderPlus, Home, Layers3, LogIn } from 'lucide-react';
 import { trackRejourneyDashboardContext } from '~/shared/compliance/rejourneyWebsiteTelemetry';
 
 interface AppLayoutProps {
@@ -56,8 +56,11 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
   const location = useLocation();
   const navigate = useNavigate();
   const [manualRefreshCycle, setManualRefreshCycle] = useState(0);
+  const isDemoLayout = pathPrefix === '/demo';
+  const [isTopLevelDemoWindow, setIsTopLevelDemoWindow] = useState(false);
 
   const routeWithoutPrefix = useMemo(() => location.pathname.replace(/^\/(dashboard|demo)/, ''), [location.pathname]);
+  const shouldShowDemoBanner = isDemoLayout && isTopLevelDemoWindow;
 
   // Changing this forces a remount of routed pages, ensuring all screens reset
   // their local state/effects when switching team/project.
@@ -128,6 +131,19 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
     });
   }, [currentTeam, location.pathname, projects.length, selectedProject, teams]);
 
+  useEffect(() => {
+    if (!isDemoLayout) {
+      setIsTopLevelDemoWindow(false);
+      return;
+    }
+
+    try {
+      setIsTopLevelDemoWindow(window.self === window.top);
+    } catch {
+      setIsTopLevelDemoWindow(false);
+    }
+  }, [isDemoLayout]);
+
   const handleProjectChange = (project: Project) => {
     // Sync with SessionContext - this updates both sidebar and all pages
     setSelectedProject(project);
@@ -165,7 +181,45 @@ export const ProjectLayout: React.FC<AppLayoutProps> = ({ children, pathPrefix =
         />
       </div>
       <div key={routeScopeKey} className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--dashboard-canvas)]">
-        <TopBar currentProject={selectedProject} />
+        {shouldShowDemoBanner && (
+          <div
+            data-testid="demo-live-banner"
+            aria-label="You're in the live demo. Sign in to get started or go back home."
+            className="relative z-20 flex min-h-10 items-center justify-between gap-2 border-b border-slate-200 bg-white px-2 py-1.5 shadow-sm sm:min-h-[44px] sm:flex-wrap sm:px-4 sm:py-2"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="h-2 w-2 shrink-0 border border-slate-900 bg-[#86efac]" aria-hidden="true" />
+              <p className="min-w-0 truncate text-sm font-extrabold text-slate-950">
+                <span className="sm:hidden">Live demo</span>
+                <span className="hidden sm:inline">
+                  You're in the live demo.{' '}
+                  <span className="font-semibold text-slate-600">Sign in to get started or go back home.</span>
+                </span>
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                to="/"
+                className="inline-flex h-8 w-8 items-center justify-center border border-slate-200 bg-white text-xs font-black text-slate-900 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 sm:w-auto sm:px-3"
+                aria-label="Back to home"
+                title="Back to home"
+              >
+                <Home className="h-4 w-4 stroke-[3] sm:hidden" aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">Back to home</span>
+              </Link>
+              <Link
+                to="/login"
+                className="inline-flex h-8 w-8 items-center justify-center border border-slate-950 bg-slate-950 text-xs font-black text-white shadow-sm transition-colors hover:bg-slate-800 sm:w-auto sm:px-3"
+                aria-label="Sign in to get started"
+                title="Sign in to get started"
+              >
+                <LogIn className="h-4 w-4 stroke-[3] sm:hidden" aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">Sign in to get started</span>
+              </Link>
+            </div>
+          </div>
+        )}
+        <TopBar currentProject={selectedProject} hideDemoHomeLink={shouldShowDemoBanner} />
         {projectsError && (
           <div className="mx-4 mt-4 border-2 border-black bg-[#f9a8d4] px-4 py-3 text-sm font-extrabold text-black shadow-neo-sm sm:mx-6">
             {projectsError}

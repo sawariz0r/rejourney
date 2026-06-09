@@ -140,4 +140,29 @@ describe('RevenueCat revenue source helpers', () => {
             metadata: expect.objectContaining({ transactionCount: 2 }),
         });
     });
+
+    it('parses RevenueCat measure-indexed object chart rows', () => {
+        const rows = parseRevenueCatRevenueChartRows({
+            yaxis_currency: 'USD',
+            measures: [
+                { display_name: 'Revenue' },
+                { display_name: 'Transactions' },
+            ],
+            values: [
+                { cohort: Date.UTC(2026, 5, 1) / 1000, incomplete: false, measure: 0, value: 12.34 },
+                { cohort: Date.UTC(2026, 5, 1) / 1000, incomplete: false, measure: 1, value: 3 },
+                { cohort: Date.UTC(2026, 5, 2) / 1000, incomplete: false, measure: 0, value: 0 },
+                { cohort: Date.UTC(2026, 5, 2) / 1000, incomplete: false, measure: 1, value: 0 },
+            ],
+        });
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+            externalTransactionId: 'revenuecat:2026-06-01:usd',
+            amountCents: 1234,
+            grossAmountCents: 1234,
+            currency: 'usd',
+            metadata: expect.objectContaining({ transactionCount: 3 }),
+        });
+    });
 });

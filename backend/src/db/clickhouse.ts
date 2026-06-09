@@ -16,6 +16,18 @@ export function isClickHouseReadsEnabled(): boolean {
     return isClickHouseConfigured() && config.CLICKHOUSE_READS_ENABLED;
 }
 
+export function isClickHouseProductRollupsWritesEnabled(): boolean {
+    return isClickHouseConfigured();
+}
+
+export function isClickHouseProductRollupsReadsEnabled(): boolean {
+    return isClickHouseConfigured();
+}
+
+export function isClickHouseProductRollupsParityLoggingEnabled(): boolean {
+    return false;
+}
+
 export function getClickHouseClient(): ClickHouseClient {
     if (!isClickHouseConfigured()) {
         throw new Error('ClickHouse is not enabled or CLICKHOUSE_URL is missing');
@@ -55,4 +67,3 @@ export async function closeClickHouseClient(): Promise<void> {
     await client.close();
     client = null;
 }
-

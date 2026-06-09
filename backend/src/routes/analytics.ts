@@ -6,13 +6,11 @@
  */
 
 import { Router } from 'express';
-import { eq, gte, lte, and, asc, inArray, sql, desc, isNotNull, gt } from 'drizzle-orm';
+import { eq, gte, and, inArray, sql, desc, isNotNull, gt } from 'drizzle-orm';
 import {
     db,
-    appDailyStats,
     projects,
     teamMembers,
-    appAllTimeStats,
     sessions,
     sessionMetrics,
     crashes,
@@ -33,6 +31,12 @@ import {
     queryApiEndpointStatusRowsFromClickHouse,
     queryRegionStatsFromClickHouse,
 } from '../services/apiEndpointStatsClickHouse.js';
+import {
+    queryProductAllTimeStatsFromClickHouse,
+    queryProductDailyStatsFromClickHouse,
+    type ProductAnalyticsAllTimeStatsRow,
+    type ProductAnalyticsDailyStatsRow,
+} from '../services/productRollupsClickHouse.js';
 import { canOpenReplayFromSessionFields } from '../services/replayAvailability.js';
 
 const router = Router();
@@ -45,6 +49,26 @@ const GEO_ISSUE_LOCATION_RESPONSE_LIMIT = 1200;
 const GEO_LATENCY_LOCATION_RESPONSE_LIMIT = 1600;
 
 type ErrorCodeBreakdown = Record<string, number>;
+
+function productRollupSourceKey(): string {
+    return 'ch-product-rollup';
+}
+
+async function readProductDailyRollupRows(params: {
+    projectIds: string[];
+    startDate?: string;
+    endDate?: string;
+}): Promise<ProductAnalyticsDailyStatsRow[]> {
+    return queryProductDailyStatsFromClickHouse(params);
+}
+
+async function readProductAllTimeRollupRows(params: {
+    projectIds: string[];
+    startDate?: string;
+    endDate?: string;
+}): Promise<ProductAnalyticsAllTimeStatsRow[]> {
+    return queryProductAllTimeStatsFromClickHouse(params);
+}
 
 /**
  * Returns the last date (YYYY-MM-DD) for which daily rollups are guaranteed
@@ -262,19 +286,18 @@ router.get(
         const endStr = requestedEndStr > lastRolledUpDate ? lastRolledUpDate : requestedEndStr;
 
         // Check Redis cache
-        const cacheKey = `analytics:daily:${projectId}:${startStr}:${endStr}`;
+        const cacheKey = `analytics:daily:${productRollupSourceKey()}:${projectId}:${startStr}:${endStr}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
             return;
         }
 
-        // Query database
-        const stats = await db
-            .select()
-            .from(appDailyStats)
-            .where(and(eq(appDailyStats.projectId, projectId), gte(appDailyStats.date, startStr), lte(appDailyStats.date, endStr)))
-            .orderBy(asc(appDailyStats.date));
+        const stats = await readProductDailyRollupRows({
+            projectIds: [projectId],
+            startDate: startStr,
+            endDate: endStr,
+        });
 
         const response = {
             projectId,
@@ -351,18 +374,18 @@ router.get(
         const lastRolledUpDate = await getLastRolledUpDate();
 
         // Check cache
-        const cacheKey = `analytics:trends:${projectId}:${days}d:through:${lastRolledUpDate}`;
+        const cacheKey = `analytics:trends:${productRollupSourceKey()}:${projectId}:${days}d:through:${lastRolledUpDate}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
             return;
         }
 
-        const stats = await db
-            .select()
-            .from(appDailyStats)
-            .where(and(eq(appDailyStats.projectId, projectId), gte(appDailyStats.date, startStr), lte(appDailyStats.date, lastRolledUpDate)))
-            .orderBy(asc(appDailyStats.date));
+        const stats = await readProductDailyRollupRows({
+            projectIds: [projectId],
+            startDate: startStr,
+            endDate: lastRolledUpDate,
+        });
 
         // Compute trend summaries
         const totalSessionsOverTime = stats.map((s) => ({ date: s.date, value: s.totalSessions }));
@@ -502,7 +525,7 @@ router.get(
             }
 
             // Check cache for global stats
-            const cacheKey = `analytics:dashboard:global:${req.user!.id}:${timeRange || 'all'}`;
+            const cacheKey = `analytics:dashboard:global:${productRollupSourceKey()}:${req.user!.id}:${timeRange || 'all'}`;
             const cached = await redis.get(cacheKey);
             if (cached) {
                 res.json(JSON.parse(cached));
@@ -547,7 +570,7 @@ router.get(
             // "All Time": simple query with IN clause.
 
             if (!timeRange || timeRange === 'all') {
-                const allTimeStats = await db.select().from(appAllTimeStats).where(inArray(appAllTimeStats.projectId, projectIds));
+                const allTimeStats = await readProductAllTimeRollupRows({ projectIds });
 
                 let wSumDuration = 0;
                 let wSumUx = 0;
@@ -606,7 +629,7 @@ router.get(
         if (!project) throw ApiError.notFound('Project not found');
 
         // Check cache
-        const cacheKey = `analytics:dashboard:${projectId}:${timeRange || 'all'}`;
+        const cacheKey = `analytics:dashboard:${productRollupSourceKey()}:${projectId}:${timeRange || 'all'}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -641,12 +664,7 @@ router.get(
         };
 
         if (!timeRange || timeRange === 'all') {
-            // Use AppAllTimeStats
-            // We need to import appAllTimeStats (added to imports below)
-            const [allTime] = await db
-                .select()
-                .from(appAllTimeStats)
-                .where(eq(appAllTimeStats.projectId, projectId as string));
+            const [allTime] = await readProductAllTimeRollupRows({ projectIds: [projectId as string] });
 
             if (allTime) {
                 stats.totalSessions = Number(allTime.totalSessions);
@@ -678,10 +696,11 @@ router.get(
 
             const lastRolledUpDate = await getLastRolledUpDate();
 
-            const dailies = await db
-                .select()
-                .from(appDailyStats)
-                .where(and(eq(appDailyStats.projectId, projectId as string), gte(appDailyStats.date, startStr), lte(appDailyStats.date, lastRolledUpDate)));
+            const dailies = await readProductDailyRollupRows({
+                projectIds: [projectId as string],
+                startDate: startStr,
+                endDate: lastRolledUpDate,
+            });
 
             // Sum up
             const totalSess = dailies.reduce((acc, d) => acc + d.totalSessions, 0);
@@ -750,7 +769,7 @@ router.get(
         }
 
         // Build cache key (v3: rollup-backed geo for non-24h windows)
-        const cacheKey = `analytics:geo:v3:${projectIds.sort().join(',')}:${timeRange || 'all'}`;
+        const cacheKey = `analytics:geo:v3:${productRollupSourceKey()}:${projectIds.sort().join(',')}:${timeRange || 'all'}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -831,15 +850,11 @@ router.get(
             }
         }
 
-        const dailyConditions = [inArray(appDailyStats.projectId, projectIds), lte(appDailyStats.date, lastRolledUpDate)];
-        if (startDateStr) {
-            dailyConditions.push(gte(appDailyStats.date, startDateStr));
-        }
-
-        const dailyRows = await db
-            .select({ geoCountryBreakdown: appDailyStats.geoCountryBreakdown })
-            .from(appDailyStats)
-            .where(and(...dailyConditions));
+        const dailyRows = await readProductDailyRollupRows({
+            projectIds,
+            startDate: startDateStr,
+            endDate: lastRolledUpDate,
+        });
 
         const rollupCountryCounts = mergeGeoCountryCountsFromDailyRows(dailyRows);
 
@@ -1523,7 +1538,7 @@ router.get(
         }
 
         // Cache check - v7 includes platform filter support.
-        const cacheKey = `analytics:device-summary:${projectIds.sort().join(',')}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v7`;
+        const cacheKey = `analytics:device-summary:${productRollupSourceKey()}:${projectIds.sort().join(',')}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v7`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -1606,24 +1621,11 @@ router.get(
             }
         } else {
             // No platform filter — use fast rollup path
-            const conditions = [inArray(appDailyStats.projectId, projectIds), lte(appDailyStats.date, lastRolledUpDate)];
-            if (startDateStr) {
-                conditions.push(gte(appDailyStats.date, startDateStr));
-            }
-
-            const dailyStats = await db
-                .select({
-                    totalSessions: appDailyStats.totalSessions,
-                    deviceModelBreakdown: appDailyStats.deviceModelBreakdown,
-                    osVersionBreakdown: appDailyStats.osVersionBreakdown,
-                    platformBreakdown: appDailyStats.platformBreakdown,
-                    appVersionBreakdown: appDailyStats.appVersionBreakdown,
-                    totalCrashes: appDailyStats.totalCrashes,
-                    totalAnrs: appDailyStats.totalAnrs,
-                    totalErrors: appDailyStats.totalErrors,
-                })
-                .from(appDailyStats)
-                .where(and(...conditions));
+            const dailyStats = await readProductDailyRollupRows({
+                projectIds,
+                startDate: startDateStr,
+                endDate: lastRolledUpDate,
+            });
 
             for (const day of dailyStats) {
                 totalSessions += day.totalSessions;
@@ -2058,7 +2060,7 @@ router.get(
             return;
         }
 
-        const cacheKey = `analytics:journey-summary:${projectIds.sort().join(',')}:${timeRange || 'all'}`;
+        const cacheKey = `analytics:journey-summary:${productRollupSourceKey()}:${projectIds.sort().join(',')}:${timeRange || 'all'}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -2077,21 +2079,11 @@ router.get(
 
         const lastRolledUpDate = await getLastRolledUpDate();
 
-        // Use pre-aggregated stats from appDailyStats
-        const conditions = [inArray(appDailyStats.projectId, projectIds), lte(appDailyStats.date, lastRolledUpDate)];
-        if (startDateStr) {
-            conditions.push(gte(appDailyStats.date, startDateStr));
-        }
-
-        const dailyStats = await db
-            .select({
-                screenViewBreakdown: appDailyStats.screenViewBreakdown,
-                screenTransitionBreakdown: appDailyStats.screenTransitionBreakdown,
-                entryScreenBreakdown: appDailyStats.entryScreenBreakdown,
-                exitScreenBreakdown: appDailyStats.exitScreenBreakdown,
-            })
-            .from(appDailyStats)
-            .where(and(...conditions));
+        const dailyStats = await readProductDailyRollupRows({
+            projectIds,
+            startDate: startDateStr,
+            endDate: lastRolledUpDate,
+        });
 
         // Merge JSONB breakdowns from all daily stats
         const screenCounts: Record<string, number> = {};
@@ -2819,7 +2811,7 @@ router.get(
         const journeyPlatform = typeof req.query.platform === 'string' && req.query.platform !== 'all' ? req.query.platform : undefined;
         const requestedAppVersion = typeof req.query.appVersion === 'string' ? req.query.appVersion.trim() : '';
         const journeyAppVersion = requestedAppVersion && requestedAppVersion !== 'all' ? requestedAppVersion : undefined;
-        const cacheKey = `analytics:journey-observability:v5:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${journeyPlatform || 'all'}:${journeyAppVersion || 'all'}`;
+        const cacheKey = `analytics:journey-observability:v5:${productRollupSourceKey()}:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${journeyPlatform || 'all'}:${journeyAppVersion || 'all'}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -2864,22 +2856,11 @@ router.get(
 
         if (responseMode === 'summary') {
             const lastRolledUpDate = await getLastRolledUpDate();
-            const conditions = [inArray(appDailyStats.projectId, projectIds), lte(appDailyStats.date, lastRolledUpDate)];
-            if (startedAfter) {
-                conditions.push(gte(appDailyStats.date, startedAfter.toISOString().split('T')[0]));
-            }
-
-            const dailyRows = await db
-                .select({
-                    totalSessions: appDailyStats.totalSessions,
-                    screenViewBreakdown: appDailyStats.screenViewBreakdown,
-                    screenTransitionBreakdown: appDailyStats.screenTransitionBreakdown,
-                    entryScreenBreakdown: appDailyStats.entryScreenBreakdown,
-                    exitScreenBreakdown: appDailyStats.exitScreenBreakdown,
-                    appVersionBreakdown: appDailyStats.appVersionBreakdown,
-                })
-                .from(appDailyStats)
-                .where(and(...conditions));
+            const dailyRows = await readProductDailyRollupRows({
+                projectIds,
+                startDate: startedAfter?.toISOString().split('T')[0],
+                endDate: lastRolledUpDate,
+            });
 
             const screenTotals: Record<string, number> = {};
             const transitionTotals: Record<string, number> = {};
@@ -3476,7 +3457,7 @@ router.get(
 
         const responseMode = req.query.mode === 'summary' ? 'summary' : 'full';
         const growthPlatform = typeof req.query.platform === 'string' && req.query.platform !== 'all' ? req.query.platform : undefined;
-        const cacheKey = `analytics:growth-observability:v4:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${growthPlatform || 'all'}`;
+        const cacheKey = `analytics:growth-observability:v4:${productRollupSourceKey()}:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${growthPlatform || 'all'}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -3495,25 +3476,11 @@ router.get(
 
         if (responseMode === 'summary') {
             const lastRolledUpDate = await getLastRolledUpDate();
-            const conditions = [inArray(appDailyStats.projectId, projectIds), lte(appDailyStats.date, lastRolledUpDate)];
-            if (startedAfter) {
-                conditions.push(gte(appDailyStats.date, startedAfter.toISOString().split('T')[0]));
-            }
-
-            const dailyRows = await db
-                .select({
-                    date: appDailyStats.date,
-                    totalSessions: appDailyStats.totalSessions,
-                    totalErrors: appDailyStats.totalErrors,
-                    totalRageTaps: appDailyStats.totalRageTaps,
-                    totalCrashes: appDailyStats.totalCrashes,
-                    totalAnrs: appDailyStats.totalAnrs,
-                    uniqueUserCount: appDailyStats.uniqueUserCount,
-                    customEventBreakdown: appDailyStats.customEventBreakdown,
-                })
-                .from(appDailyStats)
-                .where(and(...conditions))
-                .orderBy(asc(appDailyStats.date));
+            const dailyRows = await readProductDailyRollupRows({
+                projectIds,
+                startDate: startedAfter?.toISOString().split('T')[0],
+                endDate: lastRolledUpDate,
+            });
 
             const sessionHealth = { clean: 0, error: 0, rage: 0, slow: 0, crash: 0 };
             const dailyHealth: Array<{ date: string; clean: number; error: number; rage: number; slow: number; crash: number }> = [];
@@ -3784,19 +3751,11 @@ router.get(
             .slice(-30); // Last 30 days
 
         // Custom Events
-        const dailyConditions = [inArray(appDailyStats.projectId, projectIds)];
-        if (startedAfter) {
-            dailyConditions.push(gte(appDailyStats.date, startedAfter.toISOString().split('T')[0]));
-        }
-
-        const dailyStatsRows = await db
-            .select({
-                date: appDailyStats.date,
-                customEventBreakdown: appDailyStats.customEventBreakdown,
-            })
-            .from(appDailyStats)
-            .where(and(...dailyConditions))
-            .orderBy(asc(appDailyStats.date));
+        const dailyStatsRows = await readProductDailyRollupRows({
+            projectIds,
+            startDate: startedAfter?.toISOString().split('T')[0],
+            endDate: await getLastRolledUpDate(),
+        });
 
         const aggregatedCustomEvents: Record<string, number> = {};
         const dailyCustomEvents: Array<{ date: string; events: Record<string, number> }> = [];
@@ -3966,7 +3925,7 @@ router.get(
 
         const responseMode = req.query.mode === 'summary' ? 'summary' : 'full';
         const deepMetricsPlatform = typeof req.query.platform === 'string' && req.query.platform !== 'all' ? req.query.platform : undefined;
-        const cacheKey = `analytics:observability-deep-metrics:v2:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${deepMetricsPlatform || 'all'}`;
+        const cacheKey = `analytics:observability-deep-metrics:v2:${productRollupSourceKey()}:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${deepMetricsPlatform || 'all'}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -3985,35 +3944,14 @@ router.get(
 
         if (responseMode === 'summary') {
             const lastRolledUpDate = await getLastRolledUpDate();
-            const dailyConditions = [inArray(appDailyStats.projectId, projectIds), lte(appDailyStats.date, lastRolledUpDate)];
-            if (startedAfter) {
-                dailyConditions.push(gte(appDailyStats.date, startedAfter.toISOString().split('T')[0]));
-            }
 
             const [allTimeRows, dailyRows] = await Promise.all([
-                db
-                    .select({
-                        totalSessions: appAllTimeStats.totalSessions,
-                        totalUsers: appAllTimeStats.totalUsers,
-                        totalErrors: appAllTimeStats.totalErrors,
-                        avgApiErrorRate: appAllTimeStats.avgApiErrorRate,
-                        avgUxScore: appAllTimeStats.avgUxScore,
-                        totalRageTaps: appAllTimeStats.totalRageTaps,
-                        platformBreakdown: appAllTimeStats.platformBreakdown,
-                    })
-                    .from(appAllTimeStats)
-                    .where(inArray(appAllTimeStats.projectId, projectIds)),
-                db
-                    .select({
-                        totalSessions: appDailyStats.totalSessions,
-                        totalErrors: appDailyStats.totalErrors,
-                        totalCrashes: appDailyStats.totalCrashes,
-                        totalAnrs: appDailyStats.totalAnrs,
-                        totalRageTaps: appDailyStats.totalRageTaps,
-                        uniqueUserCount: appDailyStats.uniqueUserCount,
-                    })
-                    .from(appDailyStats)
-                    .where(and(...dailyConditions)),
+                readProductAllTimeRollupRows({ projectIds }),
+                readProductDailyRollupRows({
+                    projectIds,
+                    startDate: startedAfter?.toISOString().split('T')[0],
+                    endDate: lastRolledUpDate,
+                }),
             ]);
 
             const totalSessionsFromAllTime = allTimeRows.reduce((sum, row) => sum + Number(row.totalSessions || 0), 0);
@@ -4609,7 +4547,7 @@ router.get(
         // sessions. The rollup has no per-platform engagement split, so a platform
         // filter forces the exact (raw-scan) path.
         const responseMode = req.query.mode === 'summary' && !engagementPlatform ? 'summary' : 'full';
-        const cacheKey = `analytics:user-engagement-trends:v2:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${engagementPlatform || 'all'}`;
+        const cacheKey = `analytics:user-engagement-trends:v2:${productRollupSourceKey()}:${projectIds.sort().join(',')}:${timeRange || 'all'}:${responseMode}:${engagementPlatform || 'all'}`;
         const cached = await redis.get(cacheKey);
         if (cached) {
             res.json(JSON.parse(cached));
@@ -4622,23 +4560,17 @@ router.get(
 
         if (responseMode === 'summary') {
             const lastRolledUpDate = await getLastRolledUpDate();
-            const conditions = [
-                inArray(appDailyStats.projectId, projectIds),
-                lte(appDailyStats.date, lastRolledUpDate),
-                gte(appDailyStats.date, startedAfter.toISOString().split('T')[0]),
-            ];
-
-            const dailyRows = await db
-                .select({
-                    date: appDailyStats.date,
-                    bouncers: appDailyStats.totalBouncers,
-                    casuals: appDailyStats.totalCasuals,
-                    explorers: appDailyStats.totalExplorers,
-                    loyalists: appDailyStats.totalLoyalists,
-                })
-                .from(appDailyStats)
-                .where(and(...conditions))
-                .orderBy(asc(appDailyStats.date));
+            const dailyRows = (await readProductDailyRollupRows({
+                projectIds,
+                startDate: startedAfter.toISOString().split('T')[0],
+                endDate: lastRolledUpDate,
+            })).map((row) => ({
+                date: row.date,
+                bouncers: row.totalBouncers,
+                casuals: row.totalCasuals,
+                explorers: row.totalExplorers,
+                loyalists: row.totalLoyalists,
+            }));
 
             // Multiple projects can share a date; collapse them into one row per day.
             const byDate = new Map<string, { bouncers: number; casuals: number; explorers: number; loyalists: number }>();

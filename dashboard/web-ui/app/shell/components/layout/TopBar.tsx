@@ -13,9 +13,10 @@ import { DASHBOARD_MANUAL_REFRESH_COMPLETE, DASHBOARD_MANUAL_REFRESH_START } fro
 
 interface TopBarProps {
   currentProject: Project | null;
+  hideDemoHomeLink?: boolean;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
+export const TopBar: React.FC<TopBarProps> = ({ currentProject, hideDemoHomeLink = false }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const navigate = useNavigate();
   const { refreshSessions } = useSessionData();
@@ -244,7 +245,7 @@ export const TopBar: React.FC<TopBarProps> = ({ currentProject }) => {
           <Menu className="h-4 w-4 stroke-[3]" />
         </button>
 
-        {pathPrefix === '/demo' && (
+        {pathPrefix === '/demo' && !hideDemoHomeLink && (
           <Link
             to="/"
             className="flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 bg-white shadow-sm transition-colors hover:bg-slate-50 sm:hidden"

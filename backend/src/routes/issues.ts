@@ -6,12 +6,13 @@
 
 import { Router } from 'express';
 import { eq, and, desc, asc, sql, or, ilike, gte, inArray } from 'drizzle-orm';
-import { db, issues, issueEvents, projects, teamMembers, users, errors, crashes, anrs, sessions, recordingArtifacts, sessionMetrics, screenTouchHeatmaps } from '../db/client.js';
+import { db, issues, issueEvents, projects, teamMembers, users, errors, crashes, anrs, sessions, recordingArtifacts, sessionMetrics } from '../db/client.js';
 import { sessionAuth, asyncHandler, ApiError } from '../middleware/index.js';
 import { writeApiRateLimiter } from '../middleware/rateLimit.js';
 import { generateANRFingerprintFromStackTrace, resolveAnrStackTrace } from '../services/anrStack.js';
 import { generateFingerprint } from '../services/issueTracker.js';
 import { querySlowApiEndpointsFromClickHouse } from '../services/apiEndpointStatsClickHouse.js';
+import { queryScreenTouchHeatmapsFromClickHouse } from '../services/productRollupsClickHouse.js';
 
 const router = Router();
 
@@ -936,19 +937,11 @@ router.post(
 
         // 2. HIGH RAGE TAP SCREENS (> 5 rage taps)
         try {
-            const rageTapScreens = await db
-                .select({
-                    screenName: screenTouchHeatmaps.screenName,
-                    totalRageTaps: sql<number>`sum(${screenTouchHeatmaps.totalRageTaps})`,
-                    totalTouches: sql<number>`sum(${screenTouchHeatmaps.totalTouches})`,
-                })
-                .from(screenTouchHeatmaps)
-                .where(and(
-                    eq(screenTouchHeatmaps.projectId, projectId),
-                    gte(screenTouchHeatmaps.date, recentDate)
-                ))
-                .groupBy(screenTouchHeatmaps.screenName)
-                .having(sql`sum(${screenTouchHeatmaps.totalRageTaps}) > 5`);
+            const rageTapScreens = (await queryScreenTouchHeatmapsFromClickHouse({
+                projectIds: [projectId],
+                startDate: recentDate,
+            }))
+                .filter((screen) => Number(screen.totalRageTaps || 0) > 5);
 
             for (const screen of rageTapScreens) {
                 const fingerprint = `ux_friction:${screen.screenName}`;

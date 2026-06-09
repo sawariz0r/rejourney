@@ -31,6 +31,7 @@
         "usage:backfill:device": "node --import tsx/esm scripts/backfill_device_usage.ts",
         "usage:backfill:device:dry-run": "node --import tsx/esm scripts/backfill_device_usage.ts --dry-run",
         "clickhouse:backfill:api-rollups": "node --import tsx scripts/backfillClickHouseApiEndpointRollups.ts",
+        "clickhouse:backfill:product-rollups": "node --import tsx scripts/backfillClickHouseProductRollups.ts",
         "worker:ingest": "tsx src/worker/ingestArtifactWorker.ts",
         "worker:ingest:dev": "tsx watch src/worker/ingestArtifactWorker.ts",
         "worker:replay": "tsx src/worker/replayArtifactWorker.ts",

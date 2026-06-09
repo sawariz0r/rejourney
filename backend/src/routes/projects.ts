@@ -7,7 +7,7 @@
 import { Router } from 'express';
 import { randomBytes, randomUUID } from 'crypto';
 import { eq, and, inArray, isNull, sql, desc } from 'drizzle-orm';
-import { db, projects, teamMembers, sessions, sessionMetrics, teams, alertSettings, alertRecipients, appDailyStats, appAllTimeStats } from '../db/client.js';
+import { db, projects, teamMembers, sessions, sessionMetrics, teams, alertSettings, alertRecipients } from '../db/client.js';
 import { getRedis } from '../db/redis.js';
 import { logger } from '../logger.js';
 import { config } from '../config.js';
@@ -35,6 +35,10 @@ import {
     assertNoDuplicateContentSpam,
     enforceNewAccountActionLimit,
 } from '../services/abuseDetection.js';
+import {
+    queryProductAllTimeStatsFromClickHouse,
+    queryProductDailyStatsFromClickHouse,
+} from '../services/productRollupsClickHouse.js';
 import { normalizeWebAllowedDomains } from '../utils/webAllowedDomains.js';
 import {
     getSmartCapturePresetRules,
@@ -1236,29 +1240,8 @@ router.get(
         const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
 
         const [allTimeRows, dailyRows] = await Promise.all([
-            db
-                .select({
-                    projectId: appAllTimeStats.projectId,
-                    totalSessions: appAllTimeStats.totalSessions,
-                    totalErrors: appAllTimeStats.totalErrors,
-                    avgUxScore: appAllTimeStats.avgUxScore,
-                    avgApiErrorRate: appAllTimeStats.avgApiErrorRate,
-                    totalRageTaps: appAllTimeStats.totalRageTaps,
-                })
-                .from(appAllTimeStats)
-                .where(inArray(appAllTimeStats.projectId, projectIds)),
-            db
-                .select({
-                    projectId: appDailyStats.projectId,
-                    date: appDailyStats.date,
-                    totalSessions: appDailyStats.totalSessions,
-                    totalErrors: appDailyStats.totalErrors,
-                    totalCrashes: appDailyStats.totalCrashes,
-                    totalAnrs: appDailyStats.totalAnrs,
-                    totalRageTaps: appDailyStats.totalRageTaps,
-                })
-                .from(appDailyStats)
-                .where(inArray(appDailyStats.projectId, projectIds)),
+            queryProductAllTimeStatsFromClickHouse({ projectIds }),
+            queryProductDailyStatsFromClickHouse({ projectIds }),
         ]);
 
         const allTimeByProject = new Map(allTimeRows.map((row) => [row.projectId, row]));

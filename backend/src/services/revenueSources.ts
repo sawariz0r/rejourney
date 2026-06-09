@@ -700,12 +700,21 @@ async function validateSuperwallDataReadAccess(apiKey: string, organizationId: s
 
 async function revenueCatResponseErrorMessage(response: Response, fallback: string): Promise<string> {
     const detail = await response.text()
-        .then((text) => text
-            .replace(/sk_[a-zA-Z0-9_:-]+/g, 'sk_[REDACTED]')
-            .replace(/atk_[a-zA-Z0-9_:-]+/g, 'atk_[REDACTED]')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 240))
+        .then((text) => {
+            let message = text;
+            try {
+                const parsed = JSON.parse(text) as { message?: unknown };
+                if (typeof parsed.message === 'string') message = parsed.message;
+            } catch {
+                // Keep the original response text when RevenueCat returns non-JSON errors.
+            }
+            return message
+                .replace(/sk_[a-zA-Z0-9_:-]+/g, 'sk_[REDACTED]')
+                .replace(/atk_[a-zA-Z0-9_:-]+/g, 'atk_[REDACTED]')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 240);
+        })
         .catch(() => '');
     return detail ? `${fallback}: ${detail}` : fallback;
 }
@@ -805,6 +814,21 @@ function findRevenueCatMeasureValue(
     return values[fallbackIndex];
 }
 
+function findRevenueCatMeasureIndex(
+    measures: string[],
+    patterns: RegExp[],
+    fallbackIndex: number,
+): number {
+    const measureIndex = measures.findIndex((name) => patterns.some((pattern) => pattern.test(name)));
+    return measureIndex >= 0 ? measureIndex : fallbackIndex;
+}
+
+function revenueCatMeasureIndex(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+    if (typeof value === 'string' && /^\d+$/.test(value.trim())) return Number(value.trim());
+    return null;
+}
+
 function firstRecordValue(record: Record<string, unknown>, keys: string[]): unknown {
     for (const key of keys) {
         if (record[key] !== undefined && record[key] !== null) return record[key];
@@ -820,8 +844,58 @@ export function parseRevenueCatRevenueChartRows(payload: unknown): GenericRevenu
     );
     const values = Array.isArray(record.values) ? record.values : [];
     const measures = Array.isArray(record.measures) ? record.measures.map(measureName) : [];
+    const revenueMeasureIndex = findRevenueCatMeasureIndex(
+        measures,
+        [/gross/, /revenue/, /proceeds/, /value/, /amount/],
+        0,
+    );
+    const transactionMeasureIndex = findRevenueCatMeasureIndex(
+        measures,
+        [/transaction/, /purchase/, /count/],
+        1,
+    );
+    const measureRowsByDate = new Map<string, {
+        dateKey: string;
+        amountValue?: unknown;
+        transactionCountValue?: unknown;
+        currency: string;
+    }>();
 
-    return values.flatMap((point) => {
+    const rows = values.flatMap((point) => {
+        const pointRecord = !Array.isArray(point) ? asRecord(point) : null;
+        const measureIndex = pointRecord ? revenueCatMeasureIndex(pointRecord.measure) : null;
+        const measureDateKey = pointRecord
+            ? parseRevenueCatDateKey(firstRecordValue(pointRecord, [
+                'date',
+                'start_date',
+                'end_date',
+                'timestamp',
+                'time',
+                'cohort',
+                'x',
+            ]))
+            : null;
+        if (
+            pointRecord
+            && measureIndex !== null
+            && measureDateKey
+            && pointRecord.value !== undefined
+            && (measureIndex === revenueMeasureIndex || measureIndex === transactionMeasureIndex)
+        ) {
+            const currency = normalizeCurrency(pointRecord.currency ?? pointRecord.currency_code, chartCurrency);
+            const aggregate = measureRowsByDate.get(`${measureDateKey}:${currency}`) ?? {
+                dateKey: measureDateKey,
+                currency,
+            };
+            if (measureIndex === revenueMeasureIndex) {
+                aggregate.amountValue = pointRecord.value;
+            } else {
+                aggregate.transactionCountValue = pointRecord.value;
+            }
+            measureRowsByDate.set(`${measureDateKey}:${currency}`, aggregate);
+            return [];
+        }
+
         let dateKey: string | null = null;
         let amountCents: number | null = null;
         let transactionCount = 0;
@@ -851,6 +925,7 @@ export function parseRevenueCatRevenueChartRows(payload: unknown): GenericRevenu
                 'end_date',
                 'timestamp',
                 'time',
+                'cohort',
                 'x',
             ]));
             amountCents = minorFromMajorAmount(firstRecordValue(pointRecord, [
@@ -893,6 +968,33 @@ export function parseRevenueCatRevenueChartRows(payload: unknown): GenericRevenu
             },
         } satisfies GenericRevenueTransaction];
     });
+
+    for (const aggregate of measureRowsByDate.values()) {
+        const amountCents = minorFromMajorAmount(aggregate.amountValue);
+        if (amountCents === null || amountCents === 0) continue;
+        const effectiveTransactionCount = positiveInt(aggregate.transactionCountValue) || 1;
+        const occurredAt = new Date(`${aggregate.dateKey}T00:00:00Z`);
+        const reportingCategory = amountCents < 0 ? 'refund' : 'revenue';
+        rows.push({
+            externalTransactionId: `revenuecat:${aggregate.dateKey}:${aggregate.currency}`,
+            occurredAt,
+            amountCents,
+            feeCents: 0,
+            netCents: amountCents,
+            grossAmountCents: amountCents > 0 ? amountCents : 0,
+            refundAmountCents: amountCents < 0 ? Math.abs(amountCents) : 0,
+            currency: aggregate.currency,
+            type: reportingCategory,
+            reportingCategory,
+            metadata: {
+                source: 'revenuecat_revenue_chart',
+                chart: 'revenue',
+                transactionCount: effectiveTransactionCount,
+            },
+        });
+    }
+
+    return rows;
 }
 
 async function assertRevenueCatApiResponseOk(response: Response, fallback: string): Promise<void> {
@@ -900,7 +1002,11 @@ async function assertRevenueCatApiResponseOk(response: Response, fallback: strin
         throw new Error('RevenueCat API key is invalid or revoked');
     }
     if (response.status === 403) {
-        throw new Error('RevenueCat API key needs charts_metrics:overview:read and charts_metrics:charts:read permissions');
+        const detail = await revenueCatResponseErrorMessage(response, 'RevenueCat API access denied');
+        if (/does not belong to the project/i.test(detail)) {
+            throw new Error(detail);
+        }
+        throw new Error(`${detail}. Ensure the key has charts_metrics:overview:read and charts_metrics:charts:read permissions`);
     }
     if (response.status === 404) {
         throw new Error('RevenueCat project not found for this API key');
@@ -1863,21 +1969,10 @@ async function syncRevenueCatRevenue(projectId: string, mode: RevenueSyncMode): 
         },
     });
 
-    if (response.status === 401) {
-        throw new Error('RevenueCat API key is invalid or revoked');
-    }
-    if (response.status === 403) {
-        throw new Error('RevenueCat API key needs charts_metrics:overview:read and charts_metrics:charts:read permissions');
-    }
-    if (response.status === 404) {
-        throw new Error('RevenueCat project not found for this API key');
-    }
-    if (!response.ok) {
-        throw new Error(await revenueCatResponseErrorMessage(
-            response,
-            `RevenueCat revenue chart sync failed (${response.status})`,
-        ));
-    }
+    await assertRevenueCatApiResponseOk(
+        response,
+        `RevenueCat revenue chart sync failed (${response.status})`,
+    );
 
     const payload = await response.json().catch(() => null);
     const transactions = parseRevenueCatRevenueChartRows(payload);

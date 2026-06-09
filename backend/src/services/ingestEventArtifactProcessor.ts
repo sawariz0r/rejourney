@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { gunzipSync } from 'zlib';
 import { and, eq, sql } from 'drizzle-orm';
-import { db, sessions, sessionMetrics, anrs, errors, screenTouchHeatmaps, recordingArtifacts } from '../db/client.js';
+import { db, sessions, sessionMetrics, anrs, errors, recordingArtifacts } from '../db/client.js';
 import { downloadFromS3ForArtifact } from '../db/s3.js';
 import { trackANRAsIssue, trackErrorAsIssue } from './issueTracker.js';
 import { normalizeIngestAppVersion, normalizeIngestSdkVersion } from './ingestSessionLifecycle.js';
@@ -16,6 +16,10 @@ import {
     writeApiEndpointEventsToClickHouse,
     type ClickHouseApiEndpointEventRow,
 } from './clickhouseApiStatsSink.js';
+import {
+    buildClickHouseScreenHeatmapDailyRollupRows,
+    writeScreenHeatmapDailyRollupsToClickHouse,
+} from './clickhouseProductRollupsSink.js';
 import {
     coerceTimestampToDate,
     extractBackgroundDurationSeconds,
@@ -948,74 +952,28 @@ export async function processEventsArtifact(
     // Batch upsert screen touch heatmap data
     if (Object.keys(screenHeatmapData).length > 0) {
         const sessionDate = new Date().toISOString().split('T')[0];
+        const clickHouseHeatmapRows = [];
         for (const [screenName, heatmapStats] of Object.entries(screenHeatmapData)) {
             if (heatmapStats.totalTouches > 0 || heatmapStats.totalRageTaps > 0) {
-                // === DATABASE PERSISTENCE (Postgres) ===
-                try {
-                    // Use atomic SQL update with JSONB merge logic to avoid OOM for large heatmaps
-                    // This pushes the aggregation work to the database instead of Node.js RAM
-                    await db.insert(screenTouchHeatmaps)
-                        .values({
-                            projectId,
-                            screenName,
-                            date: sessionDate as any,
-                            touchBuckets: heatmapStats.touchBuckets,
-                            rageTapBuckets: heatmapStats.rageTapBuckets,
-                            totalTouches: heatmapStats.totalTouches,
-                            totalRageTaps: heatmapStats.totalRageTaps,
-                            sampleSessionId: job.sessionId,
-                            screenFirstSeenMs: heatmapStats.firstSeenMs,
-                            pageWidth: heatmapStats.pageWidth,
-                            pageHeight: heatmapStats.pageHeight,
-                            viewportWidth: heatmapStats.viewportWidth,
-                            viewportHeight: heatmapStats.viewportHeight,
-                            updatedAt: new Date(),
-                        })
-                        .onConflictDoUpdate({
-                            target: [screenTouchHeatmaps.projectId, screenTouchHeatmaps.screenName, screenTouchHeatmaps.date],
-                            set: {
-                                // Merge and sum JSONB keys directly in SQL
-                                touchBuckets: sql`(
-                                    SELECT jsonb_object_agg(key, value)
-                                    FROM (
-                                        SELECT key, SUM(value::int) as value
-                                        FROM (
-                                            SELECT * FROM jsonb_each_text(${screenTouchHeatmaps.touchBuckets}::jsonb)
-                                            UNION ALL
-                                            SELECT * FROM jsonb_each_text(EXCLUDED.touch_buckets::jsonb)
-                                        ) AS combined
-                                        GROUP BY key
-                                    ) AS aggregated
-                                )`,
-                                rageTapBuckets: sql`(
-                            SELECT jsonb_object_agg(key, value)
-                                    FROM(
-                                SELECT key, SUM(value:: int) as value
-                                        FROM(
-                                    SELECT * FROM jsonb_each_text(${screenTouchHeatmaps.rageTapBuckets}:: jsonb)
-                                            UNION ALL
-                                            SELECT * FROM jsonb_each_text(EXCLUDED.rage_tap_buckets:: jsonb)
-                                ) AS combined
-                                        GROUP BY key
-                            ) AS aggregated
-                        )`,
-                                totalTouches: sql`${screenTouchHeatmaps.totalTouches} + EXCLUDED.total_touches`,
-                                totalRageTaps: sql`${screenTouchHeatmaps.totalRageTaps} + EXCLUDED.total_rage_taps`,
-                                // Keep the earlier sample session if already present
-                                sampleSessionId: sql`COALESCE(${screenTouchHeatmaps.sampleSessionId}, EXCLUDED.sample_session_id)`,
-                                screenFirstSeenMs: sql`COALESCE(${screenTouchHeatmaps.screenFirstSeenMs}, EXCLUDED.screen_first_seen_ms)`,
-                                pageWidth: sql`NULLIF(GREATEST(COALESCE(${screenTouchHeatmaps.pageWidth}, 0), COALESCE(EXCLUDED.page_width, 0)), 0)`,
-                                pageHeight: sql`NULLIF(GREATEST(COALESCE(${screenTouchHeatmaps.pageHeight}, 0), COALESCE(EXCLUDED.page_height, 0)), 0)`,
-                                viewportWidth: sql`NULLIF(GREATEST(COALESCE(${screenTouchHeatmaps.viewportWidth}, 0), COALESCE(EXCLUDED.viewport_width, 0)), 0)`,
-                                viewportHeight: sql`NULLIF(GREATEST(COALESCE(${screenTouchHeatmaps.viewportHeight}, 0), COALESCE(EXCLUDED.viewport_height, 0)), 0)`,
-                                updatedAt: new Date(),
-                            }
-                        });
-                } catch (err) {
-                    log.error({ err, screenName }, 'Failed to upsert screen heatmap');
-                }
+                clickHouseHeatmapRows.push(...buildClickHouseScreenHeatmapDailyRollupRows({
+                    projectId,
+                    date: sessionDate,
+                    screenName,
+                    touchBuckets: heatmapStats.touchBuckets,
+                    rageTapBuckets: heatmapStats.rageTapBuckets,
+                    screenFirstSeenMs: heatmapStats.firstSeenMs,
+                    pageWidth: heatmapStats.pageWidth,
+                    pageHeight: heatmapStats.pageHeight,
+                    viewportWidth: heatmapStats.viewportWidth,
+                    viewportHeight: heatmapStats.viewportHeight,
+                    source: 'event_artifact',
+                }));
             }
         }
+        await writeScreenHeatmapDailyRollupsToClickHouse({
+            artifactId: job.artifactId,
+            rows: clickHouseHeatmapRows,
+        });
         log.debug({ screenCount: Object.keys(screenHeatmapData).length }, 'Screen touch heatmap data saved');
     }
 
