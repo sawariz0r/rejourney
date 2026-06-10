@@ -1045,11 +1045,28 @@ export const RecordingsList: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <div className="font-black uppercase text-slate-400">Notes</div>
-                      <div className="mt-1 flex justify-end gap-1">
-                        {session.isFirstSession && <span className="border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black text-emerald-800">NEW</span>}
+                      <div className="mt-1 flex flex-wrap justify-end gap-1.5">
+                        {session.isFirstSession && (
+                          <span
+                            className="inline-flex items-center border-2 border-black bg-[#86efac] px-2 py-0.5 text-[10px] font-black uppercase text-black shadow-neo-sm"
+                            title="First recorded session for this visitor in this project"
+                          >
+                            NEW USER
+                          </span>
+                        )}
                         {smartCaptureNote && <SmartCaptureNoteBadge note={smartCaptureNote} />}
-                        {!hasIssues && <span className="border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black text-emerald-800">OK</span>}
-                        {hasIssues && <span className="border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[9px] font-black text-rose-800">ISSUES</span>}
+                        {!hasIssues && (
+                          <span className="inline-flex items-center border border-[#15803d] bg-[#dcfce7] px-2 py-0.5 text-[10px] font-black uppercase text-[#14532d]">
+                            HEALTHY
+                          </span>
+                        )}
+                        {(session.crashCount || 0) > 0 && <NeoBadge variant="danger" size="sm">CRASH</NeoBadge>}
+                        {((session as any).anrCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ANR</NeoBadge>}
+                        {((session as any).errorCount || 0) > 0 && <NeoBadge variant="neutral" size="sm">ERR</NeoBadge>}
+                        {(session.rageTapCount || 0) > 0 && <NeoBadge variant="danger" size="sm">RAGE</NeoBadge>}
+                        {hasDeadTaps && <NeoBadge variant="neutral" size="sm">DEAD</NeoBadge>}
+                        {hasSlowStart && <NeoBadge variant="neutral" size="sm">SLOW</NeoBadge>}
+                        {hasSlowApi && <NeoBadge variant="neutral" size="sm">API</NeoBadge>}
                       </div>
                     </div>
                   </div>

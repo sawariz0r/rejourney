@@ -70,6 +70,8 @@ def api(method: str, path: str, password: str) -> int:
             return resp.status
     except urllib.error.HTTPError as exc:
         return exc.code
+    except (urllib.error.URLError, OSError):
+        return 0
 
 
 @contextmanager
