@@ -173,6 +173,10 @@ function jsonBuffer(value: unknown): Buffer {
     return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
+function jsonlBuffer(rows: unknown[]): Buffer {
+    return Buffer.from(rows.map((row) => JSON.stringify(row)).join('\n') + '\n', 'utf8');
+}
+
 function jsonlGzipBuffer(rows: unknown[]): Buffer {
     return gzipSync(Buffer.from(rows.map((row) => JSON.stringify(row)).join('\n') + '\n', 'utf8'));
 }
@@ -1275,9 +1279,9 @@ async function processJob(job: ResearchJobRow): Promise<'exported' | 'rejected'>
     const zipFiles = [
         { name: 'manifest.json', buffer: manifestBuf },
         { name: 'quality.json', buffer: qualityBuf },
-        { name: 'interactions.jsonl.gz', buffer: interactionsBuf },
-        { name: 'ui_frames.jsonl.gz', buffer: uiFramesBuf },
-        { name: 'ui_skeleton.jsonl.gz', buffer: uiSkeletonBuf },
+        { name: 'interactions.jsonl', buffer: jsonlBuffer(interactions) },
+        { name: 'ui_frames.jsonl', buffer: jsonlBuffer(visualRows.frames) },
+        { name: 'ui_skeleton.jsonl', buffer: jsonlBuffer(skeleton) },
     ];
     const zipBuffer = await createZipArchiveBuffer(zipFiles);
     await putResearchObject(`${basePath}.zip`, zipBuffer, 'application/zip');
