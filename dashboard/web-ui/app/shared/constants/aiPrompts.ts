@@ -85,17 +85,19 @@ REVENUE TRACKING FOR THE GENERAL REVENUE CHART:
 - Also add separate lifecycle events where the app has the signal: checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
 
 Web revenue example:
-Rejourney.setUserIdentity(currentUser.id); // internal non-PII ID
-Rejourney.logEvent('purchase_completed', {
+Rejourney.setUserIdentity(currentUser.id);
+Rejourney.logEvent("purchase_completed", {
+  amount: 29.99,
+  currency: "USD",
   transactionId: order.id,
-  amount: order.total,
-  currency: order.currency || 'USD',
+  orderId: order.id,
   productId: item.productId,
   planId: subscription?.planId,
   priceId: subscription?.priceId,
   subscriptionId: subscription?.id,
-  paymentProvider: 'stripe',
-  platform: 'web',
+  paymentProvider: "your_provider",
+  platform: "web",
+  couponCode: order.couponCode,
   isTrialConversion: Boolean(subscription?.convertedFromTrial),
   isRenewal: Boolean(order.isRenewal)
 });
@@ -222,17 +224,19 @@ REVENUE TRACKING FOR THE GENERAL REVENUE CHART:
 - Also add separate lifecycle events where the app has the signal: checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
 
 React Native revenue example:
-Rejourney.setUserIdentity(currentUser.id); // internal non-PII ID
-Rejourney.logEvent('purchase_completed', {
+Rejourney.setUserIdentity(currentUser.id);
+Rejourney.logEvent("purchase_completed", {
+  amount: 29.99,
+  currency: "USD",
   transactionId: order.id,
-  amount: order.total,
-  currency: order.currency || 'USD',
+  orderId: order.id,
   productId: item.productId,
   planId: subscription?.planId,
   priceId: subscription?.priceId,
   subscriptionId: subscription?.id,
-  paymentProvider: 'revenue_provider',
+  paymentProvider: "your_provider",
   platform: Platform.OS,
+  couponCode: order.couponCode,
   isTrialConversion: Boolean(subscription?.convertedFromTrial),
   isRenewal: Boolean(order.isRenewal)
 });
@@ -398,17 +402,19 @@ REVENUE TRACKING FOR THE GENERAL REVENUE CHART:
 - Also add separate lifecycle events where the app has the signal: checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
 
 Swift revenue example:
-Rejourney.identify(currentUser.id) // internal non-PII ID
+Rejourney.identify(currentUser.id)
 Rejourney.logEvent("purchase_completed", properties: [
+    "amount": 29.99,
+    "currency": "USD",
     "transactionId": order.id,
-    "amount": order.total,
-    "currency": order.currency ?? "USD",
+    "orderId": order.id,
     "productId": item.productId,
     "planId": subscription?.planId ?? "",
     "priceId": subscription?.priceId ?? "",
     "subscriptionId": subscription?.id ?? "",
-    "paymentProvider": "revenue_provider",
+    "paymentProvider": "your_provider",
     "platform": "ios",
+    "couponCode": order.couponCode ?? "",
     "isTrialConversion": subscription?.convertedFromTrial ?? false,
     "isRenewal": order.isRenewal
 ])

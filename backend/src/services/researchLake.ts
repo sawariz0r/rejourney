@@ -66,6 +66,13 @@ type SessionContext = {
     rage_tap_count: number | null;
     dead_tap_count: number | null;
     screens_visited: string[] | null;
+    geo_country: string | null;
+    geo_country_code: string | null;
+    geo_city: string | null;
+    user_display_id: string | null;
+    crash_count?: number;
+    anr_count?: number;
+    error_count?: number;
 };
 
 type ArtifactContext = {
@@ -216,6 +223,7 @@ function stringValue(value: unknown): string {
 }
 
 function numberValue(value: unknown): number | null {
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
     const numeric = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(numeric) ? numeric : null;
 }
@@ -315,7 +323,86 @@ function screenKey(raw: string, projectKey: string): string {
     return hmac(`${projectKey}:screen:${raw}`, 20);
 }
 
-function buildInteractions(session: SessionContext, projectKey: string): ResearchInteractionRow[] {
+function getFunnelTransition(eventName: string, customEventConfig?: any): string | null {
+    const name = eventName.toLowerCase();
+    
+    // Check custom event config first
+    if (customEventConfig) {
+        if (customEventConfig.revenueEventName && name === customEventConfig.revenueEventName.toLowerCase()) {
+            return 'purchase_complete';
+        }
+        if (customEventConfig.conversionEventName && name === customEventConfig.conversionEventName.toLowerCase()) {
+            return 'purchase_complete';
+        }
+        if (customEventConfig.checkoutEventName && name === customEventConfig.checkoutEventName.toLowerCase()) {
+            return 'checkout_start';
+        }
+        if (customEventConfig.subscriptionStartedEventName && name === customEventConfig.subscriptionStartedEventName.toLowerCase()) {
+            return 'checkout_start';
+        }
+        if (customEventConfig.subscriberEventName && name === customEventConfig.subscriberEventName.toLowerCase()) {
+            return 'cart_add';
+        }
+    }
+    
+    // Default patterns for 16 funnel / lifecycle transitions
+    if (/purchase_completed|purchase_complete|purchase_success|^purchase$|order_completed|complete_purchase|conversion/i.test(name)) {
+        return 'purchase_complete';
+    }
+    if (/checkout_started|checkout_start|begin_checkout/i.test(name)) {
+        return 'checkout_start';
+    }
+    if (/add_to_cart|cart_add|addtocart/i.test(name)) {
+        return 'cart_add';
+    }
+    if (/view_item|product_view|viewproduct/i.test(name)) {
+        return 'product_view';
+    }
+    if (/signup|sign_up|register|account_created|signup_completed/i.test(name)) {
+        return 'signup';
+    }
+    if (/login|sign_in/i.test(name)) {
+        return 'login';
+    }
+    if (/paywall_view|paywall_exposure|view_paywall/i.test(name)) {
+        return 'paywall_view';
+    }
+    if (/plan_selected|pricing_plan_selected|select_plan|pricing_viewed/i.test(name)) {
+        return 'plan_selected';
+    }
+    if (/coupon_use|coupon_used|apply_coupon/i.test(name)) {
+        return 'coupon_use';
+    }
+    if (/trial_started|trial_start|begin_trial/i.test(name)) {
+        return 'trial_start';
+    }
+    if (/subscription_started|subscription_start/i.test(name)) {
+        return 'subscription_start';
+    }
+    if (/refund|refund_completed|refunded|refund_processed/i.test(name)) {
+        return 'refund';
+    }
+    if (/cancel|cancel_subscription|cancellation|subscription_cancelled/i.test(name)) {
+        return 'cancellation';
+    }
+    if (/payment_failure|payment_failed|charge_failed/i.test(name)) {
+        return 'payment_failure';
+    }
+    if (/onboarding_completed|onboarding_milestone|complete_onboarding/i.test(name)) {
+        return 'onboarding_completed';
+    }
+    if (/feature_used|key_feature_used|use_feature/i.test(name)) {
+        return 'feature_used';
+    }
+    
+    return null;
+}
+
+function buildInteractions(
+    session: SessionContext,
+    projectKey: string,
+    customEventConfig?: any
+): ResearchInteractionRow[] {
     const events = asEvents(session.events);
     const startedAtMs = session.started_at.getTime();
     return events.map((event, index) => {
@@ -329,6 +416,77 @@ function buildInteractions(session: SessionContext, projectKey: string): Researc
         const kind = classifyEventKind(event);
         const screen = screenKey(rawScreen, projectKey);
 
+        const props = (event.properties ?? event.payload ?? {}) as Record<string, unknown>;
+        const eventName = stringValue(event.name ?? event.type ?? event.eventName ?? event.event_name);
+        const transition = getFunnelTransition(eventName, customEventConfig);
+        
+        let cartValueBucket: number | null = null;
+        let itemCountChange: number | null = null;
+        
+        if (transition === 'cart_add') {
+            const rawQty = numberValue(props.quantity ?? props.qty ?? event.quantity ?? event.qty);
+            const qtyVal = rawQty !== null ? rawQty : 1;
+            itemCountChange = Math.round(qtyVal / 5) * 5;
+        }
+        
+        const amtProp = typeof customEventConfig?.revenueAmountProperty === 'string' && customEventConfig.revenueAmountProperty.trim()
+            ? customEventConfig.revenueAmountProperty.trim()
+            : null;
+        let rawVal = numberValue(
+            (amtProp ? (props[amtProp] ?? event[amtProp]) : null) ??
+            props.price ?? props.amount ?? props.value ?? props.cart_value ?? props.cartValue ?? event.price ?? event.amount ?? event.value
+        );
+        if (rawVal !== null) {
+            if (customEventConfig?.amountUnit === 'minor') {
+                rawVal = rawVal / 100;
+            }
+            cartValueBucket = Math.round(rawVal / 50) * 50;
+        }
+
+        const productIdRaw = props.productId ?? props.product_id ?? props.sku ?? event.productId ?? event.product_id ?? event.sku;
+        const productId = typeof productIdRaw === 'string' && productIdRaw ? productIdRaw : null;
+
+        const planIdRaw = props.planId ?? props.plan_id ?? props.plan ?? event.planId ?? event.plan_id ?? event.plan;
+        const planId = typeof planIdRaw === 'string' && planIdRaw ? planIdRaw : null;
+
+        const priceIdRaw = props.priceId ?? props.price_id ?? event.priceId ?? event.price_id;
+        const priceId = typeof priceIdRaw === 'string' && priceIdRaw ? priceIdRaw : null;
+
+        const curProp = typeof customEventConfig?.revenueCurrencyProperty === 'string' && customEventConfig.revenueCurrencyProperty.trim()
+            ? customEventConfig.revenueCurrencyProperty.trim()
+            : null;
+        let currency = curProp
+            ? (stringValue(props[curProp] ?? event[curProp]) || null)
+            : null;
+        if (!currency) {
+            const currencyRaw = props.currency ?? event.currency;
+            currency = typeof currencyRaw === 'string' && currencyRaw ? currencyRaw : null;
+        }
+        if (!currency && customEventConfig?.defaultCurrency) {
+            currency = String(customEventConfig.defaultCurrency);
+        }
+        if (currency) {
+            currency = currency.trim().toUpperCase();
+        }
+
+        const paymentProviderRaw = props.paymentProvider ?? props.payment_provider ?? event.paymentProvider ?? event.payment_provider;
+        const paymentProvider = typeof paymentProviderRaw === 'string' && paymentProviderRaw ? paymentProviderRaw : null;
+
+        const platformRaw = props.platform ?? event.platform;
+        const platform = typeof platformRaw === 'string' && platformRaw ? platformRaw : null;
+
+        let isRenewal: boolean | null = null;
+        const isRenewalRaw = props.isRenewal ?? props.is_renewal ?? event.isRenewal ?? event.is_renewal;
+        if (isRenewalRaw !== undefined && isRenewalRaw !== null) {
+            isRenewal = Boolean(isRenewalRaw);
+        }
+
+        let isTrialConversion: boolean | null = null;
+        const isTrialConversionRaw = props.isTrialConversion ?? props.is_trial_conversion ?? event.isTrialConversion ?? event.is_trial_conversion;
+        if (isTrialConversionRaw !== undefined && isTrialConversionRaw !== null) {
+            isTrialConversion = Boolean(isTrialConversionRaw);
+        }
+
         return {
             index,
             kind,
@@ -341,6 +499,17 @@ function buildInteractions(session: SessionContext, projectKey: string): Researc
             viewport_width_bucket: bucketNumber(event.viewportWidth ?? event.width, 64, 0, 8192),
             viewport_height_bucket: bucketNumber(event.viewportHeight ?? event.height, 64, 0, 8192),
             input_modality: kind === 'tap' ? 'pointer' : kind,
+            funnel_transition: transition,
+            item_count_change: itemCountChange,
+            cart_value_bucket: cartValueBucket,
+            product_id: productId,
+            plan_id: planId,
+            price_id: priceId,
+            currency: currency,
+            payment_provider: paymentProvider,
+            platform: platform,
+            is_renewal: isRenewal,
+            is_trial_conversion: isTrialConversion,
         };
     });
 }
@@ -350,11 +519,47 @@ function buildInteractionSkeleton(interactions: ResearchInteractionRow[]): Resea
     for (const interaction of interactions) {
         const targetKey = stringValue(interaction.target_key);
         if (!targetKey || elements.has(targetKey)) continue;
+
+        let role = interaction.kind === 'input' ? 'input' : interaction.kind === 'scroll' ? 'scroll_region' : 'interactive';
+        if (interaction.funnel_transition === 'purchase_complete') {
+            role = 'cta_purchase';
+        } else if (interaction.funnel_transition === 'checkout_start') {
+            role = 'cta_checkout';
+        } else if (interaction.funnel_transition === 'cart_add') {
+            role = 'cta_cart_add';
+        } else if (interaction.funnel_transition === 'product_view') {
+            role = 'view_item';
+        } else if (interaction.funnel_transition === 'paywall_view') {
+            role = 'paywall_element';
+        } else if (interaction.funnel_transition === 'plan_selected') {
+            role = 'plan_selector';
+        } else if (interaction.funnel_transition === 'signup') {
+            role = 'cta_signup';
+        } else if (interaction.funnel_transition === 'login') {
+            role = 'cta_login';
+        } else if (interaction.funnel_transition === 'trial_start') {
+            role = 'cta_trial_start';
+        } else if (interaction.funnel_transition === 'subscription_start') {
+            role = 'cta_subscription_start';
+        } else if (interaction.funnel_transition === 'refund') {
+            role = 'cta_refund';
+        } else if (interaction.funnel_transition === 'cancellation') {
+            role = 'cta_cancellation';
+        } else if (interaction.funnel_transition === 'payment_failure') {
+            role = 'payment_failure_element';
+        } else if (interaction.funnel_transition === 'onboarding_completed') {
+            role = 'cta_onboarding';
+        } else if (interaction.funnel_transition === 'feature_used') {
+            role = 'feature_element';
+        } else if (interaction.funnel_transition === 'coupon_use') {
+            role = 'cta_coupon_use';
+        }
+
         elements.set(targetKey, {
             element_key: targetKey,
             frame_key: null,
             screen_key: interaction.screen_key,
-            role: interaction.kind === 'input' ? 'input' : interaction.kind === 'scroll' ? 'scroll_region' : 'interactive',
+            role,
             x_bucket: interaction.x_bucket,
             y_bucket: interaction.y_bucket,
             width_bucket: null,
@@ -1043,6 +1248,8 @@ async function claimResearchJobs(limit: number): Promise<ResearchJobRow[]> {
 async function loadSessionContext(sessionId: string): Promise<{
     session: SessionContext | null;
     artifacts: ArtifactContext[];
+    transactions: { amount_cents: number; reporting_category: string; type: string; }[];
+    customEventConfig: any | null;
 }> {
     const sessionResult = await pool.query<SessionContext>(
         `
@@ -1066,7 +1273,11 @@ async function loadSessionContext(sessionId: string): Promise<{
             sm.input_count,
             sm.rage_tap_count,
             sm.dead_tap_count,
-            sm.screens_visited
+            sm.screens_visited,
+            s.geo_country,
+            s.geo_country_code,
+            s.geo_city,
+            s.user_display_id AS "user_display_id"
         FROM sessions s
         INNER JOIN projects p ON p.id = s.project_id
         LEFT JOIN session_metrics sm ON sm.session_id = s.id
@@ -1075,6 +1286,17 @@ async function loadSessionContext(sessionId: string): Promise<{
         `,
         [sessionId],
     );
+
+    if (sessionResult.rows.length === 0) {
+        return {
+            session: null,
+            artifacts: [],
+            transactions: [],
+            customEventConfig: null,
+        };
+    }
+
+    const session = sessionResult.rows[0];
 
     const artifactsResult = await pool.query<ArtifactContext>(
         `
@@ -1097,9 +1319,55 @@ async function loadSessionContext(sessionId: string): Promise<{
         [sessionId],
     );
 
+    const transactionsResult = await pool.query<{
+        amount_cents: number;
+        reporting_category: string;
+        type: string;
+    }>(
+        `
+        SELECT amount_cents AS "amount_cents", reporting_category AS "reporting_category", type
+        FROM revenue_provider_transactions
+        WHERE project_id = $1 AND (external_source_id = $2 OR metadata->>'sessionId' = $2)
+        `,
+        [session.project_id, sessionId]
+    );
+
+    const connectionResult = await pool.query<{
+        custom_event_config: any;
+    }>(
+        `
+        SELECT custom_event_config AS "custom_event_config"
+        FROM project_revenue_connections
+        WHERE project_id = $1 AND provider = 'custom_events' AND status = 'connected'
+        LIMIT 1
+        `,
+        [session.project_id]
+    );
+
+    const customEventConfig = connectionResult.rows[0]?.custom_event_config || null;
+
+    const crashesResult = await pool.query<{ count: number }>(
+        'SELECT COUNT(*)::int AS count FROM crashes WHERE session_id = $1',
+        [sessionId]
+    );
+    const anrsResult = await pool.query<{ count: number }>(
+        'SELECT COUNT(*)::int AS count FROM anrs WHERE session_id = $1',
+        [sessionId]
+    );
+    const errorsResult = await pool.query<{ count: number }>(
+        'SELECT COUNT(*)::int AS count FROM errors WHERE session_id = $1',
+        [sessionId]
+    );
+
+    session.crash_count = crashesResult.rows[0]?.count ?? 0;
+    session.anr_count = anrsResult.rows[0]?.count ?? 0;
+    session.error_count = errorsResult.rows[0]?.count ?? 0;
+
     return {
-        session: sessionResult.rows[0] ?? null,
+        session,
         artifacts: artifactsResult.rows,
+        transactions: transactionsResult.rows,
+        customEventConfig,
     };
 }
 
@@ -1164,8 +1432,129 @@ async function failJob(job: ResearchJobRow, err: unknown): Promise<void> {
     );
 }
 
+function buildBusinessContext(
+    session: SessionContext,
+    interactions: ResearchInteractionRow[],
+    _transactions: { amount_cents: number; reporting_category: string; type: string; }[],
+    customEventConfig?: any
+) {
+    const events = asEvents(session.events);
+    const purchaseCompleteEvents = interactions.filter((i) => i.funnel_transition === 'purchase_complete');
+    const isConversionSession = purchaseCompleteEvents.length > 0;
+
+    let conversionRevenueBucket: number | null = null;
+    let dominantCurrency: string | null = null;
+    let hasDiscountApplied = false;
+    const purchasedProductsSet = new Set<string>();
+
+    if (isConversionSession) {
+        let totalAmount = 0;
+        for (const i of purchaseCompleteEvents) {
+            const ev = events[i.index];
+            if (ev) {
+                const props = (ev.properties ?? ev.payload ?? {}) as Record<string, unknown>;
+                const amtProp = typeof customEventConfig?.revenueAmountProperty === 'string' && customEventConfig.revenueAmountProperty.trim()
+                    ? customEventConfig.revenueAmountProperty.trim()
+                    : null;
+                let rawVal = numberValue(
+                    (amtProp ? (props[amtProp] ?? ev[amtProp]) : null) ??
+                    props.amount ?? props.value ?? props.price ?? ev.amount ?? ev.value ?? ev.price
+                );
+                if (rawVal !== null && rawVal > 0) {
+                    if (customEventConfig?.amountUnit === 'minor') {
+                        rawVal = rawVal / 100;
+                    }
+                    totalAmount += rawVal;
+                }
+                const curProp = typeof customEventConfig?.revenueCurrencyProperty === 'string' && customEventConfig.revenueCurrencyProperty.trim()
+                    ? customEventConfig.revenueCurrencyProperty.trim()
+                    : null;
+                let currencyVal = stringValue(
+                    (curProp ? (props[curProp] ?? ev[curProp]) : null) ??
+                    props.currency ?? ev.currency
+                );
+                if (!currencyVal && customEventConfig?.defaultCurrency) {
+                    currencyVal = String(customEventConfig.defaultCurrency);
+                }
+                if (currencyVal) {
+                    currencyVal = currencyVal.trim().toUpperCase();
+                }
+                if (currencyVal && !dominantCurrency) {
+                    dominantCurrency = currencyVal;
+                }
+            }
+        }
+        if (totalAmount > 0) {
+            conversionRevenueBucket = Math.round(totalAmount / 50) * 50;
+        }
+    }
+
+    for (const ev of events) {
+        const props = (ev.properties ?? ev.payload ?? {}) as Record<string, unknown>;
+        const couponVal = props.couponCode ?? props.coupon_code ?? props.coupon ?? ev.couponCode ?? ev.coupon_code ?? ev.coupon;
+        if (couponVal !== undefined && couponVal !== null && couponVal !== '') {
+            hasDiscountApplied = true;
+            break;
+        }
+    }
+
+    for (const i of purchaseCompleteEvents) {
+        if (i.product_id && typeof i.product_id === 'string') {
+            purchasedProductsSet.add(i.product_id);
+        }
+    }
+    const purchasedProducts = Array.from(purchasedProductsSet);
+
+    const uniqueTransitions = new Set<string>();
+    for (const i of interactions) {
+        if (typeof i.funnel_transition === 'string' && i.funnel_transition) {
+            uniqueTransitions.add(i.funnel_transition);
+        }
+    }
+    const lifecycleEventsPresent = Array.from(uniqueTransitions);
+
+    let sessionMetadataKeys: string[] = [];
+    if (session.metadata && typeof session.metadata === 'object' && !Array.isArray(session.metadata)) {
+        sessionMetadataKeys = Object.keys(session.metadata);
+    }
+
+    const cartAdditions = interactions
+        .filter((i) => i.funnel_transition === 'cart_add')
+        .reduce((sum, i) => sum + Number(i.item_count_change ?? 0), 0);
+    const totalCartAdditionsBucket = Math.round(cartAdditions / 5) * 5;
+
+    let maxFunnelStageReached = 'none';
+    if (isConversionSession) {
+        maxFunnelStageReached = 'purchase';
+    } else if (interactions.some((i) => i.funnel_transition === 'checkout_start')) {
+        maxFunnelStageReached = 'checkout';
+    } else if (interactions.some((i) => i.funnel_transition === 'cart_add')) {
+        maxFunnelStageReached = 'cart';
+    } else if (interactions.some((i) => i.funnel_transition === 'product_view')) {
+        maxFunnelStageReached = 'view';
+    }
+
+    return {
+        is_conversion_session: isConversionSession,
+        max_funnel_stage_reached: maxFunnelStageReached,
+        conversion_revenue_bucket: conversionRevenueBucket,
+        currency: dominantCurrency,
+        purchased_products: purchasedProducts,
+        has_discount_applied: hasDiscountApplied,
+        lifecycle_events_present: lifecycleEventsPresent,
+        total_cart_additions_bucket: totalCartAdditionsBucket,
+        session_metadata_keys: sessionMetadataKeys,
+        funnel_steps_configured: [
+            'product_view',
+            'cart_add',
+            'checkout_start',
+            'purchase_complete'
+        ]
+    };
+}
+
 async function processJob(job: ResearchJobRow): Promise<'exported' | 'rejected'> {
-    const { session, artifacts } = await loadSessionContext(job.session_id);
+    const { session, artifacts, transactions, customEventConfig } = await loadSessionContext(job.session_id);
     if (!session) {
         await completeJob(job, {
             status: 'rejected',
@@ -1180,7 +1569,7 @@ async function processJob(job: ResearchJobRow): Promise<'exported' | 'rejected'>
 
     const projectKey = hmac(`project:${session.project_id}`, 20);
     const lakeSampleKey = crypto.randomUUID().replace(/-/g, '');
-    const interactions = buildInteractions(session, projectKey);
+    const interactions = buildInteractions(session, projectKey, customEventConfig);
     const visualRows = await buildVisualRows(session, artifacts, interactions, projectKey);
     const skeleton = [
         ...visualRows.skeleton,
@@ -1201,6 +1590,8 @@ async function processJob(job: ResearchJobRow): Promise<'exported' | 'rejected'>
         return 'rejected';
     }
 
+    const businessContext = buildBusinessContext(session, interactions, transactions, customEventConfig);
+
     const date = datePart(session.started_at);
     const basePath = `${config.RESEARCH_LAKE_PREFIX.replace(/^\/+|\/+$/g, '')}/lake=interaction/project_key=${projectKey}/date=${date}/sample_key=${lakeSampleKey}`;
     const manifest = {
@@ -1210,20 +1601,49 @@ async function processJob(job: ResearchJobRow): Promise<'exported' | 'rejected'>
         project_key: projectKey,
         sample_key: lakeSampleKey,
         sample_date: date,
+        session_start_ts_utc: session.started_at.toISOString(),
         platform: session.platform || 'unknown',
         app_version_bucket: coarseAppVersion(session.app_version),
         sdk_version_bucket: coarseAppVersion(session.sdk_version),
         duration_seconds_bucket: bucketNumber(session.duration_seconds, 30, 0, 24 * 60 * 60),
         retention_days: session.retention_days,
         source: artifactsSummary,
+        visitor_context: {
+            is_bounced: (session.duration_seconds || 0) < 15 && (session.total_events || 0) < 5,
+            screens_visited_count: (session.screens_visited || []).length,
+            screens_visited: session.screens_visited || [],
+        },
         metrics: {
-            total_events_bucket: bucketNumber(session.total_events, 10, 0),
-            touch_count_bucket: bucketNumber(session.touch_count, 5, 0),
-            scroll_count_bucket: bucketNumber(session.scroll_count, 5, 0),
-            gesture_count_bucket: bucketNumber(session.gesture_count, 5, 0),
-            input_count_bucket: bucketNumber(session.input_count, 5, 0),
-            rage_tap_count_bucket: bucketNumber(session.rage_tap_count, 2, 0),
-            dead_tap_count_bucket: bucketNumber(session.dead_tap_count, 2, 0),
+            total_events: session.total_events || 0,
+            touch_count: session.touch_count || 0,
+            scroll_count: session.scroll_count || 0,
+            gesture_count: session.gesture_count || 0,
+            input_count: session.input_count || 0,
+            rage_tap_count: session.rage_tap_count || 0,
+            dead_tap_count: session.dead_tap_count || 0,
+            duration_seconds: session.duration_seconds || 0,
+            crash_count: session.crash_count ?? 0,
+            anr_count: session.anr_count ?? 0,
+            error_count: session.error_count ?? 0,
+        },
+        geo: {
+            country: session.geo_country || null,
+            country_code: session.geo_country_code || null,
+            city: session.geo_city || null,
+        },
+        business_context: {
+            currency: businessContext.currency,
+            has_discount_applied: businessContext.has_discount_applied,
+            total_cart_additions_bucket: businessContext.total_cart_additions_bucket,
+            session_metadata_keys: businessContext.session_metadata_keys,
+            funnel_steps_configured: businessContext.funnel_steps_configured,
+        },
+        labels: {
+            is_conversion_session: businessContext.is_conversion_session,
+            max_funnel_stage_reached: businessContext.max_funnel_stage_reached,
+            conversion_revenue_bucket: businessContext.conversion_revenue_bucket,
+            purchased_products: businessContext.purchased_products,
+            lifecycle_events_present: businessContext.lifecycle_events_present,
         },
         files: {
             interactions: `${basePath}/interactions.jsonl.gz`,
@@ -1352,4 +1772,7 @@ export const __researchLakeTestInternals = {
     containsIdentifierRisk,
     imageFeatureGrid,
     createZipArchiveBuffer,
+    buildInteractions,
+    buildInteractionSkeleton,
+    buildBusinessContext,
 };
