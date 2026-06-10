@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
     const replayShareLinks = {
@@ -103,6 +103,12 @@ function insertReturningRows(rows: ReplayShareLinkRow[]) {
 describe('replayShareLinks', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-06-03T12:00:00.000Z'));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     it('builds and verifies high-entropy unlisted replay tokens', () => {
