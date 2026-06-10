@@ -917,8 +917,6 @@ const CUSTOM_REVENUE_OPTIONAL_EVENT_FIELDS = [
 
 const VERSION_RELEASE_TOOLTIP_WINDOW_MS = 36 * 60 * 60 * 1000;
 const VERSION_TOOLTIP_WRAPPER_STYLE: React.CSSProperties = { zIndex: 40 };
-const VERSION_TOOLTIP_ALLOW_ESCAPE = { x: true, y: true };
-const VERSION_TOOLTIP_POSITION = { x: 12, y: -8 };
 
 function parseStoredCustomEventSelection(raw: string | null): string[] | null {
     if (!raw) return null;
@@ -2702,8 +2700,6 @@ const RevenueImpactSection: React.FC<{
                                                     tickLine={false}
                                                 />
                                                 <Tooltip
-                                                    allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
-                                                    position={VERSION_TOOLTIP_POSITION}
                                                     wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
                                                     cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
                                                     content={<RevenueImpactTooltip currency={currency} releaseMarkers={releaseMarkers} />}
@@ -4082,8 +4078,6 @@ export const GeneralOverview: React.FC = () => {
                                             <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                             <YAxis tick={{ fontSize: 10 }} />
                                             <Tooltip
-                                                allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
-                                                position={VERSION_TOOLTIP_POSITION}
                                                 wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
                                                 content={<VersionAwareChartTooltip releaseMarkers={trendVersionMarkers} />}
                                             />
@@ -4342,8 +4336,6 @@ export const GeneralOverview: React.FC = () => {
                                                     <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                                     <YAxis tick={{ fontSize: 10 }} />
                                                     <Tooltip
-                                                        allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
-                                                        position={VERSION_TOOLTIP_POSITION}
                                                         wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
                                                         content={(
                                                             <VersionAwareChartTooltip
@@ -4475,8 +4467,6 @@ export const GeneralOverview: React.FC = () => {
                                             <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                             <YAxis tick={{ fontSize: 10 }} />
                                             <Tooltip
-                                                allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
-                                                position={VERSION_TOOLTIP_POSITION}
                                                 wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
                                                 content={(
                                                     <VersionAwareChartTooltip
@@ -4514,8 +4504,6 @@ export const GeneralOverview: React.FC = () => {
                                             <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                             <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} unit="%" />
                                             <Tooltip
-                                                allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
-                                                position={VERSION_TOOLTIP_POSITION}
                                                 wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
                                                 content={(
                                                     <VersionAwareChartTooltip
@@ -4746,8 +4734,6 @@ export const GeneralOverview: React.FC = () => {
                                                         <XAxis dataKey="dateKey" tick={{ fontSize: 10 }} tickFormatter={formatDateLabel} minTickGap={40} />
                                                         <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                                                         <Tooltip
-                                                            allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
-                                                            position={VERSION_TOOLTIP_POSITION}
                                                             wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
                                                             content={(
                                                                 <VersionAwareChartTooltip
