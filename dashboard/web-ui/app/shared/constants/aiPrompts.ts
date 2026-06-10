@@ -82,7 +82,7 @@ REVENUE TRACKING FOR THE GENERAL REVENUE CHART:
 - If this app has checkout, subscriptions, paid plans, credits, tips, or in-app purchases, instrument a dedicated money-collected event named 'purchase_completed'. Do not map device/setup/screen events such as 'device_info', 'app_initialized', 'page_view', or 'screen_view' as revenue.
 - Fire the revenue event only after payment is confirmed by the backend/payment provider when possible. If client and backend both track it, use the same stable transactionId/orderId so retries do not duplicate revenue.
 - Required revenue properties: transactionId, amount, currency. Strongly recommended properties: orderId, productId/sku, planId, priceId, subscriptionId, paymentProvider, platform, country/region, couponCode, isTrialConversion, isRenewal, entitlement.
-- Also add separate lifecycle events where the app has the signal: checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
+- Also add separate lifecycle events where the app has the signal: add_to_cart (or product_added_to_cart), checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
 
 Web revenue example:
 Rejourney.setUserIdentity(currentUser.id);
@@ -221,7 +221,7 @@ REVENUE TRACKING FOR THE GENERAL REVENUE CHART:
 - If this app has checkout, subscriptions, paid plans, credits, tips, or in-app purchases, instrument a dedicated money-collected event named 'purchase_completed'. Do not map device/setup/screen events such as 'device_info', 'app_initialized', or 'screen_view' as revenue.
 - Fire the revenue event only after payment is confirmed by the backend/payment provider when possible. If client and backend both track it, use the same stable transactionId/orderId so retries do not duplicate revenue.
 - Required revenue properties: transactionId, amount, currency. Strongly recommended properties: orderId, productId/sku, planId, priceId, subscriptionId, paymentProvider, platform, country/region, couponCode, isTrialConversion, isRenewal, entitlement.
-- Also add separate lifecycle events where the app has the signal: checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
+- Also add separate lifecycle events where the app has the signal: add_to_cart (or product_added_to_cart), checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
 
 React Native revenue example:
 Rejourney.setUserIdentity(currentUser.id);
@@ -399,7 +399,7 @@ REVENUE TRACKING FOR THE GENERAL REVENUE CHART:
 - If this app has checkout, subscriptions, paid plans, credits, tips, or in-app purchases, instrument a dedicated money-collected event named "purchase_completed". Do not map device/setup/screen events such as "device_info", "app_initialized", or "screen_view" as revenue.
 - Fire the revenue event only after payment is confirmed by the backend/payment provider when possible. If client and backend both track it, use the same stable transactionId/orderId so retries do not duplicate revenue.
 - Required revenue properties: transactionId, amount, currency. Strongly recommended properties: orderId, productId/sku, planId, priceId, subscriptionId, paymentProvider, platform, country/region, couponCode, isTrialConversion, isRenewal, entitlement.
-- Also add separate lifecycle events where the app has the signal: checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
+- Also add separate lifecycle events where the app has the signal: add_to_cart (or product_added_to_cart), checkout_started, plan_selected, trial_started, subscription_started, refund_processed, subscription_cancelled, payment_failed, onboarding_completed, and key feature activation events.
 
 Swift revenue example:
 Rejourney.identify(currentUser.id)

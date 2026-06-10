@@ -86,6 +86,11 @@ export interface CustomRevenueEventConfig {
     defaultCurrency: string;
     amountUnit: 'major' | 'minor';
     refundEventName?: string | null;
+    /**
+     * NOTE: Maps to 'cart_add' funnel transition in researchLake.ts.
+     * By default, the Research Lake includes 'product_added_to_cart' and 'added_to_cart'
+     * as regex fallback equivalencies for this funnel transition.
+     */
     subscriberEventName?: string | null;
     trialStartedEventName?: string | null;
     subscriptionStartedEventName?: string | null;

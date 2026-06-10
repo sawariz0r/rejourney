@@ -690,6 +690,9 @@ const DEFAULT_CUSTOM_REVENUE_CONFIG: CustomRevenueEventConfig = {
     defaultCurrency: 'USD',
     amountUnit: 'major',
     refundEventName: '',
+    // NOTE: 'subscriberEventName' maps to 'cart_add' funnel transition in researchLake.ts.
+    // By default, the Research Lake also contains regex fallback equivalencies for 'product_added_to_cart'
+    // and 'added_to_cart' (supporting legacy SDK configurations).
     subscriberEventName: '',
     trialStartedEventName: '',
     subscriptionStartedEventName: '',
@@ -1516,7 +1519,7 @@ function buildCustomRevenueAiSetupPrompt(config: CustomRevenueEventConfig, detec
         `- On every successful purchase or renewal, call Rejourney.logEvent(${JSON.stringify(recommendedPurchaseEventName)}, properties) with ${amountProperty}, ${currencyProperty}, a stable transactionId/orderId, productId/sku, planId, priceId if available, subscriptionId if available, paymentProvider, platform, country/region if already available, coupon/discount fields if available, isTrialConversion, isRenewal, and entitlement fields.`,
         '- Make transactionId/orderId stable and idempotent so retries do not create duplicate revenue facts.',
         '- Track refunds with a separate refund event if the app/backend has refund callbacks. Include the original transactionId/orderId, refundId, amount, currency, reason, productId, subscriptionId, and user identity.',
-        '- Track lifecycle events for trial started, subscription started, cancellation, conversion, payment failed, checkout started, pricing viewed, paywall viewed, plan selected, onboarding completed, key feature used, and activation milestone reached.',
+        '- Track lifecycle events for add_to_cart (or product_added_to_cart), trial started, subscription started, cancellation, conversion, payment failed, checkout started, pricing viewed, paywall viewed, plan selected, onboarding completed, key feature used, and activation milestone reached.',
         '- Add session/user metadata when useful for segmentation, such as plan, account type, acquisition campaign, app surface, experiment/variant, locale, and platform. Keep metadata values primitive: strings, numbers, or booleans.',
         '- Ensure events fire on backend-confirmed payment success where possible, not only on client button clicks. If tracking from both client and backend, use unique event names or stable IDs to prevent duplicate revenue.',
         '- Add tests or smoke checks proving purchase success, refund, cancellation, trial, conversion, and login identity events are emitted with the exact property names above.',

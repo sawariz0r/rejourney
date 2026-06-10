@@ -352,7 +352,11 @@ function getFunnelTransition(eventName: string, customEventConfig?: any): string
     if (/checkout_started|checkout_start|begin_checkout/i.test(name)) {
         return 'checkout_start';
     }
-    if (/add_to_cart|cart_add|addtocart/i.test(name)) {
+    // NOTE: 'added_to_cart' and 'product_added_to_cart' are included as default equivalencies
+    // for compatibility with legacy SDK event tracking setups. If a future iteration needs to
+    // differentiate them (e.g. quick-add vs detail-add), they should be split here or overridden 
+    // explicitly via project customEventConfig.subscriberEventName setting.
+    if (/add_to_cart|cart_add|addtocart|added_to_cart|product_added_to_cart/i.test(name)) {
         return 'cart_add';
     }
     if (/view_item|product_view|viewproduct/i.test(name)) {

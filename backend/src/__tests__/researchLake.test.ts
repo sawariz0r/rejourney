@@ -92,7 +92,7 @@ describe('research lake anonymized payload shape', () => {
                 { name: 'signup_completed', timestamp: new Date('2026-06-08T12:00:01Z').getTime(), x: 50, y: 50 },
                 { name: 'login', timestamp: new Date('2026-06-08T12:00:02Z').getTime(), x: 100, y: 100 },
                 { name: 'product_view', timestamp: new Date('2026-06-08T12:00:05Z').getTime(), x: 150, y: 150, properties: { price: 49.99, productId: 'prod_1' } },
-                { name: 'cart_add', timestamp: new Date('2026-06-08T12:00:10Z').getTime(), x: 200, y: 200, properties: { quantity: 7, price: 99.98, productId: 'prod_1' } },
+                { name: 'product_added_to_cart', timestamp: new Date('2026-06-08T12:00:10Z').getTime(), x: 200, y: 200, properties: { quantity: 7, price: 99.98, productId: 'prod_1' } },
                 { name: 'paywall_view', timestamp: new Date('2026-06-08T12:00:12Z').getTime(), x: 250, y: 250 },
                 { name: 'plan_selected', timestamp: new Date('2026-06-08T12:00:14Z').getTime(), x: 300, y: 300, properties: { planId: 'plan_gold' } },
                 { name: 'coupon_use', timestamp: new Date('2026-06-08T12:00:16Z').getTime(), x: 350, y: 350, properties: { couponCode: 'SAVE20' } },
@@ -105,6 +105,7 @@ describe('research lake anonymized payload shape', () => {
                 { name: 'payment_failure', timestamp: new Date('2026-06-08T12:00:55Z').getTime(), x: 700, y: 700 },
                 { name: 'onboarding_completed', timestamp: new Date('2026-06-08T12:01:00Z').getTime(), x: 750, y: 750 },
                 { name: 'feature_used', timestamp: new Date('2026-06-08T12:01:05Z').getTime(), x: 800, y: 800 },
+                { name: 'added_to_cart', timestamp: new Date('2026-06-08T12:01:10Z').getTime(), x: 850, y: 850, properties: { quantity: 5 } },
             ]
         } as any;
 
@@ -117,7 +118,7 @@ describe('research lake anonymized payload shape', () => {
 
         const interactions = __researchLakeTestInternals.buildInteractions(session, projectKey, customEventConfig);
 
-        expect(interactions).toHaveLength(16);
+        expect(interactions).toHaveLength(17);
 
         // Verify transition names
         expect(interactions[0].funnel_transition).toBe('signup');
@@ -136,13 +137,16 @@ describe('research lake anonymized payload shape', () => {
         expect(interactions[13].funnel_transition).toBe('payment_failure');
         expect(interactions[14].funnel_transition).toBe('onboarding_completed');
         expect(interactions[15].funnel_transition).toBe('feature_used');
+        expect(interactions[16].funnel_transition).toBe('cart_add');
 
         // Verify rounding and bucketing
         // product_view: 49.99 rounded to nearest 50
         expect(interactions[2].cart_value_bucket).toBe(50);
-        // cart_add: qty 7 rounded to nearest 5 is 5, price 99.98 to 100
+        // product_added_to_cart: qty 7 rounded to nearest 5 is 5, price 99.98 to 100
         expect(interactions[3].item_count_change).toBe(5);
         expect(interactions[3].cart_value_bucket).toBe(100);
+        // added_to_cart: qty 5 rounded to nearest 5 is 5
+        expect(interactions[16].item_count_change).toBe(5);
 
         // Verify custom properties extraction on purchase_complete
         const purchase = interactions[8];
@@ -167,7 +171,7 @@ describe('research lake anonymized payload shape', () => {
 
         // Verify skeleton mapping roles
         const skeleton = __researchLakeTestInternals.buildInteractionSkeleton(interactions);
-        expect(skeleton).toHaveLength(16);
+        expect(skeleton).toHaveLength(17);
         const roles = skeleton.map(e => e.role);
         expect(roles).toContain('cta_signup');
         expect(roles).toContain('cta_login');
