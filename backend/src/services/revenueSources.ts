@@ -1173,7 +1173,9 @@ async function getCustomEventSyncPreview(
             event,
             CASE
               WHEN jsonb_typeof(event->'properties') = 'object' THEN event->'properties'
+              WHEN jsonb_typeof(event->'properties') = 'string' THEN (event->>'properties')::jsonb
               WHEN jsonb_typeof(event->'payload') = 'object' THEN event->'payload'
+              WHEN jsonb_typeof(event->'payload') = 'string' THEN (event->>'payload')::jsonb
               ELSE '{}'::jsonb
             END AS props
           FROM project_sessions s
@@ -1781,7 +1783,7 @@ async function syncSuperwallRevenue(projectId: string, mode: RevenueSyncMode): P
             .select({
                 id: revenueProviderTransactions.id,
                 externalTransactionId: revenueProviderTransactions.externalTransactionId,
-                date: sql<string>`(${revenueProviderTransactions.occurredAt} AT TIME ZONE 'UTC')::date::text`,
+                date: sql<string>`${revenueProviderTransactions.occurredAt}::date::text`,
             })
             .from(revenueProviderTransactions)
             .where(and(
@@ -1903,7 +1905,7 @@ async function replaceRevenueProviderTransactionsForDateRange(
     const existingRows = await dbRead
         .select({
             id: revenueProviderTransactions.id,
-            date: sql<string>`(${revenueProviderTransactions.occurredAt} AT TIME ZONE 'UTC')::date::text`,
+            date: sql<string>`${revenueProviderTransactions.occurredAt}::date::text`,
         })
         .from(revenueProviderTransactions)
         .where(and(
@@ -2136,7 +2138,7 @@ async function rebuildGenericProviderDailyRollups(
     const aggregateQuery = await db.execute(sql`
         WITH base AS (
           SELECT
-            (occurred_at AT TIME ZONE 'UTC')::date::text AS date,
+            occurred_at::date::text AS date,
             currency,
             provider,
             type,
@@ -2150,7 +2152,7 @@ async function rebuildGenericProviderDailyRollups(
           FROM ${revenueProviderTransactions}
           WHERE ${revenueProviderTransactions.projectId} = ${projectId}
             AND ${revenueProviderTransactions.provider} = ${provider}
-            AND (occurred_at AT TIME ZONE 'UTC')::date = ANY(${dateKeyArraySql})
+            AND occurred_at::date = ANY(${dateKeyArraySql})
         ),
         event_counts AS (
           SELECT date, currency, event_name, COUNT(*)::int AS event_count
@@ -2308,7 +2310,9 @@ async function rebuildCustomEventRevenueTransactions(
             lower(COALESCE(NULLIF(event->>'name', ''), NULLIF(event->>'type', ''))) AS event_name,
             CASE
               WHEN jsonb_typeof(event->'properties') = 'object' THEN event->'properties'
+              WHEN jsonb_typeof(event->'properties') = 'string' THEN (event->>'properties')::jsonb
               WHEN jsonb_typeof(event->'payload') = 'object' THEN event->'payload'
+              WHEN jsonb_typeof(event->'payload') = 'string' THEN (event->>'payload')::jsonb
               ELSE '{}'::jsonb
             END AS props
           FROM ${sessions} s
@@ -2450,7 +2454,7 @@ async function rebuildCustomEventRevenueTransactions(
             type,
             reporting_category,
             metadata,
-            (occurred_at AT TIME ZONE 'UTC')::date::text AS date
+            occurred_at::date::text AS date
         )
         SELECT *
         FROM inserted
@@ -2478,14 +2482,14 @@ async function rebuildCustomEventRevenueTransactions(
     if (!since) {
         const allDateRows = await dbRead
             .select({
-                date: sql<string>`(${revenueProviderTransactions.occurredAt} AT TIME ZONE 'UTC')::date::text`,
+                date: sql<string>`${revenueProviderTransactions.occurredAt}::date::text`,
             })
             .from(revenueProviderTransactions)
             .where(and(
                 eq(revenueProviderTransactions.projectId, connection.projectId),
                 eq(revenueProviderTransactions.provider, 'custom_events'),
             ))
-            .groupBy(sql`(${revenueProviderTransactions.occurredAt} AT TIME ZONE 'UTC')::date::text`);
+            .groupBy(sql`${revenueProviderTransactions.occurredAt}::date::text`);
         dateKeys = allDateRows.map((row) => row.date).filter(Boolean);
     }
     const clickHouseRows = rows.map((row) => {
@@ -2605,7 +2609,7 @@ export async function syncGenericRevenueProvider(
             } else {
                 const manualDateRows = await dbRead
                     .select({
-                        date: sql<string>`(${revenueProviderTransactions.occurredAt} AT TIME ZONE 'UTC')::date::text`,
+                        date: sql<string>`${revenueProviderTransactions.occurredAt}::date::text`,
                     })
                     .from(revenueProviderTransactions)
                     .where(and(
@@ -2613,7 +2617,7 @@ export async function syncGenericRevenueProvider(
                         eq(revenueProviderTransactions.provider, 'custom_events'),
                         sql`${revenueProviderTransactions.metadata}->>'source' = ${MANUAL_REVENUE_SOURCE}`,
                     ))
-                    .groupBy(sql`(${revenueProviderTransactions.occurredAt} AT TIME ZONE 'UTC')::date::text`);
+                    .groupBy(sql`${revenueProviderTransactions.occurredAt}::date::text`);
                 importedDateCount = await rebuildGenericProviderDailyRollups(
                     projectId,
                     'custom_events',

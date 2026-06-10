@@ -976,6 +976,7 @@ async function seedResearchJobs(limit: number): Promise<number> {
             INNER JOIN projects p ON p.id = s.project_id
             WHERE p.deleted_at IS NULL
               AND s.identity_scrubbed_at IS NULL
+              AND s.recording_deleted = false
               AND s.started_at + (s.retention_days * INTERVAL '1 day') <= NOW() + ($1 * INTERVAL '1 hour')
               AND NOT EXISTS (
                   SELECT 1 FROM research_extraction_jobs rej WHERE rej.session_id = s.id
@@ -1284,20 +1285,27 @@ export async function runResearchLakeExtractionCycle(): Promise<ResearchLakeCycl
         const jobs = await claimResearchJobs(batchSize);
         if (jobs.length === 0) break;
 
-        for (const job of jobs) {
-            summary.attempted++;
-            try {
-                const status = await processJob(job);
-                if (status === 'exported') summary.exported++;
-                else summary.rejected++;
-            } catch (err) {
-                summary.failed++;
-                await failJob(job, err);
-                logger.error({ err, jobId: job.id, sessionId: job.session_id }, 'Research lake extraction failed');
-            }
+        const concurrency = Math.max(1, Math.min(config.RESEARCH_LAKE_CONCURRENCY, jobs.length));
+        let nextIndex = 0;
 
-            if (Date.now() - startedAt >= config.RESEARCH_LAKE_MAX_RUNTIME_MS) break;
+        async function worker(): Promise<void> {
+            while (nextIndex < jobs.length) {
+                if (Date.now() - startedAt >= config.RESEARCH_LAKE_MAX_RUNTIME_MS) break;
+                const job = jobs[nextIndex++];
+                summary.attempted++;
+                try {
+                    const status = await processJob(job);
+                    if (status === 'exported') summary.exported++;
+                    else summary.rejected++;
+                } catch (err) {
+                    summary.failed++;
+                    await failJob(job, err);
+                    logger.error({ err, jobId: job.id, sessionId: job.session_id }, 'Research lake extraction failed');
+                }
+            }
         }
+
+        await Promise.all(Array.from({ length: concurrency }, () => worker()));
     }
 
     logger.info(summary, 'Research lake extraction cycle completed');

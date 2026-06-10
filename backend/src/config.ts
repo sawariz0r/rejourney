@@ -116,6 +116,7 @@ const envSchema = z.object({
     RESEARCH_LAKE_SECRET_ACCESS_KEY: z.string().optional(),
     RESEARCH_LAKE_PREFIX: z.string().default('v1'),
     RESEARCH_LAKE_BATCH_SIZE: z.string().transform(Number).default('50'),
+    RESEARCH_LAKE_CONCURRENCY: z.string().transform(Number).default('4'),
     RESEARCH_LAKE_MAX_RUNTIME_MS: z.string().transform(Number).default('240000'),
     RESEARCH_LAKE_LOOKAHEAD_HOURS: z.string().transform(Number).default('24'),
     RESEARCH_LAKE_MIN_EVENT_COUNT: z.string().transform(Number).default('3'),

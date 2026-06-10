@@ -2459,8 +2459,8 @@ const RevenueImpactSection: React.FC<{
     };
 
     return (
-        <section className="rejourney-general-card flex min-w-0 flex-col overflow-hidden border border-[#dadce0] bg-white shadow-none">
-            <div className="h-1 bg-[#67e8f9]" />
+        <section className="rejourney-general-card flex min-w-0 flex-col border border-[#dadce0] bg-white shadow-none">
+            <div className="h-1 bg-[#67e8f9] rounded-t-[7px]" />
             <div className="flex min-h-0 flex-col p-4 sm:p-5">
                 <div
                     className={`flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between ${isCollapsed ? '' : 'mb-4 border-b border-[#e8eaed] pb-3'}`}
@@ -2703,6 +2703,7 @@ const RevenueImpactSection: React.FC<{
                                                 />
                                                 <Tooltip
                                                     allowEscapeViewBox={VERSION_TOOLTIP_ALLOW_ESCAPE}
+                                                    position={VERSION_TOOLTIP_POSITION}
                                                     wrapperStyle={VERSION_TOOLTIP_WRAPPER_STYLE}
                                                     cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
                                                     content={<RevenueImpactTooltip currency={currency} releaseMarkers={releaseMarkers} />}
