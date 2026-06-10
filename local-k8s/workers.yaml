@@ -538,6 +538,14 @@ spec:
                 secretKeyRef:
                   name: redis-secret
                   key: REDIS_URL
+            - name: REDIS_SENTINEL_HOST
+              value: "redis.rejourney-local.svc.cluster.local"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: REDIS_PASSWORD
+                  optional: true
             - name: S3_ENDPOINT
               valueFrom:
                 secretKeyRef:
@@ -573,6 +581,11 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: INGEST_HMAC_SECRET
+            - name: STORAGE_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: STORAGE_ENCRYPTION_KEY
             - name: SHARE_LINK_SECRET
               valueFrom:
                 secretKeyRef:
