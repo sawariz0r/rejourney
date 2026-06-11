@@ -847,7 +847,7 @@ spec:
   failedJobsHistoryLimit: 5
   jobTemplate:
     spec:
-      activeDeadlineSeconds: 1800
+      activeDeadlineSeconds: 3600
       backoffLimit: 1
       template:
         metadata:
@@ -907,9 +907,11 @@ spec:
                 - name: RESEARCH_LAKE_CURATED_PREFIX
                   value: "v1_curated"
                 - name: RESEARCH_LAKE_COMPACTOR_LOOKBACK_DAYS
-                  value: "2"
+                  value: "120"
                 - name: RESEARCH_LAKE_COMPACTOR_MAX_SAMPLES
                   value: "5000"
+                - name: RESEARCH_LAKE_COMPACTOR_CHUNK_ROWS
+                  value: "10000"
               resources:
                 requests:
                   cpu: 250m

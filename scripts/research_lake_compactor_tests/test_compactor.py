@@ -100,6 +100,72 @@ def test_behavioral_sample_builds_behavioral_tables_without_ui_rows():
     assert "product_key" not in rows[("combined", "event_fact")][0]
 
 
+def test_eligible_manifest_keys_are_grouped_by_complete_date_partition():
+    keys = [
+        "v1/lake=interaction/project_key=a/date=2026-06-10/sample_key=one/manifest.json",
+        "v1/lake=interaction/project_key=a/date=2026-06-10/sample_key=one/events.jsonl.gz",
+        "v1/lake=interaction/project_key=a/date=2026-06-11/sample_key=two/manifest.json",
+        "v1/lake=interaction/project_key=a/date=2026-06-12/sample_key=three/manifest.json",
+        "v1/lake=interaction/project_key=a/date=bad/sample_key=four/manifest.json",
+    ]
+
+    grouped = compactor.eligible_manifest_keys_by_date(keys, explicit_date=None, min_date="2026-06-11")
+
+    assert sorted(grouped) == ["2026-06-11", "2026-06-12"]
+    assert grouped["2026-06-11"] == [
+        "v1/lake=interaction/project_key=a/date=2026-06-11/sample_key=two/manifest.json"
+    ]
+
+
+def test_chunked_writer_splits_large_partitions_without_redeleting(monkeypatch):
+    class FakeClient:
+        def __init__(self):
+            self.deleted = []
+            self.puts = []
+
+        def put_object(self, **kwargs):
+            self.puts.append(kwargs)
+
+    client = FakeClient()
+
+    monkeypatch.setattr(compactor, "delete_prefix", lambda _client, _bucket, prefix: client.deleted.append(prefix))
+    monkeypatch.setattr(compactor, "parquet_bytes", lambda rows: f"rows={len(rows)}".encode("utf-8"))
+    monkeypatch.setattr(compactor, "load_sample_from_s3", lambda _client, _bucket, key, _lake: {"key": key})
+
+    def rows_from_sample(_lake, sample):
+        return {
+            ("combined", "event_fact"): [{
+                "source_lake": "combined",
+                "project_key": "project_hash",
+                "sample_key": sample["key"],
+                "sample_date": "2026-06-11",
+                "platform": "ios",
+                "event_index": 0,
+                "event_family": "funnel",
+            }]
+        }
+
+    monkeypatch.setattr(compactor, "rows_from_sample", rows_from_sample)
+
+    row_groups, total_rows = compactor.write_manifest_keys_chunked_to_s3(
+        client,
+        "bucket",
+        "v1_curated",
+        {
+            "interaction": ["sample-one", "sample-two", "sample-three"],
+            "behavioral_outcomes": [],
+        },
+        chunk_rows=2,
+    )
+
+    assert row_groups == 2
+    assert total_rows == 3
+    assert client.deleted == ["v1_curated/source_lake=combined/table=event_fact/date=2026-06-11/event_family=funnel/"]
+    assert len(client.puts) == 2
+    assert client.puts[0]["Body"] == b"rows=2"
+    assert client.puts[1]["Body"] == b"rows=1"
+
+
 @pytest.mark.skipif(pq is None, reason="pyarrow is not installed")
 def test_parquet_bytes_round_trips():
     pa = pytest.importorskip("pyarrow")

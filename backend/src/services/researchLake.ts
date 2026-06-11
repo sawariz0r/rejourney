@@ -18,7 +18,7 @@ import {
 
 const RESEARCH_SCHEMA_VERSION = 1;
 const RESEARCH_ANONYMIZATION_VERSION = 1;
-const SCREENSHOT_FEATURE_GRID_SIZE = 8;
+const SCREENSHOT_FEATURE_GRID_SIZE = 32;
 const JPEG_MAX_MEMORY_MB = 192;
 const RRWEB_EVENT_TYPE_FULL_SNAPSHOT = 2;
 const RRWEB_EVENT_TYPE_INCREMENTAL = 3;
@@ -276,6 +276,27 @@ function bucketNumber(value: unknown, bucketSize: number, min = 0, max = Number.
     return Math.round(bounded / bucketSize) * bucketSize;
 }
 
+function bucketMoneyAmount(value: unknown): number | null {
+    const numeric = numberValue(value);
+    if (numeric === null) return null;
+    const bounded = Math.max(0, Math.min(1_000_000, numeric));
+    if (bounded <= 200) return bucketNumber(bounded, 10, 0, 200);
+    if (bounded <= 1_000) return bucketNumber(bounded, 50, 0, 1_000);
+    return bucketNumber(bounded, 100, 0, 1_000_000);
+}
+
+function bucketItemCount(value: unknown): number | null {
+    const numeric = numberValue(value);
+    if (numeric === null) return null;
+    const rounded = Math.max(0, Math.min(10_000, Math.round(numeric)));
+    if (rounded <= 5) return rounded;
+    if (rounded <= 10) return 10;
+    if (rounded <= 20) return 20;
+    if (rounded <= 50) return 50;
+    if (rounded <= 100) return 100;
+    return bucketNumber(rounded, 100, 0, 10_000);
+}
+
 function bucketTimestampElapsedMs(timestampMs: number | null, session: SessionContext, bucketSize = 500): number | null {
     if (timestampMs === null) return null;
     return bucketNumber(timestampMs - session.started_at.getTime(), bucketSize, 0, 86_400_000);
@@ -466,7 +487,7 @@ function buildInteractions(
         if (transition === 'cart_add') {
             const rawQty = numberValue(props.quantity ?? props.qty ?? event.quantity ?? event.qty);
             const qtyVal = rawQty !== null ? rawQty : 1;
-            itemCountChange = Math.round(qtyVal / 5) * 5;
+            itemCountChange = bucketItemCount(qtyVal);
         }
         
         const amtProp = typeof customEventConfig?.revenueAmountProperty === 'string' && customEventConfig.revenueAmountProperty.trim()
@@ -480,7 +501,7 @@ function buildInteractions(
             if (customEventConfig?.amountUnit === 'minor') {
                 rawVal = rawVal / 100;
             }
-            cartValueBucket = Math.round(rawVal / 50) * 50;
+            cartValueBucket = bucketMoneyAmount(rawVal);
         }
 
         const productIdRaw = props.productId ?? props.product_id ?? props.sku ?? event.productId ?? event.product_id ?? event.sku;
@@ -660,15 +681,18 @@ function imageFeatureGrid(buffer: Buffer): ScreenshotFeatureGrid | null {
         const lumaGrid: number[] = [];
         const edgeGrid: number[] = [];
         const colorGrid: number[] = [];
-        const cellWidth = Math.max(1, Math.ceil(decoded.width / SCREENSHOT_FEATURE_GRID_SIZE));
-        const cellHeight = Math.max(1, Math.ceil(decoded.height / SCREENSHOT_FEATURE_GRID_SIZE));
-
         for (let gy = 0; gy < SCREENSHOT_FEATURE_GRID_SIZE; gy++) {
             for (let gx = 0; gx < SCREENSHOT_FEATURE_GRID_SIZE; gx++) {
-                const x0 = gx * cellWidth;
-                const y0 = gy * cellHeight;
-                const x1 = Math.min(decoded.width, x0 + cellWidth);
-                const y1 = Math.min(decoded.height, y0 + cellHeight);
+                const x0 = Math.min(decoded.width - 1, Math.floor((gx * decoded.width) / SCREENSHOT_FEATURE_GRID_SIZE));
+                const y0 = Math.min(decoded.height - 1, Math.floor((gy * decoded.height) / SCREENSHOT_FEATURE_GRID_SIZE));
+                const x1 = Math.min(
+                    decoded.width,
+                    Math.max(x0 + 1, Math.floor(((gx + 1) * decoded.width) / SCREENSHOT_FEATURE_GRID_SIZE)),
+                );
+                const y1 = Math.min(
+                    decoded.height,
+                    Math.max(y0 + 1, Math.floor(((gy + 1) * decoded.height) / SCREENSHOT_FEATURE_GRID_SIZE)),
+                );
                 const stepX = Math.max(1, Math.floor((x1 - x0) / 12));
                 const stepY = Math.max(1, Math.floor((y1 - y0) / 12));
                 let lumaSum = 0;
@@ -750,33 +774,6 @@ function gridDelta(a: number[] | null, b: number[]): number | null {
     if (!a || a.length !== b.length) return null;
     const total = b.reduce((sum, value, index) => sum + Math.abs(value - a[index]), 0);
     return Math.round(total / b.length);
-}
-
-function buildScreenshotGridSkeleton(
-    frame: ResearchUiFrameRow,
-    features: ScreenshotFeatureGrid,
-): ResearchUiElementRow[] {
-    return features.lumaGrid.map((luma, index) => {
-        const xCell = index % SCREENSHOT_FEATURE_GRID_SIZE;
-        const yCell = Math.floor(index / SCREENSHOT_FEATURE_GRID_SIZE);
-        const edge = features.edgeGrid[index] ?? 0;
-        const color = features.colorGrid[index] ?? 0;
-        const prominence = Math.min(15, Math.round((edge * 0.65) + (Math.abs(luma - 8) * 0.35)));
-        return {
-            element_key: hmac(`${frame.frame_key}:cell:${index}:${luma}:${edge}:${color}`, 20),
-            frame_key: frame.frame_key,
-            screen_key: frame.screen_key,
-            role: edge >= 4 ? 'visual_edge_region' : 'visual_region',
-            x_cell: xCell,
-            y_cell: yCell,
-            grid_size: SCREENSHOT_FEATURE_GRID_SIZE,
-            luma_bucket: luma,
-            edge_bucket: edge,
-            color_bucket: color,
-            prominence_bucket: prominence,
-            text_class: 'masked',
-        };
-    });
 }
 
 function rrwebEventKind(event: Record<string, unknown>): string {
@@ -958,16 +955,15 @@ async function buildScreenshotVisualRows(
                 image_bytes_bucket: bucketNumber(frame.data.length, 16 * 1024, 0, 20 * 1024 * 1024),
                 visual_signature_key: visualSignatureKey,
                 source_frame_digest_key: sourceFrameDigestKey,
-                luma_grid_8x8: features?.lumaGrid ?? [],
-                edge_grid_8x8: features?.edgeGrid ?? [],
-                color_grid_8x8: features?.colorGrid ?? [],
+                luma_grid_32x32: features?.lumaGrid ?? [],
+                edge_grid_32x32: features?.edgeGrid ?? [],
+                color_grid_32x32: features?.colorGrid ?? [],
                 previous_frame_delta_bucket: features ? gridDelta(previousLumaGrid, features.lumaGrid) : null,
                 text_class: 'masked',
             };
             frames.push(frameRow);
 
             if (features) {
-                skeleton.push(...buildScreenshotGridSkeleton(frameRow, features));
                 previousLumaGrid = features.lumaGrid;
             }
             sessionFrameIndex++;
@@ -1672,7 +1668,7 @@ function buildBusinessContext(
             }
         }
         if (totalAmount > 0) {
-            conversionRevenueBucket = Math.round(totalAmount / 50) * 50;
+            conversionRevenueBucket = bucketMoneyAmount(totalAmount);
         }
     }
 
@@ -1708,7 +1704,7 @@ function buildBusinessContext(
     const cartAdditions = interactions
         .filter((i) => i.funnel_transition === 'cart_add')
         .reduce((sum, i) => sum + Number(i.item_count_change ?? 0), 0);
-    const totalCartAdditionsBucket = Math.round(cartAdditions / 5) * 5;
+    const totalCartAdditionsBucket = bucketItemCount(cartAdditions);
 
     let maxFunnelStageReached = 'none';
     if (isConversionSession) {

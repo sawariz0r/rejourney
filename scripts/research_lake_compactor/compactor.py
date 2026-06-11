@@ -379,15 +379,30 @@ def load_sample_from_s3(client, bucket: str, manifest_key: str, source_lake: str
 
 
 def date_allowed(manifest_key: str, explicit_date: str | None, min_date: str | None) -> bool:
-    match = re.search(r"/date=([0-9]{4}-[0-9]{2}-[0-9]{2})/", manifest_key)
-    if not match:
+    date = manifest_date(manifest_key)
+    if not date:
         return False
-    date = match.group(1)
     if explicit_date:
         return date == explicit_date
     if min_date:
         return date >= min_date
     return True
+
+
+def manifest_date(manifest_key: str) -> str | None:
+    match = re.search(r"/date=([0-9]{4}-[0-9]{2}-[0-9]{2})/", manifest_key)
+    return match.group(1) if match else None
+
+
+def eligible_manifest_keys_by_date(keys: Iterable[str], explicit_date: str | None, min_date: str | None) -> dict[str, list[str]]:
+    by_date: dict[str, list[str]] = defaultdict(list)
+    for key in keys:
+        if not key.endswith("/manifest.json") or not date_allowed(key, explicit_date, min_date):
+            continue
+        date = manifest_date(key)
+        if date:
+            by_date[date].append(key)
+    return by_date
 
 
 def delete_prefix(client, bucket: str, prefix: str) -> None:
@@ -398,25 +413,77 @@ def delete_prefix(client, bucket: str, prefix: str) -> None:
             client.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": key} for key in chunk]})
 
 
+def output_partition_prefix(curated_prefix: str, source_lake: str, table: str, partitions: tuple[str, ...]) -> str:
+    return "/".join([
+        normalize_prefix(curated_prefix),
+        f"source_lake={source_lake}",
+        f"table={table}",
+        *partitions,
+    ])
+
+
+def put_parquet_part(client, bucket: str, partition_prefix: str, run_id: str, part_index: int, rows: list[dict[str, Any]]) -> None:
+    key = f"{partition_prefix}/part-{run_id}-{part_index:05d}.parquet"
+    client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=parquet_bytes(rows),
+        ContentType="application/vnd.apache.parquet",
+    )
+
+
 def write_grouped_parquet_to_s3(client, bucket: str, curated_prefix: str, grouped: dict[tuple[str, str, tuple[str, ...]], list[dict[str, Any]]]) -> None:
     run_id = uuid.uuid4().hex
     for (source_lake, table, partitions), rows in grouped.items():
         if not rows:
             continue
-        partition_prefix = "/".join([
-            normalize_prefix(curated_prefix),
-            f"source_lake={source_lake}",
-            f"table={table}",
-            *partitions,
-        ])
+        partition_prefix = output_partition_prefix(curated_prefix, source_lake, table, partitions)
         delete_prefix(client, bucket, f"{partition_prefix}/")
-        key = f"{partition_prefix}/part-{run_id}.parquet"
-        client.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=parquet_bytes(rows),
-            ContentType="application/vnd.apache.parquet",
-        )
+        put_parquet_part(client, bucket, partition_prefix, run_id, 0, rows)
+
+
+def write_manifest_keys_chunked_to_s3(
+    client,
+    bucket: str,
+    curated_prefix: str,
+    keys_by_lake: dict[str, list[str]],
+    chunk_rows: int,
+) -> tuple[int, int]:
+    run_id = uuid.uuid4().hex
+    buffers: dict[tuple[str, str, tuple[str, ...]], list[dict[str, Any]]] = defaultdict(list)
+    deleted_prefixes: set[str] = set()
+    part_counts: dict[tuple[str, str, tuple[str, ...]], int] = defaultdict(int)
+    total_rows = 0
+
+    def flush(group_key: tuple[str, str, tuple[str, ...]]) -> None:
+        nonlocal total_rows
+        rows = buffers[group_key]
+        if not rows:
+            return
+        source_lake, table, partitions = group_key
+        partition_prefix = output_partition_prefix(curated_prefix, source_lake, table, partitions)
+        if partition_prefix not in deleted_prefixes:
+            delete_prefix(client, bucket, f"{partition_prefix}/")
+            deleted_prefixes.add(partition_prefix)
+        part_index = part_counts[group_key]
+        put_parquet_part(client, bucket, partition_prefix, run_id, part_index, rows)
+        part_counts[group_key] += 1
+        total_rows += len(rows)
+        buffers[group_key] = []
+
+    for source_lake in RAW_LAKES:
+        for key in keys_by_lake[source_lake]:
+            sample = load_sample_from_s3(client, bucket, key, source_lake)
+            grouped = group_rows_by_output(rows_from_sample(source_lake, sample))
+            for group_key, rows in grouped.items():
+                buffers[group_key].extend(rows)
+                if len(buffers[group_key]) >= chunk_rows:
+                    flush(group_key)
+
+    for group_key in list(buffers):
+        flush(group_key)
+
+    return sum(part_counts.values()), total_rows
 
 
 def main() -> None:
@@ -427,34 +494,65 @@ def main() -> None:
     raw_prefix = normalize_prefix(env("RESEARCH_LAKE_PREFIX", "v1") or "v1")
     curated_prefix = normalize_prefix(env("RESEARCH_LAKE_CURATED_PREFIX", "v1_curated") or "v1_curated")
     explicit_date = env("RESEARCH_LAKE_COMPACTOR_DATE")
-    lookback_days = int(env("RESEARCH_LAKE_COMPACTOR_LOOKBACK_DAYS", "2") or "2")
+    # Raw partitions use the session date, not the export date. Retention-time
+    # exports can therefore land today under date partitions weeks earlier.
+    lookback_days = int(env("RESEARCH_LAKE_COMPACTOR_LOOKBACK_DAYS", "120") or "120")
     max_samples = int(env("RESEARCH_LAKE_COMPACTOR_MAX_SAMPLES", "5000") or "5000")
+    chunk_rows = max(1, int(env("RESEARCH_LAKE_COMPACTOR_CHUNK_ROWS", "10000") or "10000"))
     min_date = None
     if not explicit_date and lookback_days > 0:
         min_date = (dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=lookback_days)).isoformat()
 
     client = s3_client()
-    all_rows: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    loaded_by_lake = {source_lake: 0 for source_lake in RAW_LAKES}
+    keys_by_date: dict[str, dict[str, list[str]]] = defaultdict(lambda: {source_lake: [] for source_lake in RAW_LAKES})
+    discovered_by_lake = {source_lake: 0 for source_lake in RAW_LAKES}
+    skipped_dates: dict[str, dict[str, int]] = {}
+
     for source_lake in RAW_LAKES:
         prefix = f"{raw_prefix}/lake={source_lake}/"
-        for key in list_keys(client, bucket, prefix):
-            if loaded_by_lake[source_lake] >= max_samples:
-                break
-            if not key.endswith("/manifest.json") or not date_allowed(key, explicit_date, min_date):
-                continue
-            sample = load_sample_from_s3(client, bucket, key, source_lake)
-            for table_key, rows in rows_from_sample(source_lake, sample).items():
-                all_rows[table_key].extend(rows)
-            loaded_by_lake[source_lake] += 1
+        lake_keys_by_date = eligible_manifest_keys_by_date(list_keys(client, bucket, prefix), explicit_date, min_date)
+        for date, keys in lake_keys_by_date.items():
+            keys_by_date[date][source_lake].extend(keys)
+            discovered_by_lake[source_lake] += len(keys)
 
-    grouped = group_rows_by_output(all_rows)
-    write_grouped_parquet_to_s3(client, bucket, curated_prefix, grouped)
+    loaded_by_lake = {source_lake: 0 for source_lake in RAW_LAKES}
+    processed_dates = 0
+    total_row_groups = 0
+    total_rows = 0
+
+    for date in sorted(keys_by_date):
+        oversized = {
+            source_lake: len(keys)
+            for source_lake, keys in keys_by_date[date].items()
+            if max_samples > 0 and len(keys) > max_samples
+        }
+        if oversized:
+            skipped_dates[date] = oversized
+            continue
+
+        date_row_groups, date_rows = write_manifest_keys_chunked_to_s3(
+            client,
+            bucket,
+            curated_prefix,
+            keys_by_date[date],
+            chunk_rows,
+        )
+        for source_lake in RAW_LAKES:
+            loaded_by_lake[source_lake] += len(keys_by_date[date][source_lake])
+        processed_dates += 1
+        total_row_groups += date_row_groups
+        total_rows += date_rows
+
     print(json.dumps({
+        "chunk_rows": chunk_rows,
+        "date_partitions_processed": processed_dates,
+        "date_partitions_skipped": len(skipped_dates),
         "samples_loaded": sum(loaded_by_lake.values()),
+        "samples_discovered_by_lake": discovered_by_lake,
         "samples_loaded_by_lake": loaded_by_lake,
-        "row_groups": len(grouped),
-        "rows": sum(len(rows) for rows in grouped.values()),
+        "row_groups": total_row_groups,
+        "rows": total_rows,
+        "skipped_dates": skipped_dates,
         "curated_prefix": curated_prefix,
     }, sort_keys=True))
 

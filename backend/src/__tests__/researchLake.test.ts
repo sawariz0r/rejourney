@@ -58,11 +58,12 @@ describe('research lake anonymized payload shape', () => {
         expect(features).not.toBeNull();
         expect(features?.width).toBe(width);
         expect(features?.height).toBe(height);
-        expect(features?.lumaGrid).toHaveLength(64);
-        expect(features?.edgeGrid).toHaveLength(64);
-        expect(features?.colorGrid).toHaveLength(64);
+        expect(features?.lumaGrid).toHaveLength(1024);
+        expect(features?.edgeGrid).toHaveLength(1024);
+        expect(features?.colorGrid).toHaveLength(1024);
         expect(features?.lumaGrid.every((value) => value >= 0 && value <= 15)).toBe(true);
         expect(features?.edgeGrid.every((value) => value >= 0 && value <= 15)).toBe(true);
+        expect(features?.lumaGrid.at(-1)).toBeGreaterThan(0);
     });
 
     it('generates a valid ZIP archive containing multiple files', async () => {
@@ -229,12 +230,12 @@ describe('research lake anonymized payload shape', () => {
         expect(interactions[16].funnel_transition).toBe('cart_add');
 
         // Verify rounding and bucketing
-        // product_view: 49.99 rounded to nearest 50
+        // product_view: 49.99 rounded into the fine low-value money bucket
         expect(interactions[2].cart_value_bucket).toBe(50);
-        // product_added_to_cart: qty 7 rounded to nearest 5 is 5, price 99.98 to 100
-        expect(interactions[3].item_count_change).toBe(5);
+        // product_added_to_cart: qty 7 maps to the 6-10 count bucket, price 99.98 to 100
+        expect(interactions[3].item_count_change).toBe(10);
         expect(interactions[3].cart_value_bucket).toBe(100);
-        // added_to_cart: qty 5 rounded to nearest 5 is 5
+        // added_to_cart: exact small counts are retained as buckets
         expect(interactions[16].item_count_change).toBe(5);
 
         // Verify custom properties extraction on purchase_complete
@@ -334,11 +335,11 @@ describe('research lake anonymized payload shape', () => {
 
         expect(interactions).toHaveLength(2);
         
-        // 149.97 rounded to nearest 50 is 150
+        // 149.97 rounded into the fine low-value money bucket
         expect(interactions[0].cart_value_bucket).toBe(150);
         expect(interactions[0].currency).toBe('EUR');
 
-        // 50.00 rounded to nearest 50 is 50
+        // 50.00 rounded into the fine low-value money bucket
         expect(interactions[1].cart_value_bucket).toBe(50);
         // Fallbacks to defaultCurrency GBP
         expect(interactions[1].currency).toBe('GBP');
