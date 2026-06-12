@@ -35,11 +35,40 @@ clean_macos_metadata() {
     find "$ROOT_DIR/node_modules" "$dir/node_modules" -name .DS_Store -delete 2>/dev/null || true
 }
 
+remove_node_modules_path() {
+    local path="$1"
+    local attempt
+
+    for attempt in 1 2 3 4 5; do
+        [ -d "$path" ] || return 0
+
+        find "$path" -name .DS_Store -delete 2>/dev/null || true
+        chmod -R u+w "$path" 2>/dev/null || true
+        rm -rf "$path" 2>/dev/null || true
+
+        [ -d "$path" ] || return 0
+        sleep 0.5
+    done
+
+    if ! rm -rf "$path"; then
+        error "Failed to remove $path after repeated attempts"
+    fi
+
+    [ ! -d "$path" ] || error "Failed to remove $path after repeated attempts"
+}
+
 remove_node_modules_before_ci() {
     local dir="$1"
-    if [ -d "$ROOT_DIR/node_modules" ] || [ -d "$dir/node_modules" ]; then
+    local root_node_modules="$ROOT_DIR/node_modules"
+    local dir_node_modules="$dir/node_modules"
+
+    if [ -d "$root_node_modules" ] || [ -d "$dir_node_modules" ]; then
         log "Removing existing node_modules before npm ci in $dir"
-        rm -rf "$ROOT_DIR/node_modules" "$dir/node_modules"
+        remove_node_modules_path "$root_node_modules"
+
+        if [ "$dir_node_modules" != "$root_node_modules" ]; then
+            remove_node_modules_path "$dir_node_modules"
+        fi
     fi
 }
 

@@ -8,6 +8,7 @@ import { ensureIngestSession } from '../services/ingestSessionLifecycle.js';
 import { trackANRAsIssue, trackCrashAsIssue } from '../services/issueTracker.js';
 import { assertSessionAcceptsNewIngestWork } from '../services/sessionIngestImmutability.js';
 import { mergeAnrDeviceMetadata, resolveAnrStackTrace } from '../services/anrStack.js';
+import { normalizeClientEpochMsForSession } from '../services/sessionClock.js';
 
 const router = Router();
 
@@ -25,7 +26,6 @@ router.post(
         }
 
         const sessionId = incident.sessionId;
-        const timestamp = new Date(incident.timestampMs || Date.now());
         const normalizedCategory = String(incident.category || '').trim().toLowerCase();
         const isAnrIncident = normalizedCategory === 'anr'
             || normalizedCategory === 'app_not_responding'
@@ -35,6 +35,13 @@ router.post(
             initialStatus: 'processing',
         });
         assertSessionAcceptsNewIngestWork(faultSession);
+        const serverNow = new Date();
+        const normalizedIncidentTimestamp = normalizeClientEpochMsForSession(
+            incident.timestampMs,
+            faultSession,
+            serverNow,
+        );
+        const timestamp = new Date(normalizedIncidentTimestamp.value ?? serverNow.getTime());
 
         const stackTrace = Array.isArray(incident.frames)
             ? incident.frames.join('\n')

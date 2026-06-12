@@ -51,6 +51,7 @@ import {
     isSessionIngestImmutable,
 } from '../services/sessionIngestImmutability.js';
 import { selectMaxObservabilityMinutes } from '../services/sessionTiming.js';
+import { normalizeArtifactTimeRangeForSession } from '../services/sessionClock.js';
 const router = Router();
 
 type ReplayBillingGate = {
@@ -626,12 +627,22 @@ router.post(
             sdkVersion: typeof data.sdkVersion === 'string' ? data.sdkVersion : undefined,
         }, undefined, existingSession);
 
-        const startTimeInt = Math.floor(Number(data.startTime));
-        const endTimeInt = data.endTime ? Math.floor(Number(data.endTime)) : startTimeInt;
-        const backfilledSession = await maybeBackfillSessionStartedAt(session.id, startTimeInt, session);
+        const rawStartTimeInt = Math.floor(Number(data.startTime));
+        const rawEndTimeInt = data.endTime ? Math.floor(Number(data.endTime)) : rawStartTimeInt;
+        const serverNow = new Date();
+        const backfilledSession = await maybeBackfillSessionStartedAt(session.id, rawStartTimeInt, session, serverNow);
         if (backfilledSession) {
             session = backfilledSession;
         }
+        const normalizedTiming = normalizeArtifactTimeRangeForSession({
+            session,
+            serverNow,
+            timestamp: rawStartTimeInt,
+            startTime: rawStartTimeInt,
+            endTime: rawEndTimeInt,
+        });
+        const startTimeInt = normalizedTiming.startTime ?? rawStartTimeInt;
+        const endTimeInt = normalizedTiming.endTime ?? rawEndTimeInt;
 
         assertSessionAcceptsNewIngestWork(session);
 
@@ -1001,14 +1012,24 @@ router.post(
             replayQuotaBillingExhausted: replayBillingGate.replayQuotaBillingExhausted,
         }, existingSession);
 
-        const startTimeInt = Math.floor(Number(data.startTime));
-        const endTimeInt = data.endTime ? Math.floor(Number(data.endTime)) : null;
+        const rawStartTimeInt = Math.floor(Number(data.startTime));
+        const rawEndTimeInt = data.endTime ? Math.floor(Number(data.endTime)) : null;
+        const serverNow = new Date();
         // Pass the session we already have so maybeBackfillSessionStartedAt skips its SELECT
         // when the timestamp is already correct (the common case).
-        const backfilledSession = await maybeBackfillSessionStartedAt(session.id, startTimeInt, session);
+        const backfilledSession = await maybeBackfillSessionStartedAt(session.id, rawStartTimeInt, session, serverNow);
         if (backfilledSession) {
             session = backfilledSession;
         }
+        const normalizedTiming = normalizeArtifactTimeRangeForSession({
+            session,
+            serverNow,
+            timestamp: rawStartTimeInt,
+            startTime: rawStartTimeInt,
+            endTime: rawEndTimeInt,
+        });
+        const startTimeInt = normalizedTiming.startTime ?? rawStartTimeInt;
+        const endTimeInt = normalizedTiming.endTime;
 
         assertSessionAcceptsNewIngestWork(session);
 
@@ -1061,7 +1082,7 @@ router.post(
         if ((data.kind === 'screenshots' || data.kind === 'hierarchy') && project.maxRecordingMinutes) {
             const maxRecordingMs = project.maxRecordingMinutes * 60 * 1000;
             const sessionStartMs = session.startedAt.getTime();
-            const segmentStartMs = Number(data.startTime);
+            const segmentStartMs = startTimeInt;
             const segmentEndMs = endTimeInt ?? segmentStartMs;
             const wallGraceMs = 120_000;
             const elapsedStartMs = segmentStartMs - sessionStartMs;

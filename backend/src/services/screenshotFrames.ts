@@ -25,7 +25,7 @@
  */
 
 import { eq, and } from 'drizzle-orm';
-import { gunzipSync } from 'zlib';
+import { gzipSync, gunzipSync } from 'zlib';
 import { db, recordingArtifacts, sessions } from '../db/client.js';
 import {
     downloadFromS3ForArtifact,
@@ -285,16 +285,202 @@ function parseTarArchive(tarBuffer: Buffer): Array<{ name: string; data: Buffer 
     return files;
 }
 
+function writeTarOctal(header: Buffer, value: number, offset: number, length: number): void {
+    header.write(value.toString(8).padStart(length - 1, '0') + '\0', offset, length, 'ascii');
+}
+
+function buildTarHeader(name: string, size: number): Buffer {
+    const header = Buffer.alloc(512, 0);
+    header.write(name, 0, Math.min(Buffer.byteLength(name), 100), 'utf8');
+    header.write('0000644\0', 100, 8, 'ascii');
+    header.write('0000000\0', 108, 8, 'ascii');
+    header.write('0000000\0', 116, 8, 'ascii');
+    writeTarOctal(header, size, 124, 12);
+    writeTarOctal(header, 0, 136, 12);
+    header.fill(0x20, 148, 156);
+    header[156] = '0'.charCodeAt(0);
+    let checksum = 0;
+    for (const byte of header) checksum += byte;
+    header.write(checksum.toString(8).padStart(6, '0') + '\0 ', 148, 8, 'ascii');
+    return header;
+}
+
+function buildTarArchive(files: Array<{ name: string; data: Buffer }>): Buffer {
+    const chunks: Buffer[] = [];
+    for (const file of files) {
+        chunks.push(buildTarHeader(file.name, file.data.length), file.data);
+        const paddingLength = (512 - (file.data.length % 512)) % 512;
+        if (paddingLength > 0) {
+            chunks.push(Buffer.alloc(paddingLength, 0));
+        }
+    }
+    chunks.push(Buffer.alloc(1024, 0));
+    return Buffer.concat(chunks);
+}
+
+function normalizeTarScreenshotFilename(name: string, sessionStartTime: number): { name: string; normalized: boolean } {
+    const normalizedSessionStart = Number.isFinite(sessionStartTime) && sessionStartTime > 1e12
+        ? Math.floor(sessionStartTime)
+        : null;
+    if (normalizedSessionStart === null) return { name, normalized: false };
+
+    const match = name.match(/^(.*?)(\d+)_(\d+)_(\d+)\.(jpe?g)$/i);
+    if (!match) return { name, normalized: false };
+
+    const [, prefix, rawSessionEpoch, streamId, rawFramePart, extension] = match;
+    const sessionEpoch = Number.parseInt(rawSessionEpoch, 10);
+    const framePart = Number.parseInt(rawFramePart, 10);
+    if (!Number.isFinite(sessionEpoch) || !Number.isFinite(framePart) || sessionEpoch <= 1e12) {
+        return { name, normalized: false };
+    }
+
+    let normalizedFramePart = framePart;
+    if (framePart > 1e12) {
+        const relativeOffset = framePart - sessionEpoch;
+        if (relativeOffset >= 0 && relativeOffset < 24 * 60 * 60 * 1000) {
+            normalizedFramePart = normalizedSessionStart + relativeOffset;
+        }
+    }
+
+    const normalizedName = `${prefix}${normalizedSessionStart}_${streamId}_${normalizedFramePart}.${extension}`;
+    return {
+        name: normalizedName,
+        normalized: normalizedName !== name,
+    };
+}
+
+export type ScreenshotArchiveClockNormalizationResult = {
+    data: Buffer;
+    normalized: boolean;
+    normalizedFrameNameCount: number;
+    uploadedSizeBytes: number | null;
+};
+
+export function normalizeScreenshotArchiveClockFields(
+    archiveBuffer: Buffer,
+    sessionStartTime: number,
+    options?: { s3Key?: string | null },
+): ScreenshotArchiveClockNormalizationResult {
+    try {
+        const isGzipped = archiveBuffer.length >= 2 &&
+            archiveBuffer[0] === 0x1f &&
+            archiveBuffer[1] === 0x8b;
+        const rawBuffer = isGzipped ? gunzipSync(archiveBuffer) : archiveBuffer;
+        if (isAndroidBinaryFormat(rawBuffer)) {
+            return {
+                data: archiveBuffer,
+                normalized: false,
+                normalizedFrameNameCount: 0,
+                uploadedSizeBytes: null,
+            };
+        }
+
+        const files = parseTarArchive(rawBuffer);
+        if (files.length === 0) {
+            return {
+                data: archiveBuffer,
+                normalized: false,
+                normalizedFrameNameCount: 0,
+                uploadedSizeBytes: null,
+            };
+        }
+
+        let normalizedFrameNameCount = 0;
+        const normalizedFiles = files.map((file) => {
+            if (!file.name.match(/\.jpe?g$/i)) return file;
+            const normalized = normalizeTarScreenshotFilename(file.name, sessionStartTime);
+            if (normalized.normalized) normalizedFrameNameCount += 1;
+            return { ...file, name: normalized.name };
+        });
+
+        if (normalizedFrameNameCount === 0) {
+            return {
+                data: archiveBuffer,
+                normalized: false,
+                normalizedFrameNameCount: 0,
+                uploadedSizeBytes: null,
+            };
+        }
+
+        const tar = buildTarArchive(normalizedFiles);
+        const shouldGzip = isGzipped || Boolean(options?.s3Key?.endsWith('.gz'));
+        return {
+            data: shouldGzip ? gzipSync(tar, { level: 9 }) : tar,
+            normalized: true,
+            normalizedFrameNameCount,
+            uploadedSizeBytes: null,
+        };
+    } catch (err) {
+        logger.warn({ err }, '[screenshotFrames] Failed to normalize screenshot archive clock fields');
+        return {
+            data: archiveBuffer,
+            normalized: false,
+            normalizedFrameNameCount: 0,
+            uploadedSizeBytes: null,
+        };
+    }
+}
+
+export async function normalizeScreenshotArchiveClockFieldsInStorage(params: {
+    artifactId?: string | null;
+    data: Buffer;
+    endpointId?: string | null;
+    log?: { info: (payload: Record<string, unknown>, message: string) => void };
+    projectId: string;
+    s3Key: string;
+    session: { id?: string | null; startedAt?: Date | string | null };
+}): Promise<ScreenshotArchiveClockNormalizationResult> {
+    const sessionStartTime = params.session.startedAt instanceof Date
+        ? params.session.startedAt.getTime()
+        : new Date(String(params.session.startedAt)).getTime();
+    const normalized = normalizeScreenshotArchiveClockFields(params.data, sessionStartTime, { s3Key: params.s3Key });
+    if (!normalized.normalized) return normalized;
+
+    const uploadResult = await uploadToS3ForArtifact(
+        params.projectId,
+        params.s3Key,
+        normalized.data,
+        params.s3Key.endsWith('.gz') ? 'application/gzip' : 'application/octet-stream',
+        {
+            artifact_id: params.artifactId ?? '',
+            session_id: params.session.id ?? '',
+            kind: 'screenshots',
+            clock_normalized: 'true',
+        },
+        params.endpointId,
+    );
+
+    if (!uploadResult.success) {
+        throw new Error(uploadResult.error || `Failed to normalize screenshot archive clock fields for ${params.s3Key}`);
+    }
+
+    params.log?.info({
+        artifactId: params.artifactId ?? null,
+        normalizedFrameNameCount: normalized.normalizedFrameNameCount,
+        s3Key: params.s3Key,
+        sessionId: params.session.id ?? null,
+    }, 'Normalized future client-clock fields in screenshot archive');
+
+    return {
+        ...normalized,
+        uploadedSizeBytes: normalized.data.length,
+    };
+}
+
 /**
  * Extract timestamp from screenshot filename.
  * Format: {sessionEpoch}_1_{frameTimestamp}.jpeg
  *
  * iOS SDKs store frameTimestamp as a relative offset in ms from sessionEpoch.
- * When sessionEpoch looks like an absolute epoch (>1e12) and frameTimestamp is
- * smaller than sessionEpoch, treat frameTimestamp as a relative offset and
- * return sessionEpoch + frameTimestamp as the absolute timestamp.
+ * When sessionEpoch differs from the server-normalized session start, preserve
+ * that relative offset against the normalized server time instead of reviving a
+ * future client wall clock.
  */
-function parseFrameTimestamp(filename: string): number | null {
+function parseFrameTimestamp(filename: string, sessionStartTime: number = 0): number | null {
+    const normalizedSessionStart = Number.isFinite(sessionStartTime) && sessionStartTime > 1e12
+        ? Math.floor(sessionStartTime)
+        : null;
+
     // Match pattern: digits_digits_digits.jpeg
     const match = filename.match(/(\d+)_\d+_(\d+)\.jpe?g$/i);
     if (match) {
@@ -302,7 +488,23 @@ function parseFrameTimestamp(filename: string): number | null {
         const frameTs = parseInt(match[2], 10);
         // If sessionEpoch is an absolute epoch ms and frameTs is a relative offset
         if (sessionEpoch > 1e12 && frameTs < sessionEpoch) {
-            return sessionEpoch + frameTs;
+            return (normalizedSessionStart ?? sessionEpoch) + frameTs;
+        }
+
+        // Some legacy files store the absolute frame timestamp as the third part.
+        // If the filename's session epoch was clamped on the server, translate the
+        // absolute frame timestamp by the same delta so extracted frame objects and
+        // URLs use normalized time.
+        if (
+            normalizedSessionStart !== null &&
+            sessionEpoch > 1e12 &&
+            frameTs > 1e12 &&
+            sessionEpoch !== normalizedSessionStart
+        ) {
+            const relativeOffset = frameTs - sessionEpoch;
+            if (relativeOffset >= 0 && relativeOffset < 24 * 60 * 60 * 1000) {
+                return normalizedSessionStart + relativeOffset;
+            }
         }
         return frameTs;
     }
@@ -380,7 +582,7 @@ export async function extractFramesFromArchive(
                         continue;
                     }
                     
-                    const timestamp = parseFrameTimestamp(file.name);
+                    const timestamp = parseFrameTimestamp(file.name, sessionStartTime);
                     if (timestamp === null) {
                         logger.warn({ filename: file.name }, '[screenshotFrames] Could not parse timestamp from filename');
                         continue;

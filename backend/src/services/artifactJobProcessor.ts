@@ -7,12 +7,14 @@ import { ensureHierarchyArtifactCompressed } from './hierarchyArtifactCompressio
 import { summarizeEventsArtifact } from './ingestEventArtifactProcessor.js';
 import { processAnrsArtifact, processCrashesArtifact } from './ingestFaultArtifactProcessors.js';
 import { processRecoveredReplayArtifact } from './ingestReplayArtifactProcessor.js';
+import { normalizeScreenshotArchiveClockFieldsInStorage } from './screenshotFrames.js';
 import { runArtifactCompletionEffects } from './artifactCompletionEffects.js';
 import { canOpenReplayFromSessionFields } from './replayAvailability.js';
 import { reconcileSessionState } from './sessionReconciliation.js';
 import { enqueueSessionEventRollupJob } from './sessionEventRollupQueue.js';
 import { enqueueSessionEffectsJob } from './sessionEffectsQueue.js';
 import type { ArtifactJobData, Job } from './artifactBullQueue.js';
+import { normalizeArtifactPayloadClockFieldsInStorage } from './artifactPayloadClockNormalization.js';
 
 // ─── Job context type ─────────────────────────────────────────────────────────
 
@@ -91,33 +93,76 @@ export const artifactProcessors: Record<string, ArtifactProcessor> = {
     events: async (context) => {
         const data = await downloadFromS3ForArtifact(context.projectId, context.s3Key, context.artifact.endpointId);
         if (!data) throw new Error('Artifact payload missing from S3 for events');
-        return summarizeEventsArtifact(data);
+        const normalized = await normalizeArtifactPayloadClockFieldsInStorage({
+            artifactId: context.job.artifactId,
+            data,
+            endpointId: context.artifact.endpointId,
+            kind: 'events',
+            log: context.log,
+            projectId: context.projectId,
+            s3Key: context.s3Key,
+            session: context.session,
+        });
+        const summary = summarizeEventsArtifact(normalized.data);
+        return {
+            ...summary,
+            sizeBytes: normalized.uploadedSizeBytes ?? normalized.data.length,
+        };
     },
     crashes: async (context) => {
         const data = await downloadFromS3ForArtifact(context.projectId, context.s3Key, context.artifact.endpointId);
         if (!data) throw new Error('Artifact payload missing from S3 for crashes');
-        await processCrashesArtifact(context.job, context.session, context.projectId, context.s3Key, data, context.log);
-        return { sizeBytes: data.length };
+        const normalized = await normalizeArtifactPayloadClockFieldsInStorage({
+            artifactId: context.job.artifactId,
+            data,
+            endpointId: context.artifact.endpointId,
+            kind: 'crashes',
+            log: context.log,
+            projectId: context.projectId,
+            s3Key: context.s3Key,
+            session: context.session,
+        });
+        await processCrashesArtifact(context.job, context.session, context.projectId, context.s3Key, normalized.data, context.log);
+        return { sizeBytes: normalized.uploadedSizeBytes ?? normalized.data.length };
     },
     anrs: async (context) => {
         const data = await downloadFromS3ForArtifact(context.projectId, context.s3Key, context.artifact.endpointId);
         if (!data) throw new Error('Artifact payload missing from S3 for anrs');
+        const normalized = await normalizeArtifactPayloadClockFieldsInStorage({
+            artifactId: context.job.artifactId,
+            data,
+            endpointId: context.artifact.endpointId,
+            kind: 'anrs',
+            log: context.log,
+            projectId: context.projectId,
+            s3Key: context.s3Key,
+            session: context.session,
+        });
         context.log.info('Processing ANRs artifact');
-        await processAnrsArtifact(context.job, context.session, context.projectId, context.s3Key, data, context.log);
-        return { sizeBytes: data.length };
+        await processAnrsArtifact(context.job, context.session, context.projectId, context.s3Key, normalized.data, context.log);
+        return { sizeBytes: normalized.uploadedSizeBytes ?? normalized.data.length };
     },
     screenshots: async (context) => {
         const data = await downloadFromS3ForArtifact(context.projectId, context.s3Key, context.artifact.endpointId);
         if (!data) throw new Error('Artifact payload missing from S3 for screenshots');
-        await processRecoveredReplayArtifact({
+        const normalized = await normalizeScreenshotArchiveClockFieldsInStorage({
             artifactId: context.job.artifactId,
             data,
+            endpointId: context.artifact.endpointId,
+            log: context.log,
+            projectId: context.projectId,
+            s3Key: context.s3Key,
+            session: context.session,
+        });
+        await processRecoveredReplayArtifact({
+            artifactId: context.job.artifactId,
+            data: normalized.data,
             expectedFrameCount: context.artifact.frameCount,
             job: context.job,
             log: context.log,
             sessionStartTime: context.session.startedAt.getTime(),
         });
-        return { sizeBytes: data.length };
+        return { sizeBytes: normalized.uploadedSizeBytes ?? data.length };
     },
     hierarchy: async (context) => {
         const repairResult = await ensureHierarchyArtifactCompressed({
@@ -129,23 +174,43 @@ export const artifactProcessors: Record<string, ArtifactProcessor> = {
         });
         const data = await downloadFromS3ForArtifact(context.projectId, context.s3Key, context.artifact.endpointId);
         if (!data) throw new Error('Artifact payload missing from S3 for hierarchy');
-        await processRecoveredReplayArtifact({
+        const normalized = await normalizeArtifactPayloadClockFieldsInStorage({
             artifactId: context.job.artifactId,
             data,
+            endpointId: context.artifact.endpointId,
+            kind: 'hierarchy',
+            log: context.log,
+            projectId: context.projectId,
+            s3Key: context.s3Key,
+            session: context.session,
+        });
+        await processRecoveredReplayArtifact({
+            artifactId: context.job.artifactId,
+            data: normalized.data,
             expectedFrameCount: context.artifact.frameCount,
             job: context.job,
             log: context.log,
             sessionStartTime: context.session.startedAt.getTime(),
         });
-        const sizeBytes = repairResult.sizeBytes ?? data.length;
+        const sizeBytes = normalized.uploadedSizeBytes ?? repairResult.sizeBytes ?? data.length;
         return { sizeBytes };
     },
     rrweb: async (context) => {
         const data = await downloadFromS3ForArtifact(context.projectId, context.s3Key, context.artifact.endpointId);
         if (!data) throw new Error('Artifact payload missing from S3 for rrweb');
-        const eventCount = validateRrwebArtifactPayload(data, context.s3Key);
+        const normalized = await normalizeArtifactPayloadClockFieldsInStorage({
+            artifactId: context.job.artifactId,
+            data,
+            endpointId: context.artifact.endpointId,
+            kind: 'rrweb',
+            log: context.log,
+            projectId: context.projectId,
+            s3Key: context.s3Key,
+            session: context.session,
+        });
+        const eventCount = validateRrwebArtifactPayload(normalized.data, context.s3Key);
         context.log.info({ eventCount }, 'RRWeb artifact verified');
-        return { sizeBytes: data.length };
+        return { sizeBytes: normalized.uploadedSizeBytes ?? normalized.data.length };
     },
 };
 

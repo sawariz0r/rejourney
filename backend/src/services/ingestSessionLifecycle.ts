@@ -10,7 +10,13 @@ import {
     getVideoRetentionDetailsForTier,
     normalizeVideoRetentionTier,
 } from './videoRetention.js';
-import { parseSessionStartedAt, parseSessionStartedAtOrNull } from './sessionId.js';
+import { parseSessionStartedAtOrNull } from './sessionId.js';
+import {
+    SESSION_CLOCK_METADATA_KEY,
+    buildExistingFutureSessionClockMetadata,
+    normalizeClientEpochMsForSession,
+    resolveSessionClock,
+} from './sessionClock.js';
 
 export type IngestSessionMetadata = {
     userId?: string;
@@ -286,25 +292,30 @@ function assertSessionProjectMatch(session: any, projectId: string, source: stri
 }
 
 export function isSessionIdFresh(sessionId: string, maxAgeMs = MATERIALIZE_MISSING_SESSION_MAX_AGE_MS): boolean {
-    const startedAt = parseSessionStartedAtOrNull(sessionId);
-    if (!startedAt) {
+    if (!parseSessionStartedAtOrNull(sessionId)) {
         return false;
     }
-    const ageMs = Date.now() - startedAt.getTime();
+    const clock = resolveSessionClock(sessionId);
+    const ageMs = clock.serverObservedAtMs - clock.startedAt.getTime();
     return Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= maxAgeMs;
 }
 
 export async function maybeBackfillSessionStartedAt(
     sessionId: string,
     candidateStartedAtMs: number | null | undefined,
-    prefetchedSession?: any
+    prefetchedSession?: any,
+    serverNow: Date = new Date(),
 ): Promise<any | null> {
-    const candidateMs = Number(candidateStartedAtMs);
-    if (!Number.isFinite(candidateMs) || candidateMs <= 0) {
+    const normalizedCandidate = normalizeClientEpochMsForSession(
+        candidateStartedAtMs,
+        prefetchedSession,
+        serverNow,
+    );
+    if (normalizedCandidate.value === null) {
         return null;
     }
 
-    const candidateStartedAt = new Date(candidateMs);
+    const candidateStartedAt = new Date(normalizedCandidate.value);
 
     // Use the pre-fetched session when available to skip a SELECT round-trip.
     let session = prefetchedSession ?? null;
@@ -314,6 +325,18 @@ export async function maybeBackfillSessionStartedAt(
     }
     if (!session) {
         return null;
+    }
+
+    if (!prefetchedSession) {
+        const normalizedWithSession = normalizeClientEpochMsForSession(
+            candidateStartedAtMs,
+            session,
+            serverNow,
+        );
+        if (normalizedWithSession.value === null) {
+            return null;
+        }
+        candidateStartedAt.setTime(normalizedWithSession.value);
     }
 
     if (candidateStartedAt >= session.startedAt) {
@@ -405,6 +428,7 @@ export async function ensureIngestSession(
     options?: EnsureIngestSessionOptions,
     prefetchedSession?: any
 ): Promise<{ session: any; created: boolean }> {
+    const serverNow = new Date();
     // Use the caller's already-fetched session row to skip a DB round-trip.
     // Only trust it if the projectId matches — guards against stale data bugs.
     const prefetchedWasCacheHit = prefetchedSession?.__ingestSessionCacheHit === true;
@@ -425,6 +449,7 @@ export async function ensureIngestSession(
         const inferred = inferSessionShape(req, metadata);
         const videoRetention = await resolveVideoRetention(projectId);
         const initialSdkVersion = normalizeIngestSdkVersion(metadata?.sdkVersion);
+        const sessionClock = resolveSessionClock(sessionId, serverNow);
 
         const inserted = await db.insert(sessions).values({
             id: sessionId,
@@ -438,7 +463,8 @@ export async function ensureIngestSession(
             userDisplayId: inferred.userDisplayId,
             anonymousDisplayId: inferred.anonymousDisplayId,
             deviceId: metadata?.deviceId || null,
-            startedAt: parseSessionStartedAt(sessionId),
+            startedAt: sessionClock.startedAt,
+            ...(sessionClock.metadata ? { metadata: { [SESSION_CLOCK_METADATA_KEY]: sessionClock.metadata } } : {}),
             retentionTier: videoRetention.tier,
             retentionDays: videoRetention.days,
             isSampledIn: true,
@@ -463,6 +489,19 @@ export async function ensureIngestSession(
         }
     } else {
         assertSessionProjectMatch(session, projectId, 'ensureIngestSession');
+    }
+
+    const existingClockMetadata = buildExistingFutureSessionClockMetadata(session, serverNow);
+    if (existingClockMetadata) {
+        await db.update(sessions)
+            .set({
+                startedAt: new Date(existingClockMetadata.normalizedStartedAtMs),
+                metadata: sql`${sessions.metadata} || ${JSON.stringify({ [SESSION_CLOCK_METADATA_KEY]: existingClockMetadata })}::jsonb`,
+                updatedAt: serverNow,
+            })
+            .where(eq(sessions.id, sessionId));
+        [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
+        loadedSessionFromDb = Boolean(session);
     }
 
     const updates = buildMetadataUpdates(session, metadata, req, options);

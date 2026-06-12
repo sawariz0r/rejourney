@@ -22,6 +22,7 @@ import { loadSuccessorSessionStartedAt } from '../services/sessionTimingQuery.js
 import { markSessionIngestActivity, reconcileSessionState } from '../services/sessionReconciliation.js';
 import { isSessionIngestImmutable } from '../services/sessionIngestImmutability.js';
 import { getRedisDiagnosticsForLog, invalidateSessionEndpointCache, invalidateSessionExistsCache } from '../db/redis.js';
+import { normalizeClientEpochMsForSession } from '../services/sessionClock.js';
 
 const router = Router();
 
@@ -110,6 +111,11 @@ router.post(
         const trustClientFrustrationCounts = shouldTrustClientFrustrationCountsForPlatform(session.platform);
         const metricsUpdates = buildSessionEndMetricsMergeSet(data.metrics, { trustClientFrustrationCounts });
         const metricsSummary = summarizeSessionEndMetrics(data.metrics, { trustClientFrustrationCounts });
+        const serverNow = new Date();
+        const normalizedReportedEndedAt = normalizeClientEpochMsForSession(data.endedAt, session, serverNow);
+        const normalizedCloseAnchorAt = normalizeClientEpochMsForSession(data.closeAnchorAtMs, session, serverNow);
+        const reportedEndedAt = normalizedReportedEndedAt.value ?? data.endedAt;
+        const closeAnchorAtMs = normalizedCloseAnchorAt.value ?? data.closeAnchorAtMs;
 
         if (data.metrics || normalizedSdkTelemetry) {
             await db.insert(sessionMetrics)
@@ -189,9 +195,9 @@ router.post(
             startedAt: session.startedAt,
             lastIngestActivityAt: session.lastIngestActivityAt,
             latestReplayEndMs: aggregate.latestReplayArtifactEndMs,
-            reportedEndedAt: data.endedAt,
+            reportedEndedAt,
             totalBackgroundTimeMs: data.totalBackgroundTimeMs,
-            closeAnchorAtMs: data.closeAnchorAtMs,
+            closeAnchorAtMs,
             storedBackgroundTimeSeconds: session.backgroundTimeSeconds,
             maxRecordingMinutes: maxObservabilityMinutes,
             successorStartedAt,
