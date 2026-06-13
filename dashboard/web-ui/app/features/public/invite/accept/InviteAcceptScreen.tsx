@@ -30,7 +30,7 @@ export const InviteAccept: React.FC = () => {
 
         await refreshTeams(teamId);
 
-        const go = () => navigate('/dashboard/general');
+        const go = () => navigate('/dashboard');
         if (delayMs > 0) {
             window.setTimeout(go, delayMs);
         } else {

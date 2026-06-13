@@ -67,6 +67,36 @@ spec:
               value: "--max-old-space-size=512"
             - name: COOKIE_SECURE
               value: "false"
+            - name: SHOW_ISSUE_DETECTION_UI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: SHOW_ISSUE_DETECTION_UI
+                  optional: true
+            - name: ISSUE_DETECTION_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ISSUE_DETECTION_API_URL
+                  optional: true
+            - name: ISSUE_DETECTION_SERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ISSUE_DETECTION_SERVICE_SECRET
+                  optional: true
+            - name: REJOURNEY_INTERNAL_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: REJOURNEY_INTERNAL_API_URL
+                  optional: true
+            - name: REJOURNEY_INTERNAL_SERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: REJOURNEY_INTERNAL_SERVICE_SECRET
+                  optional: true
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

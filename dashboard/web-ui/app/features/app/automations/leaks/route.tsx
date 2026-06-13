@@ -1,0 +1,876 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+	AlertCircle,
+	CheckCircle2,
+	ClipboardPaste,
+	FileText,
+	Inbox,
+	Loader2,
+    Play,
+    Search,
+    Settings,
+    SlidersHorizontal,
+    SquareArrowOutUpRight,
+    X,
+    XCircle,
+} from 'lucide-react';
+import { Link } from 'react-router';
+import type { LoaderFunctionArgs } from 'react-router';
+import {
+    getLeak,
+    getLeakContextRaw,
+    getLeaks,
+    updateLeak,
+    type LeakDetail,
+    type LeakStatus,
+    type LeakSummary,
+} from '~/shared/api/client';
+import { isIssueDetectionUiEnabled } from '~/shared/config/runtimeEnv';
+import { useDemoMode } from '~/shared/providers/DemoModeContext';
+import { useSessionData } from '~/shared/providers/SessionContext';
+import { usePathPrefix } from '~/shell/routing/usePathPrefix';
+import { buildLeakIdeHandoffUrl, LEAK_IDE_OPTIONS, type LeakIde, type LeakIdeConfig } from './ideLinks';
+
+const IDE_STORAGE_PREFIX = 'rejourney.issueDetection.ide';
+type AffectedFilter = 'all' | 'high' | 'medium' | 'low';
+
+export function loader(_args: LoaderFunctionArgs) {
+    if (!isIssueDetectionUiEnabled()) {
+        throw new Response('Not found', { status: 404 });
+    }
+    return null;
+}
+
+export const meta = () => [
+    { title: 'Leaks - Rejourney' },
+    { name: 'robots', content: 'noindex' },
+];
+
+function formatIssueType(issueType: string): string {
+    return issueType.replace(/_/g, ' ');
+}
+
+function estimateAffectedPercent(leak: LeakSummary): number {
+    const denominator = Math.max(leak.affectedSessionsCount, leak.affectedUsersCount, 1);
+    return Math.min(99, Math.max(1, Math.round((leak.affectedUsersCount / denominator) * 100)));
+}
+
+function generalAccentClass(leak: LeakSummary): string {
+    const accents = ['bg-[#67e8f9]', 'bg-[#86efac]', 'bg-[#f9a8d4]', 'bg-[#c4b5fd]', 'bg-[#5dadec]'];
+    const key = `${leak.issueType}:${leak.shortId}:${leak.title}`;
+    const index = Array.from(key).reduce((sum, char) => sum + char.charCodeAt(0), 0) % accents.length;
+    return accents[index];
+}
+
+function affectedPercentClass(percent: number): string {
+    if (percent >= 75) return 'border-rose-200 bg-rose-50 text-rose-700';
+    if (percent >= 50) return 'border-amber-200 bg-amber-50 text-amber-700';
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+}
+
+function affectedFilterMatches(leak: LeakSummary, filter: AffectedFilter): boolean {
+    if (filter === 'all') return true;
+    const percent = estimateAffectedPercent(leak);
+    if (filter === 'high') return percent >= 75;
+    if (filter === 'medium') return percent >= 50 && percent < 75;
+    return percent < 50;
+}
+
+function affectedFilterLabel(filter: AffectedFilter): string {
+    if (filter === 'high') return 'High affected';
+    if (filter === 'medium') return 'Medium affected';
+    if (filter === 'low') return 'Low affected';
+    return 'All signals';
+}
+
+function isLeakIde(value: unknown): value is LeakIde {
+    return value === 'cursor' || value === 'claude' || value === 'codex' || value === 'vscode';
+}
+
+function getIdeActionLabel(config: LeakIdeConfig): string {
+    const ideMeta = LEAK_IDE_OPTIONS[config.ide];
+    return config.handoffMode === 'copy' ? `Copy for ${ideMeta.label}` : ideMeta.actionLabel;
+}
+
+function readIdeConfig(projectId: string): LeakIdeConfig {
+    if (typeof window === 'undefined') return { handoffMode: 'open', ide: 'cursor', localRepoPath: '' };
+    try {
+        const raw = window.localStorage.getItem(`${IDE_STORAGE_PREFIX}:${projectId}`);
+        if (!raw) return { handoffMode: 'open', ide: 'cursor', localRepoPath: '' };
+        const parsed = JSON.parse(raw) as Partial<LeakIdeConfig>;
+        return {
+            handoffMode: parsed.handoffMode === 'copy' ? 'copy' : 'open',
+            ide: isLeakIde(parsed.ide) ? parsed.ide : 'cursor',
+            localRepoPath: typeof parsed.localRepoPath === 'string' ? parsed.localRepoPath : '',
+        };
+    } catch {
+        return { handoffMode: 'open', ide: 'cursor', localRepoPath: '' };
+    }
+}
+
+function saveIdeConfig(projectId: string, config: LeakIdeConfig) {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(`${IDE_STORAGE_PREFIX}:${projectId}`, JSON.stringify(config));
+}
+
+async function writeClipboardText(text: string): Promise<boolean> {
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch {
+        // Fall back to the textarea path below.
+    }
+
+    if (typeof document === 'undefined') return false;
+
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', 'true');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return copied;
+    } catch {
+        return false;
+    }
+}
+
+function openExternalAppUrl(url: string) {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.rel = 'noopener noreferrer';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+}
+
+function cleanRepoPathValue(value: string): string {
+    let next = value.trim();
+
+    while (
+        (next.startsWith('"') && next.endsWith('"')) ||
+        (next.startsWith("'") && next.endsWith("'"))
+    ) {
+        next = next.slice(1, -1).trim();
+    }
+
+    if (next.startsWith('file://')) {
+        try {
+            const fileUrl = new URL(next);
+            next = decodeURIComponent(fileUrl.pathname);
+            if (/^\/[A-Za-z]:\//.test(next)) {
+                next = next.slice(1);
+            }
+        } catch {
+            return next;
+        }
+    }
+
+    return next;
+}
+
+function filterLeaks(leaks: LeakSummary[], search: string): LeakSummary[] {
+    const normalizedSearch = search.trim().toLowerCase();
+    return leaks.filter((leak) => {
+        if (!normalizedSearch) return true;
+        return [
+            leak.title,
+            leak.whyItMatters,
+            leak.issueType,
+            leak.shortId,
+            ...leak.topSignals,
+        ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
+    });
+}
+
+function PaneButton({
+    children,
+    className = '',
+    disabled,
+    icon,
+    onClick,
+}: {
+    children: React.ReactNode;
+    className?: string;
+    disabled?: boolean;
+    icon?: React.ReactNode;
+    onClick?: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            disabled={disabled}
+            onClick={onClick}
+            className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#dadce0] bg-white px-3 text-xs font-semibold leading-snug text-[#3c4043] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff] focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+        >
+            {icon}
+            {children}
+        </button>
+    );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+    return <h3 className="dashboard-label leading-5">{children}</h3>;
+}
+
+function LeakRow({
+    active,
+    leak,
+    onSelect,
+}: {
+    active: boolean;
+    leak: LeakSummary;
+    onSelect: () => void;
+}) {
+    const leadLabel = leak.status === 'ready' || leak.status === 'resolved' || leak.status === 'budget_exhausted'
+        ? 'Why it matters:'
+        : 'Split from group:';
+    const affectedPercent = estimateAffectedPercent(leak);
+    const accentClass = generalAccentClass(leak);
+
+    return (
+        <button
+            type="button"
+            onClick={onSelect}
+            className={`group relative block w-full border-b border-[#dadce0] px-4 py-3 text-left transition-colors sm:px-5 ${
+                active ? 'bg-[#f1f3ed]' : 'bg-white hover:bg-[#f8fafd]'
+            }`}
+        >
+            <span className={`absolute bottom-0 left-0 top-0 w-[3px] ${accentClass}`} />
+            <div className="grid grid-cols-[minmax(0,1fr)_128px] gap-3">
+                <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${accentClass}`} />
+                        <span className="min-w-0 truncate text-sm font-medium leading-5 text-[#202124]">
+                            {leak.title}
+                        </span>
+                    </div>
+                    <p className="mt-1.5 line-clamp-2 pr-2 text-xs font-medium leading-5 text-[#5f6368]">
+                        <span className={leadLabel === 'Why it matters:' ? 'font-semibold text-[#b3261e]' : 'font-semibold text-[#3c4043]'}>
+                            {leadLabel}
+                        </span>{' '}
+                        {leak.whyItMatters}
+                    </p>
+                    <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-[#6f7785]">
+                        <span>{leak.affectedSessionsCount} sessions</span>
+                        <span className="truncate">{formatIssueType(leak.issueType)}</span>
+                    </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+	                    <span className={`inline-flex h-6 items-center rounded-sm border px-2 text-[10px] font-bold uppercase leading-none tabular-nums ${affectedPercentClass(affectedPercent)}`}>
+	                        Est affected {affectedPercent}%
+	                    </span>
+                    <span className="text-[11px] font-semibold tabular-nums text-[#6f7785]">{leak.affectedUsersCount} users</span>
+                </div>
+            </div>
+        </button>
+    );
+}
+
+export const Leaks: React.FC = () => {
+    const { selectedProject } = useSessionData();
+    const { isDemoMode } = useDemoMode();
+    const pathPrefix = usePathPrefix();
+    const projectId = selectedProject?.id || (isDemoMode ? 'demo-project-001' : '');
+    const [leaks, setLeaks] = useState<LeakSummary[]>([]);
+    const [selectedLeakId, setSelectedLeakId] = useState<string | null>(null);
+    const [selectedLeak, setSelectedLeak] = useState<LeakDetail | null>(null);
+    const [search, setSearch] = useState('');
+    const [affectedFilter, setAffectedFilter] = useState<AffectedFilter>('all');
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isDetailLoading, setIsDetailLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+    const [handoffStatus, setHandoffStatus] = useState<string | null>(null);
+    const [isOpeningIde, setIsOpeningIde] = useState(false);
+    const [openAfterSetup, setOpenAfterSetup] = useState(false);
+    const [pathPasteStatus, setPathPasteStatus] = useState<string | null>(null);
+    const [showIdeSetup, setShowIdeSetup] = useState(false);
+    const [ideConfig, setIdeConfig] = useState<LeakIdeConfig>({ handoffMode: 'open', ide: 'cursor', localRepoPath: '' });
+
+    useEffect(() => {
+        if (!projectId) return;
+        setIdeConfig(readIdeConfig(projectId));
+    }, [projectId]);
+
+    useEffect(() => {
+        setCopied(false);
+        setHandoffStatus(null);
+        setIsOpeningIde(false);
+    }, [selectedLeakId]);
+
+    useEffect(() => {
+        if (!projectId) {
+            setLeaks([]);
+            setIsLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setIsLoading(true);
+        setError(null);
+        getLeaks({ projectId })
+            .then((response) => {
+                if (cancelled) return;
+                setLeaks(response.leaks || []);
+                setSelectedLeakId((current) =>
+                    response.leaks?.some((leak) => leak.id === current) ? current : response.leaks?.[0]?.id || null
+                );
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                setError(err instanceof Error ? err.message : 'Issue detection is not available');
+                setLeaks([]);
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [projectId]);
+
+    useEffect(() => {
+        if (!selectedLeakId) {
+            setSelectedLeak(null);
+            return;
+        }
+
+        let cancelled = false;
+        setIsDetailLoading(true);
+        getLeak(selectedLeakId)
+            .then((detail) => {
+                if (!cancelled) setSelectedLeak(detail);
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setError(err instanceof Error ? err.message : 'Issue detection is not available');
+                    setSelectedLeak(null);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setIsDetailLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedLeakId]);
+
+    const filteredLeaks = useMemo(
+        () => filterLeaks(leaks, search).filter((leak) => affectedFilterMatches(leak, affectedFilter)),
+        [affectedFilter, leaks, search],
+    );
+    const activeLeak = selectedLeakId ? selectedLeak || leaks.find((leak) => leak.id === selectedLeakId) || null : null;
+    const topEvidenceSummary = selectedLeak?.evidenceGroups
+        ?.flatMap((group) => group.signals)
+        .map((signal) => signal.summary)
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(' ');
+
+    const persistIdeConfig = () => {
+        if (!projectId) return;
+        saveIdeConfig(projectId, ideConfig);
+        setShowIdeSetup(false);
+        if (openAfterSetup) {
+            setOpenAfterSetup(false);
+            void sendContextToIde(ideConfig);
+        }
+    };
+
+    const pasteRepoPathFromClipboard = async () => {
+        try {
+            const rawPath = await navigator.clipboard?.readText?.();
+            const nextPath = cleanRepoPathValue(rawPath || '');
+            if (!nextPath) {
+                setPathPasteStatus('Clipboard is empty.');
+                return;
+            }
+
+            setIdeConfig((current) => ({ ...current, localRepoPath: nextPath }));
+            setPathPasteStatus('Path pasted.');
+        } catch {
+            setPathPasteStatus('Browser blocked clipboard access.');
+        }
+    };
+
+    const getActiveMarkdown = async (): Promise<string | null> => {
+        if (!activeLeak) return null;
+        return selectedLeak?.contextMarkdown || await getLeakContextRaw(activeLeak.id) || null;
+    };
+
+    const copyContext = async (): Promise<boolean> => {
+        if (!activeLeak) return false;
+        const markdown = await getActiveMarkdown();
+        if (!markdown) return false;
+
+        const copiedToClipboard = await writeClipboardText(markdown);
+        if (copiedToClipboard) {
+            setCopied(true);
+            setHandoffStatus('Markdown copied.');
+            window.setTimeout(() => setCopied(false), 1600);
+        } else {
+            setHandoffStatus('Could not copy automatically. Select the markdown below and copy it manually.');
+        }
+
+        return copiedToClipboard;
+    };
+
+    const sendContextToIde = async (config = ideConfig) => {
+        if (!activeLeak) return;
+        const ideMeta = LEAK_IDE_OPTIONS[config.ide];
+        const handoffMode = config.handoffMode || 'open';
+        if (handoffMode === 'open' && !config.localRepoPath.trim()) {
+            setOpenAfterSetup(true);
+            setHandoffStatus('Add your local repo path first.');
+            setShowIdeSetup(true);
+            return;
+        }
+
+        setIsOpeningIde(true);
+        const markdown = await getActiveMarkdown();
+        if (!markdown) {
+            setHandoffStatus('Markdown context is not ready yet.');
+            setIsOpeningIde(false);
+            return;
+        }
+
+        const copiedToClipboard = await writeClipboardText(markdown);
+        if (copiedToClipboard) {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1600);
+        }
+
+        if (handoffMode === 'copy') {
+            setHandoffStatus(copiedToClipboard
+                ? `Markdown copied for ${ideMeta.label}.`
+                : 'Could not copy automatically. Select the markdown below and copy it manually.'
+            );
+            setIsOpeningIde(false);
+            return;
+        }
+
+        const url = buildLeakIdeHandoffUrl(config, {
+            markdown,
+            pointer: selectedLeak?.codePointers?.[0] || activeLeak.topCodePointer,
+            title: activeLeak.title,
+        });
+        if (url && typeof window !== 'undefined') {
+            setHandoffStatus(copiedToClipboard
+                ? ideMeta.clipboardFallback
+                : `${ideMeta.actionLabel} requested. Clipboard copy failed, so use the markdown panel below if the app opens without context.`
+            );
+            openExternalAppUrl(url);
+        } else {
+            setHandoffStatus(`Could not build a ${ideMeta.label} link. Check the local repo path.`);
+        }
+        window.setTimeout(() => setIsOpeningIde(false), 1000);
+    };
+
+    const markStatus = async (status: LeakStatus) => {
+        if (!activeLeak) return;
+        const updated = await updateLeak(activeLeak.id, { status });
+        setSelectedLeak(updated);
+        setLeaks((items) => items.map((item) => item.id === activeLeak.id ? { ...item, status: updated.status } : item));
+    };
+
+    const applyAffectedFilter = (filter: AffectedFilter) => {
+        const nextLeaks = filterLeaks(leaks, search).filter((leak) => affectedFilterMatches(leak, filter));
+        setAffectedFilter(filter);
+        setIsFilterOpen(false);
+        if (!selectedLeakId || !nextLeaks.some((leak) => leak.id === selectedLeakId)) {
+            setSelectedLeakId(nextLeaks[0]?.id || null);
+        }
+    };
+
+    const handoffReady = Boolean(activeLeak && activeLeak.contextStatus === 'ready' && (activeLeak.status === 'ready' || activeLeak.status === 'resolved'));
+    const activeIdeMeta = LEAK_IDE_OPTIONS[ideConfig.ide];
+    return (
+        <div className="rejourney-general-page flex min-h-screen flex-col bg-[#f8fafd] font-sans text-[#202124]">
+            <div className="border-b border-[#dadce0] bg-white">
+                <div className="mx-auto flex h-11 w-full max-w-[1560px] items-center justify-between gap-3 px-4 sm:px-6">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <Inbox className="h-4 w-4 shrink-0 text-[#6f7785]" />
+                        <h1 className="truncate text-[15px] font-semibold leading-none text-[#202124]">Inbox</h1>
+                    </div>
+	                    <button
+	                        type="button"
+	                        onClick={() => {
+	                            setOpenAfterSetup(false);
+	                            setPathPasteStatus(null);
+	                            setShowIdeSetup(true);
+	                        }}
+	                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#dadce0] bg-white px-3 text-xs font-semibold text-[#3c4043] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff] focus:outline-none focus:ring-2 focus:ring-blue-100"
+	                    >
+	                        <Settings className="h-4 w-4" />
+	                        IDE handoff
+	                    </button>
+                </div>
+            </div>
+
+            <div className="flex min-h-0 w-full flex-1">
+                <div className={`grid min-h-[calc(100dvh-44px)] w-full bg-white shadow-none ${activeLeak ? 'lg:grid-cols-[minmax(390px,0.49fr)_minmax(480px,0.51fr)]' : 'grid-cols-1'}`}>
+                    <section className={`flex min-h-[560px] min-w-0 flex-col bg-white ${activeLeak ? 'lg:border-r lg:border-[#dadce0]' : ''}`}>
+                        <div className="border-b border-[#dadce0] bg-white px-4 py-4 sm:px-5">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#67e8f9]" />
+                                        <h2 className="truncate text-base font-medium leading-6 text-[#3c4043]">
+                                            Signals ({leaks.length})
+                                        </h2>
+                                    </div>
+                                    <p className="mt-0.5 text-sm font-medium leading-5 text-[#6f7785]">
+                                        Ranked by estimated affected users
+                                    </p>
+                                </div>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsFilterOpen((open) => !open)}
+                                        className={`mt-1 inline-flex h-8 w-8 items-center justify-center rounded-md border text-[#6f7785] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff] hover:text-[#202124] ${affectedFilter === 'all' ? 'border-transparent' : 'border-[#1a73e8] bg-[#eef4ff] text-[#1a73e8]'}`}
+                                        aria-label="Filter signals"
+                                        aria-expanded={isFilterOpen}
+                                    >
+                                        <SlidersHorizontal className="h-4 w-4" />
+                                    </button>
+                                    {isFilterOpen && (
+                                        <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-md border border-[#dadce0] bg-white shadow-lg">
+                                            {(['all', 'high', 'medium', 'low'] as const).map((filter) => (
+                                                <button
+                                                    key={filter}
+                                                    type="button"
+                                                    onClick={() => applyAffectedFilter(filter)}
+                                                    className={`block w-full px-3 py-2 text-left text-xs font-semibold transition-colors hover:bg-[#f8fafd] ${affectedFilter === filter ? 'bg-[#eef4ff] text-[#1a73e8]' : 'text-[#3c4043]'}`}
+                                                >
+                                                    {affectedFilterLabel(filter)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <label className="mt-3 flex h-9 min-w-0 items-center gap-2 rounded-md border border-[#bfc5bd] bg-white px-3 transition-colors focus-within:border-[#1a73e8] focus-within:ring-2 focus-within:ring-blue-100">
+                                <Search className="h-4 w-4 shrink-0 text-[#6f7785]" />
+                                <input
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    placeholder="Search signals..."
+                                    className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[#202124] outline-none placeholder:text-[#8a9288]"
+                                />
+                            </label>
+                            {affectedFilter !== 'all' && (
+                                <div className="mt-2 flex items-center gap-2">
+                                    <span className="rounded-full border border-[#dadce0] bg-[#f8fafd] px-2.5 py-1 text-[11px] font-semibold text-[#3c4043]">
+                                        {affectedFilterLabel(affectedFilter)}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => applyAffectedFilter('all')}
+                                        className="text-[11px] font-semibold text-[#1a73e8] hover:underline"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="min-h-0 flex-1 overflow-y-auto">
+                            {isLoading && (
+                                <div className="flex h-56 items-center justify-center text-sm font-semibold text-[#5f6368]">
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading signals
+                                </div>
+                            )}
+                            {!isLoading && error && (
+                                <div className="m-5 rounded-md border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+                                    Issue detection is not configured.
+                                </div>
+                            )}
+                            {!isLoading && !error && filteredLeaks.length === 0 && (
+                                <div className="flex h-56 flex-col items-center justify-center px-6 text-center text-sm font-semibold text-[#5f6368]">
+                                    <CheckCircle2 className="mb-3 h-8 w-8 text-emerald-500" />
+                                    No signals match this view.
+                                </div>
+                            )}
+                            {filteredLeaks.map((leak) => (
+                                <LeakRow
+                                    key={leak.id}
+                                    active={leak.id === selectedLeakId}
+                                    leak={leak}
+                                    onSelect={() => setSelectedLeakId(leak.id)}
+                                />
+                            ))}
+                        </div>
+                    </section>
+
+                    {activeLeak && (
+                        <section className="flex min-h-[560px] min-w-0 flex-col bg-white">
+                            <div className="border-b border-[#dadce0] bg-white px-4 py-4 sm:px-5">
+                                <div className="flex items-start justify-between gap-4">
+                                    <h2 className="max-w-[760px] text-lg font-medium leading-7 text-[#202124]">
+                                        {activeLeak.title}
+                                    </h2>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedLeakId(null);
+                                            setSelectedLeak(null);
+                                        }}
+                                        className="mt-0.5 shrink-0 rounded-md p-1 text-[#5f6368] transition-colors hover:bg-[#f1f3f4] hover:text-[#202124]"
+                                        aria-label="Close signal detail"
+                                    >
+                                        <X className="h-5 w-5" />
+                                    </button>
+                                </div>
+
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <PaneButton
+                                        icon={<FileText className="h-4 w-4" />}
+                                        onClick={copyContext}
+                                        disabled={!handoffReady}
+                                    >
+                                        {copied ? 'Copied .md' : 'Copy .md context'}
+                                    </PaneButton>
+                                    <PaneButton
+                                        icon={<SquareArrowOutUpRight className="h-4 w-4" />}
+                                        onClick={() => void sendContextToIde()}
+                                        disabled={!handoffReady || isOpeningIde}
+                                        className="!border-[#1a73e8] !bg-[#1a73e8] !text-white hover:!border-[#1e40af] hover:!bg-[#2563eb] disabled:!border-[#dadce0] disabled:!bg-slate-100 disabled:!text-slate-400"
+                                    >
+                                        {isOpeningIde ? 'Opening...' : getIdeActionLabel(ideConfig)}
+                                    </PaneButton>
+                                </div>
+
+                                <p className="mt-4 max-w-3xl text-sm font-medium leading-6 text-[#5f6368]">
+                                    {activeLeak.status === 'budget_exhausted'
+                                        ? 'Budget guard paused analysis. The signal stays in this inbox until the next analysis window.'
+                                        : activeLeak.contextStatus === 'ready'
+                                            ? ideConfig.handoffMode === 'copy'
+                                                ? `Markdown context is ready. Copy it for the existing ${activeIdeMeta.label} window.`
+                                                : activeIdeMeta.supportsPromptPrefill
+                                                ? `Markdown context is ready. ${activeIdeMeta.label} opens with the handoff prefilled.`
+                                                : `Markdown context is ready. ${activeIdeMeta.label} opens the repo after copying the handoff.`
+                                            : 'Research is still running. You can review the evidence now, then use the markdown handoff when it is ready.'}
+                                </p>
+                                {handoffStatus && (
+                                    <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-[#3c4043]">
+                                        {handoffStatus}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="min-h-0 flex-1 overflow-y-auto">
+                                {isDetailLoading ? (
+                                    <div className="flex h-56 items-center justify-center text-sm font-semibold text-[#5f6368]">
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading context
+                                    </div>
+                                ) : (
+                                    <>
+                                        <section className="border-b border-[#dadce0] px-4 py-4 sm:px-5">
+                                            <p className="text-base font-medium leading-7 text-[#5f6368]">
+                                                Split from group: {formatIssueType(activeLeak.issueType)}
+                                            </p>
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                <span className="inline-flex h-8 items-center rounded-sm bg-[#e6e7e1] px-3 text-sm font-semibold text-[#3c4043]">
+                                                    {activeLeak.affectedSessionsCount} occurrences
+                                                </span>
+                                                <span className="inline-flex h-8 items-center rounded-sm bg-[#e6e7e1] px-3 text-sm font-semibold text-[#3c4043]">
+                                                    {activeLeak.affectedUsersCount} affected users
+                                                </span>
+                                            </div>
+                                        </section>
+
+                                        <section className="border-b border-[#dadce0] px-4 py-4 sm:px-5">
+                                            <SectionTitle>Signals ({Math.max(activeLeak.topSignals.length, activeLeak.affectedSessionsCount)})</SectionTitle>
+                                            <div className="mt-3 grid grid-cols-[42px_minmax(0,1fr)] overflow-hidden border border-[#dadce0] bg-[#f5f6f1]">
+                                                <div className="flex items-center justify-center border-r border-[#dadce0] text-[#6f7785]">
+                                                    <AlertCircle className="h-4 w-4" />
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 p-3">
+                                                    {activeLeak.topSignals.map((signal) => (
+                                                        <span
+                                                            key={signal}
+                                                            className="inline-flex rounded-sm bg-[#e0e2dc] px-3 py-1.5 font-mono text-xs font-semibold text-[#3c4043]"
+                                                        >
+                                                            {signal}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </section>
+
+                                        <section className="border-b border-[#dadce0] px-4 py-5 sm:px-5">
+                                            <p className="max-w-[760px] text-sm font-medium leading-8 text-[#5f6368]">
+                                                {activeLeak.whyItMatters} {topEvidenceSummary || ''}
+                                            </p>
+                                        </section>
+
+                                        {selectedLeak?.sessions?.length ? (
+                                            <section className="border-b border-[#dadce0] px-4 py-4 sm:px-5">
+                                                <SectionTitle>Replays</SectionTitle>
+                                                <div className="mt-3 grid gap-2 xl:grid-cols-2">
+                                                    {selectedLeak.sessions.map((session) => (
+                                                        <Link
+                                                            key={session.id}
+                                                            to={session.replayUrl || `${pathPrefix}/sessions/${session.id}`}
+                                                            className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-[#dadce0] bg-white px-3 py-2 text-sm font-semibold text-[#1a73e8] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
+                                                        >
+                                                            <span className="min-w-0 truncate">{session.id}</span>
+                                                            <Play className="h-4 w-4 shrink-0" />
+                                                        </Link>
+                                                    ))}
+                                                </div>
+                                            </section>
+                                        ) : null}
+
+                                        <section className="border-b border-[#dadce0] px-4 py-4 sm:px-5">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <SectionTitle>Markdown context</SectionTitle>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <PaneButton
+                                                        icon={<FileText className="h-4 w-4" />}
+                                                        onClick={copyContext}
+                                                        disabled={!handoffReady}
+                                                    >
+                                                        {copied ? 'Copied .md' : 'Copy .md'}
+                                                    </PaneButton>
+                                                    <PaneButton
+                                                        icon={<SquareArrowOutUpRight className="h-4 w-4" />}
+                                                        onClick={() => void sendContextToIde()}
+                                                        disabled={!handoffReady || isOpeningIde}
+                                                    >
+                                                        {isOpeningIde ? 'Opening...' : getIdeActionLabel(ideConfig)}
+                                                    </PaneButton>
+                                                </div>
+                                            </div>
+                                            <pre className="mt-3 max-h-[380px] overflow-auto whitespace-pre-wrap rounded-md border border-[#e8eaed] bg-[#f8fafd] p-4 font-mono text-xs font-medium leading-6 text-[#3c4043]">
+                                                {selectedLeak?.contextMarkdown || 'Markdown context is not ready yet.'}
+                                            </pre>
+                                        </section>
+
+                                        <div className="flex flex-wrap justify-end gap-2 px-4 py-4 sm:px-5">
+                                            <PaneButton icon={<XCircle className="h-4 w-4" />} onClick={() => markStatus('ignored')}>
+                                                Ignore
+                                            </PaneButton>
+                                            <PaneButton icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => markStatus('resolved')}>
+                                                Mark resolved
+                                            </PaneButton>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </section>
+                    )}
+                </div>
+            </div>
+
+            {showIdeSetup && (
+                <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[1px]">
+                    <div className="w-full max-w-lg rounded-lg border border-[#dadce0] bg-white p-5 shadow-xl">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h2 className="text-base font-semibold text-[#202124]">IDE handoff</h2>
+                                <p className="mt-1 text-sm font-medium text-[#5f6368]">Choose the local target for markdown handoffs.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setOpenAfterSetup(false);
+                                    setShowIdeSetup(false);
+                                }}
+                                className="rounded-md p-1 text-[#5f6368] transition-colors hover:bg-[#f1f3f4] hover:text-[#202124]"
+                            >
+                                <XCircle className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="mt-5 space-y-4">
+                            <label className="block">
+                                <span className="mb-1 block text-xs font-semibold uppercase text-[#6f7785]">IDE</span>
+                                <select
+                                    value={ideConfig.ide}
+                                    onChange={(event) => setIdeConfig((current) => ({ ...current, ide: event.target.value as LeakIde }))}
+                                    className="h-10 w-full rounded-md border border-[#dadce0] bg-white px-3 text-sm font-semibold text-[#202124] outline-none transition focus:border-[#1a73e8] focus:ring-2 focus:ring-blue-100"
+                                >
+                                    {(['cursor', 'claude', 'codex', 'vscode'] as const).map((ide) => (
+                                        <option key={ide} value={ide}>{LEAK_IDE_OPTIONS[ide].label}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="block">
+                                <span className="mb-1 block text-xs font-semibold uppercase text-[#6f7785]">Button action</span>
+                                <select
+                                    value={ideConfig.handoffMode || 'open'}
+                                    onChange={(event) => setIdeConfig((current) => ({ ...current, handoffMode: event.target.value === 'copy' ? 'copy' : 'open' }))}
+                                    className="h-10 w-full rounded-md border border-[#dadce0] bg-white px-3 text-sm font-semibold text-[#202124] outline-none transition focus:border-[#1a73e8] focus:ring-2 focus:ring-blue-100"
+                                >
+                                    <option value="open">Copy + open app</option>
+                                    <option value="copy">Copy only</option>
+                                </select>
+                            </label>
+	                            <div className="block">
+	                                <div className="mb-1 flex items-center justify-between gap-2">
+	                                    <label htmlFor="leak-ide-local-repo-path" className="text-xs font-semibold uppercase text-[#6f7785]">Local repo folder</label>
+	                                    <button
+	                                        type="button"
+	                                        onClick={pasteRepoPathFromClipboard}
+	                                        title="Paste a copied folder path"
+	                                        className="inline-flex h-7 items-center gap-1 rounded-md border border-[#dadce0] bg-white px-2 text-[11px] font-semibold text-[#3c4043] transition-colors hover:border-[#1a73e8] hover:bg-[#eef4ff]"
+                                    >
+	                                        <ClipboardPaste className="h-3.5 w-3.5" />
+	                                        Paste path
+	                                    </button>
+	                                </div>
+	                                <input
+	                                    id="leak-ide-local-repo-path"
+	                                    value={ideConfig.localRepoPath}
+	                                    onChange={(event) => setIdeConfig((current) => ({ ...current, localRepoPath: event.target.value }))}
+	                                    placeholder="/Users/you/dev/shopflow or C:\\Users\\you\\dev\\shopflow"
+	                                    className="h-10 w-full rounded-md border border-[#dadce0] bg-white px-3 font-mono text-sm font-semibold text-[#202124] outline-none transition placeholder:text-slate-400 focus:border-[#1a73e8] focus:ring-2 focus:ring-blue-100"
+                                />
+                                {pathPasteStatus && (
+                                    <span className="mt-1 block text-xs font-semibold text-[#5f6368]">
+	                                        {pathPasteStatus}
+	                                    </span>
+	                                )}
+	                            </div>
+                            <div className="rounded-md border border-[#dadce0] bg-[#f8fafd] px-3 py-2 text-xs font-medium leading-5 text-[#5f6368]">
+                                {ideConfig.handoffMode === 'copy'
+                                    ? `${LEAK_IDE_OPTIONS[ideConfig.ide].label} stays open; the button only copies the markdown.`
+                                    : LEAK_IDE_OPTIONS[ideConfig.ide].supportsPromptPrefill
+                                    ? `${LEAK_IDE_OPTIONS[ideConfig.ide].label} opens with the markdown in the composer.`
+                                    : `${LEAK_IDE_OPTIONS[ideConfig.ide].label} opens the repo after the markdown is copied.`}
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <PaneButton
+                                    onClick={() => {
+                                        setOpenAfterSetup(false);
+                                        setShowIdeSetup(false);
+                                    }}
+                                >
+                                    Cancel
+                                </PaneButton>
+                                <PaneButton className="!border-[#1a73e8] !bg-[#1a73e8] !text-white hover:!border-[#1e40af] hover:!bg-[#2563eb]" onClick={persistIdeConfig}>
+                                    {openAfterSetup ? 'Save and open' : 'Save'}
+                                </PaneButton>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default Leaks;

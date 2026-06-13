@@ -46,7 +46,7 @@ export const Footer: React.FC = () => {
     { label: copy.pricing, href: pricingPath },
     { label: copy.engineering, href: engineeringPath },
     { label: "Roadmap", href: getLocalizedPublicPath(locale, "/roadmap") },
-    { label: "Demo", href: "/demo/general" },
+    { label: "Demo", href: "/demo" },
   ];
 
   const handleCopyEmail = (e: React.MouseEvent) => {
@@ -73,7 +73,7 @@ export const Footer: React.FC = () => {
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link
-                to="/demo/general"
+                to="/demo"
                 className="inline-flex min-h-11 items-center justify-center border-2 border-white bg-[#86efac] px-4 text-sm font-black uppercase text-black shadow-[4px_4px_0_0_rgba(255,255,255,1)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#fef08a]"
               >
                 Demo
@@ -128,7 +128,7 @@ export const Footer: React.FC = () => {
               <h2 className={headingClass}>Company</h2>
               <div className="space-y-4">
                 <Link to="/about" className={linkClass}>About</Link>
-                <Link to="/dashboard/general" className={linkClass}>{copy.dashboard}</Link>
+                <Link to="/dashboard" className={linkClass}>{copy.dashboard}</Link>
                 <Link to="/login" className={linkClass}>{copy.login}</Link>
                 <Link to="/terms-of-service" className={linkClass}>{copy.terms}</Link>
                 <Link to="/dpa" className={linkClass}>{copy.dpa}</Link>

@@ -144,7 +144,7 @@ export default function AboutPage() {
                 </div>
                 <div className="mt-8 flex flex-wrap gap-5 normal-case">
                   <Link
-                    to="/demo/general"
+                    to="/demo"
                     className="font-black text-slate-950 underline decoration-2 underline-offset-4 hover:text-[#0f766e]"
                   >
                     See the demo

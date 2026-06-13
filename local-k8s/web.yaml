@@ -59,6 +59,12 @@ spec:
               value: "8080"
             - name: API_URL
               value: "http://api:3000"
+            - name: SHOW_ISSUE_DETECTION_UI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: SHOW_ISSUE_DETECTION_UI
+                  optional: true
             - name: VITE_STRIPE_PUBLISHABLE_KEY
               valueFrom:
                 secretKeyRef:

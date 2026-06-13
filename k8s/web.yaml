@@ -99,6 +99,12 @@ spec:
               # proxied here. Keep operator/dashboard API work on api-dashboard
               # pods instead of the api-ingest compatibility alias.
               value: "http://api-dashboard:3000"
+            - name: SHOW_ISSUE_DETECTION_UI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: SHOW_ISSUE_DETECTION_UI
+                  optional: true
             - name: VITE_STRIPE_PUBLISHABLE_KEY
               valueFrom:
                 secretKeyRef:

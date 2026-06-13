@@ -10,6 +10,7 @@ const SHARED_APP_ROUTE_MODULES = [
   { key: "analytics-geo", path: "geo", file: "features/app/analytics/geo/route.tsx" },
   { key: "analytics-journeys", path: "journeys", file: "features/app/analytics/journeys/route.tsx" },
   { key: "analytics-heatmaps", path: "heatmaps", file: "features/app/analytics/heatmaps/route.tsx" },
+  { key: "leaks", path: "leaks", file: "features/app/automations/leaks/route.tsx" },
   { key: "alerts-emails", path: "alerts/emails", file: "features/app/alerts/email/route.tsx" },
   { key: "stability", path: "stability", file: "features/app/stability/index/route.tsx" },
   { key: "crashes", path: "stability/crashes", file: "shell/routing/redirects/StabilityRedirect.tsx" },
@@ -35,6 +36,7 @@ function buildAppShellChildRoutes(mode: AppShellMode) {
     route("issues/:issueId", "shell/routing/redirects/IssueDetailRedirect.tsx", { id: `${mode}-issue-detail-redirect` }),
     route("analytics", "shell/routing/redirects/AnalyticsRedirect.tsx", { id: `${mode}-analytics-redirect` }),
     route("analytics/*", "shell/routing/redirects/AnalyticsRedirect.tsx", { id: `${mode}-analytics-splat-redirect` }),
+    route("automations/leaks", "shell/routing/redirects/AutomationsLeaksRedirect.tsx", { id: `${mode}-automations-leaks-redirect` }),
     ...SHARED_APP_ROUTE_MODULES.map(({ key, path, file }) =>
       route(path, file, { id: `${mode}-${key}` }),
     ),

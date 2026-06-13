@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { ArrowRight } from 'lucide-react';
 import type { MarketingHomeCopy, MarketingLocale } from '~/shared/lib/internationalMarketing';
 
-const LIVE_DEMO_PATH = '/demo/general';
+const LIVE_DEMO_PATH = '/demo';
 const RAINDROP_LOGO_PATH = '/rejourneyIcon-removebg-preview.png';
 const CTA_ICON_CLASS = 'h-5 w-5 shrink-0';
 

@@ -147,6 +147,8 @@ spec:
               value: "50"
             - name: COOKIE_SECURE
               value: "true"
+            - name: RJ_API_ROLE
+              value: "ingest"
             # Database
             - name: DATABASE_URL
               valueFrom:
@@ -529,6 +531,36 @@ spec:
               value: "true"
             - name: RJ_API_ROLE
               value: "dashboard"
+            - name: SHOW_ISSUE_DETECTION_UI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: SHOW_ISSUE_DETECTION_UI
+                  optional: true
+            - name: ISSUE_DETECTION_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ISSUE_DETECTION_API_URL
+                  optional: true
+            - name: ISSUE_DETECTION_SERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: ISSUE_DETECTION_SERVICE_SECRET
+                  optional: true
+            - name: REJOURNEY_INTERNAL_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: REJOURNEY_INTERNAL_API_URL
+                  optional: true
+            - name: REJOURNEY_INTERNAL_SERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: REJOURNEY_INTERNAL_SERVICE_SECRET
+                  optional: true
             # Replay loading tuning — defaults are tuned for fast /core page loads.
             # CONCURRENCY=16: pulls all rrweb segments from R2 in parallel (was 6 →
             # was the dominant cause of 17–82s /core latency on long sessions).

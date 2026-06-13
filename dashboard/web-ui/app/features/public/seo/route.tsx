@@ -2102,7 +2102,7 @@ function CategoryFeatureArticlePage({ page }: { page: SeoPage }) {
             </p>
 
             <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-sm font-semibold">
-              <Link to="/demo/general" className="inline-flex items-center gap-2 text-sky-700 underline decoration-sky-300 underline-offset-4 hover:text-sky-900">
+              <Link to="/demo" className="inline-flex items-center gap-2 text-sky-700 underline decoration-sky-300 underline-offset-4 hover:text-sky-900">
                 <PlayCircle className="h-4 w-4" strokeWidth={2.25} aria-hidden />
                 Open live demo
               </Link>
@@ -2294,7 +2294,7 @@ function AlternativeComparisonArticlePage({ page }: { page: SeoPage }) {
             </p>
 
             <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-sm font-semibold">
-              <Link to="/demo/general" className="inline-flex items-center gap-2 text-sky-700 underline decoration-sky-300 underline-offset-4 hover:text-sky-900">
+              <Link to="/demo" className="inline-flex items-center gap-2 text-sky-700 underline decoration-sky-300 underline-offset-4 hover:text-sky-900">
                 <PlayCircle className="h-4 w-4" strokeWidth={2.25} aria-hidden />
                 Open live demo
               </Link>

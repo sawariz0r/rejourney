@@ -28,7 +28,7 @@ import {
 } from '~/shared/api/client';
 
 import { Issue, IssueSession } from '~/shared/types';
-import { DEMO_FEATURED_SESSION_ID, getDemoReplaySessionMetadata } from './demoData';
+import { DEMO_FEATURED_SESSION_ID, DEMO_REPLAY_SESSION_IDS, getDemoReplaySessionMetadata } from './demoData';
 
 const DEMO_NOW = Date.UTC(2026, 4, 18, 12, 0, 0);
 
@@ -1937,6 +1937,152 @@ export const demoIssueSessions: IssueSession[] = [
         coverPhotoUrl: null,
     },
 ];
+
+// ================================================================================
+// Issue Detection / Leaks Demo Data
+// ================================================================================
+
+export const demoLeakContextMarkdown = `# Checkout coupon validation leak
+
+## Why it matters
+Users can reach checkout with an invalid coupon state. The replay shows repeated failed validation calls followed by checkout abandonment.
+
+## Evidence
+- 14 affected sessions in the last 24 hours
+- 9 users hit a visible validation loop
+- Top replay includes rage taps on the checkout CTA and repeated 409 responses
+
+## Likely cause
+The checkout form keeps stale coupon state after the cart total recalculates.
+
+## IDE handoff
+Use this markdown as the full investigation packet. Paste it into the selected IDE agent so it can inspect the local repository and decide which files need changes.
+
+## Suggested fix
+Clear coupon validation state whenever cart line items or total change, then rerun validation once before payment submission.`;
+
+export const demoLeaksResponse = {
+    leaks: [
+        {
+            id: 'demo-leak-ready-checkout-coupon',
+            shortId: 'LEAK-101',
+            projectId: 'demo-project-001',
+            title: 'Checkout coupon validation loops after cart changes',
+            status: 'ready',
+            severity: 'high',
+            issueType: 'abandon_after_api_error',
+            whyItMatters: 'Users abandon checkout after repeated coupon validation failures and rage taps on the payment CTA.',
+            affectedSessionsCount: 14,
+            affectedUsersCount: 9,
+            firstSeenAt: new Date(DEMO_NOW - 26 * 60 * 60 * 1000).toISOString(),
+            lastSeenAt: new Date(DEMO_NOW - 42 * 60 * 1000).toISOString(),
+            estimatedCostUsd: 0.48,
+            contextStatus: 'ready',
+            topSignals: ['session_replay', 'api_error_cluster', 'rage_tap'],
+        },
+        {
+            id: 'demo-leak-researching-tour-selector',
+            shortId: 'LEAK-102',
+            projectId: 'demo-project-001',
+            title: 'Product tour selector misses target on settings page',
+            status: 'researching',
+            severity: 'medium',
+            issueType: 'session_problem_cluster',
+            whyItMatters: 'New users get stuck in onboarding because the tour waits for an element that is not rendered.',
+            affectedSessionsCount: 7,
+            affectedUsersCount: 6,
+            firstSeenAt: new Date(DEMO_NOW - 12 * 60 * 60 * 1000).toISOString(),
+            lastSeenAt: new Date(DEMO_NOW - 18 * 60 * 1000).toISOString(),
+            estimatedCostUsd: 0.21,
+            contextStatus: 'running',
+            topSignals: ['session_segment_cluster', 'dead_tap', 'abandonment'],
+        },
+        {
+            id: 'demo-leak-queued-inventory',
+            shortId: 'LEAK-103',
+            projectId: 'demo-project-001',
+            title: 'Inventory badge flickers between in-stock and unavailable',
+            status: 'queued',
+            severity: 'medium',
+            issueType: 'stuck_loop',
+            whyItMatters: 'Product detail sessions show repeated visual churn around inventory state before users leave.',
+            affectedSessionsCount: 5,
+            affectedUsersCount: 4,
+            firstSeenAt: new Date(DEMO_NOW - 8 * 60 * 60 * 1000).toISOString(),
+            lastSeenAt: new Date(DEMO_NOW - 25 * 60 * 1000).toISOString(),
+            estimatedCostUsd: 0.15,
+            contextStatus: 'queued',
+            topSignals: ['visual_loop', 'api_latency', 'session_replay'],
+        },
+        {
+            id: 'demo-leak-budget-search',
+            shortId: 'LEAK-104',
+            projectId: 'demo-project-001',
+            title: 'Search results blank screen needs next budget window',
+            status: 'budget_exhausted',
+            severity: 'low',
+            issueType: 'budget_guard',
+            whyItMatters: 'The candidate ranked high, but the project reached the daily analysis cap before this session could be analyzed.',
+            affectedSessionsCount: 3,
+            affectedUsersCount: 3,
+            firstSeenAt: new Date(DEMO_NOW - 5 * 60 * 60 * 1000).toISOString(),
+            lastSeenAt: new Date(DEMO_NOW - 66 * 60 * 1000).toISOString(),
+            estimatedCostUsd: 0.0,
+            contextStatus: 'budget_exhausted',
+            topSignals: ['blank_screen', 'api_error', 'budget_cap'],
+        },
+        {
+            id: 'demo-leak-resolved-profile',
+            shortId: 'LEAK-088',
+            projectId: 'demo-project-001',
+            title: 'Profile save spinner did not clear after timeout',
+            status: 'resolved',
+            severity: 'medium',
+            issueType: 'non_blocking_failure',
+            whyItMatters: 'Resolved example: affected sessions stopped after clearing the save mutation timeout state.',
+            affectedSessionsCount: 11,
+            affectedUsersCount: 8,
+            firstSeenAt: new Date(DEMO_NOW - 7 * 24 * 60 * 60 * 1000).toISOString(),
+            lastSeenAt: new Date(DEMO_NOW - 3 * 24 * 60 * 60 * 1000).toISOString(),
+            estimatedCostUsd: 0.33,
+            contextStatus: 'ready',
+            topSignals: ['session_replay', 'timeout', 'resolved'],
+        },
+    ],
+    stats: {
+        total: 5,
+        ready: 1,
+        queued: 1,
+        researching: 1,
+        budgetExhausted: 1,
+        resolved: 1,
+    },
+    nextCursor: null,
+};
+
+export const demoLeakDetails = demoLeaksResponse.leaks.map((leak) => ({
+    ...leak,
+    evidenceGroups: [
+        {
+            label: 'Session signals',
+            signals: leak.topSignals.map((signal, index) => ({
+                id: `${leak.id}-signal-${index}`,
+                label: signal,
+                weight: index === 0 ? 1 : 0.6,
+                summary: `${signal.replace(/_/g, ' ')} contributed to the leak ranking.`,
+            })),
+        },
+    ],
+    sessions: DEMO_REPLAY_SESSION_IDS.slice(0, Math.max(1, Math.min(3, leak.affectedSessionsCount))).map((sessionId, index) => ({
+        id: sessionId,
+        startedAt: new Date(DEMO_NOW - (index + 1) * 45 * 60 * 1000).toISOString(),
+        replayUrl: `/demo/sessions/${sessionId}`,
+        signalScore: 12 - index * 2,
+    })),
+    codePointers: [],
+    contextMarkdown: leak.contextStatus === 'ready' ? demoLeakContextMarkdown : null,
+    contextMarkdownUrl: `/api/automations/leaks/${leak.id}/context/raw.md`,
+}));
 
 // ================================================================================
 // Crashes, Errors & ANRs (for Stability pages)

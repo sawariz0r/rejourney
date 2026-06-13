@@ -118,7 +118,7 @@ export default function LoginPage() {
 
     const getPostLoginDestination = useCallback(() => {
         if (typeof window === 'undefined') {
-            return '/dashboard/general';
+            return '/dashboard';
         }
         const returnUrl = localStorage.getItem('returnUrl');
         if (returnUrl && returnUrl.startsWith('/')) {
@@ -126,7 +126,7 @@ export default function LoginPage() {
             return returnUrl;
         }
 
-        return '/dashboard/general';
+        return '/dashboard';
     }, []);
 
     const navigateToPostLoginDestination = useCallback((options?: { accountActivationMethod?: AccountActivationMethod | null }) => {

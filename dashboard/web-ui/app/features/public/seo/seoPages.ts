@@ -121,7 +121,7 @@ const commonRelated = [
   },
   {
     label: "Live demo",
-    href: "/demo/general",
+    href: "/demo",
     description: "Open the demo dashboard and inspect the replay, heatmap, journey, and stability views.",
   },
   {

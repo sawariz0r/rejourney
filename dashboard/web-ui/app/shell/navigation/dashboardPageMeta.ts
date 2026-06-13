@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   CreditCard,
+  Droplets,
   Flame,
   Globe,
   LayoutDashboard,
@@ -24,6 +25,7 @@ export type DashboardPageKey =
   | 'stability'
   | 'api'
   | 'devices'
+  | 'leaks'
   | 'emails'
   | 'project'
   | 'team'
@@ -103,6 +105,14 @@ export const DASHBOARD_PAGE_META: Record<DashboardPageKey, DashboardPageMeta> = 
     accent: '#7c3aed',
     activeBg: '#f5f3ff',
     iconBgClass: 'bg-[#f5f3ff]',
+  },
+  leaks: {
+    sidebarLabel: 'Leaks',
+    tabTitle: 'Leaks',
+    icon: Droplets,
+    accent: '#0891b2',
+    activeBg: '#ecfeff',
+    iconBgClass: 'bg-[#ecfeff]',
   },
   emails: {
     sidebarLabel: 'Emails',

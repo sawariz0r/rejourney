@@ -27,6 +27,8 @@ import demoRoutes from './demo.js';
 import alertsRoutes from './alerts.js';
 import roadmapRoutes from './roadmap.js';
 import { revenueProjectRouter } from './revenueSources.js';
+import issueDetectionLeaksRoutes from './issueDetectionLeaks.js';
+import internalIssueDetectionRoutes from './internalIssueDetection.js';
 
 const router = Router();
 
@@ -63,6 +65,11 @@ router.use('/overview', dashboardOverviewRoutes);
 
 // UI workspace state persistence
 router.use('/', workspaceRoutes);
+
+// Private issue-detection integration. Dashboard routes are session-authenticated;
+// internal routes require service-to-service HMAC auth.
+router.use('/automations', issueDetectionLeaksRoutes);
+router.use('/internal/issue-detection', internalIssueDetectionRoutes);
 
 // API management
 router.use('/', apiKeysRoutes); // /api/projects/:id/api-keys and /api/api-keys/:id

@@ -3670,6 +3670,152 @@ export async function updateIssue(
     });
 }
 
+// =============================================================================
+// Issue Detection / Leaks
+// =============================================================================
+
+export type LeakStatus = 'queued' | 'researching' | 'ready' | 'resolved' | 'ignored' | 'budget_exhausted' | 'failed';
+export type LeakSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type LeakContextStatus = 'queued' | 'running' | 'ready' | 'budget_exhausted' | 'failed';
+
+export interface LeakCodePointer {
+    file: string;
+    line?: number;
+    column?: number;
+    label?: string;
+}
+
+export interface LeakSummary {
+    id: string;
+    shortId?: string;
+    projectId: string;
+    title: string;
+    status: LeakStatus;
+    severity: LeakSeverity;
+    issueType: string;
+    whyItMatters: string;
+    affectedSessionsCount: number;
+    affectedUsersCount: number;
+    firstSeenAt: string;
+    lastSeenAt: string;
+    estimatedCostUsd?: number;
+    contextStatus: LeakContextStatus;
+    topSignals: string[];
+    topCodePointer?: LeakCodePointer | null;
+}
+
+export interface LeakSignal {
+    id: string;
+    label: string;
+    weight?: number;
+    summary?: string;
+}
+
+export interface LeakEvidenceGroup {
+    label: string;
+    signals: LeakSignal[];
+}
+
+export interface LeakSessionReference {
+    id: string;
+    startedAt?: string;
+    replayUrl?: string;
+    signalScore?: number;
+}
+
+export interface LeakDetail extends LeakSummary {
+    evidenceGroups: LeakEvidenceGroup[];
+    sessions: LeakSessionReference[];
+    codePointers: LeakCodePointer[];
+    contextMarkdown?: string | null;
+    contextMarkdownUrl?: string | null;
+}
+
+export interface LeaksResponse {
+    leaks: LeakSummary[];
+    stats: {
+        total: number;
+        ready: number;
+        queued: number;
+        researching: number;
+        budgetExhausted: number;
+        resolved: number;
+    };
+    nextCursor?: string | null;
+}
+
+export async function getLeaks(params: {
+    cursor?: string;
+    projectId: string;
+    q?: string;
+    severity?: string;
+    status?: string;
+    type?: string;
+}): Promise<LeaksResponse> {
+    if (isDemoMode()) {
+        return demoApiData.demoLeaksResponse as LeaksResponse;
+    }
+
+    const query = new URLSearchParams();
+    query.set('projectId', params.projectId);
+    if (params.status) query.set('status', params.status);
+    if (params.q) query.set('q', params.q);
+    if (params.cursor) query.set('cursor', params.cursor);
+    if (params.severity) query.set('severity', params.severity);
+    if (params.type) query.set('type', params.type);
+    return fetchJson<LeaksResponse>(`/api/automations/leaks?${query.toString()}`);
+}
+
+export async function getLeak(leakId: string): Promise<LeakDetail> {
+    if (isDemoMode()) {
+        const detail = demoApiData.demoLeakDetails.find((leak: any) => leak.id === leakId) || demoApiData.demoLeakDetails[0];
+        return detail as LeakDetail;
+    }
+
+    return fetchJson<LeakDetail>(`/api/automations/leaks/${encodeURIComponent(leakId)}`);
+}
+
+export async function requestLeakContext(leakId: string): Promise<LeakDetail> {
+    if (isDemoMode()) {
+        return getLeak(leakId);
+    }
+
+    return fetchJson<LeakDetail>(`/api/automations/leaks/${encodeURIComponent(leakId)}/context`, {
+        method: 'POST',
+    });
+}
+
+export async function getLeakContextRaw(leakId: string): Promise<string> {
+    if (isDemoMode()) {
+        const detail = await getLeak(leakId);
+        return detail.contextMarkdown || '';
+    }
+
+    const response = await fetch(`/api/automations/leaks/${encodeURIComponent(leakId)}/context/raw.md`, {
+        headers: withDefaultHeaders(),
+        credentials: 'include',
+    });
+    if (!response.ok) {
+        throw new ApiServiceUnavailableError('Failed to load leak context', response.status);
+    }
+    return response.text();
+}
+
+export async function updateLeak(
+    leakId: string,
+    updates: { status?: LeakStatus },
+): Promise<LeakDetail> {
+    if (isDemoMode()) {
+        const detail = await getLeak(leakId);
+        return { ...detail, ...updates } as LeakDetail;
+    }
+
+    return fetchJson<LeakDetail>(`/api/automations/leaks/${encodeURIComponent(leakId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+    });
+}
+
 /**
  * All-time heatmap screen data
  */
@@ -4946,6 +5092,11 @@ export const api = {
     getIssueSessions,
     syncIssues,
     updateIssue,
+    getLeaks,
+    getLeak,
+    requestLeakContext,
+    getLeakContextRaw,
+    updateLeak,
     getAlltimeHeatmap,
     getTeams,
     getTeam,

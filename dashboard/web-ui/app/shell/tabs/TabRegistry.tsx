@@ -56,6 +56,7 @@ const loadDevices = () => import('~/features/app/analytics/devices/route').then(
 const loadGeo = () => import('~/features/app/analytics/geo/route').then((module) => ({ default: module.Geo }));
 const loadJourneys = () => import('~/features/app/analytics/journeys/route').then((module) => ({ default: module.Journeys }));
 const loadHeatmaps = () => import('~/features/app/analytics/heatmaps/route').then((module) => ({ default: module.Heatmaps }));
+const loadLeaks = () => import('~/features/app/automations/leaks/route').then((module) => ({ default: module.Leaks }));
 const loadAlertEmails = () => import('~/features/app/alerts/email/route').then((module) => ({ default: module.AlertEmails }));
 const loadStability = () => import('~/features/app/stability/index/route').then((module) => ({ default: module.Stability }));
 const loadTeamSettings = () => import('~/features/app/team/route').then((module) => ({ default: module.TeamSettings }));
@@ -154,6 +155,12 @@ const routes: RouteDefinition[] = [
                 getErrorsOverview(projectId, range),
             ]);
         },
+    },
+    {
+        pattern: '/leaks',
+        getInfo: () => ({ id: 'leaks', title: DASHBOARD_PAGE_META.leaks.tabTitle, icon: DASHBOARD_PAGE_META.leaks.icon }),
+        Component: React.lazy(loadLeaks),
+        loadComponent: loadLeaks,
     },
     {
         pattern: '/sessions',

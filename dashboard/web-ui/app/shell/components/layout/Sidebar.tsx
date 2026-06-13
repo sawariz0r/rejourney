@@ -14,6 +14,7 @@ import {
   Smartphone,
   Globe,
   CodeXml,
+  Workflow,
   BellRing,
   Settings,
   User,
@@ -26,6 +27,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from 'lucide-react';
+import { isIssueDetectionUiEnabled } from '~/shared/config/runtimeEnv';
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'rj-dashboard-sidebar-width';
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'rj-dashboard-sidebar-collapsed';
@@ -233,6 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Resize only on desktop — a full-height strip on mobile steals touches and breaks the drawer.
   const showResizeHandle = isDesktop && !collapsed;
+  const showIssueDetectionUi = isIssueDetectionUiEnabled();
 
   const startResize = (e: React.PointerEvent) => {
     if (typeof window === 'undefined') return;
@@ -301,6 +304,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Helper to prefix paths for demo mode
   const p = (path: string) => pathPrefix + path;
+  const defaultDashboardPath = p(isIssueDetectionUiEnabled() ? '/leaks' : '/general');
 
   const closeCreateTeamModal = () => {
     setShowCreateTeamModal(false);
@@ -324,6 +328,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     accent: string;
     items: SidebarNavItem[];
   }>>(() => [
+    ...(showIssueDetectionUi ? [{
+      id: 'automations',
+      section: 'Automations',
+      icon: Workflow,
+      accent: '#0891b2',
+      items: [
+        createSidebarNavItem(p('/leaks'), 'leaks'),
+      ],
+    }] : []),
     {
       id: 'growth',
       section: 'Growth',
@@ -377,7 +390,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         createSidebarNavItem(p('/account'), 'account'),
       ],
     },
-  ], [currentProject, pathPrefix]);
+  ], [currentProject, pathPrefix, showIssueDetectionUi]);
 
   // isActive needs to check if path matches, accounting for demo prefix
   const isActive = (path: string) => location.pathname === path;
@@ -515,7 +528,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         setShowTeamSelector(false);
                         setShowAppSelector(false);
                         setIsMobileOpen(false);
-                        navigate(p('/general'));
+                        navigate(defaultDashboardPath);
                       }}
                       className={`w-full text-left px-3 py-2 text-sm font-semibold flex items-center justify-between gap-2 border-b border-slate-100 last:border-0 ${currentTeam?.id === team.id ? 'bg-[#e0f7ff] text-slate-900 font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
                     >
@@ -780,7 +793,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onProjectChange(createdProjectData);
                   if (onProjectCreated) onProjectCreated();
                   window.dispatchEvent(new CustomEvent('projectCreated', { detail: newProject }));
-                  navigate(p('/general'));
+                  navigate(defaultDashboardPath);
                 } catch (error) {
                   setCreateError(error instanceof Error ? error.message : 'Failed to create project');
                 } finally {
@@ -959,7 +972,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   if (onTeamChange) onTeamChange(newTeam);
                   window.dispatchEvent(new CustomEvent('teamCreated', { detail: { teamId: newTeam.id } }));
                   closeCreateTeamModal();
-                  navigate(p('/general'));
+                  navigate(defaultDashboardPath);
                 } catch (e) {
                   setCreateTeamError(e instanceof Error ? e.message : 'Failed to create team');
                 } finally {

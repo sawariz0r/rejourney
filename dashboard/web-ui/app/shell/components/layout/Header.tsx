@@ -220,7 +220,7 @@ export const Header: React.FC = () => {
             >
               <Github className="h-5 w-5" />
             </a>
-            <Link to={isAuthenticated ? "/dashboard/general" : "/login"}>
+            <Link to={isAuthenticated ? "/dashboard" : "/login"}>
               <Button variant="ghost" className="font-mono uppercase font-black text-xs sm:text-sm px-3 sm:px-6 py-2 border-2 border-black bg-white text-black hover:bg-white hover:text-black hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all rounded-none">
                 {isAuthenticated ? copy.dashboard : copy.login}
               </Button>

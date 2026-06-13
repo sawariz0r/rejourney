@@ -2,6 +2,7 @@ export interface RuntimeEnvSnapshot {
   VITE_STRIPE_PUBLISHABLE_KEY?: string;
   VITE_MAPBOX_TOKEN?: string;
   VITE_TURNSTILE_SITE_KEY?: string;
+  SHOW_ISSUE_DETECTION_UI?: string;
 }
 
 function readRuntimeEnvValue(key: keyof RuntimeEnvSnapshot): string | undefined {
@@ -17,6 +18,7 @@ export function getRuntimeEnvSnapshot(): RuntimeEnvSnapshot {
     VITE_STRIPE_PUBLISHABLE_KEY: readRuntimeEnvValue("VITE_STRIPE_PUBLISHABLE_KEY"),
     VITE_MAPBOX_TOKEN: readRuntimeEnvValue("VITE_MAPBOX_TOKEN"),
     VITE_TURNSTILE_SITE_KEY: readRuntimeEnvValue("VITE_TURNSTILE_SITE_KEY"),
+    SHOW_ISSUE_DETECTION_UI: readRuntimeEnvValue("SHOW_ISSUE_DETECTION_UI"),
   };
 }
 
@@ -28,6 +30,10 @@ export function getMapboxToken(): string {
   return getRuntimeEnvSnapshot().VITE_MAPBOX_TOKEN || "";
 }
 
+export function isIssueDetectionUiEnabled(): boolean {
+  return getRuntimeEnvSnapshot().SHOW_ISSUE_DETECTION_UI === "true";
+}
+
 export function getPublicRuntimeEnvSnapshot(): RuntimeEnvSnapshot {
   const snapshot = getRuntimeEnvSnapshot();
 
@@ -35,5 +41,6 @@ export function getPublicRuntimeEnvSnapshot(): RuntimeEnvSnapshot {
     VITE_STRIPE_PUBLISHABLE_KEY: snapshot.VITE_STRIPE_PUBLISHABLE_KEY,
     VITE_MAPBOX_TOKEN: snapshot.VITE_MAPBOX_TOKEN,
     VITE_TURNSTILE_SITE_KEY: snapshot.VITE_TURNSTILE_SITE_KEY,
+    SHOW_ISSUE_DETECTION_UI: snapshot.SHOW_ISSUE_DETECTION_UI === "true" ? "true" : "false",
   };
 }

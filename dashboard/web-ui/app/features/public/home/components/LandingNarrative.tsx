@@ -212,7 +212,7 @@ export const LandingNarrative: React.FC<{ copy: MarketingHomeCopy['narrative']; 
                             </h2>
                         </div>
                         <Link
-                            to="/demo/general"
+                            to="/demo"
                             className="inline-flex w-full items-center justify-center gap-2 border-2 border-black bg-[#fef08a] px-5 py-3 text-sm font-black uppercase text-black shadow-neo transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#67e8f9] hover:shadow-neo-lg active:translate-x-0 active:translate-y-0 active:shadow-none sm:w-auto sm:px-6 sm:py-4"
                         >
                             {copy.demoCta}

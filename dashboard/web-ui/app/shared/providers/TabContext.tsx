@@ -8,6 +8,7 @@ import { getWorkspace, saveWorkspace, WorkspaceTab } from '~/shared/api/client';
 import { isUuid } from '~/shared/lib/ids';
 import { isPublicRoutePath } from '~/shared/lib/publicRoutePaths';
 import { normalizeLegacyAnalyticsAppPath, stripDashboardPathPrefix } from '~/shell/routing/dashboardRouteAliases';
+import { isIssueDetectionUiEnabled } from '~/shared/config/runtimeEnv';
 
 export interface Tab {
     id: string;
@@ -53,6 +54,14 @@ const MAX_OPEN_TABS = 14;
 const MAX_DETAIL_TABS = 6;
 const STALE_TAB_KEEP_COUNT = 6;
 const RECENTLY_CLOSED_LIMIT = 10;
+
+function getDefaultDashboardTabId(): string {
+    return isIssueDetectionUiEnabled() ? 'leaks' : 'general';
+}
+
+function getDefaultDashboardPath(prefix: string): string {
+    return `${prefix}/${getDefaultDashboardTabId()}`;
+}
 
 function isDetailTab(tabId: string): boolean {
     return tabId.startsWith('session-')
@@ -237,7 +246,7 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     teamId,
                     projectId,
                     workspaceTabs,
-                    currentActiveId || 'general', // Fallback to 'general' if undefined/empty
+                    currentActiveId || getDefaultDashboardTabId(),
                     closedTabs
                 );
             } catch (err) {
@@ -503,11 +512,11 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                         const activeTab = trimmed.tabs.find(t => t.id === resolvedActiveTabId);
 
                         if (activeTab) {
-                            // Don't restore sessions tab - always default to general
+                            // Don't restore sessions tab as the default workspace.
                             if (activeTab.id === 'sessions' || activeTab.path.includes('/sessions')) {
-                                navigate(`${prefix}/general`, { replace: true });
+                                navigate(getDefaultDashboardPath(prefix), { replace: true });
                                 startTransition(() => {
-                                    setActiveTabId('general');
+                                    setActiveTabId(getDefaultDashboardTabId());
                                 });
                                 return;
                             }
@@ -525,19 +534,17 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                             if (tabInfo && location.pathname !== activeTab.path && !isPublicPage) {
                                 navigate(activeTab.path, { replace: true });
                             } else if (!tabInfo) {
-                                // Invalid path - redirect to general instead
-                                navigate(`${prefix}/general`, { replace: true });
+                                navigate(getDefaultDashboardPath(prefix), { replace: true });
                             }
                         } else {
-                            // Active tab not found - redirect to general
-                            navigate(`${prefix}/general`, { replace: true });
+                            navigate(getDefaultDashboardPath(prefix), { replace: true });
                         }
                     } else {
-                        // No saved active tab - redirect to general if we're on a dashboard route
+                        // No saved active tab - redirect to the default workspace route.
                         if (location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/demo')) {
                             const tabInfo = TabRegistry.getTabInfo(location.pathname);
                             if (!tabInfo) {
-                                navigate(`${prefix}/general`, { replace: true });
+                                navigate(getDefaultDashboardPath(prefix), { replace: true });
                             }
                         }
                     }
@@ -687,7 +694,7 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 } else {
                     setActiveTabId('');
                     const prefix = getPathPrefix();
-                    navigate(`${prefix}/general`, { replace: true });
+                    navigate(getDefaultDashboardPath(prefix), { replace: true });
                 }
             }
         } else {
@@ -712,7 +719,7 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTabId('');
         setSecondaryTabId(null);
         setIsSplitView(false);
-        navigate(`${getPathPrefix()}/general`, { replace: true });
+        navigate(getDefaultDashboardPath(getPathPrefix()), { replace: true });
     }, [navigate, setActiveTabId, getPathPrefix]);
 
     const closeOtherTabs = useCallback((id: string) => {

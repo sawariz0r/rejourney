@@ -87,6 +87,18 @@ const envSchema = z.object({
     CLICKHOUSE_ASYNC_INSERT: z.string().transform(v => v !== 'false').default('true'),
     CLICKHOUSE_REQUEST_TIMEOUT_MS: z.string().transform(Number).default('5000'),
 
+    // Private issue-detection integration. The UI/API default is intentionally
+    // closed unless explicitly enabled by runtime env.
+    SHOW_ISSUE_DETECTION_UI: z.preprocess(
+        (value) => value === 'true',
+        z.boolean(),
+    ).default(false),
+    ISSUE_DETECTION_API_URL: z.string().optional(),
+    ISSUE_DETECTION_SERVICE_SECRET: z.string().optional(),
+    REJOURNEY_INTERNAL_API_URL: z.string().optional(),
+    REJOURNEY_INTERNAL_SERVICE_SECRET: z.string().optional(),
+    RJ_API_ROLE: z.enum(['dashboard', 'ingest']).optional(),
+
     // Redis
     REDIS_URL: z.string().default('redis://localhost:6379/0'),
     // Redis Sentinel (optional — when set, app connects via Sentinel instead of URL)
