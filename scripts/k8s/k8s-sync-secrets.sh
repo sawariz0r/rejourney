@@ -110,8 +110,13 @@ fi
 
 # 2. Redis Secret
 log "Creating redis-secret..."
-create_or_update_secret redis-secret \
+REDIS_SECRET_ARGS=(
     --from-literal=REDIS_URL="${REDIS_URL:-redis://redis:6379/0}"
+)
+if [ -n "${REDIS_PASSWORD:-}" ]; then
+    REDIS_SECRET_ARGS+=(--from-literal=REDIS_PASSWORD="$REDIS_PASSWORD")
+fi
+create_or_update_secret redis-secret "${REDIS_SECRET_ARGS[@]}"
 
 # 2b. ClickHouse Secret (optional, disabled by default)
 CLICKHOUSE_ENABLED="${CLICKHOUSE_ENABLED:-false}"
@@ -220,6 +225,12 @@ if [ -n "${ISSUE_DETECTION_API_URL:-}" ]; then
 fi
 if [ -n "${ISSUE_DETECTION_SERVICE_SECRET:-}" ]; then
     APP_SECRET_ARGS+=(--from-literal=ISSUE_DETECTION_SERVICE_SECRET="$ISSUE_DETECTION_SERVICE_SECRET")
+fi
+if [ -n "${GITHUB_APP_SLUG:-}" ]; then
+    APP_SECRET_ARGS+=(--from-literal=GITHUB_APP_SLUG="$GITHUB_APP_SLUG")
+fi
+if [ -n "${GITHUB_APP_STATE_SECRET:-}" ]; then
+    APP_SECRET_ARGS+=(--from-literal=GITHUB_APP_STATE_SECRET="$GITHUB_APP_STATE_SECRET")
 fi
 if [ -n "${REJOURNEY_INTERNAL_API_URL:-}" ]; then
     APP_SECRET_ARGS+=(--from-literal=REJOURNEY_INTERNAL_API_URL="$REJOURNEY_INTERNAL_API_URL")

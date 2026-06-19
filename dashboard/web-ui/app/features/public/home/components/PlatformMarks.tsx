@@ -55,3 +55,35 @@ export function MarkNuxt(props: React.SVGProps<SVGSVGElement>) {
         </svg>
     );
 }
+
+export function MarkAngular(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+            <path d="M12 2L1.875 19.375h3.303l1.83-3.75h9.984l1.83 3.75h3.303L12 2zM10.82 12.887l2.36-4.654 2.36 4.654h-4.72z"/>
+        </svg>
+    );
+}
+
+export function MarkSvelte(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+            <path d="M22.508 1.488c-1.309-1.258-2.617-1.396-3.876-.667L1.64 10.364c-1.579.914-1.95 2.158-1.554 3.447.394 1.288 1.48 2.072 2.89 2.072.33 0 .667-.044.997-.13l13.682-3.864c.504-.143 1.054-.055 1.472.235.419.29.65.753.605 1.255-.045.503-.357.941-.818 1.155L6.643 17.51c-1.353.642-2.14 1.776-2.14 3.195 0 2.274 1.936 3.738 4.673 3.738 1.34 0 2.651-.277 3.842-.787l16.892-7.234c1.378-.59 2.14-1.745 2.14-3.158 0-2.313-1.85-3.844-4.577-3.844-.396 0-.796.046-1.189.141L15.35 13.916c-.524.13-1.096.027-1.536-.279-.44-.306-.673-.807-.614-1.332.06-.525.385-.975.867-1.176l10.457-4.323c1.325-.548 2.14-1.774 2.14-3.125 0-2.317-1.91-3.793-4.656-3.793z"/>
+        </svg>
+    );
+}
+
+export function MarkRemix(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+            <path d="M4 4h9.3c3.9 0 6.5 2.3 6.5 5.7 0 2.3-1.2 4-3.2 4.9 1.2.6 1.9 1.6 2.4 3.1l.7 2.3h-5.2l-.5-1.8c-.5-1.7-1.3-2.4-3-2.4H4v-4.1h8.8c1.4 0 2.2-.7 2.2-1.9 0-1.2-.8-1.9-2.2-1.9H4V4z" />
+        </svg>
+    );
+}
+
+export function MarkSolid(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 28" fill="currentColor" aria-hidden {...props}>
+            <path d="M11.6667 0L0 6.66667V20L11.6667 26.6667L23.3333 20V6.66667L11.6667 0ZM11.6667 4.16667L19.5833 8.75V17.9167L11.6667 22.5L3.75 17.9167V8.75L11.6667 4.16667Z"/>
+        </svg>
+    );
+}

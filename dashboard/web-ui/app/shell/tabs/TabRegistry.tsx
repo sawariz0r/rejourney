@@ -1,6 +1,7 @@
 import React from 'react';
 import { matchPath } from 'react-router';
 import {
+    Github,
     MessageSquareWarning,
     Play,
     Search as SearchIcon,
@@ -58,11 +59,13 @@ const loadJourneys = () => import('~/features/app/analytics/journeys/route').the
 const loadHeatmaps = () => import('~/features/app/analytics/heatmaps/route').then((module) => ({ default: module.Heatmaps }));
 const loadLeaks = () => import('~/features/app/automations/leaks/route').then((module) => ({ default: module.Leaks }));
 const loadAlertEmails = () => import('~/features/app/alerts/email/route').then((module) => ({ default: module.AlertEmails }));
+const loadSetup = () => import('~/features/app/setup/route').then((module) => ({ default: module.SetupRoute }));
 const loadStability = () => import('~/features/app/stability/index/route').then((module) => ({ default: module.Stability }));
 const loadTeamSettings = () => import('~/features/app/team/route').then((module) => ({ default: module.TeamSettings }));
 const loadBillingSettings = () => import('~/features/app/billing/route').then((module) => ({ default: module.BillingSettings }));
 const loadAccountSettings = () => import('~/features/app/account/route').then((module) => ({ default: module.AccountSettings }));
 const loadProjectSettings = () => import('~/features/app/settings/project/route').then((module) => ({ default: module.ProjectSettings }));
+const loadGithubSetup = () => import('~/features/app/settings/github/route').then((module) => ({ default: module.GithubSetup }));
 const loadSearch = () => import('~/features/app/search/route').then((module) => ({ default: module.Search }));
 
 const routes: RouteDefinition[] = [
@@ -185,6 +188,12 @@ const routes: RouteDefinition[] = [
         loadComponent: loadAlertEmails,
     },
     {
+        pattern: '/setup',
+        getInfo: () => ({ id: 'setup', title: DASHBOARD_PAGE_META.setup.tabTitle, icon: DASHBOARD_PAGE_META.setup.icon }),
+        Component: React.lazy(loadSetup),
+        loadComponent: loadSetup,
+    },
+    {
         pattern: '/sessions/:sessionId',
         getInfo: (p) => ({ id: `session-${p.sessionId}`, title: `Replay ${(p.sessionId || '').replace('session_', '').substring(0, 8)}...`, icon: Play }),
         Component: React.lazy(loadRecordingDetail),
@@ -194,6 +203,13 @@ const routes: RouteDefinition[] = [
     { pattern: '/team', getInfo: () => ({ id: 'team', title: DASHBOARD_PAGE_META.team.tabTitle, icon: DASHBOARD_PAGE_META.team.icon }), Component: React.lazy(loadTeamSettings), loadComponent: loadTeamSettings },
     { pattern: '/billing', getInfo: () => ({ id: 'billing', title: DASHBOARD_PAGE_META.billing.tabTitle, icon: DASHBOARD_PAGE_META.billing.icon }), Component: React.lazy(loadBillingSettings), loadComponent: loadBillingSettings },
     { pattern: '/account', getInfo: () => ({ id: 'account', title: DASHBOARD_PAGE_META.account.tabTitle, icon: DASHBOARD_PAGE_META.account.icon }), Component: React.lazy(loadAccountSettings), loadComponent: loadAccountSettings },
+    {
+        pattern: '/settings/:projectId/github',
+        getInfo: (p) => ({ id: `github-settings-${p.projectId}`, title: 'GitHub Setup', icon: Github }),
+        Component: React.lazy(loadGithubSetup),
+        loadComponent: loadGithubSetup,
+        getProps: (p) => ({ projectId: p.projectId }),
+    },
     {
         pattern: '/settings/:projectId',
         getInfo: (p) => ({ id: `settings-${p.projectId}`, title: DASHBOARD_PAGE_META.project.tabTitle, icon: DASHBOARD_PAGE_META.project.icon }),

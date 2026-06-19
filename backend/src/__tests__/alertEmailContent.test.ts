@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     sendApiDegradationAlertEmail,
     sendCrashAlertEmail,
+    sendLeakScanEmail,
 } from '../services/email.js';
 
 const { sentMails } = vi.hoisted(() => ({
@@ -65,6 +66,12 @@ describe('alert email content', () => {
             sampleAppVersion: '1.1.0',
             sampleOsVersion: 'Android 16',
             sampleDeviceModel: 'Pixel 9',
+            sampleSessionId: 'session_123',
+            culprit: 'MainActivity.onCreate',
+            priority: 'high',
+            status: 'ongoing',
+            events24h: 4,
+            events90d: 12,
         });
 
         expect(sentMails).toHaveLength(2);
@@ -74,6 +81,8 @@ describe('alert email content', () => {
         expect(sentMails[0].html).toContain('Triage Context');
         expect(sentMails[0].html).toContain('Affected Versions');
         expect(sentMails[0].html).toContain('Affected Devices');
+        expect(sentMails[0].html).toContain('Suggested Investigation');
+        expect(sentMails[0].html).toContain('session_123');
         expect(sentMails[0].html).toContain('http://localhost:8080/dashboard/general/issue_789');
         expect(sentMails[0].html).toContain('Times shown in Asia/Hebron');
         expect(sentMails[1].html).toContain('Times shown in America/New_York');
@@ -96,5 +105,57 @@ describe('alert email content', () => {
         expect(sentMails[0].subject).toContain('API latency degradation in Mobile App');
         expect(sentMails[0].html).toContain('http://localhost:8080/dashboard/api');
         expect(sentMails[0].html).toContain('Slowest Endpoints');
+    });
+
+    it('sends leak scan digests ordered by estimated affected users', async () => {
+        await sendLeakScanEmail([
+            { email: 'marlin@example.com', timeZone: 'UTC' },
+        ], {
+            projectId: 'p_123',
+            projectName: 'Checkout',
+            dashboardUrl: 'http://localhost:8080/dashboard/leaks',
+            completedAt: new Date('2026-06-18T09:00:00.000Z'),
+            issues: [
+                {
+                    id: '00000000-0000-0000-0000-000000000002',
+                    shortId: 'IDM-2',
+                    title: 'Coupon modal traps users',
+                    issueType: 'sp_confusion',
+                    severity: 'medium',
+                    status: 'ready',
+                    whyItMatters: 'Users rage tap the coupon modal and abandon checkout before payment.',
+                    estimatedAffectedUsers: 3,
+                    affectedSessions: 5,
+                    firstSeen: new Date('2026-06-18T07:00:00.000Z'),
+                    lastSeen: new Date('2026-06-18T08:30:00.000Z'),
+                    topSignals: ['rage_tap', 'abandonment'],
+                },
+                {
+                    id: '00000000-0000-0000-0000-000000000001',
+                    shortId: 'IDM-1',
+                    title: 'Checkout button never enables',
+                    issueType: 'sp_failure',
+                    severity: 'high',
+                    status: 'ready',
+                    whyItMatters: 'Users complete the form but cannot continue to payment.',
+                    estimatedAffectedUsers: 12,
+                    affectedSessions: 14,
+                    firstSeen: new Date('2026-06-18T06:30:00.000Z'),
+                    lastSeen: new Date('2026-06-18T08:45:00.000Z'),
+                    contextStatus: 'ready',
+                    topSignals: ['dead_tap', 'session_replay', 'checkout_abandonment'],
+                },
+            ],
+        });
+
+        expect(sentMails).toHaveLength(1);
+        expect(sentMails[0].subject).toContain('Leak scan for Checkout');
+        expect(sentMails[0].text).toContain('Checkout leak scan summary');
+        expect(sentMails[0].html).toContain('http://localhost:8080/dashboard/leaks');
+        expect(sentMails[0].html).toContain('Why it matters');
+        expect(sentMails[0].html).not.toContain('Revenue risk');
+        expect(sentMails[0].html.indexOf('Checkout button never enables')).toBeLessThan(
+            sentMails[0].html.indexOf('Coupon modal traps users'),
+        );
     });
 });

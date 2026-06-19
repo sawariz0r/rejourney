@@ -15,6 +15,7 @@ import {
     sendAnrAlertEmail,
     sendErrorSpikeAlertEmail,
     sendApiDegradationAlertEmail,
+    sendLeakScanEmail,
 } from './email.js';
 import { shouldSendForEmailRules } from './emailAlertRules.js';
 import { querySlowestApiEndpointsFromClickHouse } from './apiEndpointStatsClickHouse.js';
@@ -26,7 +27,38 @@ const SAME_TYPE_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
 const DAILY_ALERT_CAP = 20;
 
 // Alert types
-type AlertType = 'crash' | 'anr' | 'error_spike' | 'api_degradation';
+type AlertType = 'crash' | 'anr' | 'error_spike' | 'api_degradation' | 'leak_scan';
+
+export interface LeakScanDigestIssue {
+    id: string;
+    shortId?: string | null;
+    title: string;
+    issueType?: string | null;
+    severity?: string | null;
+    status?: string | null;
+    whyItMatters?: string | null;
+    estimatedAffectedUsers: number;
+    affectedSessions?: number | null;
+    firstSeen?: Date | null;
+    lastSeen?: Date | null;
+    contextStatus?: string | null;
+    topSignals?: string[] | null;
+}
+
+export interface TriggerLeakScanDigestEmailInput {
+    projectId: string;
+    scanRunId: string;
+    completedAt?: Date;
+    admittedSessions?: number;
+    issues: LeakScanDigestIssue[];
+}
+
+export interface TriggerLeakScanDigestEmailResult {
+    sent: boolean;
+    issueCount: number;
+    recipientCount: number;
+    reason?: string;
+}
 
 interface ErrorSpikeAlertWindowOptions {
     currentWindowStart: Date;
@@ -157,6 +189,24 @@ async function recordAlertSent(
     });
 }
 
+async function hasAlertBeenSent(
+    projectId: string,
+    alertType: AlertType,
+    fingerprint: string
+): Promise<boolean> {
+    const [existing] = await db
+        .select({ id: alertHistory.id })
+        .from(alertHistory)
+        .where(and(
+            eq(alertHistory.projectId, projectId),
+            eq(alertHistory.alertType, alertType),
+            eq(alertHistory.fingerprint, fingerprint)
+        ))
+        .limit(1);
+
+    return Boolean(existing);
+}
+
 /**
  * Get alert recipients with name and email for logging
  */
@@ -238,6 +288,104 @@ async function getProjectAlertSettings(projectId: string) {
 // Public Alert Functions
 // =============================================================================
 
+export async function triggerLeakScanDigestEmail(
+    input: TriggerLeakScanDigestEmailInput
+): Promise<TriggerLeakScanDigestEmailResult> {
+    const sortedIssues = input.issues
+        .filter((issue) => issue.title.trim().length > 0)
+        .sort((a, b) =>
+            (b.estimatedAffectedUsers || 0) - (a.estimatedAffectedUsers || 0) ||
+            (b.affectedSessions || 0) - (a.affectedSessions || 0)
+        );
+
+        if (sortedIssues.length === 0) {
+            return { sent: false, issueCount: 0, recipientCount: 0, reason: 'no_issues' };
+        }
+
+    try {
+        const settings = await getProjectAlertSettings(input.projectId);
+        if (settings?.leakScanAlertsEnabled === false) {
+            logger.debug({ projectId: input.projectId }, 'Leak scan digest emails disabled');
+            return {
+                sent: false,
+                issueCount: sortedIssues.length,
+                recipientCount: 0,
+                reason: 'disabled',
+            };
+        }
+
+        if (await hasAlertBeenSent(input.projectId, 'leak_scan', input.scanRunId)) {
+            return {
+                sent: false,
+                issueCount: sortedIssues.length,
+                recipientCount: 0,
+                reason: 'already_sent',
+            };
+        }
+
+        const recipientDetails = await getRecipientDetails(input.projectId);
+        if (recipientDetails.length === 0) {
+            logger.debug({ projectId: input.projectId }, 'No leak scan alert recipients');
+            return {
+                sent: false,
+                issueCount: sortedIssues.length,
+                recipientCount: 0,
+                reason: 'no_recipients',
+            };
+        }
+
+        const recipients = recipientDetails.map(r => ({
+            email: r.email,
+            name: r.name,
+            timeZone: r.timeZone,
+        }));
+        const projectName = await getProjectName(input.projectId);
+        const dashboardUrl = emailDashboardAppPath('/leaks');
+
+        await sendLeakScanEmail(recipients, {
+            projectId: input.projectId,
+            projectName,
+            dashboardUrl,
+            issues: sortedIssues,
+            completedAt: input.completedAt ?? new Date(),
+            admittedSessions: input.admittedSessions ?? null,
+        });
+
+        await recordAlertSent(input.projectId, 'leak_scan', recipients.length, input.scanRunId);
+        await logEmailSends(
+            input.projectId,
+            recipientDetails,
+            'leak_scan',
+            `Leak scan for ${projectName}: ${sortedIssues.length} ${sortedIssues.length === 1 ? 'issue' : 'issues'}`,
+            `${sortedIssues.length} leak ${sortedIssues.length === 1 ? 'issue' : 'issues'}`,
+        );
+
+        logger.info(
+            {
+                projectId: input.projectId,
+                scanRunId: input.scanRunId,
+                recipients: recipients.length,
+                issueCount: sortedIssues.length,
+            },
+            'Leak scan digest email sent',
+        );
+
+        return {
+            sent: true,
+            issueCount: sortedIssues.length,
+            recipientCount: recipients.length,
+        };
+    } catch (error) {
+        logger.error({ projectId: input.projectId, scanRunId: input.scanRunId, error }, 'Failed to send leak scan digest email');
+        return {
+            sent: false,
+            issueCount: sortedIssues.length,
+            recipientCount: 0,
+            reason: 'send_failed',
+        };
+    }
+}
+
 /**
  * Send crash alert if enabled and not rate limited
  */
@@ -280,14 +428,21 @@ export async function triggerCrashAlert(
         let subtitle: string | undefined;
         let screenName: string | undefined;
         let componentName: string | undefined;
+        let culprit: string | undefined;
         let environment: string | undefined;
+        let status: string | undefined;
+        let priority: string | undefined;
         let firstSeen: Date | undefined;
         let lastSeen: Date | undefined;
         let isHandled: boolean | undefined;
         let eventCount: number | undefined;
+        let events24h: number | undefined;
+        let events90d: number | undefined;
+        let sampleSessionId: string | undefined;
         let sampleAppVersion: string | undefined;
         let sampleOsVersion: string | undefined;
         let sampleDeviceModel: string | undefined;
+        let affectedUsersForEmail = affectedUsers;
 
         if (issueId) {
             const [issue] = await db
@@ -304,14 +459,21 @@ export async function triggerCrashAlert(
                 subtitle = issue.subtitle || undefined;
                 screenName = issue.screenName || undefined;
                 componentName = issue.componentName || undefined;
+                culprit = issue.culprit || undefined;
                 environment = issue.environment || undefined;
+                status = issue.status || undefined;
+                priority = issue.priority || undefined;
                 firstSeen = issue.firstSeen || undefined;
                 lastSeen = issue.lastSeen || undefined;
                 isHandled = issue.isHandled === null ? undefined : issue.isHandled;
                 eventCount = issue.eventCount ? Number(issue.eventCount) : undefined;
+                events24h = issue.events24h ?? undefined;
+                events90d = issue.events90d ?? undefined;
+                sampleSessionId = issue.sampleSessionId || undefined;
                 sampleAppVersion = issue.sampleAppVersion || undefined;
                 sampleOsVersion = issue.sampleOsVersion || undefined;
                 sampleDeviceModel = issue.sampleDeviceModel || undefined;
+                affectedUsersForEmail = Number(issue.userCount || affectedUsers);
             }
         }
 
@@ -325,18 +487,24 @@ export async function triggerCrashAlert(
             subtitle,
             shortId,
             issueId,
-            affectedUsers,
+            affectedUsers: affectedUsersForEmail,
             eventCount,
+            events24h,
+            events90d,
             issueUrl,
             stackTrace,
             affectedVersions,
             affectedDevices,
             screenName,
             componentName,
+            culprit,
             environment,
+            status,
+            priority,
             firstSeen,
             lastSeen,
             isHandled,
+            sampleSessionId,
             sampleAppVersion,
             sampleOsVersion,
             sampleDeviceModel,
@@ -393,13 +561,21 @@ export async function triggerAnrAlert(
         let affectedDevices: Record<string, number> | undefined;
         let shortId: string | undefined;
         let screenName: string | undefined;
+        let componentName: string | undefined;
+        let culprit: string | undefined;
         let environment: string | undefined;
+        let status: string | undefined;
+        let priority: string | undefined;
         let firstSeen: Date | undefined;
         let lastSeen: Date | undefined;
         let eventCount: number | undefined;
+        let events24h: number | undefined;
+        let events90d: number | undefined;
+        let sampleSessionId: string | undefined;
         let sampleAppVersion: string | undefined;
         let sampleOsVersion: string | undefined;
         let sampleDeviceModel: string | undefined;
+        let affectedUsersForEmail = affectedUsers;
 
         if (issueId) {
             const [issue] = await db
@@ -414,13 +590,21 @@ export async function triggerAnrAlert(
                 affectedDevices = (issue.affectedDevices as Record<string, number>) || undefined;
                 shortId = issue.shortId || undefined;
                 screenName = issue.screenName || undefined;
+                componentName = issue.componentName || undefined;
+                culprit = issue.culprit || undefined;
                 environment = issue.environment || undefined;
+                status = issue.status || undefined;
+                priority = issue.priority || undefined;
                 firstSeen = issue.firstSeen || undefined;
                 lastSeen = issue.lastSeen || undefined;
                 eventCount = issue.eventCount ? Number(issue.eventCount) : undefined;
+                events24h = issue.events24h ?? undefined;
+                events90d = issue.events90d ?? undefined;
+                sampleSessionId = issue.sampleSessionId || undefined;
                 sampleAppVersion = issue.sampleAppVersion || undefined;
                 sampleOsVersion = issue.sampleOsVersion || undefined;
                 sampleDeviceModel = issue.sampleDeviceModel || undefined;
+                affectedUsersForEmail = Number(issue.userCount || affectedUsers);
             }
         }
 
@@ -431,8 +615,10 @@ export async function triggerAnrAlert(
             projectId,
             projectName,
             durationMs,
-            affectedUsers,
+            affectedUsers: affectedUsersForEmail,
             eventCount,
+            events24h,
+            events90d,
             shortId,
             issueId,
             issueUrl,
@@ -440,9 +626,14 @@ export async function triggerAnrAlert(
             affectedVersions,
             affectedDevices,
             screenName,
+            componentName,
+            culprit,
             environment,
+            status,
+            priority,
             firstSeen,
             lastSeen,
+            sampleSessionId,
             sampleAppVersion,
             sampleOsVersion,
             sampleDeviceModel,

@@ -133,6 +133,160 @@ type FeatureDisplay = {
 const defaultFeatureTabs = ["Watch sessions", "Find drop-offs", "Review launches", "Debug stability", "Share evidence"];
 
 const featureDisplayByPath: Record<string, FeatureDisplay> = {
+  "/ai-funnel-leak-detection": {
+    title: "AI funnel leak detection",
+    subtitle: "Rank conversion leaks, rage taps, crashes, API failures, and journey loops from the leaks page.",
+    guideTitle: "Start from the ranked leak",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use generic analytics when",
+    heroBullets: ["Rank repeated leak signals", "Open replay evidence", "Create fix-ready context"],
+    available: ["Product teams", "Growth teams", "Engineering"],
+    showcaseTabs: ["Detect", "Rank", "Replay", "Package", "Fix"],
+    showcaseTitle: "Turn the leaks page into a repair queue",
+    showcaseCopy: "Start with the ranked leak, then inspect the sessions, journeys, failures, and context that explain why users dropped.",
+    showcaseBullets: ["Group repeated issues", "Keep replay beside each leak", "Hand off evidence without rewriting it"],
+    steps: ["Open the leaks page", "Inspect the ranked evidence", "Route the context to the owner"],
+  },
+  "/funnel-replay-evidence": {
+    title: "Funnel replay evidence",
+    subtitle: "Use journey ribbons to open replay evidence for paths where users branch, loop, or drop.",
+    guideTitle: "Follow the path",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use simple funnels when",
+    heroBullets: ["Weighted journey ribbons", "Path-level replay evidence", "Drop-off labels"],
+    available: ["Product teams", "Growth teams", "Web and mobile"],
+    showcaseTabs: ["Map paths", "Find drops", "Open replays", "Compare paths", "Prioritize"],
+    showcaseTitle: "Open the sessions behind the ribbon",
+    showcaseCopy: "A funnel path becomes actionable when teams can inspect the replay evidence behind the drop.",
+    showcaseBullets: ["Find high-volume leaks", "Compare healthy and degraded paths", "Share replay-backed findings"],
+    steps: ["Choose a journey path", "Open matching sessions", "Prioritize the repeated drop"],
+  },
+  "/geographic-analytics": {
+    title: "Geographic analytics",
+    subtitle: "Map regional sentiment and UX friction with replay evidence behind the country clusters.",
+    guideTitle: "Find the regional cluster",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use aggregate analytics when",
+    heroBullets: ["Regional sentiment", "Country-level friction", "Replay by market"],
+    available: ["Web apps", "Mobile apps", "Global products"],
+    showcaseTabs: ["Map", "Segment", "Inspect", "Compare", "Prioritize"],
+    showcaseTitle: "Spot the market where experience changed",
+    showcaseCopy: "Regional analytics keeps the map connected to real sessions so teams can see what users experienced.",
+    showcaseBullets: ["Catch market-specific UX issues", "Separate infra from product friction", "Open replay evidence by country"],
+    steps: ["Select a region", "Inspect sentiment clusters", "Open sessions behind the signal"],
+  },
+  "/revenue-recovery-analytics": {
+    title: "Revenue recovery analytics",
+    subtitle: "Connect revenue, transactions, users, retention, releases, and sessions in one recovery workflow.",
+    guideTitle: "Tie movement to sessions",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use BI reports when",
+    heroBullets: ["Revenue trends", "Release markers", "Replay context"],
+    available: ["Growth teams", "Product teams", "Revenue teams"],
+    showcaseTabs: ["Track", "Compare", "Inspect", "Repair", "Confirm"],
+    showcaseTitle: "Move from revenue change to session evidence",
+    showcaseCopy: "Use the General dashboard to keep revenue movement close to the sessions and releases that explain it.",
+    showcaseBullets: ["Watch revenue and transactions", "Check release impact", "Open affected sessions"],
+    steps: ["Find the movement", "Inspect affected sessions", "Confirm recovery after the fix"],
+  },
+  "/standardized-context": {
+    title: "Standardized context",
+    subtitle: "Keep sessions, regions, events, releases, requests, and issues under shared identifiers.",
+    guideTitle: "Normalize the evidence",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use ad hoc notes when",
+    heroBullets: ["Shared session identifiers", "Reusable issue context", "Replay-linked evidence"],
+    available: ["Data teams", "Product teams", "Engineering"],
+    showcaseTabs: ["Capture", "Normalize", "Query", "Share", "Compare"],
+    showcaseTitle: "Make session evidence reusable",
+    showcaseCopy: "Standardized context lets teams reopen, compare, and hand off the same evidence without translating it each time.",
+    showcaseBullets: ["Tie events to sessions", "Preserve region and release context", "Export fix-ready summaries"],
+    steps: ["Name the signals", "Attach them to sessions", "Reuse the context in handoffs"],
+  },
+  "/ai-agent-handoff": {
+    title: "AI agent handoff",
+    subtitle: "Package replay, event, request, crash, and journey evidence for developer AI workflows.",
+    guideTitle: "Prepare the packet",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use manual tickets when",
+    heroBullets: ["Replay links", "Markdown context", "Coding-agent ready"],
+    available: ["Engineering", "Support", "Product"],
+    showcaseTabs: ["Collect", "Summarize", "Review", "Paste", "Verify"],
+    showcaseTitle: "Give the agent the facts it needs",
+    showcaseCopy: "Turn session evidence into a structured packet a developer can review and hand to Cursor, Claude, Codex, or an IDE assistant.",
+    showcaseBullets: ["Describe expected and observed behavior", "Attach technical signals", "Keep the replay link with the fix context"],
+    steps: ["Open the issue", "Generate the context", "Review and hand off"],
+  },
+  "/autonomous-debugging": {
+    title: "Autonomous debugging",
+    subtitle: "Group repeated production failures with replay, stack, API, device, and release context.",
+    guideTitle: "Start with reproducible evidence",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use crash-only triage when",
+    heroBullets: ["Repeated signals", "Replay-linked bugs", "Fix-ready handoff"],
+    available: ["Engineering", "Mobile apps", "Web apps"],
+    showcaseTabs: ["Group", "Replay", "Inspect", "Handoff", "Verify"],
+    showcaseTitle: "Debug from the session that proves the bug",
+    showcaseCopy: "Autonomous debugging works when replay, crash, API, release, and user-path context stay together.",
+    showcaseBullets: ["Avoid reconstructing evidence by hand", "Open sessions behind repeated issues", "Hand off reproducible context"],
+    steps: ["Group the repeated signal", "Inspect replay and technical context", "Send the fix packet"],
+  },
+  "/self-healing-software": {
+    title: "Self-healing software",
+    subtitle: "Turn repeated session, stability, API, device, and journey signals into fix-ready work.",
+    guideTitle: "Start with evidence",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use generic monitoring when",
+    heroBullets: ["Detect repeated friction", "Package repair context", "Verify recovery"],
+    available: ["Engineering", "Product teams", "AI workflows"],
+    showcaseTabs: ["Observe", "Group", "Replay", "Handoff", "Verify"],
+    showcaseTitle: "Make self-healing a repair loop",
+    showcaseCopy: "Self-healing software needs user evidence, technical context, and a clear handoff before automation can be trusted.",
+    showcaseBullets: ["Keep replay with each signal", "Attach stability and API context", "Use device and release evidence"],
+    steps: ["Find the repeated issue", "Inspect the session evidence", "Hand off the fix context"],
+  },
+  "/stability-monitoring": {
+    title: "Stability monitoring",
+    subtitle: "Group crashes, errors, ANRs, and API spikes with replay, devices, releases, and users.",
+    guideTitle: "Debug from the failing session",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use crash-only tools when",
+    heroBullets: ["Crash groups", "Error and ANR context", "Replay-backed triage"],
+    available: ["Mobile apps", "Web apps", "Engineering"],
+    showcaseTabs: ["Group", "Prioritize", "Replay", "Inspect", "Resolve"],
+    showcaseTitle: "Connect failures to the user path",
+    showcaseCopy: "Stability monitoring is stronger when the failure carries the path, device, app version, and replay context that shaped it.",
+    showcaseBullets: ["Group repeated failures", "See affected users and devices", "Open replay evidence before filing the fix"],
+    steps: ["Open stability", "Filter by issue type", "Inspect replay and device context"],
+  },
+  "/api-endpoint-insights": {
+    title: "API endpoint insights",
+    subtitle: "Track endpoint volume, latency, failure codes, and risk beside affected session evidence.",
+    guideTitle: "Find the endpoint users felt",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use server-only monitoring when",
+    heroBullets: ["Endpoint risk", "Failure code filters", "Session-level impact"],
+    available: ["Web apps", "Mobile apps", "Backend teams"],
+    showcaseTabs: ["Volume", "Latency", "Failures", "Risk", "Replay"],
+    showcaseTitle: "Turn API telemetry into product evidence",
+    showcaseCopy: "Endpoint insights show which backend behavior became user-visible friction in captured sessions.",
+    showcaseBullets: ["Sort by risk and latency", "Filter by status family", "Tie endpoint failures to user paths"],
+    steps: ["Open API Insights", "Find risky endpoints", "Inspect affected sessions"],
+  },
+  "/device-insights": {
+    title: "Device insights",
+    subtitle: "Find device, platform, OS, and app-version friction hidden inside average metrics.",
+    guideTitle: "Find the device cohort",
+    fitTitle: "Best fit",
+    tradeoffTitle: "Use aggregate analytics when",
+    heroBullets: ["Device cohorts", "Issue pressure", "Engagement quality"],
+    available: ["Mobile apps", "React Native", "iOS and Android"],
+    showcaseTabs: ["Portfolio", "Engagement", "Stability", "Versions", "Replay"],
+    showcaseTitle: "Spot device-specific product friction",
+    showcaseCopy: "Device insights show which devices carry engagement, stability, duration, and issue patterns that averages hide.",
+    showcaseBullets: ["Compare device models", "Track crash and ANR pressure", "Find device-version hotspots"],
+    steps: ["Open Devices", "Review pressure leaders", "Connect the cohort to replay"],
+  },
   "/record-user-sessions": {
     title: "Record user sessions",
     subtitle: "Find the sessions that answer a specific product, support, or engineering question.",
@@ -290,12 +444,13 @@ type FeatureImage = {
 
 const featureImageDimensionsBySrc: Record<string, { width: number; height: number }> = {
   "/images/anr-issues.png": { width: 1800, height: 1110 },
+  "/images/geo-analytics.png": { width: 1024, height: 755 },
+  "/images/geo-intelligence.png": { width: 1024, height: 755 },
   "/images/growth-engines.png": { width: 1564, height: 1078 },
   "/images/heatmaps.png": { width: 998, height: 794 },
   "/images/hero-replay-workbench.png": { width: 1024, height: 597 },
   "/images/issues-feed.png": { width: 1024, height: 378 },
   "/images/landing-replay-theater.png": { width: 2018, height: 1080 },
-  "/images/readme-alert-emails.png": { width: 1440, height: 900 },
   "/images/readme-general-demo.png": { width: 1440, height: 900 },
   "/images/readme-user-journeys.png": { width: 1078, height: 663 },
   "/images/session-replay-preview.png": { width: 1024, height: 598 },
@@ -305,6 +460,8 @@ const featureImageDimensionsBySrc: Record<string, { width: number; height: numbe
   "/images/engineering/product-tools-live-journeys.png": { width: 1440, height: 820 },
   "/images/engineering/product-tools-live-replay.png": { width: 1440, height: 820 },
   "/images/engineering/product-tools-live-stability.png": { width: 1440, height: 820 },
+  "/images/engineering/product-tools-live-api-endpoints.png": { width: 1440, height: 900 },
+  "/images/engineering/product-tools-live-devices.png": { width: 1440, height: 900 },
   "/images/engineering/record-sessions-ai-query-builder.png": { width: 943, height: 180 },
   "/images/engineering/record-sessions-journey-selection.png": { width: 1000, height: 640 },
   "/images/engineering/heatmaps-attention-docs.png": { width: 1006, height: 834 },
@@ -337,6 +494,238 @@ const defaultFeatureImages: FeatureImage[] = [
 ];
 
 const featureImagesByPath: Record<string, FeatureImage[]> = {
+  "/ai-funnel-leak-detection": [
+    {
+      src: "/images/landing-replay-theater.png",
+      alt: "Rejourney leaks page showing ranked issue detection and funnel leak evidence",
+      title: "Leaks page",
+      copy: "Start from ranked leak signals instead of searching the whole replay archive.",
+    },
+    {
+      src: "/images/issues-feed.png",
+      alt: "Rejourney issues feed with replay-backed leak signals",
+      title: "Issue feed",
+      copy: "Review repeated issues with enough context to decide what deserves repair.",
+    },
+    {
+      src: "/images/readme-general-demo.png",
+      alt: "Rejourney issue detection dashboard with fix-ready context",
+      title: "Leak context",
+      copy: "Keep session, product, and technical context beside the issue.",
+    },
+    {
+      src: "/images/readme-user-journeys.png",
+      alt: "Rejourney journey ribbons showing funnel paths behind leaks",
+      title: "Journey evidence",
+      copy: "Use paths to understand whether the leak repeats across a flow.",
+    },
+  ],
+  "/funnel-replay-evidence": [
+    {
+      src: "/images/readme-user-journeys.png",
+      alt: "Rejourney journey ribbon map focused on the funnel path",
+      title: "Journey ribbons",
+      copy: "Find the weighted path where users branch, loop, or drop.",
+    },
+    {
+      src: "/images/user-journeys.png",
+      alt: "Rejourney user journey analytics dashboard",
+      title: "Journey overview",
+      copy: "Compare funnel paths and transition volume across the product.",
+    },
+    {
+      src: "/images/session-replay-preview.png",
+      alt: "Rejourney replay evidence for a selected funnel path",
+      title: "Replay evidence",
+      copy: "Open the sessions behind a path before turning it into work.",
+    },
+  ],
+  "/geographic-analytics": [
+    {
+      src: "/images/geo-analytics.png",
+      alt: "Rejourney geographic analytics map showing regional sentiment",
+      title: "Sentiment by region",
+      copy: "Spot frustrated, neutral, and positive session clusters by country.",
+    },
+    {
+      src: "/images/geo-intelligence.png",
+      alt: "Rejourney geographic intelligence card showing regional UX friction",
+      title: "Regional friction",
+      copy: "Use map-based context to prioritize local UX and infrastructure issues.",
+    },
+    {
+      src: "/images/session-replay-preview.png",
+      alt: "Rejourney replay evidence for regional sessions",
+      title: "Regional replay",
+      copy: "Open real sessions behind the regional signal.",
+    },
+  ],
+  "/revenue-recovery-analytics": [
+    {
+      src: "/images/growth-engines.png",
+      alt: "Rejourney revenue recovery analytics dashboard",
+      title: "Revenue dashboard",
+      copy: "Track revenue, transactions, users, retention, and release impact.",
+    },
+    {
+      src: "/images/readme-general-demo.png",
+      alt: "Rejourney general dashboard with leak and revenue context",
+      title: "Issue context",
+      copy: "Use issue evidence to explain movement in growth metrics.",
+    },
+    {
+      src: "/images/session-replay-preview.png",
+      alt: "Rejourney replay evidence for revenue movement",
+      title: "Session evidence",
+      copy: "Inspect the sessions behind a revenue change.",
+    },
+  ],
+  "/standardized-context": [
+    {
+      src: "/images/growth-engines.png",
+      alt: "Rejourney analytics dashboard with shared context identifiers",
+      title: "Shared context",
+      copy: "Keep revenue, sessions, releases, and user signals in the same vocabulary.",
+    },
+    {
+      src: "/images/geo-analytics.png",
+      alt: "Rejourney region analytics with session context",
+      title: "Regional context",
+      copy: "Tie regional signals back to real replay evidence.",
+    },
+    {
+      src: "/images/readme-general-demo.png",
+      alt: "Rejourney issue detection context",
+      title: "Issue context",
+      copy: "Preserve the facts another team needs to reopen an issue.",
+    },
+  ],
+  "/ai-agent-handoff": [
+    {
+      src: "/images/readme-general-demo.png",
+      alt: "Rejourney issue detection dashboard for AI handoff context",
+      title: "Fix packet",
+      copy: "Prepare replay-backed context for a developer or coding agent.",
+    },
+    {
+      src: "/images/issues-feed.png",
+      alt: "Rejourney issue feed with repeated signals",
+      title: "Repeated signals",
+      copy: "Start the handoff from a grouped issue instead of a vague report.",
+    },
+    {
+      src: "/images/session-replay-preview.png",
+      alt: "Rejourney session replay evidence for AI handoff",
+      title: "Replay evidence",
+      copy: "Keep the exact session attached to the handoff.",
+    },
+  ],
+  "/autonomous-debugging": [
+    {
+      src: "/images/anr-issues.png",
+      alt: "Rejourney stability dashboard with ANR and crash context",
+      title: "Stability issue",
+      copy: "Group repeated production failures with replay and app context.",
+    },
+    {
+      src: "/images/issues-feed.png",
+      alt: "Rejourney issues feed for autonomous debugging",
+      title: "Issue queue",
+      copy: "Start from ranked issue signals before opening the technical detail.",
+    },
+    {
+      src: "/images/session-replay-preview.png",
+      alt: "Rejourney replay evidence for production debugging",
+      title: "Replay context",
+      copy: "Use the session to reproduce what the user experienced.",
+    },
+  ],
+  "/self-healing-software": [
+    {
+      src: "/images/engineering/product-tools-live-stability.png",
+      alt: "Rejourney live demo stability dashboard for self-healing software",
+      title: "Stability evidence",
+      copy: "Start from grouped crashes, errors, ANRs, and API spikes with real session context.",
+    },
+    {
+      src: "/images/engineering/product-tools-live-api-endpoints.png",
+      alt: "Rejourney API endpoint insights dashboard used for self-healing workflows",
+      title: "API context",
+      copy: "Use endpoint risk, latency, and status codes to identify backend friction users felt.",
+    },
+    {
+      src: "/images/engineering/product-tools-live-devices.png",
+      alt: "Rejourney device insights dashboard showing device-specific friction",
+      title: "Device pressure",
+      copy: "Find the devices, platforms, and app versions where issues concentrate.",
+    },
+    {
+      src: "/images/session-replay-preview.png",
+      alt: "Rejourney session replay evidence for debugging",
+      title: "Replay evidence",
+      copy: "Keep the actual session attached before sending work to a developer or AI agent.",
+    },
+  ],
+  "/stability-monitoring": [
+    {
+      src: "/images/engineering/product-tools-live-stability.png",
+      alt: "Rejourney stability monitoring dashboard with grouped crashes errors ANRs and API spikes",
+      title: "Stability dashboard",
+      copy: "Review crashes, errors, ANRs, and API spikes from one stability workflow.",
+    },
+    {
+      src: "/images/anr-issues.png",
+      alt: "Rejourney ANR issue dashboard with production failure context",
+      title: "ANR context",
+      copy: "Use replay and issue context to understand freezes and unresponsive moments.",
+    },
+    {
+      src: "/images/engineering/product-tools-live-devices.png",
+      alt: "Rejourney device insights linked to stability monitoring",
+      title: "Affected devices",
+      copy: "Prioritize failures by the device and app-version cohorts that carry them.",
+    },
+  ],
+  "/api-endpoint-insights": [
+    {
+      src: "/images/engineering/product-tools-live-api-endpoints.png",
+      alt: "Rejourney API endpoint insights dashboard with risk latency and failure code filters",
+      title: "Endpoint database",
+      copy: "Sort endpoints by calls, errors, fail rate, latency, status codes, and risk.",
+    },
+    {
+      src: "/images/engineering/ambiguity-api-error-rate-by-country.png",
+      alt: "Rejourney API error analytics by country",
+      title: "API error impact",
+      copy: "Use regional and product context to understand where API errors shape user behavior.",
+    },
+    {
+      src: "/images/session-replay-preview.png",
+      alt: "Rejourney replay evidence for API failure sessions",
+      title: "Replay evidence",
+      copy: "Open sessions where endpoint behavior changed the user experience.",
+    },
+  ],
+  "/device-insights": [
+    {
+      src: "/images/engineering/product-tools-live-devices.png",
+      alt: "Rejourney device insights dashboard with device portfolio engagement and issue pressure",
+      title: "Device insights",
+      copy: "Compare session volume, engagement, duration, and issue pressure by device model.",
+    },
+    {
+      src: "/images/anr-issues.png",
+      alt: "Rejourney stability issue context for affected devices",
+      title: "Stability by device",
+      copy: "Connect device cohorts to crashes, ANRs, errors, and affected sessions.",
+    },
+    {
+      src: "/images/engineering/product-tools-live-replay.png",
+      alt: "Rejourney replay workbench for device-specific session evidence",
+      title: "Replay by cohort",
+      copy: "Open the sessions behind a device-specific pattern before deciding what to fix.",
+    },
+  ],
   "/record-user-sessions": [
     {
       src: "/images/engineering/product-tools-live-replay.png",
@@ -463,10 +852,10 @@ const featureImagesByPath: Record<string, FeatureImage[]> = {
       copy: "Review the behavior data your team depends on.",
     },
     {
-      src: "/images/readme-alert-emails.png",
-      alt: "Rejourney alert email preview",
-      title: "Operational control",
-      copy: "Build a workflow that can fit cloud or self-hosted needs.",
+      src: "/images/readme-general-demo.png",
+      alt: "Rejourney issue detection inbox with ranked leak signals",
+      title: "Issue detection",
+      copy: "Build a workflow around ranked issues, replay evidence, and fix-ready context.",
     },
     {
       src: "/images/engineering/product-tools-live-stability.png",
@@ -573,10 +962,10 @@ const alternativeQuickScanImages: Record<string, FeatureImage> = {
     copy: "Use product analytics as the supporting visual.",
   },
   "/alternatives/pendo-session-replay": {
-    src: "/images/readme-alert-emails.png",
-    alt: "Rejourney alert email preview",
-    title: "Team alerts",
-    copy: "Show workflow context for product teams.",
+    src: "/images/readme-general-demo.png",
+    alt: "Rejourney issue detection inbox with ranked leak signals",
+    title: "Issue detection",
+    copy: "Show ranked product and technical issues with the context teams need to act.",
   },
   "/alternatives/fullstory": {
     src: "/images/session-replay-preview.png",
@@ -1256,6 +1645,14 @@ function CategoryLimitsSection({ page }: { page: SeoPage }) {
 }
 
 function categoryDocsLink(page: SeoPage) {
+  if (page.path === "/self-healing-software") {
+    return { href: "/demo", label: "Open live demo" };
+  }
+
+  if (page.path === "/stability-monitoring" || page.path === "/device-insights") {
+    return { href: "/docs/reactnative/overview", label: "React Native docs" };
+  }
+
   if (page.path === "/mobile-session-replay") {
     return { href: "/docs/reactnative/overview", label: "React Native docs" };
   }
@@ -1547,6 +1944,240 @@ const defaultFeatureArticleContent: FeatureArticleContent = {
 };
 
 const featureArticleContentByPath: Record<string, FeatureArticleContent> = {
+  "/ai-funnel-leak-detection": {
+    sections: [
+      {
+        title: "Open the leaks page before opening random sessions",
+        paragraphs: [
+          "The leaks page is the triage surface for repeated friction. Instead of starting in a replay archive, the team starts with grouped issues that already point to a funnel drop, rage tap cluster, crash, API failure, journey loop, or blocked product path.",
+          "That changes the review from clip hunting to issue ranking. Product can ask which leak costs the most intent, growth can look for revenue impact, and engineering can open the exact sessions that prove the failure.",
+        ],
+        bullets: [
+          "Repeated product and technical signals grouped together.",
+          "Replay evidence attached to the issue instead of stored elsewhere.",
+          "Affected paths, sessions, and context ready for the owner.",
+        ],
+        imageIndex: 0,
+        imageVariant: "wide",
+      },
+      {
+        title: "Rank leaks by user impact and fixability",
+        paragraphs: [
+          "A useful leaks page should not treat every signal as equal. A one-off confusing session, a repeated checkout failure, and a release-specific crash all need different priority.",
+          "Rejourney keeps the issue list tied to user impact and supporting evidence, so the team can see whether a leak is repeated, whether it blocks conversion, and whether the available context is enough for someone to repair it.",
+        ],
+        bullets: [
+          "Prioritize repeated leaks over isolated oddities.",
+          "Check the path and session sample before assigning work.",
+          "Keep technical signals close enough to prove the likely cause.",
+        ],
+        imageIndex: 1,
+        imageVariant: "wide",
+      },
+      {
+        title: "Inspect the replay evidence behind the issue",
+        paragraphs: [
+          "The issue summary is only the door. The proof is still the session: what the user saw, which path they took, where they hesitated, what request failed, and whether a crash or UI state shaped the outcome.",
+          "When the replay evidence stays attached, the team can verify that the issue description matches reality before it becomes roadmap work or an engineering ticket.",
+        ],
+        imageIndex: 2,
+        imageVariant: "wide",
+      },
+      {
+        title: "Use journey paths to prove the leak repeats",
+        paragraphs: [
+          "Some leaks are path-shaped. Users branch, loop, or drop after a transition rather than at a single obvious button. Journey ribbons make those patterns easier to spot and easier to explain.",
+          "From the leaks page, the journey evidence helps the team decide whether the issue is a repeated funnel problem or just one strange session. That context matters before assigning priority.",
+        ],
+        imageIndex: 3,
+        imageVariant: "wide",
+      },
+      {
+        title: "Package the fix context for engineering or an AI workflow",
+        paragraphs: [
+          "Once a leak is real and repeated, the handoff should include the path, expected behavior, observed behavior, affected sessions, relevant events, failed requests, release or device context, and replay links.",
+          "That gives an engineer or coding agent enough evidence to begin reproducing the issue instead of asking someone to rewrite the same investigation in a ticket.",
+        ],
+        bullets: [
+          "Expected and observed behavior.",
+          "Replay links and affected session examples.",
+          "Events, requests, crashes, devices, releases, and journey context.",
+          "A short fix hypothesis that can be tested.",
+        ],
+      },
+    ],
+    implementationNotes: [
+      "Do not file a leak until the replay evidence supports the issue summary.",
+      "Keep grouped issues tied to route, screen, release, platform, and affected user context.",
+      "Use journey ribbons when the failure is a path or transition problem.",
+      "Package expected behavior, observed behavior, replay links, and technical context before handing the leak to engineering or an AI coding workflow.",
+    ],
+  },
+  "/self-healing-software": {
+    sections: [
+      {
+        title: "Treat self-healing as a repair loop",
+        paragraphs: [
+          "Self-healing software starts with the same discipline as good debugging: observe the user-facing failure, group repeated signals, attach the session evidence, and make the next step small enough to repair.",
+          "Rejourney keeps stability issues, API endpoint failures, device pressure, journeys, and replay evidence close together so teams can move from product friction to a bounded fix packet.",
+        ],
+        bullets: [
+          "Group repeated crashes, errors, ANRs, API failures, and leak signals.",
+          "Keep replay and product-path context attached to the issue.",
+          "Hand off enough evidence for an engineer or AI coding workflow to reproduce the problem.",
+        ],
+        imageIndex: 0,
+        imageVariant: "wide",
+      },
+      {
+        title: "Connect backend and device context before automating",
+        paragraphs: [
+          "Automation is only useful when the evidence is specific. An endpoint that fails during checkout, a device model that carries ANRs, or a release that changed engagement needs to be visible before the fix can be trusted.",
+          "The workflow should preserve the route, screen, request, app version, device, replay link, and expected behavior. That context gives the next reviewer enough information to verify the repair instead of guessing from a summary.",
+        ],
+        imageIndex: 1,
+        imageVariant: "wide",
+      },
+      {
+        title: "Verify recovery with the same signals",
+        paragraphs: [
+          "A self-healing loop is incomplete until the team can confirm that the issue actually improved. Use the same session, stability, endpoint, device, and journey views to compare behavior after the fix ships.",
+          "If the issue disappears from one view but remains visible in another, the repair may have narrowed the symptom without removing the underlying product friction.",
+        ],
+        imageIndex: 2,
+        imageVariant: "wide",
+      },
+    ],
+    implementationNotes: [
+      "Define which signal types create a repair candidate: crash, ANR, API spike, device hotspot, journey loop, or funnel leak.",
+      "Require replay or a clear reason replay is unavailable before handing work to an AI coding workflow.",
+      "Attach route, screen, release, endpoint, device, and expected behavior to the fix packet.",
+      "Verify the same signal after release instead of closing the loop from a code change alone.",
+    ],
+  },
+  "/stability-monitoring": {
+    sections: [
+      {
+        title: "Group failures before assigning priority",
+        paragraphs: [
+          "Stability triage gets noisy when every crash, error, ANR, and API spike becomes a separate task. Grouping repeated failures lets the team see affected users, event count, last occurrence, and the context that makes the issue worth repairing.",
+          "Rejourney's stability page keeps those groups beside replay availability, device context, app versions, and API spikes so engineering and product can judge impact from the same evidence.",
+        ],
+        bullets: [
+          "Crashes, errors, ANRs, and API spikes in one workflow.",
+          "Affected users and event counts visible before drilldown.",
+          "Replay links and device context preserved for reproduction.",
+        ],
+        imageIndex: 0,
+        imageVariant: "wide",
+      },
+      {
+        title: "Use replay to understand what happened before the failure",
+        paragraphs: [
+          "A failure often depends on the path that led to it: a gesture, a loading state, a failed request, or a device-specific state that never appears in local testing.",
+          "Opening the replay before writing the ticket helps the team describe expected behavior, observed behavior, and the smallest reproduction path without asking the user to recreate the failure.",
+        ],
+        imageIndex: 1,
+      },
+      {
+        title: "Separate release, device, and API causes",
+        paragraphs: [
+          "The same symptom can come from different causes. A crash spike after a release, an ANR concentrated on one device family, and an API spike during checkout should not be handled as the same class of work.",
+          "Use stability monitoring with device insights and endpoint insights to split those causes before assigning ownership.",
+        ],
+        imageIndex: 2,
+        imageVariant: "wide",
+      },
+    ],
+    implementationNotes: [
+      "Capture app version, SDK version, device model, OS version, route, and screen context with stability events.",
+      "Link crash, error, and ANR groups back to representative sessions when available.",
+      "Track API spikes beside stability issues so backend regressions are not mistaken for frontend bugs.",
+      "Filter by issue type and affected cohort before assigning severity.",
+    ],
+  },
+  "/api-endpoint-insights": {
+    sections: [
+      {
+        title: "Track the endpoint behavior users actually felt",
+        paragraphs: [
+          "API endpoint analytics is most useful when it explains product impact. A high-volume endpoint, a slow endpoint, and an endpoint with a small but repeated 500 rate can each matter differently depending on where users encounter it.",
+          "Rejourney's endpoint database keeps calls, errors, fail rate, latency, status codes, filters, and risk together so teams can find the backend behavior most likely to explain user friction.",
+        ],
+        bullets: [
+          "Sort endpoints by volume, errors, fail rate, latency, and risk.",
+          "Filter by method, status family, failure code, latency, volume, and endpoint path.",
+          "Use endpoint insights beside replay, stability, journeys, and device context.",
+        ],
+        imageIndex: 0,
+        imageVariant: "wide",
+      },
+      {
+        title: "Do not stop at the status code",
+        paragraphs: [
+          "A 500 during checkout and a 500 on a background refresh do not carry the same product cost. Endpoint insights should show enough context to separate noisy failures from failures that block intent.",
+          "Use status codes, latency, request volume, and risk as the starting point, then inspect the affected sessions and journeys before turning the endpoint into engineering work.",
+        ],
+        imageIndex: 1,
+        imageVariant: "wide",
+      },
+      {
+        title: "Connect API failures to funnel and retention work",
+        paragraphs: [
+          "API issues often look like product confusion to users: a button that appears ignored, a stale feed, a form with no confirmation, or a checkout step that silently fails.",
+          "When endpoint insights sit beside session replay, teams can explain not just which endpoint failed, but how the failure changed the user's path.",
+        ],
+        imageIndex: 2,
+      },
+    ],
+    implementationNotes: [
+      "Capture endpoint path, method, status code, latency, route or screen, release, and sanitized request context.",
+      "Avoid capturing sensitive request bodies or tokens in endpoint context.",
+      "Filter out health checks and low-signal endpoints before ranking product risk.",
+      "Attach one or more affected sessions when turning an endpoint issue into a ticket.",
+    ],
+  },
+  "/device-insights": {
+    sections: [
+      {
+        title: "Find the device cohort hiding inside the average",
+        paragraphs: [
+          "Device issues rarely announce themselves in the top-line metric. One device model, OS version, or app version can carry worse engagement, longer sessions, crashes, ANRs, or rage taps while the global dashboard still looks acceptable.",
+          "Rejourney's device page shows the portfolio, platform mix, engagement leaders, issue pressure, and device-version hotspots so teams can decide whether a problem is broad UX friction or a cohort-specific production issue.",
+        ],
+        bullets: [
+          "Compare device models by sessions, engagement, duration, and issue pressure.",
+          "Review platform mix and device-version hotspots.",
+          "Connect device cohorts to stability and replay evidence.",
+        ],
+        imageIndex: 0,
+        imageVariant: "wide",
+      },
+      {
+        title: "Separate device pressure from product friction",
+        paragraphs: [
+          "A user path that fails only on one device family should not trigger the same response as a flow that fails everywhere. Device insights help the team avoid broad redesigns when the evidence points to hardware, OS, app version, or performance pressure.",
+          "That distinction matters for prioritization. Engineering can reproduce the device-specific issue while product keeps the broader funnel work focused.",
+        ],
+        imageIndex: 1,
+      },
+      {
+        title: "Open sessions from the affected cohort",
+        paragraphs: [
+          "A device ranking is a clue. The proof is in sessions from that cohort: what the user tried, how the UI responded, whether a crash or ANR occurred, and which app or OS version shaped the outcome.",
+          "Pair device insights with replay and stability monitoring before deciding whether the fix belongs to UI, performance, networking, or instrumentation.",
+        ],
+        imageIndex: 2,
+        imageVariant: "wide",
+      },
+    ],
+    implementationNotes: [
+      "Capture device model, OS version, app version, platform, route or screen, and stability signals.",
+      "Rank device cohorts by issue pressure as well as volume so small but severe cohorts are visible.",
+      "Compare device-specific failures against successful sessions from the same flow.",
+      "Link device hotspots to replay and stability evidence before filing engineering work.",
+    ],
+  },
   "/record-user-sessions": {
     sections: [
       {

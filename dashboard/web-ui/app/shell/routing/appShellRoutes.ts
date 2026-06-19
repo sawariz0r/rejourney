@@ -12,6 +12,7 @@ const SHARED_APP_ROUTE_MODULES = [
   { key: "analytics-heatmaps", path: "heatmaps", file: "features/app/analytics/heatmaps/route.tsx" },
   { key: "leaks", path: "leaks", file: "features/app/automations/leaks/route.tsx" },
   { key: "alerts-emails", path: "alerts/emails", file: "features/app/alerts/email/route.tsx" },
+  { key: "setup", path: "setup", file: "features/app/setup/route.tsx" },
   { key: "stability", path: "stability", file: "features/app/stability/index/route.tsx" },
   { key: "crashes", path: "stability/crashes", file: "shell/routing/redirects/StabilityRedirect.tsx" },
   { key: "crash-detail", path: "stability/crashes/:projectId/:crashId", file: "shell/routing/redirects/StabilityRedirect.tsx" },
@@ -24,6 +25,7 @@ const SHARED_APP_ROUTE_MODULES = [
   { key: "billing-return", path: "billing/return", file: "features/app/billing/return/route.tsx" },
   { key: "account", path: "account", file: "features/app/account/route.tsx" },
   { key: "project-settings", path: "settings/:projectId", file: "features/app/settings/project/route.tsx" },
+  { key: "github-setup", path: "settings/:projectId/github", file: "features/app/settings/github/route.tsx" },
   { key: "search", path: "search", file: "features/app/search/route.tsx" },
 ] as const;
 

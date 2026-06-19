@@ -1,8 +1,12 @@
 import { Router } from 'express';
-import { config } from '../config.js';
+import { and, eq, inArray } from 'drizzle-orm';
 import { sessionAuth, asyncHandler, ApiError } from '../middleware/index.js';
-import { signInternalServiceRequest } from '../services/internalServiceAuth.js';
-import { userCanAccessProject } from '../services/projectAccess.js';
+import { alertHistory, dbRead } from '../db/client.js';
+import {
+    callIssueDetection,
+    ensureIssueDetectionEnabled,
+    requireProjectAccess,
+} from '../services/issueDetectionClient.js';
 
 const router = Router();
 
@@ -14,69 +18,23 @@ type LeakLike = {
     project_id?: string;
 };
 
-function ensureLeaksUiEnabled() {
-    if (!config.SHOW_ISSUE_DETECTION_UI) {
-        throw ApiError.notFound('Not found');
-    }
-}
+type ScanRunEmail = {
+    status?: string;
+    reason?: string | null;
+    issueCount?: number | null;
+    recipientCount?: number | null;
+    sentAt?: string | null;
+};
 
-function getIssueDetectionBaseUrl(): URL {
-    ensureLeaksUiEnabled();
-    if (!config.ISSUE_DETECTION_API_URL || !config.ISSUE_DETECTION_SERVICE_SECRET) {
-        throw ApiError.serviceUnavailable('Issue detection is not configured');
-    }
-    return new URL(config.ISSUE_DETECTION_API_URL);
-}
+type ScanRunLike = {
+    id?: string;
+    email?: ScanRunEmail | null;
+};
 
-function buildUpstreamUrl(pathWithQuery: string): URL {
-    const baseUrl = getIssueDetectionBaseUrl();
-    return new URL(pathWithQuery, baseUrl.toString());
-}
-
-async function callIssueDetection<T>(input: {
-    body?: unknown;
-    method?: string;
-    pathWithQuery: string;
-    raw?: boolean;
-}): Promise<T> {
-    const method = input.method ?? 'GET';
-    const headers = new Headers({
-        ...signInternalServiceRequest({
-            body: input.body,
-            method,
-            pathWithQuery: input.pathWithQuery,
-            secret: config.ISSUE_DETECTION_SERVICE_SECRET!,
-            service: 'rejourney',
-        }),
-    });
-
-    let body: string | undefined;
-    if (input.body !== undefined) {
-        body = JSON.stringify(input.body);
-        headers.set('Content-Type', 'application/json');
-    }
-
-    const response = await fetch(buildUpstreamUrl(input.pathWithQuery), {
-        method,
-        headers,
-        body,
-    });
-
-    if (!response.ok) {
-        if (response.status === 404) throw ApiError.notFound('Leak not found');
-        if (response.status === 409) throw ApiError.conflict('Issue detection rejected the request');
-        if (response.status === 429) throw ApiError.tooManyRequests('Issue detection is rate limited');
-        throw ApiError.serviceUnavailable('Issue detection service unavailable');
-    }
-
-    if (input.raw) return response as T;
-    return await response.json() as T;
-}
-
-async function requireProjectAccess(userId: string, projectId: string) {
-    const allowed = await userCanAccessProject(userId, projectId);
-    if (!allowed) throw ApiError.forbidden('Access denied');
-}
+type ScanRunHistoryLike = {
+    runs?: ScanRunLike[];
+    stats?: unknown;
+};
 
 function getLeakProjectId(leak: LeakLike): string | null {
     return leak.projectId ?? leak.project_id ?? null;
@@ -94,7 +52,7 @@ async function fetchLeakForAccessCheck(leakId: string): Promise<LeakLike> {
 router.use(sessionAuth);
 
 router.get('/leaks', asyncHandler(async (req, res) => {
-    ensureLeaksUiEnabled();
+    ensureIssueDetectionEnabled();
     const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : '';
     if (!projectId) throw ApiError.badRequest('projectId is required');
     await requireProjectAccess(req.user!.id, projectId);
@@ -112,15 +70,92 @@ router.get('/leaks', asyncHandler(async (req, res) => {
     res.json(data);
 }));
 
+router.get('/leaks/runs', asyncHandler(async (req, res) => {
+    ensureIssueDetectionEnabled();
+    const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : '';
+    if (!projectId) throw ApiError.badRequest('projectId is required');
+    await requireProjectAccess(req.user!.id, projectId);
+
+    const params = new URLSearchParams();
+    const limit = typeof req.query.limit === 'string' ? req.query.limit : '';
+    if (limit.trim()) params.set('limit', limit);
+
+    const query = params.toString();
+    let data: ScanRunHistoryLike & { unavailableReason?: string };
+    try {
+        data = await callIssueDetection<ScanRunHistoryLike>({
+            pathWithQuery: `/v1/projects/${encodeURIComponent(projectId)}/scan-runs${query ? `?${query}` : ''}`,
+        });
+    } catch (err) {
+        if (err instanceof ApiError && (err.statusCode === 404 || err.statusCode === 503)) {
+            res.json({
+                runs: [],
+                stats: {
+                    total: 0,
+                    lastRunAt: null,
+                    lastSuccessAt: null,
+                    recentFailures: 0,
+                },
+                unavailableReason: err.statusCode === 404
+                    ? 'run_history_endpoint_not_deployed'
+                    : 'issue_detection_service_unavailable',
+            });
+            return;
+        }
+        throw err;
+    }
+    const runs = Array.isArray(data.runs) ? data.runs : [];
+    const runIds = runs.map((run) => run.id).filter((id): id is string => Boolean(id));
+
+    if (runIds.length === 0) {
+        res.json({ ...data, runs });
+        return;
+    }
+
+    const sentRows = await dbRead
+        .select({
+            fingerprint: alertHistory.fingerprint,
+            recipientCount: alertHistory.recipientCount,
+            sentAt: alertHistory.sentAt,
+        })
+        .from(alertHistory)
+        .where(and(
+            eq(alertHistory.projectId, projectId),
+            eq(alertHistory.alertType, 'leak_scan'),
+            inArray(alertHistory.fingerprint, runIds),
+        ));
+    const sentByRunId = new Map(sentRows
+        .filter((row) => row.fingerprint)
+        .map((row) => [row.fingerprint!, row]));
+
+    res.json({
+        ...data,
+        runs: runs.map((run) => {
+            if (!run.id) return run;
+            const sent = sentByRunId.get(run.id);
+            if (!sent) return run;
+            return {
+                ...run,
+                email: {
+                    ...(run.email ?? {}),
+                    status: 'sent',
+                    recipientCount: sent.recipientCount,
+                    sentAt: sent.sentAt.toISOString(),
+                },
+            };
+        }),
+    });
+}));
+
 router.get('/leaks/:leakId', asyncHandler(async (req, res) => {
-    ensureLeaksUiEnabled();
+    ensureIssueDetectionEnabled();
     const leak = await fetchLeakForAccessCheck(req.params.leakId);
     await requireProjectAccess(req.user!.id, getLeakProjectId(leak)!);
     res.json(leak);
 }));
 
 router.post('/leaks/:leakId/context', asyncHandler(async (req, res) => {
-    ensureLeaksUiEnabled();
+    ensureIssueDetectionEnabled();
     const leak = await fetchLeakForAccessCheck(req.params.leakId);
     await requireProjectAccess(req.user!.id, getLeakProjectId(leak)!);
 
@@ -135,7 +170,7 @@ router.post('/leaks/:leakId/context', asyncHandler(async (req, res) => {
 }));
 
 router.get('/leaks/:leakId/context/raw.md', asyncHandler(async (req, res) => {
-    ensureLeaksUiEnabled();
+    ensureIssueDetectionEnabled();
     const leak = await fetchLeakForAccessCheck(req.params.leakId);
     await requireProjectAccess(req.user!.id, getLeakProjectId(leak)!);
 
@@ -150,7 +185,7 @@ router.get('/leaks/:leakId/context/raw.md', asyncHandler(async (req, res) => {
 }));
 
 router.patch('/leaks/:leakId', asyncHandler(async (req, res) => {
-    ensureLeaksUiEnabled();
+    ensureIssueDetectionEnabled();
     const status = req.body?.status;
     if (status !== undefined && (!ALLOWED_LEAK_STATUSES.has(status))) {
         throw ApiError.badRequest('Invalid leak status');

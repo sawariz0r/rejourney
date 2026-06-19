@@ -1589,6 +1589,16 @@ export async function updateProjectSmartCaptureConfig(projectId: string, config:
     return response;
 }
 
+export async function sendProjectSetupEmail(
+    projectId: string,
+    payload: { email: string; aiPrompt: string },
+): Promise<{ success: boolean; message?: string }> {
+    return fetchJson<{ success: boolean; message?: string }>(`/api/projects/${projectId}/setup-email`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+}
+
 /**
  * Create a new project
  */
@@ -3676,7 +3686,7 @@ export async function updateIssue(
 
 export type LeakStatus = 'queued' | 'researching' | 'ready' | 'resolved' | 'ignored' | 'budget_exhausted' | 'failed';
 export type LeakSeverity = 'low' | 'medium' | 'high' | 'critical';
-export type LeakContextStatus = 'queued' | 'running' | 'ready' | 'budget_exhausted' | 'failed';
+export type LeakContextStatus = 'none' | 'queued' | 'running' | 'researching' | 'ready' | 'budget_exhausted' | 'failed';
 
 export interface LeakCodePointer {
     file: string;
@@ -3696,6 +3706,14 @@ export interface LeakSummary {
     whyItMatters: string;
     affectedSessionsCount: number;
     affectedUsersCount: number;
+    estimatedAffectedUsersCount?: number;
+    estimatedAffectedSessionsCount?: number;
+    estimatedAffectedUsersPercent?: number | null;
+    affectedEstimateSampleSize?: number;
+    affectedEstimateTotalSessions?: number;
+    affectedEstimateObservedSessions?: number;
+    affectedEstimateBasis?: 'known_users' | 'session_proxy' | 'observed_only';
+    affectedEstimateConfidence?: 'high' | 'medium' | 'low';
     firstSeenAt: string;
     lastSeenAt: string;
     estimatedCostUsd?: number;
@@ -3717,7 +3735,8 @@ export interface LeakEvidenceGroup {
 }
 
 export interface LeakSessionReference {
-    id: string;
+    id?: string;
+    sessionId?: string;
     startedAt?: string;
     replayUrl?: string;
     signalScore?: number;
@@ -3744,6 +3763,132 @@ export interface LeaksResponse {
     nextCursor?: string | null;
 }
 
+export interface LeakRunEmail {
+    status: 'sent' | 'skipped' | 'unknown' | 'not_recorded' | string;
+    reason?: string | null;
+    issueCount?: number | null;
+    recipientCount?: number | null;
+    sentAt?: string | null;
+}
+
+export interface LeakRunSettings {
+    dryRun?: boolean | null;
+    lookbackHours?: number | null;
+    dailyCap?: number | null;
+    dailyFloor?: number | null;
+    maxCandidates?: number | null;
+    topPercent?: number | null;
+    spaGate?: string | null;
+    adaptivePromotionThreshold?: number | null;
+    adaptivePromotionAnalyzedSessions?: number | null;
+}
+
+export interface LeakRunHistoryItem {
+    id: string;
+    projectId: string;
+    trigger: string;
+    status: string;
+    startedAt: string;
+    finishedAt?: string | null;
+    durationMs?: number | null;
+    sessionsScanned: number;
+    admittedSessions: number;
+    skippedSessions: number;
+    candidatesEmitted: number;
+    problemsFound: number;
+    issuesUpserted: number;
+    visibleIssues: number;
+    renderFailures: number;
+    analysisFailures: number;
+    warningCount: number;
+    settings: LeakRunSettings;
+    decisionBreakdown: Record<string, number>;
+    analysisBreakdown: Record<string, number>;
+    email: LeakRunEmail;
+    notes: string[];
+    errors: Array<{
+        stage?: string | null;
+        sessionId?: string | null;
+        message: string;
+    }>;
+}
+
+export interface LeakRunHistoryResponse {
+    runs: LeakRunHistoryItem[];
+    stats: {
+        total: number;
+        lastRunAt?: string | null;
+        lastSuccessAt?: string | null;
+        recentFailures: number;
+    };
+    unavailableReason?: string | null;
+}
+
+function demoLeakRunHistory(projectId: string): LeakRunHistoryResponse {
+    const now = Date.now();
+    const iso = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    return {
+        runs: [
+            {
+                id: 'demo-scan-run-003',
+                projectId,
+                trigger: 'scheduled_scan',
+                status: 'succeeded',
+                startedAt: iso(-3 * 60 * 60 * 1000),
+                finishedAt: iso(-3 * 60 * 60 * 1000 + 5 * 60 * 1000),
+                durationMs: 5 * 60 * 1000,
+                sessionsScanned: 150,
+                admittedSessions: 7,
+                skippedSessions: 143,
+                candidatesEmitted: 7,
+                problemsFound: 7,
+                issuesUpserted: 3,
+                visibleIssues: 3,
+                renderFailures: 0,
+                analysisFailures: 0,
+                warningCount: 0,
+                settings: { dryRun: false, lookbackHours: 24, dailyCap: 150, dailyFloor: 0, maxCandidates: 2000, topPercent: 100, spaGate: 'scored' },
+                decisionBreakdown: { admitted: 7, skipped: 143 },
+                analysisBreakdown: { succeeded: 7 },
+                email: { status: 'sent', issueCount: 3, recipientCount: 2, sentAt: iso(-3 * 60 * 60 * 1000 + 6 * 60 * 1000) },
+                notes: ['3 inbox issues were visible after this run.', 'A digest email was sent after the scan completed.'],
+                errors: [],
+            },
+            {
+                id: 'demo-scan-run-002',
+                projectId,
+                trigger: 'scheduled_scan',
+                status: 'succeeded',
+                startedAt: iso(-27 * 60 * 60 * 1000),
+                finishedAt: iso(-27 * 60 * 60 * 1000 + 4 * 60 * 1000),
+                durationMs: 4 * 60 * 1000,
+                sessionsScanned: 94,
+                admittedSessions: 4,
+                skippedSessions: 90,
+                candidatesEmitted: 4,
+                problemsFound: 2,
+                issuesUpserted: 0,
+                visibleIssues: 0,
+                renderFailures: 0,
+                analysisFailures: 0,
+                warningCount: 0,
+                settings: { dryRun: false, lookbackHours: 24, dailyCap: 150, dailyFloor: 0, maxCandidates: 2000, topPercent: 100, spaGate: 'scored' },
+                decisionBreakdown: { admitted: 4, skipped: 90 },
+                analysisBreakdown: { succeeded: 4 },
+                email: { status: 'skipped', reason: 'no_issues', issueCount: 0, recipientCount: null, sentAt: null },
+                notes: ['Problems were observed, but none were promoted into a repeated issue for the inbox.'],
+                errors: [],
+            },
+        ],
+        stats: {
+            total: 2,
+            lastRunAt: iso(-3 * 60 * 60 * 1000),
+            lastSuccessAt: iso(-3 * 60 * 60 * 1000),
+            recentFailures: 0,
+        },
+    };
+}
+
 export async function getLeaks(params: {
     cursor?: string;
     projectId: string;
@@ -3764,6 +3909,17 @@ export async function getLeaks(params: {
     if (params.severity) query.set('severity', params.severity);
     if (params.type) query.set('type', params.type);
     return fetchJson<LeaksResponse>(`/api/automations/leaks?${query.toString()}`);
+}
+
+export async function getLeakRunHistory(projectId: string, limit = 12): Promise<LeakRunHistoryResponse> {
+    if (isDemoMode()) {
+        return demoLeakRunHistory(projectId);
+    }
+
+    const query = new URLSearchParams();
+    query.set('projectId', projectId);
+    query.set('limit', String(limit));
+    return fetchJson<LeakRunHistoryResponse>(`/api/automations/leaks/runs?${query.toString()}`);
 }
 
 export async function getLeak(leakId: string): Promise<LeakDetail> {
@@ -3814,6 +3970,124 @@ export async function updateLeak(
         method: 'PATCH',
         body: JSON.stringify(updates),
     });
+}
+
+// =============================================================================
+// Issue Detection / GitHub link
+// =============================================================================
+
+export type GithubInstallationState = 'active' | 'suspended' | 'revoked' | 'none';
+
+export interface GithubLinkRepo {
+    repoId: number;
+    owner: string;
+    repo: string;
+    defaultBranch: string | null;
+    private: boolean;
+}
+
+export interface GithubLinkStatus {
+    linked: boolean;
+    installationId: number | null;
+    repo: GithubLinkRepo | null;
+    sourceGlobs: string[] | null;
+    installationState: GithubInstallationState;
+    linkedAt: string | null;
+}
+
+export interface GithubFolderNode {
+    name: string;
+    children: string[];
+}
+
+export interface GithubInstallationRepos {
+    installationId: number;
+    repositorySelection: 'all' | 'selected';
+    repos: GithubLinkRepo[];
+    folderTree?: GithubFolderNode[];
+    truncated?: boolean;
+}
+
+export interface GithubInstallationCandidate {
+    installationId: number;
+    accountLogin: string;
+    accountType: 'Organization' | 'User';
+    repositorySelection: 'all' | 'selected';
+    installationState: Exclude<GithubInstallationState, 'none'>;
+    repos: GithubLinkRepo[];
+}
+
+export interface GithubInstallationsResponse {
+    installations: GithubInstallationCandidate[];
+}
+
+export async function getGithubLinkStatus(projectId: string): Promise<GithubLinkStatus> {
+    if (isDemoMode()) {
+        return {
+            linked: true,
+            installationId: null,
+            repo: null,
+            sourceGlobs: null,
+            installationState: 'active',
+            linkedAt: null,
+        };
+    }
+    return fetchJson<GithubLinkStatus>(
+        `/api/automations/github/link?projectId=${encodeURIComponent(projectId)}`,
+    );
+}
+
+export async function getGithubInstallations(projectId: string): Promise<GithubInstallationsResponse> {
+    return fetchJson<GithubInstallationsResponse>(
+        `/api/automations/github/installations?projectId=${encodeURIComponent(projectId)}`,
+    );
+}
+
+export async function getGithubInstallUrl(projectId: string): Promise<{ installUrl: string }> {
+    return fetchJson<{ installUrl: string }>(
+        `/api/automations/github/install-url?projectId=${encodeURIComponent(projectId)}`,
+    );
+}
+
+export async function getGithubInstallationRepos(
+    projectId: string,
+    opts: { installationId?: number; withFolders?: boolean; repoId?: number } = {},
+): Promise<GithubInstallationRepos> {
+    const query = new URLSearchParams();
+    query.set('projectId', projectId);
+    if (opts.installationId != null) query.set('installationId', String(opts.installationId));
+    if (opts.withFolders) query.set('withFolders', 'true');
+    if (opts.repoId != null) query.set('repoId', String(opts.repoId));
+    return fetchJson<GithubInstallationRepos>(
+        `/api/automations/github/installation/repos?${query.toString()}`,
+    );
+}
+
+export async function bindGithubLink(
+    projectId: string,
+    body: { installationId: number; repoId: number; sourceGlobs: string[] },
+): Promise<GithubLinkStatus> {
+    return fetchJson<GithubLinkStatus>(`/api/automations/github/link`, {
+        method: 'POST',
+        body: JSON.stringify({ projectId, ...body }),
+    });
+}
+
+export async function updateGithubGlobs(
+    projectId: string,
+    sourceGlobs: string[],
+): Promise<GithubLinkStatus> {
+    return fetchJson<GithubLinkStatus>(`/api/automations/github/link`, {
+        method: 'PATCH',
+        body: JSON.stringify({ projectId, sourceGlobs }),
+    });
+}
+
+export async function unlinkGithub(projectId: string): Promise<GithubLinkStatus> {
+    return fetchJson<GithubLinkStatus>(
+        `/api/automations/github/link?projectId=${encodeURIComponent(projectId)}`,
+        { method: 'DELETE' },
+    );
 }
 
 /**
@@ -3927,6 +4201,7 @@ export interface ApiTeam {
     ownerUserId: string;
     name?: string;
     billingPlan?: string;
+    workspaceConfirmedAt?: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -3965,17 +4240,19 @@ export async function createTeam(name?: string): Promise<ApiTeam> {
         method: 'POST',
         body: JSON.stringify({ name }),
     });
+    clearCache('/api/teams');
     return data.team;
 }
 
 /**
  * Update team settings
  */
-export async function updateTeam(teamId: string, updates: { name?: string; billingPlan?: string }): Promise<ApiTeam> {
+export async function updateTeam(teamId: string, updates: { name?: string; billingPlan?: string; workspaceConfirmed?: boolean }): Promise<ApiTeam> {
     const data = await fetchJson<{ team: ApiTeam }>(`/api/teams/${teamId}`, {
         method: 'PUT',
         body: JSON.stringify(updates),
     });
+    clearCache('/api/teams');
     return data.team;
 }
 
@@ -5049,6 +5326,7 @@ export const api = {
     createProject,
     getProject,
     updateProject,
+    sendProjectSetupEmail,
     deleteProject,
     getTeamBillingUsage,
     getTeamBillingDashboard,
@@ -5093,6 +5371,7 @@ export const api = {
     syncIssues,
     updateIssue,
     getLeaks,
+    getLeakRunHistory,
     getLeak,
     requestLeakContext,
     getLeakContextRaw,
