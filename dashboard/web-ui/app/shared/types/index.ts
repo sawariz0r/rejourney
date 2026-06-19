@@ -51,7 +51,9 @@ export interface Project {
   smartCaptureRules?: Array<Record<string, unknown>>;
   smartCaptureDecisionWindowHours?: number;
   createdAt: string;
+  sessionsTotal?: number;
   sessionsLast7Days: number;
+  errorsTotal?: number;
   errorsLast7Days: number;
 }
 

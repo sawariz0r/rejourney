@@ -157,6 +157,37 @@ const PROJECT_LIST_CACHE_TTL_SECONDS = Number(process.env.RJ_PROJECT_LIST_CACHE_
 const QUERY_BUILDER_MAX_PROMPT_LENGTH = 500;
 const QUERY_BUILDER_TIMEOUT_MS = Number(process.env.RJ_QUERY_BUILDER_TIMEOUT_MS ?? 15000);
 
+type ProjectSessionStatsFallback = {
+    projectId: string;
+    sessionsTotal: number;
+    sessionsLast7Days: number;
+    errorsTotal: number;
+    errorsLast7Days: number;
+    crashesTotal: number;
+    anrsTotal: number;
+    rageTapTotal: number;
+};
+
+async function queryProjectSessionStatsFallback(projectIds: string[], sevenDaysAgo: Date): Promise<ProjectSessionStatsFallback[]> {
+    if (projectIds.length === 0) return [];
+
+    return db
+        .select({
+            projectId: sessions.projectId,
+            sessionsTotal: sql<number>`count(*)::int`,
+            sessionsLast7Days: sql<number>`count(*) filter (where ${sessions.startedAt} >= ${sevenDaysAgo})::int`,
+            errorsTotal: sql<number>`coalesce(sum(coalesce(${sessionMetrics.errorCount}, 0)), 0)::int`,
+            errorsLast7Days: sql<number>`coalesce(sum(coalesce(${sessionMetrics.errorCount}, 0)) filter (where ${sessions.startedAt} >= ${sevenDaysAgo}), 0)::int`,
+            crashesTotal: sql<number>`coalesce(sum(coalesce(${sessionMetrics.crashCount}, 0)), 0)::int`,
+            anrsTotal: sql<number>`coalesce(sum(coalesce(${sessionMetrics.anrCount}, 0)), 0)::int`,
+            rageTapTotal: sql<number>`coalesce(sum(coalesce(${sessionMetrics.rageTapCount}, 0)), 0)::int`,
+        })
+        .from(sessions)
+        .leftJoin(sessionMetrics, eq(sessions.id, sessionMetrics.sessionId))
+        .where(inArray(sessions.projectId, projectIds))
+        .groupBy(sessions.projectId);
+}
+
 type AvailableProjectFilters = {
     events: string[];
     eventPropertyKeys: string[];
@@ -1250,6 +1281,13 @@ router.get(
         ]);
 
         const allTimeByProject = new Map(allTimeRows.map((row) => [row.projectId, row]));
+        const fallbackProjectIds = projectIds.filter((projectId) =>
+            Number(allTimeByProject.get(projectId)?.totalSessions ?? 0) <= 0
+        );
+        const fallbackRows = fallbackProjectIds.length > 0
+            ? await queryProjectSessionStatsFallback(fallbackProjectIds, sevenDaysAgo)
+            : [];
+        const fallbackByProject = new Map(fallbackRows.map((row) => [row.projectId, row]));
         const aggregatesByProject = new Map<string, {
             sessionsLast7Days: number;
             errorsLast7Days: number;
@@ -1279,16 +1317,17 @@ router.get(
         const projectStats = projectsList.map((project) => {
             const allTimeMetrics = allTimeByProject.get(project.id);
             const dailyAggregate = aggregatesByProject.get(project.id);
+            const fallbackMetrics = fallbackByProject.get(project.id);
 
-            const sessionsTotal = Number(allTimeMetrics?.totalSessions ?? 0);
-            const sessionsLast7Days = Number(dailyAggregate?.sessionsLast7Days ?? 0);
-            const errorsLast7Days = Number(dailyAggregate?.errorsLast7Days ?? 0);
-            const errorsTotal = Number(allTimeMetrics?.totalErrors ?? 0);
-            const crashesTotal = Number(dailyAggregate?.crashesTotal ?? 0);
-            const anrsTotal = Number(dailyAggregate?.anrsTotal ?? 0);
+            const sessionsTotal = Number(allTimeMetrics?.totalSessions ?? fallbackMetrics?.sessionsTotal ?? 0);
+            const sessionsLast7Days = Number(dailyAggregate?.sessionsLast7Days ?? fallbackMetrics?.sessionsLast7Days ?? 0);
+            const errorsLast7Days = Number(dailyAggregate?.errorsLast7Days ?? fallbackMetrics?.errorsLast7Days ?? 0);
+            const errorsTotal = Number(allTimeMetrics?.totalErrors ?? fallbackMetrics?.errorsTotal ?? 0);
+            const crashesTotal = Number(dailyAggregate?.crashesTotal ?? fallbackMetrics?.crashesTotal ?? 0);
+            const anrsTotal = Number(dailyAggregate?.anrsTotal ?? fallbackMetrics?.anrsTotal ?? 0);
             const avgUxScoreAllTime = Number(allTimeMetrics?.avgUxScore ?? 0);
             const avgApiErrorRateAllTime = Number(allTimeMetrics?.avgApiErrorRate ?? 0);
-            const rageTapTotal = Number(dailyAggregate?.rageTapTotal ?? allTimeMetrics?.totalRageTaps ?? 0);
+            const rageTapTotal = Number(dailyAggregate?.rageTapTotal ?? allTimeMetrics?.totalRageTaps ?? fallbackMetrics?.rageTapTotal ?? 0);
             const healthScore = computeHealthScore({
                 sessionsTotal,
                 errorsTotal,

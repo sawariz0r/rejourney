@@ -50,7 +50,9 @@ export function formatProjectPlatforms(project: Project | null | undefined): str
 
 export function projectHasRecentData(project: Project | null | undefined): boolean {
   return Boolean(
+    (project?.sessionsTotal ?? 0) > 0 ||
     (project?.sessionsLast7Days ?? 0) > 0 ||
+    (project?.errorsTotal ?? 0) > 0 ||
     (project?.errorsLast7Days ?? 0) > 0,
   );
 }

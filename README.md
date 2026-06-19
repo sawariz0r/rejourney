@@ -7,9 +7,9 @@
   <img src="dashboard/web-ui/public/images/landing-replay-theater.png" alt="Rejourney Issue Detection" width="100%" />
 
   <p>
-    <strong>Lightweight session replay and observability for Mobile and Web Apps</strong>
+    <strong>AI Funnel Leak Detection and Conversion Acceleration</strong>
     <br />
-    Focus with pixel-perfect video capture and real-time incident detection.
+    Fix Funnel and Conversion Leaks with Rejourney.
   </p>
   
   <p>
@@ -51,10 +51,10 @@
 
 True FPS video playback capturing every rendered pixel. Unlike competitors, we capture everything—including Mapbox (Metal), custom shaders, and GPU-accelerated views.
 
-### Issue Detection
+### AI Leak Detection
 ![Issues Feed](dashboard/web-ui/public/images/readme-general-demo.png)
 
-Rank repeated funnel leaks, rage taps, API failures, and replay evidence into fix-ready context packets.
+Rank repeated funnel leaks, rage taps, API failures, and replay evidence into fix-ready context packets. Powered by Rejourney Marlin.
 
 ### Error/ANR/Crash Detection
 ![ANR Issues](dashboard/web-ui/public/images/anr-issues.png)

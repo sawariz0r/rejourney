@@ -34,7 +34,9 @@ function apiProjectToProject(apiProject: ApiProject): Project {
     maxRecordingMinutes: apiProject.maxRecordingMinutes,
     webMaxObservabilityMinutes: apiProject.webMaxObservabilityMinutes,
     createdAt: apiProject.createdAt,
+    sessionsTotal: apiProject.sessionsTotal || 0,
     sessionsLast7Days: apiProject.sessionsLast7Days || 0,
+    errorsTotal: apiProject.errorsTotal || 0,
     errorsLast7Days: apiProject.errorsLast7Days || 0,
   };
 }
@@ -78,7 +80,9 @@ function projectsEqual(left: Project, right: Project): boolean {
     && left.maxRecordingMinutes === right.maxRecordingMinutes
     && left.webMaxObservabilityMinutes === right.webMaxObservabilityMinutes
     && left.createdAt === right.createdAt
+    && left.sessionsTotal === right.sessionsTotal
     && left.sessionsLast7Days === right.sessionsLast7Days
+    && left.errorsTotal === right.errorsTotal
     && left.errorsLast7Days === right.errorsLast7Days
     && arraysEqual(left.platforms, right.platforms)
     && arraysEqual(left.webAllowedDomains, right.webAllowedDomains);

@@ -49,6 +49,7 @@ import { useSessionData } from '~/shared/providers/SessionContext';
 import { AnimalAvatar, getAnimalAvatarSeed, getAnimalForIdentity } from '~/shared/ui/core/AnimalAvatar';
 import { Modal } from '~/shared/ui/core/Modal';
 import { API_BASE_URL, getCsrfToken } from '~/shared/config/appConfig';
+import { projectHasRecentData } from '~/features/app/setup/setupUtils';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 import { buildLeakIdeHandoffUrl, LEAK_IDE_OPTIONS, type LeakIde, type LeakIdeConfig } from './ideLinks';
 
@@ -741,8 +742,10 @@ function LeakRow({
 
 function GithubNotLinked({
     suspended,
+    setupHref,
 }: {
     suspended: boolean;
+    setupHref: string;
 }) {
     return (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-white px-6 py-16 text-center">
@@ -757,6 +760,13 @@ function GithubNotLinked({
                     ? 'Reconnect GitHub to resume detecting leaks for this project.'
                     : 'Leak signals will appear here after a GitHub repository is connected and scans find issues.'}
             </p>
+            <Link
+                to={setupHref}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#1a73e8] bg-[#1a73e8] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:border-[#1558b0] hover:bg-[#1558b0] focus:outline-none focus:ring-2 focus:ring-blue-100"
+            >
+                <Github className="h-4 w-4" aria-hidden />
+                {suspended ? 'Review GitHub access' : 'Connect GitHub repository'}
+            </Link>
         </div>
     );
 }
@@ -1266,10 +1276,10 @@ export const Leaks: React.FC = () => {
     const setupPrompt = useMemo(() => (
         selectedProject ? buildProjectAIIntegrationPrompt(selectedProject) : ''
     ), [selectedProject]);
-    const selectedProjectHasRecentData = useMemo(() => Boolean(
-        (selectedProject?.sessionsLast7Days ?? 0) > 0 ||
-        (selectedProject?.errorsLast7Days ?? 0) > 0,
-    ), [selectedProject?.errorsLast7Days, selectedProject?.sessionsLast7Days]);
+    const selectedProjectHasRecentData = useMemo(
+        () => projectHasRecentData(selectedProject),
+        [selectedProject],
+    );
     const githubStatusKnown = Boolean(linkStatus) || linkHasLoaded;
     const githubLinked = isDemoMode || Boolean(linkStatus?.linked && linkStatus.installationState === 'active');
     const githubSuspended = Boolean(
@@ -1778,6 +1788,7 @@ export const Leaks: React.FC = () => {
             {showGithubNotLinkedState ? (
                 <GithubNotLinked
                     suspended={githubSuspended}
+                    setupHref={githubSetupHref}
                 />
             ) : (
             <div className="flex min-h-0 w-full flex-1 overflow-hidden">
