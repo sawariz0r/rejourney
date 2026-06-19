@@ -762,10 +762,11 @@ function GithubNotLinked({
             </p>
             <Link
                 to={setupHref}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#1a73e8] bg-[#1a73e8] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:border-[#1558b0] hover:bg-[#1558b0] focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#1a73e8] bg-[#1a73e8] px-4 text-sm font-semibold !text-white shadow-sm transition-colors hover:border-[#1558b0] hover:bg-[#1558b0] hover:!text-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                style={{ color: '#ffffff' }}
             >
-                <Github className="h-4 w-4" aria-hidden />
-                {suspended ? 'Review GitHub access' : 'Connect GitHub repository'}
+                <Github className="h-4 w-4 text-white" aria-hidden />
+                <span className="text-white">{suspended ? 'Review GitHub access' : 'Connect GitHub repository'}</span>
             </Link>
         </div>
     );

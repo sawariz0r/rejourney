@@ -21,7 +21,7 @@ import {
 
 const homeLocale = MARKETING_LOCALES.en;
 const canonicalUrl = getMarketingLocaleUrl(homeLocale);
-const socialPreviewImage = "https://rejourney.co/images/growth-engines.png";
+const socialPreviewImage = "https://rejourney.co/images/growth-engines.png?v=20260619";
 const socialPreviewAlt = "Rejourney AI funnel leak detection and revenue analytics preview";
 const homeKeywords = [
     "AI funnel leak detection",

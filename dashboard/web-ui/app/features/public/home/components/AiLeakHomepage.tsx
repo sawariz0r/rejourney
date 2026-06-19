@@ -22,7 +22,9 @@ import { CodeBlock } from '~/shared/ui/core/CodeBlock';
 import { NetworkConstellation, FloatingDataNodes, TechRingsScanner } from './SparseThreeAnimations';
 
 const LOGIN_PATH = '/login';
-const MARLIN_IMAGE = '/images/rejourney-marlin.png';
+const LANDING_IMAGE_VERSION = '20260619';
+const landingImage = (path: string) => `${path}?v=${LANDING_IMAGE_VERSION}`;
+const MARLIN_IMAGE = landingImage('/images/rejourney-marlin.png');
 
 const shellClass = 'mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10';
 
@@ -31,7 +33,7 @@ const aiCards = [
         step: 'Replay',
         title: 'Rejourney Records Sessions',
         copy: 'Rejourney records the exact session, events, console logs, network calls, and layout state behind the leak.',
-        image: '/images/session-replay-preview.png',
+        image: landingImage('/images/session-replay-preview.png'),
         imagePosition: 'center top',
         href: '/ai-agent-handoff',
     },
@@ -39,7 +41,7 @@ const aiCards = [
         step: 'Observe',
         title: 'AI Watches and Finds Leaks',
         copy: 'Similar failures are grouped by affected users and severity so the highest-impact leak rises first.',
-        image: '/images/issues-feed.png',
+        image: landingImage('/images/issues-feed.png'),
         imagePosition: 'left top',
         href: '/ai-funnel-leak-detection',
     },
@@ -47,7 +49,7 @@ const aiCards = [
         step: 'Handoff',
         title: 'Funnel Fix Is Implemented',
         copy: 'A markdown brief is packaged for Cursor, Claude, Codex, or your IDE with links back to the evidence.',
-        image: '/images/readme-general-demo.png',
+        image: landingImage('/images/readme-general-demo.png'),
         imagePosition: 'right top',
         href: '/ai-agent-handoff',
     },
@@ -55,7 +57,7 @@ const aiCards = [
         step: 'Verify',
         title: 'Watch the growth impact',
         copy: 'Cohorts, regions, and revenue movement show whether the fix actually recovered users.',
-        image: '/images/geo-intelligence.png',
+        image: landingImage('/images/geo-intelligence.png'),
         imagePosition: 'center top',
         href: '/geographic-analytics',
     },
@@ -177,7 +179,7 @@ const customerWantTabs: Array<{
         id: 'analytics',
         title: 'Session Replay',
         copy: 'Record exact user journeys with lightweight DOM mutation tracking, capturing layout updates and console errors without degrading device battery or network bandwidth.',
-        image: '/images/session-replay-preview.png',
+        image: landingImage('/images/session-replay-preview.png'),
         icon: Play,
         href: '/record-user-sessions',
     },
@@ -185,7 +187,7 @@ const customerWantTabs: Array<{
         id: 'stability',
         title: 'Stability Monitoring',
         copy: 'Group crashes, ANRs, errors, and API failures by affected sessions so engineering can see the replay evidence behind each incident.',
-        image: '/images/anr-issues.png',
+        image: landingImage('/images/anr-issues.png'),
         icon: Activity,
         href: '/stability-monitoring',
     },
@@ -193,7 +195,7 @@ const customerWantTabs: Array<{
         id: 'heatmaps',
         title: 'Heat Maps',
         copy: 'Reveal ignored CTAs, repeated taps, rage clicks, and scroll patterns so product teams can spot friction before it drains conversion.',
-        image: '/images/heatmaps.png',
+        image: landingImage('/images/heatmaps.png'),
         icon: MousePointerClick,
         href: '/heatmaps',
     },
@@ -201,7 +203,7 @@ const customerWantTabs: Array<{
         id: 'journey',
         title: 'User Journey',
         copy: 'Map real paths through your funnel, then open replay evidence behind every branch, loop, and drop-off.',
-        image: '/images/readme-user-journeys.png',
+        image: landingImage('/images/readme-user-journeys.png'),
         icon: Route,
         href: '/funnel-replay-evidence',
     },
@@ -209,7 +211,7 @@ const customerWantTabs: Array<{
         id: 'revenue',
         title: 'Revenue Growth Tracking',
         copy: 'Track revenue movement beside sessions, releases, retention, and affected users so growth work stays tied to evidence.',
-        image: '/images/growth-engines.png',
+        image: landingImage('/images/growth-engines.png'),
         icon: TrendingUp,
         href: '/revenue-recovery-analytics',
     },
@@ -217,7 +219,7 @@ const customerWantTabs: Array<{
         id: 'web',
         title: 'Geographic Analytics',
         copy: 'Spot regional friction, sentiment clusters, and infrastructure trouble by country so teams can prioritize the markets that need attention.',
-        image: '/images/geo-analytics.png',
+        image: landingImage('/images/geo-analytics.png'),
         icon: Globe2,
         href: '/geographic-analytics',
     },
@@ -476,7 +478,7 @@ export const AiLeakHomepage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Hero Dashboard Preview (landing-replay-theater.png) */}
+                {/* Hero Dashboard Preview */}
                 <div className="relative z-10 mx-auto mt-16 max-w-5xl rounded-3xl border border-slate-200 bg-slate-50 p-3 shadow-2xl overflow-hidden">
                     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
                         <div className="flex h-11 items-center gap-2 border-b border-slate-100 bg-slate-50 px-4">
@@ -487,7 +489,7 @@ export const AiLeakHomepage: React.FC = () => {
                             <span className="min-w-0 truncate font-mono text-xs font-bold text-slate-400">https://rejourney.co/dashboard/leaks</span>
                         </div>
                         <img 
-                            src="/images/landing-replay-theater.png" 
+                            src={landingImage('/images/landing-replay-theater.png')}
                             alt="Rejourney Issue Detection" 
                             className="w-full h-auto object-cover" 
                         />

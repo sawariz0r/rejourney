@@ -295,10 +295,11 @@ export const GithubSetup: React.FC = () => {
                                         type="button"
                                         onClick={() => void onOpenInstall()}
                                         disabled={installBusy}
-                                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#1a73e8] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#2563eb] focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#1a73e8] px-4 text-sm font-semibold !text-white transition-colors hover:bg-[#2563eb] hover:!text-white focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                        style={{ color: '#ffffff' }}
                                     >
-                                        <Github className="h-4 w-4" />
-                                        {installBusy ? 'Opening…' : 'Install or update GitHub App'}
+                                        <Github className="h-4 w-4 text-white" />
+                                        <span className="text-white">{installBusy ? 'Opening…' : 'Install or update GitHub App'}</span>
                                     </button>
                                     <button
                                         type="button"
