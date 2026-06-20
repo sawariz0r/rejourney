@@ -788,9 +788,10 @@ postgres_primary_node() {
     -o jsonpath='{.items[0].spec.nodeName}' 2>/dev/null || true
 }
 
-# API latency depends on API pods running on the same node as the current CNPG
-# primary. The Deployment has a hard podAffinity for new pods; this post-rollout
-# check corrects any older pods that were already running elsewhere.
+# API latency benefits from API pods running on the same node as the current CNPG
+# primary. Keep this helper available for explicit maintenance windows only; the
+# steady-state Deployment uses preferred affinity so HPA/failover events do not
+# trade availability for locality.
 pin_deployment_to_postgres_primary() {
   local name="$1"
   local primary_node
@@ -984,10 +985,8 @@ main() {
 
   section "Waiting For Rollouts"
   # Critical user-facing services: allow residual image-pull or scheduling delay
-  # after the pre-pull step. api-ingest gets a longer window because it is
-  # hard-colocated with the current Postgres primary.
+  # after the pre-pull step.
   wait_for_deployment api-ingest     1800s
-  pin_deployment_to_postgres_primary api-ingest
   wait_for_deployment api-dashboard  600s
   wait_for_deployment ingest-upload  600s
   pin_deployment_to_fsn1 ingest-upload

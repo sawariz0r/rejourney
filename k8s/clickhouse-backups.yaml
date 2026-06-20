@@ -73,6 +73,8 @@ spec:
                   value: clickhouse/rejourney
                 - name: CLICKHOUSE_BACKUP_REQUEST_TIMEOUT_MS
                   value: "3600000"
+                - name: CLICKHOUSE_BACKUP_RETENTION_DAYS
+                  value: "7"
                 - name: BACKUP_S3_ENDPOINT
                   valueFrom:
                     secretKeyRef:
@@ -106,3 +108,90 @@ spec:
                 limits:
                   cpu: "2"
                   memory: 2Gi
+
+---
+# ClickHouse system log tables are diagnostic-only and can grow quickly when
+# debug logging is enabled by the operator image. Truncate them after the daily
+# backup window so analytics data stays intact while node disks stay bounded.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: clickhouse-system-log-cleanup
+  namespace: rejourney
+  labels:
+    app.kubernetes.io/part-of: rejourney
+    app.kubernetes.io/component: clickhouse
+spec:
+  schedule: "15 4 * * *"
+  startingDeadlineSeconds: 1800
+  suspend: false
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 600
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: clickhouse-system-log-cleanup
+            app.kubernetes.io/component: clickhouse
+        spec:
+          restartPolicy: OnFailure
+          affinity:
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  preference:
+                    matchExpressions:
+                      - key: rejourney.co/datacenter
+                        operator: In
+                        values: ["hel1"]
+          containers:
+            - name: cleanup
+              image: altinity/clickhouse-server:25.8.16.10002.altinitystable
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  clickhouse-client \
+                    --host clickhouse-rejourney \
+                    --user "$CLICKHOUSE_USER" \
+                    --password "$CLICKHOUSE_PASSWORD" \
+                    --multiquery \
+                    --query "
+                      SYSTEM FLUSH LOGS;
+                      TRUNCATE TABLE IF EXISTS system.text_log;
+                      TRUNCATE TABLE IF EXISTS system.part_log;
+                      TRUNCATE TABLE IF EXISTS system.query_log;
+                      TRUNCATE TABLE IF EXISTS system.processors_profile_log;
+                      TRUNCATE TABLE IF EXISTS system.trace_log;
+                      TRUNCATE TABLE IF EXISTS system.metric_log;
+                      TRUNCATE TABLE IF EXISTS system.asynchronous_metric_log;
+                      TRUNCATE TABLE IF EXISTS system.query_views_log;
+                      TRUNCATE TABLE IF EXISTS system.asynchronous_insert_log;
+                      TRUNCATE TABLE IF EXISTS system.query_metric_log;
+                      TRUNCATE TABLE IF EXISTS system.blob_storage_log;
+                      TRUNCATE TABLE IF EXISTS system.error_log;
+                      TRUNCATE TABLE IF EXISTS system.backup_log;
+                    "
+              env:
+                - name: CLICKHOUSE_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: clickhouse-secret
+                      key: CLICKHOUSE_USER
+                - name: CLICKHOUSE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: clickhouse-secret
+                      key: CLICKHOUSE_PASSWORD
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi

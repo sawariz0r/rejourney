@@ -131,4 +131,7 @@ spec:
       endpointURL: https://s3.us-west-or.io.cloud.ovh.us
       wal:
         compression: gzip
-    retentionPolicy: "30d"
+    # Current OVH backup-bucket sizing cannot hold 30 days of daily base
+    # backups plus WAL. Seven days keeps the recovery window explicit while
+    # avoiding a storage upgrade at the current database growth rate.
+    retentionPolicy: "7d"

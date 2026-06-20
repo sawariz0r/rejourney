@@ -97,9 +97,8 @@ metadata:
 #   --from-literal=BACKUP_S3_BUCKET=rejourney-db-backups-1 \
 #   --from-literal=BACKUP_S3_REGION=us-west-or \
 #   --from-literal=AWS_ACCESS_KEY_ID=<YOUR_OVH_ACCESS_KEY> \
-#   --from-literal=AWS_SECRET_ACCESS_KEY=<YOUR_OVH_SECRET_KEY> \
-#   --from-literal=R2_ENDPOINT=https://s3.us-west-or.io.cloud.ovh.us \
-#   --from-literal=R2_BUCKET=rejourney-db-backups-1
+#   --from-literal=AWS_SECRET_ACCESS_KEY=<YOUR_OVH_SECRET_KEY>
+# kubectl label secret db-backup-secret -n rejourney cnpg.io/reload=true --overwrite
 #
 # 10. Research lake object-store secret (disabled until bucket is ready):
 # kubectl create secret generic research-lake-secret \

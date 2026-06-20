@@ -1,7 +1,10 @@
 # API/Postgres colocation guard
 # Keeps API pods on the same Kubernetes node as the current CNPG primary.
-# Kubernetes podAffinity is scheduling-only; this CronJob handles later primary
-# failovers by evicting one misplaced API pod at a time after the Deployment is healthy.
+# Kubernetes podAffinity is scheduling-only; this CronJob can handle later primary
+# failovers by moving one misplaced API pod at a time after the Deployment is healthy.
+# It is suspended until the mover is capacity-aware: after a failover, the primary
+# node may not have room for every API pod, and locality must not reduce service
+# availability.
 
 ---
 apiVersion: v1
@@ -25,7 +28,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "delete"]
   - apiGroups: [""]
     resources: ["pods/eviction"]
     verbs: ["create"]
@@ -114,7 +117,7 @@ data:
     fi
 
     log "Evicting ${misplaced_pod}; Postgres primary is on ${primary_node}."
-    kubectl create --validate=false -n "${namespace}" -f - <<EOF
+    if kubectl create --validate=false -n "${namespace}" -f - <<EOF
     apiVersion: policy/v1
     kind: Eviction
     metadata:
@@ -123,6 +126,12 @@ data:
     deleteOptions:
       gracePeriodSeconds: 30
     EOF
+    then
+      exit 0
+    fi
+
+    log "Eviction API unavailable; deleting ${misplaced_pod} with deployment health gate already satisfied."
+    kubectl delete pod "${misplaced_pod}" -n "${namespace}" --grace-period=30 --wait=false
 
 ---
 apiVersion: batch/v1
@@ -135,6 +144,7 @@ metadata:
     app.kubernetes.io/part-of: rejourney
 spec:
   schedule: "* * * * *"
+  suspend: true
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3

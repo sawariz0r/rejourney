@@ -1,4 +1,5 @@
 import { createClient } from '@clickhouse/client';
+import { DeleteObjectsCommand, ListObjectsV2Command, S3Client, type _Object } from '@aws-sdk/client-s3';
 
 function requireEnv(name: string): string {
     const value = process.env[name]?.trim();
@@ -27,6 +28,17 @@ function trimSlashes(value: string): string {
     return value.replace(/^\/+|\/+$/g, '');
 }
 
+function optionalPositiveIntegerEnv(name: string, fallback: number): number {
+    const raw = process.env[name]?.trim();
+    if (!raw) return fallback;
+
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 0) {
+        throw new Error(`${name} must be a non-negative integer`);
+    }
+    return parsed;
+}
+
 function buildBackupId(): string {
     const explicit = process.env.CLICKHOUSE_BACKUP_ID?.trim();
     if (explicit) {
@@ -37,6 +49,110 @@ function buildBackupId(): string {
     }
 
     return `rejourney-${new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z')}`;
+}
+
+function backupStartedAtFromId(backupId: string): Date | null {
+    const match = /^rejourney-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)$/.exec(backupId);
+    if (!match) return null;
+
+    const iso = match[1].replace(
+        /^(\d{4}-\d{2}-\d{2}T)(\d{2})-(\d{2})-(\d{2})-(\d{3}Z)$/,
+        '$1$2:$3:$4.$5',
+    );
+    const parsed = new Date(iso);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function backupGroupFromKey(prefix: string, key: string): string | null {
+    const normalizedPrefix = `${trimSlashes(prefix)}/`;
+    if (!key.startsWith(normalizedPrefix)) return null;
+
+    const rest = key.slice(normalizedPrefix.length);
+    const backupId = rest.split('/', 1)[0];
+    return backupId || null;
+}
+
+async function deleteObjectBatch(s3: S3Client, bucket: string, keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+
+    await s3.send(new DeleteObjectsCommand({
+        Bucket: bucket,
+        Delete: {
+            Objects: keys.map((Key) => ({ Key })),
+            Quiet: true,
+        },
+    }));
+}
+
+async function cleanupExpiredBackups(params: {
+    endpoint: string;
+    bucket: string;
+    prefix: string;
+    region: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    retentionDays: number;
+    keepBackupId: string;
+}): Promise<{ expiredBackups: number; deletedObjects: number; deletedBytes: number }> {
+    if (params.retentionDays === 0) {
+        return { expiredBackups: 0, deletedObjects: 0, deletedBytes: 0 };
+    }
+
+    const cutoff = Date.now() - (params.retentionDays * 24 * 60 * 60 * 1000);
+    const s3 = new S3Client({
+        endpoint: params.endpoint,
+        region: params.region,
+        forcePathStyle: true,
+        credentials: {
+            accessKeyId: params.accessKeyId,
+            secretAccessKey: params.secretAccessKey,
+        },
+    });
+
+    const objectsByBackup = new Map<string, _Object[]>();
+    let continuationToken: string | undefined;
+    const objectPrefix = `${trimSlashes(params.prefix)}/`;
+
+    do {
+        const response = await s3.send(new ListObjectsV2Command({
+            Bucket: params.bucket,
+            Prefix: objectPrefix,
+            ContinuationToken: continuationToken,
+        }));
+
+        for (const object of response.Contents ?? []) {
+            if (!object.Key) continue;
+            const backupId = backupGroupFromKey(params.prefix, object.Key);
+            if (!backupId) continue;
+            const group = objectsByBackup.get(backupId) ?? [];
+            group.push(object);
+            objectsByBackup.set(backupId, group);
+        }
+
+        continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    let expiredBackups = 0;
+    let deletedObjects = 0;
+    let deletedBytes = 0;
+
+    for (const [backupId, objects] of objectsByBackup) {
+        if (backupId === params.keepBackupId) continue;
+
+        const startedAt = backupStartedAtFromId(backupId);
+        if (!startedAt || startedAt.getTime() >= cutoff) continue;
+
+        expiredBackups += 1;
+        const keys = objects.map((object) => object.Key).filter((key): key is string => Boolean(key));
+        for (let index = 0; index < keys.length; index += 1000) {
+            await deleteObjectBatch(s3, params.bucket, keys.slice(index, index + 1000));
+        }
+
+        deletedObjects += keys.length;
+        deletedBytes += objects.reduce((sum, object) => sum + (object.Size ?? 0), 0);
+    }
+
+    return { expiredBackups, deletedObjects, deletedBytes };
 }
 
 async function main(): Promise<void> {
@@ -53,6 +169,8 @@ async function main(): Promise<void> {
     const backupId = buildBackupId();
     const destination = `${endpoint}/${bucket}/${prefix}/${backupId}`;
     const requestTimeout = Number(process.env.CLICKHOUSE_BACKUP_REQUEST_TIMEOUT_MS || process.env.CLICKHOUSE_REQUEST_TIMEOUT_MS || 3600000);
+    const retentionDays = optionalPositiveIntegerEnv('CLICKHOUSE_BACKUP_RETENTION_DAYS', 7);
+    const region = optionalEnv('BACKUP_S3_REGION', 'us-west-or');
 
     const client = createClient({
         url: clickhouseUrl,
@@ -82,11 +200,24 @@ async function main(): Promise<void> {
             },
         });
 
+        const cleanup = await cleanupExpiredBackups({
+            endpoint,
+            bucket,
+            prefix,
+            region,
+            accessKeyId,
+            secretAccessKey,
+            retentionDays,
+            keepBackupId: backupId,
+        });
+
         console.log(JSON.stringify({
             status: 'created',
             database,
             backupId,
             destination,
+            retentionDays,
+            cleanup,
         }));
     } finally {
         await client.close();

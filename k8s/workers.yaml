@@ -593,32 +593,6 @@ spec:
                     secretKeyRef:
                       name: s3-secret
                       key: S3_SECRET_ACCESS_KEY
-                - name: R2_ENDPOINT
-                  valueFrom:
-                    secretKeyRef:
-                      name: db-backup-secret
-                      key: R2_ENDPOINT
-                - name: R2_BUCKET
-                  valueFrom:
-                    secretKeyRef:
-                      name: db-backup-secret
-                      key: R2_BUCKET
-                - name: R2_REGION
-                  valueFrom:
-                    secretKeyRef:
-                      name: db-backup-secret
-                      key: BACKUP_S3_REGION
-                      optional: true
-                - name: R2_ACCESS_KEY_ID
-                  valueFrom:
-                    secretKeyRef:
-                      name: db-backup-secret
-                      key: AWS_ACCESS_KEY_ID
-                - name: R2_SECRET_ACCESS_KEY
-                  valueFrom:
-                    secretKeyRef:
-                      name: db-backup-secret
-                      key: AWS_SECRET_ACCESS_KEY
                 - name: JWT_SECRET
                   valueFrom:
                     secretKeyRef:

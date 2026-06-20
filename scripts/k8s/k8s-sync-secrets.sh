@@ -303,11 +303,13 @@ else
 fi
 
 # 11. Database backup object-store secret (PostgreSQL CNPG + ClickHouse)
-BACKUP_S3_ENDPOINT="${BACKUP_S3_ENDPOINT:-${R2_ENDPOINT:-}}"
-BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-${R2_BUCKET:-rejourney-db-backups-1}}"
+# Keep this explicit. Legacy R2_* names may still appear around replay object
+# storage, but database backup credentials must use BACKUP_S3_* only.
+BACKUP_S3_ENDPOINT="${BACKUP_S3_ENDPOINT:-}"
+BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-rejourney-db-backups-1}"
 BACKUP_S3_REGION="${BACKUP_S3_REGION:-us-west-or}"
-BACKUP_S3_ACCESS_KEY_ID="${BACKUP_S3_ACCESS_KEY_ID:-${R2_ACCESS_KEY_ID:-}}"
-BACKUP_S3_SECRET_ACCESS_KEY="${BACKUP_S3_SECRET_ACCESS_KEY:-${R2_SECRET_ACCESS_KEY:-}}"
+BACKUP_S3_ACCESS_KEY_ID="${BACKUP_S3_ACCESS_KEY_ID:-}"
+BACKUP_S3_SECRET_ACCESS_KEY="${BACKUP_S3_SECRET_ACCESS_KEY:-}"
 
 if [ -n "$BACKUP_S3_ENDPOINT" ] && [ -n "$BACKUP_S3_ACCESS_KEY_ID" ] && [ -n "$BACKUP_S3_SECRET_ACCESS_KEY" ]; then
     log "Creating db-backup-secret..."
@@ -316,11 +318,10 @@ if [ -n "$BACKUP_S3_ENDPOINT" ] && [ -n "$BACKUP_S3_ACCESS_KEY_ID" ] && [ -n "$B
         --from-literal=BACKUP_S3_BUCKET="$BACKUP_S3_BUCKET" \
         --from-literal=BACKUP_S3_REGION="$BACKUP_S3_REGION" \
         --from-literal=AWS_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY_ID" \
-        --from-literal=AWS_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY" \
-        --from-literal=R2_ENDPOINT="$BACKUP_S3_ENDPOINT" \
-        --from-literal=R2_BUCKET="$BACKUP_S3_BUCKET"
+        --from-literal=AWS_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_ACCESS_KEY"
+    kubectl label secret db-backup-secret -n "$NAMESPACE" cnpg.io/reload=true --overwrite >/dev/null
 else
-    info "Database backup credentials not provided, skipping db-backup-secret"
+    info "Database backup credentials not provided, skipping db-backup-secret; set BACKUP_S3_ENDPOINT, BACKUP_S3_ACCESS_KEY_ID, and BACKUP_S3_SECRET_ACCESS_KEY explicitly"
 fi
 
 # 12. Monitoring Auth Secret (Uptime Kuma Basic Auth)

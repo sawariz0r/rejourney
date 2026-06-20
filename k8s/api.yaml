@@ -77,16 +77,14 @@ spec:
   # This ensures the load balancer has fully picked up the new pod before traffic
   # shifts — the key ingredient of zero-downtime blue-green deploys.
   minReadySeconds: 10
-  # api-ingest is hard-colocated with the current Postgres primary. During
-  # deploys the replacement pod can wait for that single node's allocatable CPU
-  # while the old pod finishes termination and CronJobs settle, so keep the
-  # progress deadline longer than the default 10m rollout window.
+  # api-ingest prefers the current Postgres primary, but it must still be able
+  # to scale out when the primary node is temporarily short on capacity.
   progressDeadlineSeconds: 1800
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      # api-ingest is pinned to the Postgres-primary node. Replacing one pod at
-      # a time avoids needing spare CPU for surge pods during deploys.
+      # Replacing one pod at a time avoids needing spare CPU for surge pods
+      # during deploys; HPA can still scale above the manifest floor.
       maxUnavailable: 1
       maxSurge: 0
   selector:
@@ -98,18 +96,19 @@ spec:
         app: api-ingest
     spec:
       terminationGracePeriodSeconds: 30
-      # Ingest latency depends on being colocated with the current Postgres primary.
-      # The hard podAffinity keeps new ingest pods on the same hostname as the CNPG
-      # primary, while the FSN1 preference preserves the normal placement when
-      # postgres-local-1 is primary.
+      # Ingest latency benefits from being colocated with the current Postgres
+      # primary. Keep that as a strong preference rather than a hard constraint:
+      # during failover/HPA events, availability beats perfect locality.
       affinity:
         podAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  cnpg.io/cluster: postgres-local
-                  cnpg.io/instanceRole: primary
-              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    cnpg.io/cluster: postgres-local
+                    cnpg.io/instanceRole: primary
+                topologyKey: kubernetes.io/hostname
         nodeAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
