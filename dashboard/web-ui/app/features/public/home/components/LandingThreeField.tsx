@@ -69,6 +69,8 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
 
             const random = createSeededRandom(seed);
             const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const initialWidth = container.clientWidth || window.innerWidth || 1024;
+            const startsSmall = initialWidth < 640;
 
             const renderer = new THREE.WebGLRenderer({
                 canvas,
@@ -77,7 +79,7 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
                 powerPreference: 'high-performance',
             });
             renderer.setClearAlpha(0);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isHero ? 1.5 : 1.0));
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, startsSmall ? 1.1 : (isHero ? 1.5 : 1.0)));
             renderer.outputColorSpace = THREE.SRGBColorSpace;
 
             const scene = new THREE.Scene();
@@ -113,20 +115,20 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
             const particleTexture = createParticleTexture();
 
             // Ambient background lighting
-            scene.add(new THREE.AmbientLight(0xf0f7ff, isHero ? 3.4 : 1.85));
+            scene.add(new THREE.AmbientLight(0xf0f7ff, isHero ? (startsSmall ? 2.85 : 3.4) : 1.85));
 
             // Floating neon point lights to illuminate the metallic ribbon (only for heroes)
-            const cyanLight = new THREE.PointLight(0x38bdf8, isHero ? 18 : 0, 20);
+            const cyanLight = new THREE.PointLight(0x38bdf8, isHero ? (startsSmall ? 11 : 18) : 0, 20);
             scene.add(cyanLight);
 
-            const blueLight = new THREE.PointLight(0x3b82f6, isHero ? 14 : 0, 18);
+            const blueLight = new THREE.PointLight(0x3b82f6, isHero ? (startsSmall ? 9 : 14) : 0, 18);
             scene.add(blueLight);
 
-            const azureLight = new THREE.PointLight(0x60a5fa, isHero ? 6 : 0, 16);
+            const azureLight = new THREE.PointLight(0x60a5fa, isHero ? (startsSmall ? 5 : 6) : 0, 16);
             scene.add(azureLight);
 
             // Add a directional light for specular highlights
-            const dirLight = new THREE.DirectionalLight(0xffffff, isHero ? 2.5 : 0);
+            const dirLight = new THREE.DirectionalLight(0xffffff, isHero ? (startsSmall ? 1.45 : 2.5) : 0);
             dirLight.position.set(5, 5, 4);
             scene.add(dirLight);
 
@@ -135,7 +137,9 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
             scene.add(root);
 
             // Create background stars/particles
-            const starCount = isHero ? 110 : (isLandingPage ? 180 : 90);
+            const starCount = isHero
+                ? (startsSmall ? 48 : 110)
+                : (isLandingPage ? (startsSmall ? 82 : 180) : (startsSmall ? 48 : 90));
             const starPositions = new Float32Array(starCount * 3);
             const starColors = new Float32Array(starCount * 3);
             const starSizes = new Float32Array(starCount);
@@ -156,7 +160,7 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
                 starColors[i * 3] = color.r * brightness;
                 starColors[i * 3 + 1] = color.g * brightness;
                 starColors[i * 3 + 2] = color.b * brightness;
-                starSizes[i] = random() * (isHero ? 0.09 : (isLandingPage ? 0.16 : 0.12)) + (isHero ? 0.035 : (isLandingPage ? 0.06 : 0.045));
+                starSizes[i] = random() * (isHero ? (startsSmall ? 0.07 : 0.09) : (isLandingPage ? (startsSmall ? 0.11 : 0.16) : 0.12)) + (isHero ? (startsSmall ? 0.024 : 0.035) : (isLandingPage ? (startsSmall ? 0.04 : 0.06) : 0.045));
 
                 starStates.push({
                     x,
@@ -176,7 +180,7 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
             const starMaterial = register(new THREE.ShaderMaterial({
                 uniforms: {
                     map: { value: particleTexture },
-                    opacity: { value: isHero ? 0.42 : (isLandingPage ? 0.76 : 0.56) },
+                    opacity: { value: isHero ? (startsSmall ? 0.34 : 0.42) : (isLandingPage ? (startsSmall ? 0.46 : 0.76) : 0.56) },
                 },
                 vertexShader: `
                     attribute float size;
@@ -216,65 +220,118 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
             const flowLines: FlowLineState[] = [];
 
             if (isHero) {
-                // Sleeker torus knot geometry
-                const knotGeometry = register(new THREE.TorusKnotGeometry(1.25, 0.35, 180, 24, 2, 3));
-                
-                // Translucent physical material with depth writing enabled for sharp glass look
-                const knotMaterial = register(new THREE.MeshPhysicalMaterial({
-                    color: 0x2563eb, // Vibrant blue
-                    metalness: 0.15,
-                    roughness: 0.1,
-                    clearcoat: 1.0,
-                    clearcoatRoughness: 0.0,
-                    transmission: 0.35,
-                    thickness: 0.8,
-                    ior: 1.48,
-                    transparent: true,
-                    opacity: 0.95,
-                    depthWrite: true,
-                }));
-                knotMesh = new THREE.Mesh(knotGeometry, knotMaterial);
-                root.add(knotMesh);
+                if (startsSmall) {
+                    const globeGeometry = register(new THREE.SphereGeometry(2.25, 42, 24));
+                    const globeSurfaceMaterial = register(new THREE.MeshPhysicalMaterial({
+                        color: 0x7dd3fc,
+                        metalness: 0.02,
+                        roughness: 0.22,
+                        clearcoat: 0.75,
+                        clearcoatRoughness: 0.18,
+                        transparent: true,
+                        opacity: 0.17,
+                        depthWrite: false,
+                    }));
+                    knotMesh = new THREE.Mesh(globeGeometry, globeSurfaceMaterial);
+                    root.add(knotMesh);
 
-                // Holographic wireframe overlay shell for crisp contour definition
-                const knotWireframeMat = register(new THREE.MeshBasicMaterial({
-                    color: 0x38bdf8, // Cyan glow
-                    wireframe: true,
-                    transparent: true,
-                    opacity: 0.24,
-                    blending: THREE.AdditiveBlending,
-                    depthWrite: false,
-                }));
-                const knotWireframe = new THREE.Mesh(knotGeometry, knotWireframeMat);
-                knotWireframe.scale.setScalar(1.005);
-                knotMesh.add(knotWireframe);
+                    const globeWireframeMat = register(new THREE.MeshBasicMaterial({
+                        color: 0x60a5fa,
+                        wireframe: true,
+                        transparent: true,
+                        opacity: 0.28,
+                        blending: THREE.NormalBlending,
+                        depthWrite: false,
+                    }));
+                    const globeWireframe = new THREE.Mesh(globeGeometry, globeWireframeMat);
+                    globeWireframe.scale.setScalar(1.004);
+                    knotMesh.add(globeWireframe);
 
-                // Orbit rings material
-                const ringMaterial = register(new THREE.MeshBasicMaterial({
-                    color: 0x3b82f6,
-                    wireframe: true,
-                    transparent: true,
-                    opacity: 0.22,
-                    blending: THREE.AdditiveBlending,
-                    depthWrite: false,
-                }));
+                    const ringMaterial = register(new THREE.MeshBasicMaterial({
+                        color: 0x38bdf8,
+                        wireframe: true,
+                        transparent: true,
+                        opacity: 0.26,
+                        blending: THREE.NormalBlending,
+                        depthWrite: false,
+                    }));
 
-                // Orbit Group 1 (Ring 1)
-                ring1Group = new THREE.Group();
-                ring1Group.rotation.x = Math.PI / 3;
-                root.add(ring1Group);
+                    ring1Group = new THREE.Group();
+                    ring1Group.rotation.x = Math.PI / 2.65;
+                    ring1Group.rotation.z = Math.PI / 10;
+                    root.add(ring1Group);
 
-                ring1 = new THREE.Mesh(register(new THREE.TorusGeometry(2.6, 0.008, 6, 120)), ringMaterial);
-                ring1Group.add(ring1);
+                    ring1 = new THREE.Mesh(register(new THREE.TorusGeometry(2.62, 0.009, 6, 140)), ringMaterial);
+                    ring1Group.add(ring1);
 
-                // Orbit Group 2 (Ring 2)
-                ring2Group = new THREE.Group();
-                ring2Group.rotation.y = Math.PI / 4;
-                ring2Group.rotation.x = -Math.PI / 6;
-                root.add(ring2Group);
+                    ring2Group = new THREE.Group();
+                    ring2Group.rotation.y = Math.PI / 2.85;
+                    ring2Group.rotation.x = -Math.PI / 7.5;
+                    root.add(ring2Group);
 
-                ring2 = new THREE.Mesh(register(new THREE.TorusGeometry(2.95, 0.006, 6, 120)), ringMaterial);
-                ring2Group.add(ring2);
+                    ring2 = new THREE.Mesh(register(new THREE.TorusGeometry(2.95, 0.007, 6, 140)), ringMaterial);
+                    ring2Group.add(ring2);
+                } else {
+                    // Sleeker torus knot geometry
+                    const knotGeometry = register(new THREE.TorusKnotGeometry(1.25, 0.35, 180, 24, 2, 3));
+                    
+                    // Translucent physical material with depth writing enabled for sharp glass look
+                    const knotMaterial = register(new THREE.MeshPhysicalMaterial({
+                        color: 0x2563eb, // Vibrant blue
+                        metalness: 0.15,
+                        roughness: 0.1,
+                        clearcoat: 1.0,
+                        clearcoatRoughness: 0.0,
+                        transmission: 0.35,
+                        thickness: 0.8,
+                        ior: 1.48,
+                        transparent: true,
+                        opacity: 0.95,
+                        depthWrite: true,
+                    }));
+                    knotMesh = new THREE.Mesh(knotGeometry, knotMaterial);
+                    root.add(knotMesh);
+
+                    // Holographic wireframe overlay shell for crisp contour definition
+                    const knotWireframeMat = register(new THREE.MeshBasicMaterial({
+                        color: 0x38bdf8, // Cyan glow
+                        wireframe: true,
+                        transparent: true,
+                        opacity: 0.24,
+                        blending: THREE.AdditiveBlending,
+                        depthWrite: false,
+                    }));
+                    const knotWireframe = new THREE.Mesh(knotGeometry, knotWireframeMat);
+                    knotWireframe.scale.setScalar(1.005);
+                    knotMesh.add(knotWireframe);
+
+                    // Orbit rings material
+                    const ringMaterial = register(new THREE.MeshBasicMaterial({
+                        color: 0x3b82f6,
+                        wireframe: true,
+                        transparent: true,
+                        opacity: 0.22,
+                        blending: THREE.AdditiveBlending,
+                        depthWrite: false,
+                    }));
+
+                    // Orbit Group 1 (Ring 1)
+                    ring1Group = new THREE.Group();
+                    ring1Group.rotation.x = Math.PI / 3;
+                    root.add(ring1Group);
+
+                    ring1 = new THREE.Mesh(register(new THREE.TorusGeometry(2.6, 0.008, 6, 120)), ringMaterial);
+                    ring1Group.add(ring1);
+
+                    // Orbit Group 2 (Ring 2)
+                    ring2Group = new THREE.Group();
+                    ring2Group.rotation.y = Math.PI / 4;
+                    ring2Group.rotation.x = -Math.PI / 6;
+                    root.add(ring2Group);
+
+                    ring2 = new THREE.Mesh(register(new THREE.TorusGeometry(2.95, 0.006, 6, 120)), ringMaterial);
+                    ring2Group.add(ring2);
+                }
             } else if (isAmbient) {
                 if (!isLandingPage) {
                     const ringMaterial = register(new THREE.MeshBasicMaterial({
@@ -366,17 +423,17 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
                     root.position.set(0, 0, 0);
                     root.scale.setScalar(1.0);
                 } else if (width < 640) {
-                    camera.position.z = 10.0;
-                    root.position.set(0, 0.8, 0);
-                    root.scale.setScalar(0.75);
+                    camera.position.z = 9.3;
+                    root.position.set(width < 430 ? 0.98 : 1.12, -1.42, -0.35);
+                    root.scale.setScalar(width < 430 ? 0.78 : 0.86);
                 } else if (width < 1024) {
                     camera.position.z = 9.0;
-                    root.position.set(0.8, 0.2, 0);
-                    root.scale.setScalar(0.9);
+                    root.position.set(1.05, 0.12, 0);
+                    root.scale.setScalar(0.86);
                 } else {
                     camera.position.z = 8.5;
-                    root.position.set(1.8, 0.1, 0);
-                    root.scale.setScalar(1.1);
+                    root.position.set(2.65, 0.02, 0);
+                    root.scale.setScalar(1.02);
                 }
 
                 camera.updateProjectionMatrix();
@@ -405,12 +462,13 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
 
                 // Rotate knot and background groups
                 if (isHero && knotMesh && ring1Group && ring2Group) {
-                    knotMesh.rotation.x = elapsed * 0.15;
-                    knotMesh.rotation.y = elapsed * 0.2;
-                    knotMesh.rotation.z = elapsed * 0.08;
+                    const heroMotion = startsSmall ? 0.46 : 1;
+                    knotMesh.rotation.x = elapsed * 0.15 * heroMotion;
+                    knotMesh.rotation.y = elapsed * 0.2 * heroMotion;
+                    knotMesh.rotation.z = elapsed * 0.08 * heroMotion;
 
-                    ring1Group.rotation.z = -elapsed * 0.12;
-                    ring2Group.rotation.z = elapsed * 0.08;
+                    ring1Group.rotation.z = -elapsed * 0.12 * heroMotion;
+                    ring2Group.rotation.z = elapsed * 0.08 * heroMotion;
                 } else if (isAmbient && ring1 && ring2 && ring3) {
                     const ambientSpeed = 1.0;
                     ring1.rotation.x = elapsed * 0.015 * ambientSpeed;
@@ -566,14 +624,29 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
                             opacity: 0.64;
                         }
                         @media (max-width: 640px) {
+                            .landing-three-field--hero .landing-light-bg {
+                                background:
+                                    radial-gradient(circle at 76% 28%, rgba(59, 130, 246, 0.06), transparent 42%),
+                                    linear-gradient(180deg, #ffffff 0%, #fcfdfe 100%);
+                            }
+                            .landing-three-field--hero .landing-light-haze {
+                                inset: -4% -10%;
+                                filter: blur(38px);
+                                opacity: 0.54;
+                            }
                             .landing-three-field--hero .landing-three-canvas {
+                                height: 100% !important;
+                                left: 50% !important;
                                 opacity: 0.46;
+                                top: 50% !important;
+                                width: 100% !important;
                             }
                             .landing-three-field--page .landing-three-canvas {
-                                opacity: 0.68;
+                                filter: saturate(0.9) contrast(0.98);
+                                opacity: 0.34;
                             }
                             .landing-three-field--sparse .landing-three-canvas {
-                                opacity: 0.36;
+                                opacity: 0.30;
                             }
                         }
                         @media (prefers-reduced-motion: reduce) {

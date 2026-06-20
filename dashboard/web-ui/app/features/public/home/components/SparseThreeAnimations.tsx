@@ -41,6 +41,7 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
         const container = containerRef.current;
         const random = createSeededRandom(seed);
         const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const pointerFine = window.matchMedia('(pointer: fine)').matches;
 
         // Tracks mouse in Normalized Device Coordinates (NDC)
         const mouse = { x: -9999, y: -9999 };
@@ -56,12 +57,15 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
             mouse.y = -9999;
         };
 
-        window.addEventListener('mousemove', handleMouseMove, { passive: true });
-        container.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+        if (pointerFine) {
+            window.addEventListener('mousemove', handleMouseMove, { passive: true });
+            container.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+        }
 
         const bootScene = async () => {
             const THREE = await import('three');
             if (disposed || !canvasRef.current) return;
+            const startsSmall = (container.clientWidth || window.innerWidth || 1024) < 640;
 
             const renderer = new THREE.WebGLRenderer({
                 canvas,
@@ -70,7 +74,7 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
                 powerPreference: 'high-performance',
             });
             renderer.setClearAlpha(0);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, startsSmall ? 1.1 : 1.5));
 
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
@@ -106,7 +110,7 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
             const particleTexture = createCircleTexture();
 
             // Set up sparse node structures
-            const nodeCount = 64;
+            const nodeCount = startsSmall ? 38 : 64;
             const nodePositions = new Float32Array(nodeCount * 3);
             const nodeStates: Array<{
                 x: number;
@@ -118,10 +122,12 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
                 baseSpeed: number;
                 phase: number;
             }> = [];
+            const spreadX = startsSmall ? 6.4 : 9.4;
+            const spreadY = startsSmall ? 3.7 : 5.3;
 
             for (let i = 0; i < nodeCount; i++) {
-                const x = (random() - 0.5) * 9.4;
-                const y = (random() - 0.5) * 5.3;
+                const x = (random() - 0.5) * spreadX;
+                const y = (random() - 0.5) * spreadY;
                 const z = (random() - 0.5) * 1.8;
 
                 nodePositions[i * 3] = x;
@@ -148,9 +154,9 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
 
             const pointsMaterial = register(new THREE.PointsMaterial({
                 color: 0x0284c7,
-                size: 0.27,
+                size: startsSmall ? 0.21 : 0.27,
                 transparent: true,
-                opacity: 0.96,
+                opacity: startsSmall ? 0.64 : 0.96,
                 map: particleTexture,
                 blending: THREE.NormalBlending,
                 depthWrite: false,
@@ -160,7 +166,7 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
             scene.add(points);
 
             // Set up dynamic lines
-            const maxLines = 150;
+            const maxLines = startsSmall ? 72 : 150;
             const linePositions = new Float32Array(maxLines * 2 * 3);
             const lineColors = new Float32Array(maxLines * 2 * 3);
             const lineGeometry = register(new THREE.BufferGeometry());
@@ -170,7 +176,7 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
             const lineMaterial = register(new THREE.LineBasicMaterial({
                 vertexColors: true,
                 transparent: true,
-                opacity: 0.74,
+                opacity: startsSmall ? 0.48 : 0.74,
                 blending: THREE.NormalBlending,
                 depthWrite: false,
             }));
@@ -199,8 +205,10 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
                 if (frameId) window.cancelAnimationFrame(frameId);
                 resizeObserver?.disconnect();
                 visibilityObserver?.disconnect();
-                window.removeEventListener('mousemove', handleMouseMove);
-                container.removeEventListener('mouseleave', handleMouseLeave);
+                if (pointerFine) {
+                    window.removeEventListener('mousemove', handleMouseMove);
+                    container.removeEventListener('mouseleave', handleMouseLeave);
+                }
                 disposables.forEach((d) => d.dispose());
                 renderer.dispose();
             };
@@ -230,8 +238,8 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
                     state.z += state.vz;
 
                     // Bounce/wrap borders
-                    const xLimit = camera.aspect * 4.2;
-                    const yLimit = 2.65;
+                    const xLimit = camera.aspect * (startsSmall ? 3.45 : 4.2);
+                    const yLimit = startsSmall ? 2.05 : 2.65;
                     if (Math.abs(state.x) > xLimit) {
                         state.vx *= -1;
                         state.x = Math.sign(state.x) * xLimit;
@@ -246,7 +254,7 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
                     }
 
                     // Mouse interaction
-                    if (mouseActive) {
+                    if (!startsSmall && mouseActive) {
                         const dx = state.x - mouseCoords.x;
                         const dy = state.y - mouseCoords.y;
                         const dz = state.z - mouseCoords.z;
@@ -280,6 +288,9 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
                 let lineIdx = 0;
                 const linePosAttr = lineGeometry.getAttribute('position') as BufferAttribute;
                 const lineColAttr = lineGeometry.getAttribute('color') as BufferAttribute;
+                const connectionDistance = startsSmall ? 1.95 : 2.35;
+                const connectionDistanceSq = connectionDistance * connectionDistance;
+                const connectionOpacity = startsSmall ? 0.54 : 0.82;
 
                 for (let i = 0; i < nodeCount; i++) {
                     const pi = nodeStates[i];
@@ -292,10 +303,9 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
                         const dz = pi.z - pj.z;
                         const distSq = dx*dx + dy*dy + dz*dz;
 
-                        // Connect if distance < 2.35
-                        if (distSq < 5.52) {
+                        if (distSq < connectionDistanceSq) {
                             const dist = Math.sqrt(distSq);
-                            const opacity = Math.max(0, 1 - dist / 2.35) * 0.82;
+                            const opacity = Math.max(0, 1 - dist / connectionDistance) * connectionOpacity;
 
                             // Point A
                             linePosAttr.setXYZ(lineIdx * 2, pi.x, pi.y, pi.z);
@@ -381,6 +391,8 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
         const bootScene = async () => {
             const THREE = await import('three');
             if (disposed || !canvasRef.current) return;
+            const startsSmall = (container.clientWidth || window.innerWidth || 1024) < 640;
+            const motionScale = startsSmall ? 0.48 : 1;
 
             const renderer = new THREE.WebGLRenderer({
                 canvas,
@@ -389,11 +401,11 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                 powerPreference: 'high-performance',
             });
             renderer.setClearAlpha(0);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, startsSmall ? 1.1 : 1.5));
 
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
-            camera.position.set(0, 0, 8.0);
+            camera.position.set(0, 0, startsSmall ? 8.7 : 8.0);
 
             const disposables: Array<{ dispose: () => void }> = [];
             const register = <T extends { dispose: () => void }>(item: T) => {
@@ -491,7 +503,7 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                 const mat = register(new THREE.LineBasicMaterial({
                     color: data.color,
                     transparent: true,
-                    opacity: 0.95,
+                    opacity: startsSmall ? 0.58 : 0.95,
                     blending: THREE.NormalBlending,
                     depthWrite: false,
                 }));
@@ -504,7 +516,7 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                     const innerMat = register(new THREE.LineBasicMaterial({
                         color: data.innerColor,
                         transparent: true,
-                        opacity: 0.96,
+                        opacity: startsSmall ? 0.58 : 0.96,
                         blending: THREE.NormalBlending,
                         depthWrite: false,
                     }));
@@ -529,15 +541,15 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
             });
 
             // Add background drifting micro-particles
-            const starCount = 84;
+            const starCount = startsSmall ? 42 : 84;
             const starPositions = new Float32Array(starCount * 3);
             const starColors = new Float32Array(starCount * 3);
             const starStates: Array<{ x: number; y: number; z: number; speed: number; phase: number }> = [];
             const starPalette = [0x2563eb, 0x0284c7, 0x0f766e, 0xf59e0b, 0xffffff];
 
             for (let i = 0; i < starCount; i++) {
-                const x = (random() - 0.5) * 8.5;
-                const y = (random() - 0.5) * 5.0;
+                const x = (random() - 0.5) * (startsSmall ? 5.9 : 8.5);
+                const y = (random() - 0.5) * (startsSmall ? 3.7 : 5.0);
                 const z = -2.0 - random() * 2.5;
 
                 starPositions[i * 3] = x;
@@ -580,10 +592,10 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
 
             const starMaterial = register(new THREE.PointsMaterial({
                 color: 0xffffff,
-                size: 0.135,
+                size: startsSmall ? 0.095 : 0.135,
                 vertexColors: true,
                 transparent: true,
-                opacity: 0.76,
+                opacity: startsSmall ? 0.42 : 0.76,
                 map: starTexture,
                 blending: THREE.NormalBlending,
                 depthWrite: false,
@@ -605,7 +617,7 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                         mesh.group.position.x = idx === 0 ? -1.0 : 1.0;
                         mesh.baseX = idx === 0 ? -1.0 : 1.0;
                     });
-                    meshesGroup.scale.setScalar(0.72);
+                    meshesGroup.scale.setScalar(width < 640 ? 0.54 : 0.72);
                 } else {
                     activeMeshes.forEach((mesh, idx) => {
                         mesh.group.position.x = idx === 0 ? shapesData[idx].x : shapesData[idx].x;
@@ -637,26 +649,26 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
 
                 // Animate rotating floating shapes
                 activeMeshes.forEach((m, idx) => {
-                    m.group.rotation.x = elapsed * m.rotSpeedX * 1.35;
-                    m.group.rotation.y = elapsed * m.rotSpeedY * 1.45;
+                    m.group.rotation.x = elapsed * m.rotSpeedX * 1.35 * motionScale;
+                    m.group.rotation.y = elapsed * m.rotSpeedY * 1.45 * motionScale;
 
                     // Separate nested counter-rotation for nested shapes
                     if (m.group.children.length > 1) {
                         const inner = m.group.children[1] as Object3D;
-                        inner.rotation.x = -elapsed * m.rotSpeedX * 2.0;
-                        inner.rotation.y = -elapsed * m.rotSpeedY * 2.0;
+                        inner.rotation.x = -elapsed * m.rotSpeedX * 2.0 * motionScale;
+                        inner.rotation.y = -elapsed * m.rotSpeedY * 2.0 * motionScale;
                     }
 
                     // Float height sinusoidally
-                    m.group.position.y = m.baseY + Math.sin(elapsed * m.floatSpeed * 1.25 + m.phase) * (m.floatAmp * 1.22);
+                    m.group.position.y = m.baseY + Math.sin(elapsed * m.floatSpeed * 1.25 * motionScale + m.phase) * (m.floatAmp * (startsSmall ? 0.55 : 1.22));
                 });
 
                 // Gentle drift of micro-particles
                 const starPosAttr = starGeometry.getAttribute('position') as BufferAttribute;
                 for (let i = 0; i < starCount; i++) {
                     const state = starStates[i];
-                    const driftX = Math.sin(elapsed * state.speed + state.phase) * 0.075;
-                    const driftY = Math.cos(elapsed * state.speed * 0.8 + state.phase) * 0.075;
+                    const driftX = Math.sin(elapsed * state.speed * motionScale + state.phase) * (startsSmall ? 0.04 : 0.075);
+                    const driftY = Math.cos(elapsed * state.speed * 0.8 * motionScale + state.phase) * (startsSmall ? 0.04 : 0.075);
                     starPosAttr.setXYZ(i, state.x + driftX, state.y + driftY, state.z);
                 }
                 starPosAttr.needsUpdate = true;
@@ -727,6 +739,8 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
         const bootScene = async () => {
             const THREE = await import('three');
             if (disposed || !canvasRef.current) return;
+            const startsSmall = (container.clientWidth || window.innerWidth || 1024) < 640;
+            const motionScale = startsSmall ? 0.48 : 1;
 
             const renderer = new THREE.WebGLRenderer({
                 canvas,
@@ -735,7 +749,7 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
                 powerPreference: 'high-performance',
             });
             renderer.setClearAlpha(0);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, startsSmall ? 1.1 : 1.5));
 
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
@@ -755,7 +769,7 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
                 color: 0x0284c7,
                 wireframe: true,
                 transparent: true,
-                opacity: 0.72,
+                opacity: startsSmall ? 0.36 : 0.72,
                 blending: THREE.NormalBlending,
                 depthWrite: false,
             }));
@@ -764,7 +778,7 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
                 color: 0x2563eb,
                 wireframe: true,
                 transparent: true,
-                opacity: 0.62,
+                opacity: startsSmall ? 0.30 : 0.62,
                 blending: THREE.NormalBlending,
                 depthWrite: false,
             }));
@@ -773,7 +787,7 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
                 color: 0x0f766e,
                 wireframe: true,
                 transparent: true,
-                opacity: 0.48,
+                opacity: startsSmall ? 0.24 : 0.48,
                 blending: THREE.NormalBlending,
                 depthWrite: false,
             }));
@@ -790,7 +804,7 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
             const coreMat = register(new THREE.MeshBasicMaterial({
                 color: 0x1d4ed8,
                 transparent: true,
-                opacity: 0.9,
+                opacity: startsSmall ? 0.56 : 0.9,
                 blending: THREE.NormalBlending,
                 depthWrite: false,
             }));
@@ -802,7 +816,7 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
             const glowMat = register(new THREE.MeshBasicMaterial({
                 color: 0x0284c7,
                 transparent: true,
-                opacity: 0.46,
+                opacity: startsSmall ? 0.24 : 0.46,
                 blending: THREE.NormalBlending,
                 depthWrite: false,
             }));
@@ -817,8 +831,8 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
 
                 // Responsive positioning (center for tablet/desktop, shift slightly on mobile)
                 if (width < 640) {
-                    rootGroup.position.set(0, 0.2, -0.5);
-                    rootGroup.scale.setScalar(0.82);
+                    rootGroup.position.set(0.85, 0.05, -0.65);
+                    rootGroup.scale.setScalar(0.58);
                 } else if (width < 1024) {
                     rootGroup.position.set(1.4, -0.1, -0.6);
                     rootGroup.scale.setScalar(1.02);
@@ -849,21 +863,21 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
                 const elapsed = clock.getElapsedTime();
 
                 // Rotate rings on multiple axes
-                ring1.rotation.x = elapsed * 0.24;
-                ring1.rotation.y = elapsed * 0.32;
+                ring1.rotation.x = elapsed * 0.24 * motionScale;
+                ring1.rotation.y = elapsed * 0.32 * motionScale;
 
-                ring2.rotation.y = -elapsed * 0.4;
-                ring2.rotation.z = elapsed * 0.18;
+                ring2.rotation.y = -elapsed * 0.4 * motionScale;
+                ring2.rotation.z = elapsed * 0.18 * motionScale;
 
-                ring3.rotation.x = -elapsed * 0.13;
-                ring3.rotation.z = -elapsed * 0.26;
+                ring3.rotation.x = -elapsed * 0.13 * motionScale;
+                ring3.rotation.z = -elapsed * 0.26 * motionScale;
 
                 // Pulsing animation for the central core & glow
                 if (!reducedMotion) {
-                    const pulse = 1.0 + Math.sin(elapsed * 3.1) * 0.18;
+                    const pulse = 1.0 + Math.sin(elapsed * 3.1 * motionScale) * (startsSmall ? 0.08 : 0.18);
                     core.scale.setScalar(pulse);
 
-                    const glowPulse = 1.0 + Math.sin(elapsed * 3.1 + Math.PI) * 0.28;
+                    const glowPulse = 1.0 + Math.sin(elapsed * 3.1 * motionScale + Math.PI) * (startsSmall ? 0.12 : 0.28);
                     glow.scale.setScalar(glowPulse);
                 }
 

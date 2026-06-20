@@ -392,27 +392,27 @@ export const AiLeakHomepage: React.FC = () => {
     const activeSdkSetup = `${activeSdk.terminalCommands.join('\n')}\n\n${activeSdk.code}`;
 
     return (
-        <div className="relative isolate w-full overflow-x-hidden bg-[#f8fbff] text-slate-900">
-            <LandingThreeField variant="landing-page" seed={211} className="opacity-90" />
+        <div className="landing-home relative isolate w-full overflow-x-hidden bg-[#f8fbff] text-slate-900">
+            <LandingThreeField variant="landing-page" seed={211} className="landing-page-field opacity-90" />
 
             <div className="relative z-10">
                 {/* Hero Section */}
-                <section className="relative overflow-hidden px-5 pb-28 pt-36 text-center sm:px-8 sm:pb-40 sm:pt-44 lg:overflow-visible lg:px-10 lg:pb-44 lg:pt-48">
+                <section className="landing-hero-section relative overflow-hidden px-5 pb-28 pt-36 text-center sm:px-8 sm:pb-40 sm:pt-44 lg:overflow-visible lg:px-10 lg:pb-44 lg:pt-48">
                     <LandingThreeField variant="landing-hero" seed={11} />
 
                     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-36 bg-gradient-to-t from-white/75 via-white/35 to-transparent" aria-hidden="true" />
 
                     <div className="relative z-10 mx-auto flex max-w-6xl flex-col items-center">
-                        <h1 className="mx-auto max-w-6xl bg-gradient-to-br from-slate-950 via-blue-950 to-sky-900 bg-clip-text font-display text-[1.68rem] font-extrabold leading-[1.04] tracking-normal text-transparent drop-shadow-[0_18px_44px_rgba(37,99,235,0.08)] min-[360px]:text-[1.95rem] min-[430px]:text-[2.2rem] sm:text-[3.05rem] md:text-[3.65rem] lg:text-[4.45rem] xl:text-[5.35rem]">
+                        <h1 className="landing-hero-title mx-auto max-w-6xl bg-gradient-to-br from-slate-950 via-blue-950 to-sky-900 bg-clip-text font-display text-[1.68rem] font-extrabold leading-[1.04] tracking-normal text-transparent drop-shadow-[0_18px_44px_rgba(37,99,235,0.08)] min-[360px]:text-[1.95rem] min-[430px]:text-[2.2rem] sm:text-[3.05rem] md:text-[3.65rem] lg:text-[4.45rem] xl:text-[5.35rem]">
                             <span className="block whitespace-nowrap">From Session</span>
                             <span className="block whitespace-nowrap">Diagnostics To</span>
                             <span className="block whitespace-nowrap">Revenue Acceleration.</span>
                         </h1>
-                        <p className="mx-auto mt-8 max-w-3xl text-balance text-lg font-medium leading-relaxed text-slate-600 sm:text-xl md:text-2xl">
+                        <p className="landing-hero-subtitle mx-auto mt-8 max-w-3xl text-balance text-lg font-medium leading-relaxed text-slate-600 sm:text-xl md:text-2xl">
                             Power self-healing products.
                         </p>
                         {/* Action buttons matching style */}
-                        <div className="mt-9 flex w-full max-w-[20.5rem] flex-col items-center justify-center gap-3 sm:mt-11 sm:w-auto sm:max-w-none sm:flex-row">
+                        <div className="landing-hero-actions mt-9 flex w-full max-w-[20.5rem] flex-col items-center justify-center gap-3 sm:mt-11 sm:w-auto sm:max-w-none sm:flex-row">
                             <Link
                                 to={LOGIN_PATH}
                                 className="group inline-flex min-h-[52px] w-full min-w-[190px] items-center justify-center gap-2 rounded-full border border-blue-600 bg-blue-600 px-7 text-[0.95rem] font-bold text-white shadow-[0_16px_36px_rgba(37,99,235,0.24)] ring-1 ring-blue-500/20 transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-700 hover:bg-blue-700 hover:shadow-[0_20px_44px_rgba(37,99,235,0.3)] active:translate-y-0 sm:min-h-[58px] sm:w-auto sm:px-8 sm:text-base"
@@ -430,7 +430,7 @@ export const AiLeakHomepage: React.FC = () => {
                         </div>
 
                     {/* Supported Platforms */}
-                    <div className="mx-auto mt-24 max-w-5xl flex flex-col items-center justify-center gap-4 border-t border-slate-200/70 pt-8">
+                    <div className="landing-platforms mx-auto mt-24 max-w-5xl flex flex-col items-center justify-center gap-4 border-t border-slate-200/70 pt-8">
 
                         <div className="flex flex-wrap items-center justify-center gap-y-3 gap-x-4 text-slate-500">
                             <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold shadow-sm transition hover:bg-slate-100">
@@ -479,7 +479,7 @@ export const AiLeakHomepage: React.FC = () => {
                 </div>
 
                 {/* Hero Dashboard Preview */}
-                <div className="relative z-10 mx-auto mt-16 max-w-5xl rounded-3xl border border-slate-200 bg-slate-50 p-3 shadow-2xl overflow-hidden">
+                <div className="landing-hero-preview relative z-10 mx-auto mt-16 max-w-5xl rounded-3xl border border-slate-200 bg-slate-50 p-3 shadow-2xl overflow-hidden">
                     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
                         <div className="flex h-11 items-center gap-2 border-b border-slate-100 bg-slate-50 px-4">
                             <span className="h-3 w-3 rounded-full bg-rose-400" />
@@ -503,9 +503,9 @@ export const AiLeakHomepage: React.FC = () => {
                 <div className="pointer-events-none absolute inset-x-0 top-[33rem] z-[1] h-px bg-gradient-to-r from-transparent via-sky-200/45 to-transparent" aria-hidden="true" />
 
             {/* Self-Healing Loop Section */}
-                <section className="relative overflow-hidden border-t border-transparent bg-[linear-gradient(180deg,rgba(241,248,255,0.76)_0%,rgba(247,243,255,0.70)_100%)] px-5 py-24 sm:px-8 sm:py-28 lg:px-10">
-                    <div className="pointer-events-none absolute inset-x-0 top-8 z-0 h-[44rem] overflow-hidden" aria-hidden="true">
-                        <NetworkConstellation className="opacity-[0.52]" seed={661} />
+                <section className="landing-section landing-ai-loop-section relative overflow-hidden border-t border-transparent bg-[linear-gradient(180deg,rgba(241,248,255,0.76)_0%,rgba(247,243,255,0.70)_100%)] px-5 py-24 sm:px-8 sm:py-28 lg:px-10">
+                    <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-8 z-0 h-[44rem] overflow-hidden" aria-hidden="true">
+                        <NetworkConstellation className="landing-ambient-layer opacity-[0.52]" seed={661} />
                     </div>
                     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_16%,rgba(37,99,235,0.08),transparent_31%),radial-gradient(circle_at_78%_22%,rgba(234,179,8,0.08),transparent_31%),radial-gradient(circle_at_27%_86%,rgba(236,72,153,0.06),transparent_32%),radial-gradient(circle_at_80%_84%,rgba(16,185,129,0.07),transparent_32%)]" aria-hidden="true" />
                     <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-36 bg-gradient-to-b from-white/80 via-white/38 to-transparent" aria-hidden="true" />
@@ -528,10 +528,10 @@ export const AiLeakHomepage: React.FC = () => {
                             return (
                                 <article
                                     key={title}
-                                    className={`group relative overflow-hidden rounded-[2rem] border-2 ${style.border} bg-white/[0.9] text-left shadow-xl shadow-slate-900/[0.055] backdrop-blur-xl transition-colors duration-300 hover:bg-white lg:rounded-none lg:border-0 lg:bg-white/[0.88] lg:shadow-none`}
+                                    className={`landing-ai-card group relative overflow-hidden rounded-[2rem] border-2 ${style.border} bg-white/[0.9] text-left shadow-xl shadow-slate-900/[0.055] backdrop-blur-xl transition-colors duration-300 hover:bg-white lg:rounded-none lg:border-0 lg:bg-white/[0.88] lg:shadow-none`}
                                 >
                                     <div className="relative z-20 grid min-h-[18.5rem] overflow-hidden rounded-[1.85rem] md:grid-cols-[0.95fr_1.05fr] lg:min-h-[20rem] lg:rounded-none">
-                                        <div className={`relative min-h-[14rem] overflow-hidden border-b border-slate-200/70 bg-gradient-to-br ${style.imageBg} md:border-b-0 md:border-r md:border-slate-200/70`}>
+                                        <div className={`landing-ai-card__visual relative min-h-[14rem] overflow-hidden border-b border-slate-200/70 bg-gradient-to-br ${style.imageBg} md:border-b-0 md:border-r md:border-slate-200/70`}>
                                             <div className="absolute inset-4 overflow-hidden rounded-[1.25rem] border border-white/80 bg-white shadow-lg shadow-slate-900/[0.05] transition-transform duration-500 group-hover:scale-[1.018]">
                                                 <div className="flex h-6 shrink-0 select-none items-center gap-1.5 border-b border-slate-100 bg-slate-50/90 px-3">
                                                     <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
@@ -547,7 +547,7 @@ export const AiLeakHomepage: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="flex flex-col justify-center p-6 sm:p-8">
+                                        <div className="landing-ai-card__content flex flex-col justify-center p-6 sm:p-8">
                                             <h3 className="max-w-md text-2xl font-extrabold leading-tight tracking-tight text-slate-950 sm:text-[1.7rem]">
                                                 {title}
                                             </h3>
@@ -573,9 +573,9 @@ export const AiLeakHomepage: React.FC = () => {
             </section>
 
             {/* Understand What Your Customers Want Section */}
-                <section className="relative overflow-hidden bg-[linear-gradient(180deg,rgba(247,243,255,0.70)_0%,rgba(255,246,234,0.68)_58%,rgba(250,251,244,0.70)_100%)] py-24 sm:py-28 lg:overflow-visible">
-                <div className="pointer-events-none absolute inset-x-0 top-6 z-0 h-[40rem] overflow-hidden" aria-hidden="true">
-                    <FloatingDataNodes className="opacity-[0.38]" seed={662} />
+                <section className="landing-section landing-toolbox-section relative overflow-hidden bg-[linear-gradient(180deg,rgba(247,243,255,0.70)_0%,rgba(255,246,234,0.68)_58%,rgba(250,251,244,0.70)_100%)] py-24 sm:py-28 lg:overflow-visible">
+                <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-6 z-0 h-[40rem] overflow-hidden" aria-hidden="true">
+                    <FloatingDataNodes className="landing-ambient-layer opacity-[0.38]" seed={662} />
                 </div>
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(245,158,11,0.08),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(59,130,246,0.07),transparent_32%),radial-gradient(circle_at_18%_82%,rgba(236,72,153,0.06),transparent_32%),radial-gradient(circle_at_84%_78%,rgba(16,185,129,0.08),transparent_31%)]" aria-hidden="true" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-200/45 to-transparent" aria-hidden="true" />
@@ -589,9 +589,9 @@ export const AiLeakHomepage: React.FC = () => {
                         </p>
                     </div>
 
-                    <div className="mt-16 grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+                    <div className="landing-toolbox-grid mt-16 grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
                         {/* Interactive vertical selectors */}
-                        <div className="space-y-2.5">
+                        <div className="landing-toolbox-tabs space-y-2.5">
                             <h3 className="mb-4 text-left text-2xl font-extrabold tracking-tight text-slate-950">Funnels & Replays</h3>
                             {customerWantTabs.map(({ id, title, copy, icon: Icon }) => {
                                 const isActive = activeFeatureTab === id;
@@ -636,7 +636,7 @@ export const AiLeakHomepage: React.FC = () => {
                         </div>
 
                         {/* Large product screenshot container */}
-                        <div className="rounded-3xl border border-slate-200/80 bg-white/45 backdrop-blur-md p-3 shadow-xl relative group">
+                        <div className="landing-toolbox-preview rounded-3xl border border-slate-200/80 bg-white/45 backdrop-blur-md p-3 shadow-xl relative group">
                             <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden transition-all duration-500 group-hover:scale-[1.015] group-hover:rotate-0.5 origin-center">
                                 <div className="flex h-6 items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 font-mono text-[9px] text-slate-500 shrink-0 select-none">
                                     <div className="flex items-center gap-1.5">
@@ -659,9 +659,9 @@ export const AiLeakHomepage: React.FC = () => {
             </section>
 
             {/* Rejourney Marlin GitHub App Section */}
-                <section className="relative overflow-hidden bg-[linear-gradient(180deg,rgba(250,251,244,0.70)_0%,rgba(240,251,244,0.68)_52%,rgba(239,247,255,0.70)_100%)] px-5 py-24 sm:px-8 sm:py-28 lg:overflow-visible lg:px-10">
-                <div className="pointer-events-none absolute inset-x-0 top-8 z-0 h-[38rem] overflow-hidden" aria-hidden="true">
-                    <NetworkConstellation className="opacity-[0.42]" seed={873} />
+                <section className="landing-section landing-marlin-section relative overflow-hidden bg-[linear-gradient(180deg,rgba(250,251,244,0.70)_0%,rgba(240,251,244,0.68)_52%,rgba(239,247,255,0.70)_100%)] px-5 py-24 sm:px-8 sm:py-28 lg:overflow-visible lg:px-10">
+                <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-8 z-0 h-[38rem] overflow-hidden" aria-hidden="true">
+                    <NetworkConstellation className="landing-ambient-layer opacity-[0.42]" seed={873} />
                 </div>
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_18%,rgba(16,185,129,0.08),transparent_32%),radial-gradient(circle_at_86%_22%,rgba(37,99,235,0.07),transparent_33%),radial-gradient(circle_at_58%_92%,rgba(245,158,11,0.07),transparent_35%)]" aria-hidden="true" />
                 <div className="relative z-10 mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
@@ -694,8 +694,8 @@ export const AiLeakHomepage: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="relative mx-auto w-full max-w-xl">
-                        <div className="absolute -inset-5 rounded-[2rem] bg-cyan-200/30 blur-3xl" aria-hidden="true" />
+                    <div className="landing-marlin-art relative mx-auto w-full max-w-xl">
+                        <div className="landing-marlin-glow absolute -inset-5 rounded-[2rem] bg-cyan-200/30 blur-3xl" aria-hidden="true" />
                         <div className="relative overflow-hidden rounded-[1.75rem] border border-cyan-100 bg-white/70 p-3 shadow-2xl shadow-cyan-900/10 backdrop-blur-xl">
                             <img
                                 src={MARLIN_IMAGE}
@@ -703,7 +703,7 @@ export const AiLeakHomepage: React.FC = () => {
                                 className="aspect-square w-full rounded-[1.35rem] object-cover"
                             />
                         </div>
-                        <div className="relative -mt-12 ml-auto w-[88%] rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-xl backdrop-blur-md sm:w-[78%]">
+                        <div className="landing-marlin-suggestion relative -mt-12 ml-auto w-[88%] rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-xl backdrop-blur-md sm:w-[78%]">
                             <div className="flex items-center justify-between gap-4">
                                 <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                     Marlin suggestion
@@ -726,9 +726,9 @@ export const AiLeakHomepage: React.FC = () => {
             <FaqSection />
 
             {/* Bottom Call-To-Action (CTA) */}
-                <section className="relative overflow-hidden bg-[linear-gradient(180deg,rgba(239,247,255,0.70)_0%,rgba(246,243,255,0.70)_44%,rgba(255,248,239,0.78)_100%)] px-5 py-24 sm:px-8 sm:py-28 lg:px-10">
-                <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[36rem] overflow-hidden" aria-hidden="true">
-                    <TechRingsScanner className="opacity-[0.36]" seed={526} />
+                <section className="landing-section landing-sdk-section relative overflow-hidden bg-[linear-gradient(180deg,rgba(239,247,255,0.70)_0%,rgba(246,243,255,0.70)_44%,rgba(255,248,239,0.78)_100%)] px-5 py-24 sm:px-8 sm:py-28 lg:px-10">
+                <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-0 z-0 h-[36rem] overflow-hidden" aria-hidden="true">
+                    <TechRingsScanner className="landing-ambient-layer opacity-[0.36]" seed={526} />
                 </div>
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(245,158,11,0.07),transparent_31%),radial-gradient(circle_at_82%_20%,rgba(37,99,235,0.08),transparent_33%),radial-gradient(circle_at_50%_88%,rgba(16,185,129,0.07),transparent_35%)]" aria-hidden="true" />
                 <div className="relative z-10 mx-auto max-w-6xl">
@@ -743,7 +743,7 @@ export const AiLeakHomepage: React.FC = () => {
                     </div>
 
                     {/* Interactive Playground Grid */}
-                    <div className="grid items-center gap-8 rounded-3xl border border-slate-200/80 bg-white/45 p-6 shadow-xl ring-1 ring-slate-100/5 backdrop-blur-md sm:p-8 lg:grid-cols-[1fr_2fr]">
+                    <div className="landing-sdk-playground grid items-center gap-8 rounded-3xl border border-slate-200/80 bg-white/45 p-6 shadow-xl ring-1 ring-slate-100/5 backdrop-blur-md sm:p-8 lg:grid-cols-[1fr_2fr]">
                         
                         {/* Left Column: Platform selectors */}
                         <div className="flex flex-col gap-3 justify-center">
@@ -785,7 +785,7 @@ export const AiLeakHomepage: React.FC = () => {
                         </div>
 
                         {/* Right Column: Code block */}
-                        <div className="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl transition-all duration-300 hover:shadow-blue-500/10">
+                        <div className="landing-sdk-code-panel group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl transition-all duration-300 hover:shadow-blue-500/10">
                             <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/50 px-4 py-3">
                                 <div className="flex min-w-0 items-center gap-3">
                                     <div className="flex shrink-0 gap-2">
