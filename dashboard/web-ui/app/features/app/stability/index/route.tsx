@@ -10,6 +10,8 @@ import {
   Copy,
   Download,
   Loader,
+  Maximize2,
+  Minimize2,
   Play,
   Plus,
   Search,
@@ -52,6 +54,7 @@ import { dashboardPageHeaderProps } from '~/shell/navigation/dashboardPageMeta';
 import { usePathPrefix } from '~/shell/routing/usePathPrefix';
 
 type StabilityIssueKind = 'crashes' | 'errors' | 'anrs' | 'api_spikes';
+type MobileIssueDetailSize = 'compact' | 'expanded';
 
 type IgnoredEndpointOption = {
   pattern: string;
@@ -683,6 +686,7 @@ export const Stability: React.FC = () => {
   const [apiSpikes, setApiSpikes] = useState<ApiErrorSpikeRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedIssueKey, setExpandedIssueKey] = useState<string | null>(null);
+  const [mobileIssueDetailSize, setMobileIssueDetailSize] = useState<MobileIssueDetailSize>('compact');
   const [crashDetails, setCrashDetails] = useState<Record<string, CrashReport | null>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [ignoredEndpointPatterns, setIgnoredEndpointPatterns] = useState<string[]>([]);
@@ -825,6 +829,7 @@ export const Stability: React.FC = () => {
     if (!target) return;
 
     setExpandedIssueKey(target.key);
+    setMobileIssueDetailSize('compact');
     setTimeout(() => {
       const element = document.getElementById(makeDomId(target.key));
       if (element) {
@@ -837,6 +842,17 @@ export const Stability: React.FC = () => {
     () => allRows.find((row) => row.key === expandedIssueKey) || null,
     [allRows, expandedIssueKey],
   );
+
+  useEffect(() => {
+    setMobileIssueDetailSize('compact');
+  }, [expandedIssueKey]);
+
+  const handleIssueRowClick = (row: StabilityIssueRow, isExpanded: boolean) => {
+    setExpandedIssueKey(isExpanded ? null : row.key);
+    if (!isExpanded) {
+      setMobileIssueDetailSize('compact');
+    }
+  };
 
   useEffect(() => {
     if (!expandedRow || expandedRow.kind !== 'crashes') return;
@@ -1387,6 +1403,57 @@ export const Stability: React.FC = () => {
     );
   };
 
+  const renderMobileIssueDetailSheet = (row: StabilityIssueRow) => {
+    const meta = KIND_META[row.kind];
+    const isExpanded = mobileIssueDetailSize === 'expanded';
+
+    return (
+      <div
+        role="dialog"
+        aria-modal="false"
+        aria-label={`${meta.label} issue details`}
+        className={`fixed inset-x-2 bottom-2 z-[70] flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-950/20 transition-[max-height] duration-200 ease-out sm:hidden ${
+          isExpanded ? 'max-h-[calc(100dvh-1rem)]' : 'max-h-[54dvh]'
+        }`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="shrink-0 border-b border-slate-200 bg-white px-3 pb-2.5 pt-2">
+          <div className="mx-auto mb-2 h-1 w-12 rounded-full bg-slate-300" aria-hidden="true" />
+          <div className="flex min-w-0 items-center gap-2">
+            <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${meta.dotClass}`} aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{meta.label} detail</div>
+              <div className="truncate text-sm font-semibold text-slate-950" title={row.title}>
+                {row.title}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileIssueDetailSize(isExpanded ? 'compact' : 'expanded')}
+              className="inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs font-bold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+              aria-pressed={isExpanded}
+              aria-label={isExpanded ? 'Reduce issue detail sheet' : 'Expand issue detail sheet'}
+            >
+              {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              <span>{isExpanded ? 'Reduce' : 'Expand'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpandedIssueKey(null)}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+              aria-label="Close issue detail"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50/60 p-3">
+          {renderExpandedContent(row)}
+        </div>
+      </div>
+    );
+  };
+
   if ((isLoading && allRows.length === 0) || projectsLoading) {
     return <DashboardGhostLoader variant="list" />;
   }
@@ -1575,7 +1642,7 @@ export const Stability: React.FC = () => {
                 >
                   <div
                     className="group/row flex cursor-pointer items-center gap-4 px-4 py-3"
-                    onClick={() => setExpandedIssueKey(isExpanded ? null : row.key)}
+                    onClick={() => handleIssueRowClick(row, isExpanded)}
                   >
                     <div className="flex w-24 shrink-0 items-center gap-2">
                       <div className={`h-2.5 w-2.5 rounded-full transition-all ${isExpanded ? meta.dotClass : `bg-slate-300 ${meta.hoverDotClass}`}`} />
@@ -1654,9 +1721,12 @@ export const Stability: React.FC = () => {
                   </div>
 
                   {isExpanded && (
-                    <div className="cursor-default border-t border-slate-200 bg-slate-50/50 p-4 shadow-inner sm:p-5">
-                      {renderExpandedContent(row)}
-                    </div>
+                    <>
+                      {renderMobileIssueDetailSheet(row)}
+                      <div className="hidden cursor-default border-t border-slate-200 bg-slate-50/50 p-4 shadow-inner sm:block sm:p-5">
+                        {renderExpandedContent(row)}
+                      </div>
+                    </>
                   )}
                 </div>
               );
