@@ -109,11 +109,41 @@ function getPreferredHeatmapSessionId(screen: PreviewHeatmapScreen): string | nu
     return getHeatmapEvidenceSessionIds(screen)[0] ?? null;
 }
 
-function buildHeatmapImageUrlCandidates(screen: PreviewHeatmapScreen, isWebViewer: boolean): string[] {
+function parseTimestampedHeatmapImageUrl(url: string): { sessionId: string; timestamp: number } | null {
+    const frameMatch = url.match(/\/api\/session\/frame\/([^/?#]+)\/(\d+)(?:\.jpg)?(?:[?#].*)?$/);
+    if (frameMatch?.[1] && frameMatch?.[2]) {
+        const timestamp = Number(frameMatch[2]);
+        if (Number.isFinite(timestamp) && timestamp > 0) {
+            return { sessionId: frameMatch[1], timestamp: Math.round(timestamp) };
+        }
+    }
+
+    const thumbnailMatch = url.match(/\/api\/session\/thumbnail\/([^/?#]+)/);
+    if (thumbnailMatch?.[1]) {
+        try {
+            const parsed = new URL(url, typeof window !== 'undefined' ? window.location.href : 'http://localhost');
+            const timestamp = Number(parsed.searchParams.get('ts'));
+            if (Number.isFinite(timestamp) && timestamp > 0) {
+                return { sessionId: thumbnailMatch[1], timestamp: Math.round(timestamp) };
+            }
+        } catch {
+            return null;
+        }
+    }
+
+    return null;
+}
+
+function isGenericHeatmapThumbnailUrl(url: string): boolean {
+    return /\/api\/session\/thumbnail\/[^/?#]+(?:[?#].*)?$/.test(url) && !/[?&]ts=\d+/.test(url);
+}
+
+function buildHeatmapImageUrlCandidates(screen: PreviewHeatmapScreen): string[] {
     const candidates: string[] = [];
     const seen = new Set<string>();
     const addCandidate = (url: string | null | undefined) => {
         if (!url) return;
+        if (isGenericHeatmapThumbnailUrl(url)) return;
         const absoluteUrl = toAbsoluteHeatmapImageUrl(url);
         if (seen.has(absoluteUrl)) return;
         seen.add(absoluteUrl);
@@ -121,21 +151,9 @@ function buildHeatmapImageUrlCandidates(screen: PreviewHeatmapScreen, isWebViewe
     };
 
     addCandidate(screen.screenshotUrl);
-
-    const evidenceSessionIds = getHeatmapEvidenceSessionIds(screen);
-    if (!isWebViewer) {
-        const timestamp = Number(screen.screenFirstSeenMs);
-        const roundedTimestamp = Number.isFinite(timestamp) && timestamp > 0
-            ? Math.round(timestamp)
-            : null;
-        for (const sessionId of evidenceSessionIds.slice(0, 4)) {
-            const encodedSessionId = encodeURIComponent(sessionId);
-            if (roundedTimestamp) {
-                addCandidate(`/api/session/frame/${encodedSessionId}/${roundedTimestamp}.jpg`);
-                addCandidate(`/api/session/thumbnail/${encodedSessionId}?ts=${roundedTimestamp}`);
-            }
-            addCandidate(`/api/session/thumbnail/${encodedSessionId}`);
-        }
+    const timestamped = screen.screenshotUrl ? parseTimestampedHeatmapImageUrl(screen.screenshotUrl) : null;
+    if (timestamped) {
+        addCandidate(`/api/session/thumbnail/${timestamped.sessionId}?ts=${timestamped.timestamp}`);
     }
 
     return candidates;
@@ -728,12 +746,14 @@ const HeatmapPreview: React.FC<{
         [frameDimensions.pageHeight, frameDimensions.viewportHeight, isWebViewer, tile],
     );
     const coverUrlCandidates = useMemo(
-        () => buildHeatmapImageUrlCandidates(screen, isWebViewer),
-        [screen.screenshotUrl, screen.evidenceSessionId, screen.sessionIds, screen.screenFirstSeenMs, isWebViewer],
+        () => buildHeatmapImageUrlCandidates(screen),
+        [screen.screenshotUrl],
     );
     const coverUrlKey = coverUrlCandidates.join('|');
+    const hasScreenSpecificTimestamp = Number.isFinite(Number(screen.screenFirstSeenMs)) && Number(screen.screenFirstSeenMs) > 0;
     const shouldRenderRrwebPreview = isWebViewer
         && !tile
+        && hasScreenSpecificTimestamp
         && Boolean(getPreferredHeatmapSessionId(screen));
 
     useEffect(() => {

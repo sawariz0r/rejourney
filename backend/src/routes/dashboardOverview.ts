@@ -31,7 +31,6 @@ import { boundedTimeRangeToDays } from '../utils/analyticsTimeRange.js';
 import { buildRetentionCohortRows } from '../services/retentionCohorts.js';
 import { canOpenReplayFromSessionFields } from '../services/replayAvailability.js';
 import { generateAnonymousName } from '../utils/anonymousName.js';
-import { buildHeatmapScreenshotUrl } from '../utils/heatmapPreview.js';
 import { normalizeHeatmapScreenName, normalizeHeatmapScreenPath } from '../utils/heatmapScreens.js';
 import { buildClickHouseIgnoredEndpointCondition, normalizeIgnoredApiEndpointPatterns } from '../utils/apiEndpointIgnoreRules.js';
 import {
@@ -986,7 +985,11 @@ type HeatmapIterationSummary = {
 };
 
 function mergeHeatmapScreen(name: string, alltime: HeatmapScreenSource | undefined, rangeData: HeatmapScreenSource | undefined, includeTouchHotspots: boolean) {
-    const evidenceSource = rangeData?.sessionIds?.[0] ? rangeData : alltime?.sessionIds?.[0] ? alltime : (rangeData ?? alltime);
+    const hasScreenPreview = (source: HeatmapScreenSource | undefined) => Boolean(
+        source?.screenshotUrl && source?.screenFirstSeenMs && source?.sessionIds?.[0],
+    );
+    const previewSource = hasScreenPreview(rangeData) ? rangeData : hasScreenPreview(alltime) ? alltime : undefined;
+    const sessionSource = previewSource ?? (rangeData?.sessionIds?.[0] ? rangeData : alltime?.sessionIds?.[0] ? alltime : undefined);
     const rangeVisits = normalizeIssueCount(rangeData?.visits);
     const rangeRageTaps = normalizeIssueCount(rangeData?.rageTaps);
     const rangeErrors = normalizeIssueCount(rangeData?.errors);
@@ -1007,9 +1010,9 @@ function mergeHeatmapScreen(name: string, alltime: HeatmapScreenSource | undefin
         frictionScore: Number(
             (alltime?.frictionScore ?? rangeData?.frictionScore ?? 0).toFixed?.(1) ?? alltime?.frictionScore ?? rangeData?.frictionScore ?? 0,
         ),
-        screenshotUrl: alltime?.screenshotUrl ?? rangeData?.screenshotUrl ?? null,
-        sessionIds: evidenceSource?.sessionIds ?? alltime?.sessionIds ?? rangeData?.sessionIds ?? [],
-        screenFirstSeenMs: evidenceSource?.screenFirstSeenMs ?? alltime?.screenFirstSeenMs ?? rangeData?.screenFirstSeenMs ?? null,
+        screenshotUrl: previewSource?.screenshotUrl ?? null,
+        sessionIds: sessionSource?.sessionIds ?? [],
+        screenFirstSeenMs: previewSource?.screenFirstSeenMs ?? null,
         touchHotspots,
         pageWidth: alltime?.pageWidth ?? rangeData?.pageWidth ?? null,
         pageHeight: alltime?.pageHeight ?? rangeData?.pageHeight ?? null,
@@ -1028,7 +1031,7 @@ function mergeHeatmapScreen(name: string, alltime: HeatmapScreenSource | undefin
         primarySignal: getHeatmapPrimarySignal(rangeRageTapRatePer100, rangeErrorRatePer100, rangeExitRate),
         confidence: getHeatmapConfidence(rangeVisits, touchHotspots.length),
         priority: getHeatmapPriority(rangeImpactScore, rangeEstimatedAffectedSessions),
-        evidenceSessionId: evidenceSource?.sessionIds?.[0] ?? null,
+        evidenceSessionId: previewSource?.sessionIds?.[0] ?? null,
     };
 }
 
@@ -1075,9 +1078,6 @@ function updateHeatmapIterationScreen(
     }
     if (!screen.evidenceSessionId && values.evidenceSessionId) {
         screen.evidenceSessionId = values.evidenceSessionId;
-    }
-    if (!screen.screenshotUrl && values.screenshotSessionId) {
-        screen.screenshotUrl = buildHeatmapScreenshotUrl(values.screenshotSessionId);
     }
 }
 
@@ -1238,12 +1238,19 @@ function applyHeatmapIterationScreenshots(
 ): HeatmapIterationSummary {
     const applyScreenshot = (screen: HeatmapIterationScreen): HeatmapIterationScreen => {
         const fallbackSource = alltimeMap.get(screen.name) ?? frictionMap.get(screen.name);
+        const fallbackEvidenceSessionId = fallbackSource?.sessionIds?.[0] ?? null;
         const fallbackScreenshot = fallbackSource?.screenshotUrl ?? null;
+        const hasTimestampedFallback = Boolean(fallbackScreenshot && fallbackSource?.screenFirstSeenMs && fallbackEvidenceSessionId);
         const fallbackHotspots = fallbackSource?.touchHotspots ?? [];
         return {
             ...screen,
             screenshotUrl: screen.screenshotUrl ?? fallbackScreenshot,
-            screenFirstSeenMs: screen.screenFirstSeenMs ?? fallbackSource?.screenFirstSeenMs ?? null,
+            screenFirstSeenMs: screen.screenFirstSeenMs ?? (hasTimestampedFallback ? fallbackSource?.screenFirstSeenMs ?? null : null),
+            evidenceSessionId: screen.screenshotUrl
+                ? screen.evidenceSessionId
+                : hasTimestampedFallback
+                    ? fallbackEvidenceSessionId
+                    : screen.evidenceSessionId,
             touchHotspots: screen.touchHotspots?.length ? screen.touchHotspots : fallbackHotspots,
             pageWidth: screen.pageWidth ?? fallbackSource?.pageWidth ?? null,
             pageHeight: screen.pageHeight ?? fallbackSource?.pageHeight ?? null,
@@ -2565,7 +2572,7 @@ router.get(
                 'heatmaps',
                 scope.scopedProjectIds,
                 scope.normalizedTimeRange,
-                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v9` : 'v9',
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v10` : 'v10',
             ),
             routeName: 'heatmaps',
             res,
@@ -2633,7 +2640,7 @@ router.get(
                 `heatmaps:screen:${screenName}`,
                 scope.scopedProjectIds,
                 scope.normalizedTimeRange,
-                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v6` : 'v6',
+                scope.normalizedPlatform ? `platform:${scope.normalizedPlatform}:v7` : 'v7',
             ),
             routeName: 'heatmaps-screen',
             res,

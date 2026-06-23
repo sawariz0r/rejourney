@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import {
-    Activity,
     ArrowRight,
     Check,
     Copy,
     Feather,
-    Globe2,
-    MousePointerClick,
-    Play,
-    Route,
-    TrendingUp,
 } from 'lucide-react';
 import { getMarketingHomeCopy } from '~/shared/lib/internationalMarketing';
 import { useToast } from '~/shared/providers/ToastContext';
@@ -19,244 +13,17 @@ import { LandingThreeField } from './LandingThreeField';
 import { MarkAngular, MarkReactNative, MarkSwift, MarkNextJs, MarkRemix, MarkSvelte, MarkVue } from './PlatformMarks';
 import { FaqSection } from './FaqSection';
 import { CodeBlock } from '~/shared/ui/core/CodeBlock';
-import { NetworkConstellation, FloatingDataNodes, TechRingsScanner } from './SparseThreeAnimations';
 
 const LOGIN_PATH = '/login';
 const LANDING_IMAGE_VERSION = '20260619';
 const landingImage = (path: string) => `${path}?v=${LANDING_IMAGE_VERSION}`;
-const MARLIN_IMAGE = landingImage('/images/rejourney-marlin.png');
 
-const shellClass = 'mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10';
-
-const aiCards = [
-    {
-        step: 'Replay',
-        title: 'Rejourney Records Sessions',
-        copy: 'Rejourney records the exact session, events, console logs, network calls, and layout state behind the leak.',
-        image: landingImage('/images/session-replay-preview.png'),
-        imagePosition: 'center top',
-        href: '/ai-agent-handoff',
-    },
-    {
-        step: 'Observe',
-        title: 'AI Watches and Finds Leaks',
-        copy: 'Similar failures are grouped by affected users and severity so the highest-impact leak rises first.',
-        image: landingImage('/images/issues-feed.png'),
-        imagePosition: 'left top',
-        href: '/ai-funnel-leak-detection',
-    },
-    {
-        step: 'Handoff',
-        title: 'Funnel Fix Is Implemented',
-        copy: 'A markdown brief is packaged for Cursor, Claude, Codex, or your IDE with links back to the evidence.',
-        image: landingImage('/images/readme-general-demo.png'),
-        imagePosition: 'right top',
-        href: '/ai-agent-handoff',
-    },
-    {
-        step: 'Verify',
-        title: 'Watch the growth impact',
-        copy: 'Cohorts, regions, and revenue movement show whether the fix actually recovered users.',
-        image: landingImage('/images/geo-intelligence.png'),
-        imagePosition: 'center top',
-        href: '/geographic-analytics',
-    },
-];
-
-const aiCardStyles = [
-    {
-        imageBg: 'from-blue-50/80 via-white to-sky-50/70',
-        border: 'border-blue-500/80',
-        link: 'text-blue-700 hover:text-blue-800',
-    },
-    {
-        imageBg: 'from-yellow-50/80 via-white to-amber-50/70',
-        border: 'border-yellow-500/80',
-        link: 'text-yellow-700 hover:text-yellow-800',
-    },
-    {
-        imageBg: 'from-pink-50/80 via-white to-rose-50/70',
-        border: 'border-pink-500/80',
-        link: 'text-pink-700 hover:text-pink-800',
-    },
-    {
-        imageBg: 'from-green-50/80 via-white to-emerald-50/70',
-        border: 'border-green-500/80',
-        link: 'text-green-700 hover:text-green-800',
-    },
-];
-
-const puzzleOuterPaths = [
-    {
-        color: '#3b82f6',
-        d: 'M500 0 H36 Q0 0 0 36 V320',
-    },
-    {
-        color: '#f59e0b',
-        d: 'M500 0 H964 Q1000 0 1000 36 V320',
-    },
-    {
-        color: '#ec4899',
-        d: 'M0 320 V604 Q0 640 36 640 H500',
-    },
-    {
-        color: '#22c55e',
-        d: 'M500 640 H964 Q1000 640 1000 604 V320',
-    },
-];
-
-const puzzleSeamPaths = [
-    {
-        color: '#3b82f6',
-        d: 'M500 0 V116 C500 130 518 130 532 130 C568 130 596 158 596 192 C596 226 568 254 532 254 C518 254 500 254 500 268 V320',
-    },
-    {
-        color: '#ec4899',
-        d: 'M0 320 H130 C144 320 144 338 144 352 C144 388 172 416 208 416 C244 416 272 388 272 352 C272 338 272 320 286 320 H500',
-    },
-    {
-        color: '#22c55e',
-        d: 'M500 320 V372 C500 386 518 386 532 386 C568 386 596 414 596 448 C596 482 568 510 532 510 C518 510 500 510 500 524 V640',
-    },
-    {
-        color: '#f59e0b',
-        d: 'M500 320 H670 C684 320 684 338 684 352 C684 388 712 416 748 416 C784 416 812 388 812 352 C812 338 812 320 826 320 H1000',
-    },
-];
-
-const PuzzlePieceFrame: React.FC = () => (
-    <svg
-        className="pointer-events-none absolute inset-0 z-30 hidden h-full w-full overflow-visible lg:block"
-        viewBox="0 0 1000 640"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-    >
-        <defs>
-            <filter id="puzzle-piece-frame-shadow" x="-8%" y="-8%" width="116%" height="116%">
-                <feDropShadow dx="0" dy="9" stdDeviation="10" floodColor="#0f172a" floodOpacity="0.10" />
-            </filter>
-        </defs>
-        <g filter="url(#puzzle-piece-frame-shadow)">
-            {[...puzzleOuterPaths, ...puzzleSeamPaths].map(({ color, d }, index) => (
-                <path
-                    key={`${color}-${index}-underlay`}
-                    d={d}
-                    fill="none"
-                    stroke="rgba(255,255,255,0.92)"
-                    strokeWidth="10"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                />
-            ))}
-            {[...puzzleOuterPaths, ...puzzleSeamPaths].map(({ color, d }, index) => (
-                <path
-                    key={`${color}-${index}-stroke`}
-                    d={d}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth="3.25"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                />
-            ))}
-        </g>
-    </svg>
-);
-
-type CustomerWantTabId = 'analytics' | 'stability' | 'heatmaps' | 'journey' | 'revenue' | 'web';
-
-const customerWantTabs: Array<{
-    id: CustomerWantTabId;
-    title: string;
-    copy: string;
-    image: string;
-    icon: React.ComponentType<{ className?: string }>;
-    href: string;
-}> = [
-    {
-        id: 'analytics',
-        title: 'Session Replay',
-        copy: 'Record exact user journeys with lightweight DOM mutation tracking, capturing layout updates and console errors without degrading device battery or network bandwidth.',
-        image: landingImage('/images/session-replay-preview.png'),
-        icon: Play,
-        href: '/record-user-sessions',
-    },
-    {
-        id: 'stability',
-        title: 'Stability Monitoring',
-        copy: 'Group crashes, ANRs, errors, and API failures by affected sessions so engineering can see the replay evidence behind each incident.',
-        image: landingImage('/images/anr-issues.png'),
-        icon: Activity,
-        href: '/stability-monitoring',
-    },
-    {
-        id: 'heatmaps',
-        title: 'Heat Maps',
-        copy: 'Reveal ignored CTAs, repeated taps, rage clicks, and scroll patterns so product teams can spot friction before it drains conversion.',
-        image: landingImage('/images/heatmaps.png'),
-        icon: MousePointerClick,
-        href: '/heatmaps',
-    },
-    {
-        id: 'journey',
-        title: 'User Journey',
-        copy: 'Map real paths through your funnel, then open replay evidence behind every branch, loop, and drop-off.',
-        image: landingImage('/images/readme-user-journeys.png'),
-        icon: Route,
-        href: '/funnel-replay-evidence',
-    },
-    {
-        id: 'revenue',
-        title: 'Revenue Growth Tracking',
-        copy: 'Track revenue movement beside sessions, releases, retention, and affected users so growth work stays tied to evidence.',
-        image: landingImage('/images/growth-engines.png'),
-        icon: TrendingUp,
-        href: '/revenue-recovery-analytics',
-    },
-    {
-        id: 'web',
-        title: 'Geographic Analytics',
-        copy: 'Spot regional friction, sentiment clusters, and infrastructure trouble by country so teams can prioritize the markets that need attention.',
-        image: landingImage('/images/geo-analytics.png'),
-        icon: Globe2,
-        href: '/geographic-analytics',
-    },
-];
-
-const featureActiveStyles: Record<CustomerWantTabId, { border: string; badge: string; shadow: string }> = {
-    analytics: {
-        border: 'border-blue-200/70',
-        badge: 'bg-blue-50 border-blue-100 text-blue-600 shadow-sm shadow-blue-100/50',
-        shadow: 'shadow-[0_12px_30px_rgba(37,99,235,0.06)]'
-    },
-    stability: {
-        border: 'border-rose-200/70',
-        badge: 'bg-rose-50 border-rose-100 text-rose-600 shadow-sm shadow-rose-100/50',
-        shadow: 'shadow-[0_12px_30px_rgba(225,29,72,0.06)]'
-    },
-    heatmaps: {
-        border: 'border-orange-200/70',
-        badge: 'bg-orange-50 border-orange-100 text-orange-600 shadow-sm shadow-orange-100/50',
-        shadow: 'shadow-[0_12px_30px_rgba(234,88,12,0.06)]'
-    },
-    journey: {
-        border: 'border-violet-200/70',
-        badge: 'bg-violet-50 border-violet-100 text-violet-600 shadow-sm shadow-violet-100/50',
-        shadow: 'shadow-[0_12px_30px_rgba(124,58,237,0.06)]'
-    },
-    revenue: {
-        border: 'border-emerald-200/70',
-        badge: 'bg-emerald-50 border-emerald-100 text-emerald-600 shadow-sm shadow-emerald-100/50',
-        shadow: 'shadow-[0_12px_30px_rgba(5,150,105,0.06)]'
-    },
-    web: {
-        border: 'border-cyan-200/70',
-        badge: 'bg-cyan-50 border-cyan-100 text-cyan-600 shadow-sm shadow-cyan-100/50',
-        shadow: 'shadow-[0_12px_30px_rgba(6,182,212,0.06)]'
-    },
-};
+const SESSION_REPLAY_IMAGE = landingImage('/images/session-replay-preview.png');
+const ISSUE_FEED_IMAGE = landingImage('/images/issues-feed.png');
+const REVENUE_IMAGE = landingImage('/images/growth-engines.png');
+const STABILITY_IMAGE = landingImage('/images/anr-issues.png');
+const CONTEXT_HANDOFF_IMAGE = landingImage('/images/readme-general-demo.png');
+const GEO_IMAGE = landingImage('/images/geo-intelligence.png');
 
 const sdkPlatforms = [
     {
@@ -341,9 +108,6 @@ export const AiLeakHomepage: React.FC = () => {
     const trustCopy = homeCopy.trust;
     const { showToast } = useToast();
 
-    // Feature tabs state
-    const [activeFeatureTab, setActiveFeatureTab] = useState<CustomerWantTabId>('analytics');
-
     // Bottom CTA Playground state
     const [activeSdkPlatform, setActiveSdkPlatform] = useState<'nextjs' | 'reactnative' | 'swift' | 'vue'>('reactnative');
     const [copied, setCopied] = useState(false);
@@ -386,18 +150,16 @@ export const AiLeakHomepage: React.FC = () => {
         }
     };
 
-    const activeFeature = customerWantTabs.find(t => t.id === activeFeatureTab) || customerWantTabs[0];
     const activeSdk = sdkPlatforms.find(p => p.id === activeSdkPlatform) || sdkPlatforms[0];
     const activeSdkLanguage = activeSdk.id === 'swift' ? 'swift' : 'typescript';
     const activeSdkSetup = `${activeSdk.terminalCommands.join('\n')}\n\n${activeSdk.code}`;
 
     return (
         <div className="landing-home relative isolate w-full overflow-x-hidden bg-[#f8fbff] text-slate-900">
-            <LandingThreeField variant="landing-page" seed={211} className="landing-page-field opacity-90" />
 
             <div className="relative z-10">
                 {/* Hero Section */}
-                <section className="landing-hero-section relative overflow-hidden px-5 pb-28 pt-36 text-center sm:px-8 sm:pb-40 sm:pt-44 lg:overflow-visible lg:px-10 lg:pb-44 lg:pt-48">
+                <section className="landing-hero-section relative z-20 overflow-hidden px-5 pb-28 pt-36 text-center sm:px-8 sm:pb-40 sm:pt-44 lg:px-10 lg:pb-44 lg:pt-48">
                     <LandingThreeField variant="landing-hero" seed={11} />
 
                     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-36 bg-gradient-to-t from-white/75 via-white/35 to-transparent" aria-hidden="true" />
@@ -477,248 +239,120 @@ export const AiLeakHomepage: React.FC = () => {
                         </span>
                     </div>
                 </div>
-
-                {/* Hero Dashboard Preview */}
-                <div className="landing-hero-preview relative z-10 mx-auto mt-16 max-w-5xl rounded-3xl border border-slate-200 bg-slate-50 p-3 shadow-2xl overflow-hidden">
-                    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
-                        <div className="flex h-11 items-center gap-2 border-b border-slate-100 bg-slate-50 px-4">
-                            <span className="h-3 w-3 rounded-full bg-rose-400" />
-                            <span className="h-3 w-3 rounded-full bg-amber-400" />
-                            <span className="h-3 w-3 rounded-full bg-emerald-400" />
-                            <div className="mx-2 h-5 w-px shrink-0 bg-slate-200" />
-                            <span className="min-w-0 truncate font-mono text-xs font-bold text-slate-400">https://rejourney.co/dashboard/leaks</span>
-                        </div>
-                        <img 
-                            src={landingImage('/images/landing-replay-theater.png')}
-                            alt="Rejourney Issue Detection" 
-                            className="w-full h-auto object-cover" 
-                        />
-                    </div>
-                </div>
             </section>
 
-            <div className="relative overflow-hidden bg-[linear-gradient(180deg,#f1f8ff_0%,#f7f3ff_24%,#fff6ea_48%,#effbf4_73%,#eef7ff_100%)]">
-                <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_15%_9%,rgba(37,99,235,0.10),transparent_31%),radial-gradient(circle_at_86%_22%,rgba(139,92,246,0.09),transparent_34%),radial-gradient(circle_at_18%_52%,rgba(245,158,11,0.10),transparent_34%),radial-gradient(circle_at_82%_78%,rgba(16,185,129,0.10),transparent_34%)]" aria-hidden="true" />
-                <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(255,255,255,0.55)_0%,rgba(255,255,255,0.18)_28%,rgba(255,255,255,0.12)_56%,rgba(255,255,255,0.40)_100%)]" aria-hidden="true" />
+            <div className="landing-after-hero relative z-10 overflow-hidden bg-[linear-gradient(180deg,#f8fafc_0%,#f4f7fe_25%,#faf6ff_50%,#f4faf6_75%,#f8fafc_100%)]">
+                <LandingThreeField variant="landing-sparse" seed={307} className="landing-after-hero-field" />
+                <div className="pointer-events-none absolute inset-0 z-[0] bg-[radial-gradient(circle_at_15%_9%,rgba(37,99,235,0.015),transparent_31%),radial-gradient(circle_at_86%_22%,rgba(139,92,246,0.015),transparent_34%),radial-gradient(circle_at_18%_52%,rgba(245,158,11,0.015),transparent_34%),radial-gradient(circle_at_82%_78%,rgba(16,185,129,0.015),transparent_34%)]" aria-hidden="true" />
+                <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(255,255,255,0.35)_0%,rgba(255,255,255,0.12)_28%,rgba(255,255,255,0.08)_56%,rgba(255,255,255,0.25)_100%)]" aria-hidden="true" />
                 <div className="pointer-events-none absolute inset-x-0 top-[33rem] z-[1] h-px bg-gradient-to-r from-transparent via-sky-200/45 to-transparent" aria-hidden="true" />
 
-            {/* Self-Healing Loop Section */}
-                <section className="landing-section landing-ai-loop-section relative overflow-hidden border-t border-transparent bg-[linear-gradient(180deg,rgba(241,248,255,0.76)_0%,rgba(247,243,255,0.70)_100%)] px-5 py-24 sm:px-8 sm:py-28 lg:px-10">
-                    <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-8 z-0 h-[44rem] overflow-hidden" aria-hidden="true">
-                        <NetworkConstellation className="landing-ambient-layer opacity-[0.52]" seed={661} />
-                    </div>
-                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_16%,rgba(37,99,235,0.08),transparent_31%),radial-gradient(circle_at_78%_22%,rgba(234,179,8,0.08),transparent_31%),radial-gradient(circle_at_27%_86%,rgba(236,72,153,0.06),transparent_32%),radial-gradient(circle_at_80%_84%,rgba(16,185,129,0.07),transparent_32%)]" aria-hidden="true" />
-                    <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-36 bg-gradient-to-b from-white/80 via-white/38 to-transparent" aria-hidden="true" />
-                
-                <div className="relative z-10 mx-auto max-w-7xl">
-                    <div className="mx-auto max-w-4xl text-center">
-
-                        <h2 className="mt-4 font-display text-4xl font-extrabold tracking-tight bg-gradient-to-br from-slate-950 via-blue-950 to-sky-900 bg-clip-text text-transparent sm:text-5xl pb-1">
-                            Self-Healing Funnel Leaks
-                        </h2>
-
-                    </div>
-
-                    <div className="relative mx-auto mt-14 max-w-[78rem]">
-                        <div className="relative lg:rounded-[2.35rem] lg:shadow-[0_28px_70px_rgba(15,23,42,0.10)]">
-                            <div className="relative z-10 grid gap-6 lg:grid-cols-2 lg:gap-0 lg:overflow-hidden lg:rounded-[2.35rem] lg:bg-white/[0.76] lg:ring-1 lg:ring-white/80">
-                        {aiCards.map(({ title, copy, image, imagePosition, href }, index) => {
-                            const style = aiCardStyles[index % aiCardStyles.length];
-
-                            return (
-                                <article
-                                    key={title}
-                                    className={`landing-ai-card group relative overflow-hidden rounded-[2rem] border-2 ${style.border} bg-white/[0.9] text-left shadow-xl shadow-slate-900/[0.055] backdrop-blur-xl transition-colors duration-300 hover:bg-white lg:rounded-none lg:border-0 lg:bg-white/[0.88] lg:shadow-none`}
-                                >
-                                    <div className="relative z-20 grid min-h-[18.5rem] overflow-hidden rounded-[1.85rem] md:grid-cols-[0.95fr_1.05fr] lg:min-h-[20rem] lg:rounded-none">
-                                        <div className={`landing-ai-card__visual relative min-h-[14rem] overflow-hidden border-b border-slate-200/70 bg-gradient-to-br ${style.imageBg} md:border-b-0 md:border-r md:border-slate-200/70`}>
-                                            <div className="absolute inset-4 overflow-hidden rounded-[1.25rem] border border-white/80 bg-white shadow-lg shadow-slate-900/[0.05] transition-transform duration-500 group-hover:scale-[1.018]">
-                                                <div className="flex h-6 shrink-0 select-none items-center gap-1.5 border-b border-slate-100 bg-slate-50/90 px-3">
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-                                                </div>
-                                                <img
-                                                    src={image}
-                                                    alt={title}
-                                                    className="h-[calc(100%-1.5rem)] w-full object-cover object-top opacity-95 transition-opacity duration-300 group-hover:opacity-100"
-                                                    style={{ objectPosition: imagePosition }}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="landing-ai-card__content flex flex-col justify-center p-6 sm:p-8">
-                                            <h3 className="max-w-md text-2xl font-extrabold leading-tight tracking-tight text-slate-950 sm:text-[1.7rem]">
-                                                {title}
-                                            </h3>
-                                            <p className="mt-4 max-w-md text-[0.98rem] font-medium leading-7 text-slate-600">
-                                                {copy}
-                                            </p>
-                                            <Link
-                                                to={href}
-                                                className={`mt-7 inline-flex w-fit items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider transition-all hover:translate-x-0.5 ${style.link}`}
-                                            >
-                                                Learn more <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-                                            </Link>
-                                        </div>
-                                    </div>
-                                </article>
-                            );
-                        })}
-                            </div>
-                            <PuzzlePieceFrame />
+            {/* Detailed Marlin Product Sections */}
+            <section className="landing-section relative z-10 overflow-hidden bg-transparent px-5 py-12 sm:px-8 sm:py-16 lg:px-10">
+                <div className="mx-auto max-w-7xl space-y-32">
+                    
+                    {/* Section: Replay Context */}
+                    <div className="space-y-8">
+                        <div className="mx-auto max-w-4xl text-center">
+                            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Replay context</p>
+                            <h3 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
+                                First, Rejourney keeps the exact user session attached.
+                            </h3>
+                            <p className="mt-4 text-base font-medium leading-8 text-slate-600">
+                                The repair note is grounded in the replay timeline: user actions, console events, network failures, DOM state, and the specific sessions that prove the leak is real.
+                            </p>
+                        </div>
+                        <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70">
+                            <img src={SESSION_REPLAY_IMAGE} alt="Rejourney session replay screen showing user journey steps and timeline context" className="w-full rounded-[1.35rem] object-cover" />
                         </div>
                     </div>
-                </div>
-            </section>
 
-            {/* Understand What Your Customers Want Section */}
-                <section className="landing-section landing-toolbox-section relative overflow-hidden bg-[linear-gradient(180deg,rgba(247,243,255,0.70)_0%,rgba(255,246,234,0.68)_58%,rgba(250,251,244,0.70)_100%)] py-24 sm:py-28 lg:overflow-visible">
-                <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-6 z-0 h-[40rem] overflow-hidden" aria-hidden="true">
-                    <FloatingDataNodes className="landing-ambient-layer opacity-[0.38]" seed={662} />
-                </div>
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(245,158,11,0.08),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(59,130,246,0.07),transparent_32%),radial-gradient(circle_at_18%_82%,rgba(236,72,153,0.06),transparent_32%),radial-gradient(circle_at_84%_78%,rgba(16,185,129,0.08),transparent_31%)]" aria-hidden="true" />
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-200/45 to-transparent" aria-hidden="true" />
-                <div className={`${shellClass} relative z-10`}>
-                    <div className="mx-auto max-w-3xl text-center">
-                        <h2 className="font-display text-4xl font-extrabold tracking-tight bg-gradient-to-br from-slate-950 via-blue-950 to-sky-900 bg-clip-text text-transparent sm:text-5xl pb-1">
-                           A Full Toolbox for Conversion Growth
-                        </h2>
-                        <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-500 font-medium">
-                            Stop guessing why checkouts or sign-ups leak. Capture user behavior, compile technical context, and handshake directly with coding agents.
-                        </p>
-                    </div>
-
-                    <div className="landing-toolbox-grid mt-16 grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
-                        {/* Interactive vertical selectors */}
-                        <div className="landing-toolbox-tabs space-y-2.5">
-                            <h3 className="mb-4 text-left text-2xl font-extrabold tracking-tight text-slate-950">Funnels & Replays</h3>
-                            {customerWantTabs.map(({ id, title, copy, icon: Icon }) => {
-                                const isActive = activeFeatureTab === id;
-                                const activeStyle = featureActiveStyles[id] || featureActiveStyles.analytics;
-
-                                return (
-                                    <button
-                                        key={id}
-                                        onClick={() => setActiveFeatureTab(id)}
-                                        className={`w-full rounded-2xl border text-left transition-all duration-300 ${
-                                            isActive 
-                                                ? `bg-white/85 p-4 ${activeStyle.border} ${activeStyle.shadow} backdrop-blur-lg ring-1 ring-slate-100/5 scale-[1.01]` 
-                                                : 'border-transparent bg-transparent px-4 py-3 hover:border-slate-200/50 hover:bg-white/35 hover:shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
-                                        }`}
-                                    >
-                                        <div className="flex gap-3.5">
-                                            <div className={`mt-0.5 h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border transition-all duration-300 ${
-                                                isActive ? activeStyle.badge : 'bg-transparent border-transparent text-slate-400 hover:text-slate-700'
-                                            }`}>
-                                                <Icon className="h-4 w-4" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <h4 className="flex items-center gap-1.5 text-base font-bold tracking-tight text-slate-900">
-                                                    {title}
-                                                </h4>
-                                                {isActive && (
-                                                    <div className="mt-2.5 space-y-2.5 transition-all duration-300">
-                                                        <p className="text-sm font-medium leading-6 text-slate-500">{copy}</p>
-                                                        <Link 
-                                                            to={activeFeature.href} 
-                                                            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-sky-700 transition-colors hover:translate-x-0.5"
-                                                        >
-                                                            Learn more <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                                                        </Link>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </button>
-                                );
-                            })}
+                    {/* Section: Issue Detection */}
+                    <div className="grid gap-12 lg:grid-cols-[0.42fr_0.58fr] lg:items-center">
+                        <div className="space-y-4">
+                            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Issue detection</p>
+                            <h3 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
+                                Then, Marlin watches the ranked leak feed.
+                            </h3>
+                            <p className="text-base font-medium leading-8 text-slate-600">
+                                Rejourney groups repeated checkout failures, rage taps, broken onboarding paths, and abandoned funnels into signals. Marlin reads the same evidence your team sees: affected users, session count, failure cluster, and why the leak matters.
+                            </p>
                         </div>
-
-                        {/* Large product screenshot container */}
-                        <div className="landing-toolbox-preview rounded-3xl border border-slate-200/80 bg-white/45 backdrop-blur-md p-3 shadow-xl relative group">
-                            <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden transition-all duration-500 group-hover:scale-[1.015] group-hover:rotate-0.5 origin-center">
-                                <div className="flex h-6 items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 font-mono text-[9px] text-slate-500 shrink-0 select-none">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-350" />
-                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-350" />
-                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-350" />
-                                    </div>
-                                    <span className="opacity-80">rejourney.co/dashboard</span>
-                                    <div className="w-10" />
-                                </div>
+                        <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70">
+                            <div className="overflow-hidden rounded-[1.35rem] aspect-[16/10]">
                                 <img 
-                                    src={activeFeature.image} 
-                                    alt={activeFeature.title} 
-                                    className="w-full h-auto object-cover opacity-95 group-hover:opacity-100 transition-opacity duration-300"
+                                    src={ISSUE_FEED_IMAGE} 
+                                    alt="Rejourney issue detection feed showing ranked leaks list" 
+                                    className="w-[165%] max-w-none h-full object-cover object-left" 
                                 />
                             </div>
                         </div>
                     </div>
-                </div>
-            </section>
 
-            {/* Rejourney Marlin GitHub App Section */}
-                <section className="landing-section landing-marlin-section relative overflow-hidden bg-[linear-gradient(180deg,rgba(250,251,244,0.70)_0%,rgba(240,251,244,0.68)_52%,rgba(239,247,255,0.70)_100%)] px-5 py-24 sm:px-8 sm:py-28 lg:overflow-visible lg:px-10">
-                <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-8 z-0 h-[38rem] overflow-hidden" aria-hidden="true">
-                    <NetworkConstellation className="landing-ambient-layer opacity-[0.42]" seed={873} />
-                </div>
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_18%,rgba(16,185,129,0.08),transparent_32%),radial-gradient(circle_at_86%_22%,rgba(37,99,235,0.07),transparent_33%),radial-gradient(circle_at_58%_92%,rgba(245,158,11,0.07),transparent_35%)]" aria-hidden="true" />
-                <div className="relative z-10 mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-                    <div className="max-w-3xl">
-                        <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">
-                            Rejourney Marlin for GitHub
-                        </p>
-                        <h2 className="mt-5 max-w-4xl font-display text-4xl font-extrabold leading-tight tracking-normal text-slate-950 sm:text-6xl lg:text-7xl">
-                            Meet Marlin. 
-                        </h2>
-                        <p className="mt-6 max-w-2xl text-lg font-medium leading-8 text-slate-600 sm:text-xl">
-                            Marlin is the Rejourney GitHub App that uses replay context to identify funnel and revenue issues, then suggests code fixes your team can review from the repository.
-                        </p>
-
-                        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                            <Link
-                                to="/rejourney-marlin"
-                                className="inline-flex min-h-[54px] items-center justify-center gap-2 rounded-full bg-blue-600 px-7 text-sm font-bold text-white shadow-xl shadow-blue-200/70 transition hover:-translate-y-0.5 hover:bg-blue-700"
-                            >
-                                Explore Marlin
-                                <ArrowRight className="h-4 w-4" />
-                            </Link>
-                            <Link
-                                to="/pricing"
-                                className="inline-flex min-h-[54px] items-center justify-center gap-2 rounded-full border border-slate-300 bg-white/70 px-7 text-sm font-bold text-slate-700 shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-white"
-                            >
-                                See pricing
-                                <ArrowRight className="h-4 w-4" />
-                            </Link>
+                    {/* Section: Revenue Priority */}
+                    <div className="grid gap-12 lg:grid-cols-[0.58fr_0.42fr] lg:items-center">
+                        <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70 lg:order-first">
+                            <img src={REVENUE_IMAGE} alt="Rejourney revenue growth dashboard with revenue trend and release markers" className="w-full rounded-[1.35rem] object-cover" />
+                        </div>
+                        <div className="space-y-4">
+                            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Revenue priority</p>
+                            <h3 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
+                                The issues are ranked by business impact.
+                            </h3>
+                            <p className="text-base font-medium leading-8 text-slate-600">
+                                Marlin can tell the difference between cosmetic noise and a checkout path that blocks revenue. Revenue movement, affected cohorts, and release timing travel into the GitHub suggestion so engineers know why the fix should move now.
+                            </p>
                         </div>
                     </div>
 
-                    <div className="landing-marlin-art relative mx-auto w-full max-w-xl">
-                        <div className="landing-marlin-glow absolute -inset-5 rounded-[2rem] bg-cyan-200/30 blur-3xl" aria-hidden="true" />
-                        <div className="relative overflow-hidden rounded-[1.75rem] border border-cyan-100 bg-white/70 p-3 shadow-2xl shadow-cyan-900/10 backdrop-blur-xl">
-                            <img
-                                src={MARLIN_IMAGE}
-                                alt="Rejourney Marlin artwork"
-                                className="aspect-square w-full rounded-[1.35rem] object-cover"
-                            />
+                    {/* Section: Stability Evidence */}
+                    <div className="grid gap-12 lg:grid-cols-[0.42fr_0.58fr] lg:items-center">
+                        <div className="space-y-4">
+                            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Stability evidence</p>
+                            <h3 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
+                                Crashes, ANRs, and API spikes become fix paths too.
+                            </h3>
+                            <p className="text-base font-medium leading-8 text-slate-600">
+                                When the leak is technical, Marlin uses the same issue feed to connect stack traces, device cohorts, endpoint spikes, and replay context to likely files. The result is a focused repair brief instead of a vague stability ticket.
+                            </p>
                         </div>
-                        <div className="landing-marlin-suggestion relative -mt-12 ml-auto w-[88%] rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-xl backdrop-blur-md sm:w-[78%]">
-                            <div className="flex items-center justify-between gap-4">
-                                <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Marlin suggestion
-                                </span>
-                                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                                    450 Replays 
-                                </span>
-                            </div>
-                            <div className="mt-3 space-y-2 font-mono text-xs font-semibold text-slate-700">
-                                <p>checkout/PaymentSheet.tsx</p>
-                                <p className="text-emerald-700">+ retry failed intent before empty state</p>
-                                <p className="text-blue-700">+ guard CTA when plan quote is stale</p>
-                            </div>
+                        <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70">
+                            <img src={STABILITY_IMAGE} alt="Rejourney stability monitoring table with crashes, ANRs, API spikes, events, and affected users" className="w-full rounded-[1.35rem] object-cover" />
                         </div>
                     </div>
+
+                    {/* Section: IDE Handoff */}
+                    <div className="grid gap-12 lg:grid-cols-[0.58fr_0.42fr] lg:items-center">
+                        <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70 lg:order-first">
+                            <img src={CONTEXT_HANDOFF_IMAGE} alt="Rejourney Markdown context handoff showing Copy md and Open Cursor options" className="w-full rounded-[1.35rem] object-cover" />
+                        </div>
+                        <div className="space-y-4">
+                            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">IDE Handoff</p>
+                            <h3 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
+                                Generate a copyable .MD context file for your coding agent.
+                            </h3>
+                            <p className="text-base font-medium leading-8 text-slate-600">
+                                Once the issue is analyzed, Marlin packs the entire diagnostic context—replay events, affected user sessions, and console stack traces—into an LLM-optimized Markdown payload. Copy it straight to your clipboard to paste into Cursor, Claude, or Copilot for an instant, precise code fix.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Section: Conversion Growth */}
+                    <div className="grid gap-12 lg:grid-cols-[0.42fr_0.58fr] lg:items-center">
+                        <div className="space-y-4">
+                            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Growth impact</p>
+                            <h3 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
+                                Watch the conversion and growth impact.
+                            </h3>
+                            <p className="text-base font-medium leading-8 text-slate-600">
+                                Track conversion recovery, regional cohorts, and revenue movement in real time. Verify that released fixes actually restored conversions and healed the leak.
+                            </p>
+                        </div>
+                        <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70">
+                            <img src={GEO_IMAGE} alt="Rejourney geographical growth dashboard showing conversion recovery by region" className="w-full rounded-[1.35rem] object-cover" />
+                        </div>
+                    </div>
+
                 </div>
             </section>
 
@@ -726,11 +360,9 @@ export const AiLeakHomepage: React.FC = () => {
             <FaqSection />
 
             {/* Bottom Call-To-Action (CTA) */}
-                <section className="landing-section landing-sdk-section relative overflow-hidden bg-[linear-gradient(180deg,rgba(239,247,255,0.70)_0%,rgba(246,243,255,0.70)_44%,rgba(255,248,239,0.78)_100%)] px-5 py-24 sm:px-8 sm:py-28 lg:px-10">
-                <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-0 z-0 h-[36rem] overflow-hidden" aria-hidden="true">
-                    <TechRingsScanner className="landing-ambient-layer opacity-[0.36]" seed={526} />
-                </div>
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(245,158,11,0.07),transparent_31%),radial-gradient(circle_at_82%_20%,rgba(37,99,235,0.08),transparent_33%),radial-gradient(circle_at_50%_88%,rgba(16,185,129,0.07),transparent_35%)]" aria-hidden="true" />
+                <section className="landing-section landing-sdk-section relative z-10 overflow-hidden bg-transparent px-5 py-24 sm:px-8 sm:py-28 lg:px-10">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-200/20 to-transparent" aria-hidden="true" />
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(245,158,11,0.015),transparent_31%),radial-gradient(circle_at_82%_20%,rgba(37,99,235,0.015),transparent_33%),radial-gradient(circle_at_50%_88%,rgba(16,185,129,0.015),transparent_35%)]" aria-hidden="true" />
                 <div className="relative z-10 mx-auto max-w-6xl">
                     {/* Header */}
                     <div className="mx-auto max-w-3xl text-center mb-16">

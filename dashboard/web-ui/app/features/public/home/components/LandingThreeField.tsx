@@ -26,6 +26,17 @@ type FlowLineState = {
     y: number;
 };
 
+type SparseMeshState = {
+    mesh: Mesh;
+    baseX: number;
+    baseY: number;
+    baseZ: number;
+    drift: number;
+    phase: number;
+    speed: number;
+    spin: number;
+};
+
 const createSeededRandom = (seed: number) => {
     let value = seed % 2147483647;
     if (value <= 0) value += 2147483646;
@@ -216,6 +227,7 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
             let ring2Group: Group | null = null;
             let flowGroup: Group | null = null;
             const flowLines: FlowLineState[] = [];
+            const sparseMeshes: SparseMeshState[] = [];
 
             if (isHero) {
                 const globeGeometry = register(new THREE.SphereGeometry(2.25, 42, 24));
@@ -274,29 +286,96 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
                         color: 0x3b82f6,
                         wireframe: true,
                         transparent: true,
-                        opacity: 0.28,
+                        opacity: 0.22,
                         blending: THREE.AdditiveBlending,
                         depthWrite: false,
                     }));
 
-                    ring1 = new THREE.Mesh(register(new THREE.TorusGeometry(3.2, 0.35, 8, 80)), ringMaterial);
+                    ring1 = new THREE.Mesh(register(new THREE.TorusGeometry(3.2, 0.22, 8, 80)), ringMaterial);
                     ring1.rotation.x = Math.PI / 4.2;
                     ring1.position.set(-3.5, 1.8, -1.2);
                     ring1.scale.setScalar(1.2);
                     root.add(ring1);
 
-                    ring2 = new THREE.Mesh(register(new THREE.TorusGeometry(3.6, 0.25, 6, 60)), ringMaterial);
+                    ring2 = new THREE.Mesh(register(new THREE.TorusGeometry(3.6, 0.18, 6, 60)), ringMaterial);
                     ring2.rotation.y = Math.PI / 3.5;
                     ring2.position.set(4.0, -1.8, -1.4);
                     ring2.scale.setScalar(1.25);
                     root.add(ring2);
 
-                    ring3 = new THREE.Mesh(register(new THREE.TorusGeometry(2.8, 0.15, 4, 50)), ringMaterial);
+                    ring3 = new THREE.Mesh(register(new THREE.TorusGeometry(2.8, 0.12, 4, 50)), ringMaterial);
                     ring3.rotation.z = Math.PI / 6;
                     ring3.rotation.x = -Math.PI / 4;
                     ring3.position.set(0, 0, -1.0);
                     ring3.scale.setScalar(0.9);
                     root.add(ring3);
+
+                    const createWireMaterial = (color: number, opacity: number) => register(new THREE.MeshBasicMaterial({
+                        color,
+                        wireframe: true,
+                        transparent: true,
+                        opacity,
+                        blending: THREE.NormalBlending,
+                        depthWrite: false,
+                    }));
+
+                    const addSparseMesh = (mesh: Mesh, x: number, y: number, z: number, scale: number) => {
+                        mesh.position.set(x, y, z);
+                        mesh.rotation.set(random() * Math.PI, random() * Math.PI, random() * Math.PI);
+                        mesh.scale.setScalar(scale);
+                        root.add(mesh);
+                        sparseMeshes.push({
+                            mesh,
+                            baseX: x,
+                            baseY: y,
+                            baseZ: z,
+                            drift: 0.16 + random() * 0.34,
+                            phase: random() * Math.PI * 2,
+                            speed: 0.08 + random() * 0.16,
+                            spin: 0.35 + random() * 0.7,
+                        });
+                    };
+
+                    addSparseMesh(
+                        new THREE.Mesh(
+                            register(new THREE.SphereGeometry(1.05, 26, 15)),
+                            createWireMaterial(0x38bdf8, 0.18),
+                        ),
+                        -5.35,
+                        2.35,
+                        -1.2,
+                        1.0,
+                    );
+                    addSparseMesh(
+                        new THREE.Mesh(
+                            register(new THREE.IcosahedronGeometry(1.05, 1)),
+                            createWireMaterial(0x2563eb, 0.16),
+                        ),
+                        5.05,
+                        1.15,
+                        -1.8,
+                        0.92,
+                    );
+                    addSparseMesh(
+                        new THREE.Mesh(
+                            register(new THREE.OctahedronGeometry(0.92, 1)),
+                            createWireMaterial(0x0f766e, 0.14),
+                        ),
+                        -1.75,
+                        -2.25,
+                        -1.4,
+                        0.95,
+                    );
+                    addSparseMesh(
+                        new THREE.Mesh(
+                            register(new THREE.TorusKnotGeometry(0.72, 0.045, 96, 8)),
+                            createWireMaterial(0xf59e0b, 0.13),
+                        ),
+                        2.1,
+                        2.95,
+                        -2.1,
+                        0.9,
+                    );
                 }
 
                 if (isLandingPage) {
@@ -355,9 +434,9 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
                     root.position.set(0, 0, 0);
                     root.scale.setScalar(width < 640 ? 1.04 : 1.18);
                 } else if (isLandingSparse) {
-                    camera.position.z = 7.5;
-                    root.position.set(0, 0, 0);
-                    root.scale.setScalar(1.0);
+                    camera.position.z = width < 640 ? 8.45 : 7.5;
+                    root.position.set(width < 640 ? 0.2 : 0, width < 640 ? -0.2 : 0, 0);
+                    root.scale.setScalar(width < 640 ? 0.76 : (width < 1024 ? 0.9 : 1.0));
                 } else if (width < 640) {
                     camera.position.z = 9.3;
                     root.position.set(width < 430 ? 0.98 : 1.12, -1.42, -0.35);
@@ -413,6 +492,17 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
                     ring2.rotation.z = elapsed * 0.006 * ambientSpeed;
                     ring3.rotation.x = -elapsed * 0.005 * ambientSpeed;
                     ring3.rotation.z = -elapsed * 0.01 * ambientSpeed;
+                }
+
+                if (isLandingSparse && sparseMeshes.length) {
+                    sparseMeshes.forEach((shape, index) => {
+                        const pulse = elapsed * shape.speed + shape.phase;
+                        shape.mesh.position.x = shape.baseX + Math.sin(pulse) * shape.drift;
+                        shape.mesh.position.y = shape.baseY + Math.cos(pulse * 0.82 + index) * shape.drift * 0.74;
+                        shape.mesh.position.z = shape.baseZ + Math.sin(pulse * 0.62) * shape.drift * 0.45;
+                        shape.mesh.rotation.x += 0.0025 * shape.spin;
+                        shape.mesh.rotation.y += 0.0035 * shape.spin;
+                    });
                 }
 
                 root.rotation.y = Math.sin(elapsed * (isLandingPage ? 0.07 : 0.1)) * (isLandingPage ? 0.025 : 0.05);
@@ -518,7 +608,7 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
         : (isHero ? 'landing-three-field--hero' : 'landing-three-field--sparse');
     const wrapperClassName = isLandingPage
         ? `pointer-events-none fixed inset-0 z-0 overflow-hidden ${variantClassName} ${className}`
-        : `pointer-events-none absolute inset-0 z-0 overflow-hidden lg:overflow-visible ${variantClassName} ${className}`;
+        : `pointer-events-none absolute inset-0 z-0 overflow-hidden ${isHero ? '' : 'lg:overflow-visible'} ${variantClassName} ${className}`;
 
     return (
         <div
@@ -582,7 +672,7 @@ export const LandingThreeField: React.FC<LandingThreeFieldProps> = ({
                                 opacity: 0.34;
                             }
                             .landing-three-field--sparse .landing-three-canvas {
-                                opacity: 0.30;
+                                opacity: 0.38;
                             }
                         }
                         @media (prefers-reduced-motion: reduce) {

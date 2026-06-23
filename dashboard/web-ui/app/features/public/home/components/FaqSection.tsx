@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { ChevronDown, MessageSquare } from 'lucide-react';
-import { FloatingDataNodes, NetworkConstellation } from './SparseThreeAnimations';
 
 interface FaqItem {
     question: string;
@@ -50,14 +49,8 @@ export const FaqSection: React.FC = () => {
     };
 
     return (
-        <section className="landing-section landing-faq-section relative overflow-hidden border-t border-transparent bg-transparent px-6 py-24 sm:px-8 sm:py-32 lg:px-12">
-            <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-0 z-0 h-full min-h-[34rem] overflow-hidden" aria-hidden="true">
-                <NetworkConstellation className="landing-ambient-layer opacity-[0.34]" seed={946} />
-            </div>
-            <div className="landing-ambient-stage pointer-events-none absolute inset-x-0 top-4 z-0 h-[34rem] overflow-hidden sm:top-8 lg:h-[38rem]" aria-hidden="true">
-                <FloatingDataNodes variant="alternate" className="landing-ambient-layer opacity-[0.42]" seed={947} />
-            </div>
-            <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_17%_21%,rgba(37,99,235,0.08),transparent_31%),radial-gradient(circle_at_82%_18%,rgba(16,185,129,0.08),transparent_32%),radial-gradient(circle_at_52%_86%,rgba(245,158,11,0.07),transparent_34%)]" aria-hidden="true" />
+        <section className="landing-section landing-faq-section relative z-10 overflow-hidden border-t border-transparent bg-transparent px-6 py-24 sm:px-8 sm:py-32 lg:px-12">
+            <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_17%_21%,rgba(37,99,235,0.015),transparent_31%),radial-gradient(circle_at_82%_18%,rgba(16,185,129,0.015),transparent_32%),radial-gradient(circle_at_52%_86%,rgba(245,158,11,0.01),transparent_34%)]" aria-hidden="true" />
             <div className="relative z-10 mx-auto max-w-7xl">
                 <div className="grid gap-12 lg:grid-cols-[1.1fr_1.9fr] lg:items-start">
                     
@@ -72,8 +65,8 @@ export const FaqSection: React.FC = () => {
                         </div>
 
                         {/* Minimalist support link instead of card */}
-                        <div className="pt-2 text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                            <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
+                        <div className="pt-2 text-sm text-slate-500 flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4 text-blue-500 shrink-0" />
                             <span>
                                 Have specialized requirements?{' '}
                                 <button onClick={handleCopyEmail} className="text-blue-600 font-bold hover:underline transition select-none">
@@ -90,19 +83,19 @@ export const FaqSection: React.FC = () => {
                             return (
                                 <div 
                                     key={index}
-                                    className="py-5 sm:py-6 transition-all duration-300"
+                                    className="py-6 sm:py-7 transition-all duration-300"
                                 >
                                     <button
                                         onClick={() => toggleFaq(index)}
                                         className="flex w-full items-start justify-between gap-6 text-left"
                                         aria-expanded={isOpen}
                                     >
-                                        <span className={`text-base font-bold tracking-tight transition-colors duration-250 ${
+                                        <span className={`text-lg sm:text-xl font-bold tracking-tight transition-colors duration-250 leading-snug ${
                                             isOpen ? 'text-blue-600' : 'text-slate-900 hover:text-blue-600'
                                         }`}>
                                             {faq.question}
                                         </span>
-                                        <ChevronDown className={`h-5 w-5 shrink-0 mt-0.5 text-slate-400 transition-all duration-300 ${
+                                        <ChevronDown className={`h-6 w-6 shrink-0 mt-0.5 text-slate-400 transition-all duration-300 ${
                                             isOpen ? 'rotate-180 text-blue-600' : ''
                                         }`} />
                                     </button>
@@ -110,11 +103,11 @@ export const FaqSection: React.FC = () => {
                                     {/* Pure CSS grid height transition container */}
                                     <div 
                                         className={`grid transition-all duration-300 ease-in-out ${
-                                            isOpen ? 'grid-rows-[1fr] opacity-100 mt-3.5' : 'grid-rows-[0fr] opacity-0'
+                                            isOpen ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'
                                         }`}
                                     >
                                         <div className="overflow-hidden">
-                                            <p className="text-sm font-medium leading-relaxed text-slate-500 pr-6">
+                                            <p className="text-[15px] sm:text-base font-medium leading-relaxed text-slate-600 pr-6">
                                                 {faq.answer}
                                             </p>
                                         </div>

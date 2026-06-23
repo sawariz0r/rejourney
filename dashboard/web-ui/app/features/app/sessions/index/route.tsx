@@ -7,7 +7,6 @@ import {
   ScanEye,
   ChevronUp,
   ChevronDown,
-  Download,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -618,11 +617,19 @@ export const RecordingsList: React.FC = () => {
           ? 'active'
           : 'pending';
   const smartCaptureButtonClass = {
-    loading: 'border-black bg-slate-100 text-slate-500 shadow-neo-sm cursor-not-allowed',
-    locked: 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo',
-    off: 'border-black bg-white text-black shadow-neo-sm hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo',
-    active: 'border-black bg-[#86efac] text-black shadow-neo-sm hover:-translate-y-0.5 hover:shadow-neo',
-    pending: 'border-black bg-[#fef08a] text-black shadow-neo-sm hover:-translate-y-0.5 hover:shadow-neo',
+    loading: 'border-slate-200/40 bg-slate-500/5 text-slate-400 cursor-not-allowed',
+    locked: 'border-amber-200/80 bg-amber-50/60 text-amber-700 hover:bg-amber-50/85 hover:border-amber-300 hover:text-amber-800 shadow-sm hover:shadow-md hover:shadow-amber-500/5 hover:scale-[1.01]',
+    off: 'border-amber-200/80 bg-amber-50/60 text-amber-700 hover:bg-amber-50/85 hover:border-amber-300 hover:text-amber-800 shadow-sm hover:shadow-md hover:shadow-amber-500/5 hover:scale-[1.01]',
+    active: 'border-emerald-200/80 bg-emerald-50/60 text-emerald-700 hover:bg-emerald-50/85 hover:border-emerald-300 hover:text-emerald-800 shadow-sm hover:shadow-md hover:shadow-emerald-500/5 hover:scale-[1.01]',
+    pending: 'border-amber-200/80 bg-amber-50/60 text-amber-700 hover:bg-amber-50/85 hover:border-amber-300 hover:text-amber-800 shadow-sm hover:shadow-md hover:shadow-amber-500/5 hover:scale-[1.01]',
+  }[smartCaptureStatusTone];
+
+  const smartCaptureDotClass = {
+    loading: 'bg-slate-300 animate-pulse',
+    locked: 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]',
+    off: 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]',
+    active: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse',
+    pending: 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]',
   }[smartCaptureStatusTone];
   const smartCaptureStatusLabel = isLoadingSmartCapture
     ? 'Loading'
@@ -735,36 +742,19 @@ export const RecordingsList: React.FC = () => {
               type="button"
               disabled={isLoadingSmartCapture}
               onClick={() => setIsSmartCaptureModalOpen(true)}
-              className={`smart-capture-trigger relative inline-flex h-11 w-11 shrink-0 items-center justify-center border-2 border-black transition-all disabled:pointer-events-none sm:h-9 sm:w-9 ${smartCaptureButtonClass}`}
+              className={`smart-capture-trigger relative inline-flex h-9 items-center justify-center gap-2 rounded-full border px-3.5 text-[13px] font-semibold backdrop-blur-md transition-all duration-300 disabled:pointer-events-none hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] ${smartCaptureButtonClass}`}
               title={`Smart Capture: ${smartCaptureStatusLabel}`}
               aria-label={`Smart Capture: ${smartCaptureStatusLabel}`}
             >
-              {isLoadingSmartCapture ? <Loader className="h-4 w-4 shrink-0 animate-spin" aria-hidden /> : <ScanEye className="h-4 w-4 shrink-0" aria-hidden />}
+              {isLoadingSmartCapture ? (
+                <Loader className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+              ) : (
+                <ScanEye className="h-4 w-4 shrink-0" aria-hidden />
+              )}
+              <span>Smart Capture</span>
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full transition-all duration-300 ${smartCaptureDotClass}`} />
             </button>
           )}
-          <button
-            onClick={() => {
-              const params = new URLSearchParams();
-              if (selectedProjectId) params.append('projectId', selectedProjectId);
-              params.append('hasRecording', 'true');
-              const filterParams = groupsToArchiveQuery(queryGroups);
-              Object.entries(filterParams).forEach(([k, v]) => {
-                if (v !== undefined && v !== null) params.append(k, String(v));
-              });
-              const qExport = debouncedSearchQuery.trim();
-              if (qExport) params.append('q', qExport);
-              params.append('sort', primarySortKey);
-              params.append('sortDir', primarySortDir);
-              const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-              if (browserTimeZone) params.append('timeZone', browserTimeZone);
-              if (window.navigator.language) params.append('locale', window.navigator.language);
-              window.location.href = `/api/sessions/export?${params.toString()}`;
-            }}
-            className="inline-flex h-9 w-9 items-center justify-center border-2 border-black bg-white text-black shadow-neo-sm transition-all hover:-translate-y-0.5 hover:bg-[#ecfeff] hover:shadow-neo"
-            title="Export CSV"
-          >
-            <Download className="w-4 h-4" />
-          </button>
         </DashboardPageHeader>
 
         {/* Search & Controls Row */}

@@ -3329,7 +3329,7 @@ export async function getHeatmapsOverview(projectId: string, timeRange?: string,
     if (timeRange) params.set('timeRange', timeRange);
     if (normalizedPlatform) params.set('platform', normalizedPlatform);
     const endpoint = `/api/overview/heatmaps?${params.toString()}`;
-    const cacheKey = `overview:heatmaps:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v10`;
+    const cacheKey = `overview:heatmaps:${projectId}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v11`;
     return fetchWithCache<HeatmapOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 
@@ -3352,7 +3352,7 @@ export async function getHeatmapScreenOverview(
     if (timeRange) params.set('timeRange', timeRange);
     if (normalizedPlatform) params.set('platform', normalizedPlatform);
     const endpoint = `/api/overview/heatmaps/screen?${params.toString()}`;
-    const cacheKey = `overview:heatmaps:screen:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v7`;
+    const cacheKey = `overview:heatmaps:screen:${projectId}:${screenName}:${timeRange || 'all'}:${normalizedPlatform || 'all'}:v8`;
     return fetchWithCache<HeatmapScreenOverviewResponse>(endpoint, {}, cacheKey, ANALYTICS_BOOTSTRAP_CACHE_TTL);
 }
 

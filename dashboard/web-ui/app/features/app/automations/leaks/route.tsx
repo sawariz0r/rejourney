@@ -768,6 +768,12 @@ function GithubNotLinked({
                 <Github className="h-4 w-4 text-white" aria-hidden />
                 <span className="text-white">{suspended ? 'Review GitHub access' : 'Connect GitHub repository'}</span>
             </Link>
+            <Link
+                to="/ai-funnel-leak-detection"
+                className="text-xs font-semibold text-[#1a73e8] hover:text-[#1558b0] hover:underline"
+            >
+                Learn more
+            </Link>
         </div>
     );
 }

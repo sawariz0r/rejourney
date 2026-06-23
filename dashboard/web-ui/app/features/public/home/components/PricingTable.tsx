@@ -451,7 +451,7 @@ export const PricingTable: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="border-t border-slate-200 pt-12 sm:pt-16 lg:pt-20">
+                <div className="relative z-10 border-t border-slate-200 pt-12 sm:pt-16 lg:pt-20">
                     <div className="mb-8 border border-slate-200 bg-white/60 backdrop-blur-md px-6 py-5 text-left shadow-sm">
                         <span className="block text-xl font-bold tracking-tight text-slate-950">{copy.comparisonTitle}</span>
                         <span className="mt-1.5 block text-sm font-medium leading-normal text-slate-500">{copy.comparisonSubtitle}</span>

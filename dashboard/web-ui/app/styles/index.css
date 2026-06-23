@@ -3749,16 +3749,6 @@
   background: #f8fafd !important;
 }
 
-.rejourney-replays-page :where(.smart-capture-trigger) {
-  border-color: #000000 !important;
-  border-width: 2px !important;
-  border-radius: 0 !important;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 1) !important;
-}
-
-.rejourney-replays-page :where(.smart-capture-trigger:hover:not(:disabled)) {
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 1) !important;
-}
 
 .rejourney-replays-page .smart-capture-retro-surface :where(.border-black) {
   border-color: #000000 !important;
@@ -5278,6 +5268,17 @@
   border-color: rgba(218, 220, 224, 0.5) !important;
 }
 
+.landing-home .landing-hero-section,
+.landing-home .landing-after-hero {
+  isolation: isolate;
+}
+
+.landing-home .landing-after-hero-field {
+  inset: -14rem 0 0 0;
+  height: calc(100% + 14rem);
+  opacity: 0.62;
+}
+
 @media (max-width: 640px) {
   .landing-home {
     background:
@@ -5292,6 +5293,12 @@
     padding-top: 7.25rem !important;
     padding-bottom: 5.25rem !important;
     overflow: hidden !important;
+  }
+
+  .landing-home .landing-after-hero-field {
+    inset: -8rem 0 0 0;
+    height: calc(100% + 8rem);
+    opacity: 0.44;
   }
 
   .landing-home .landing-hero-title {

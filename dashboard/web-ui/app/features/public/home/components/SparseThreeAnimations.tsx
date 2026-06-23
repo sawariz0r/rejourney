@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import type { BufferAttribute, Group, Object3D } from 'three';
+import type { BufferAttribute, Group, Object3D, Vector3, Mesh } from 'three';
 
 type SparseAnimationProps = {
     className?: string;
@@ -365,7 +365,7 @@ export const NetworkConstellation: React.FC<SparseAnimationProps> = ({
  * 2. FloatingDataNodes: Rotating wireframe geometric data nodes
  * drifting slowly, ideal for section sides or clean background visual hooks.
  */
-export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'default' | 'alternate' }> = ({
+export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'default' | 'alternate' | 'diamond-only' }> = ({
     className = '',
     seed = 101,
     variant = 'default',
@@ -436,9 +436,38 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                 phase: number;
             }> = [];
 
-            const isAlt = variant === 'alternate';
-
-            const shapesData = isAlt
+            const shapesData: Array<{
+                geo: any;
+                color: number;
+                x: number;
+                y: number;
+                z: number;
+                rotX: number;
+                rotY: number;
+                floatSp: number;
+                floatAm: number;
+                innerGeo?: any;
+                innerColor?: number;
+                mobileX?: number;
+                tabletX?: number;
+            }> = variant === 'diamond-only'
+                ? [
+                      // Octahedron wireframe (spinning diamond)
+                      {
+                          geo: register(new THREE.OctahedronGeometry(0.75, 1)),
+                          color: 0x7c3aed, // Violet
+                          x: 0.2,
+                          y: -0.5,
+                          z: -1.2,
+                          rotX: 0.2,
+                          rotY: 0.35,
+                          floatSp: 0.45,
+                          floatAm: 0.18,
+                          mobileX: 0.8,
+                          tabletX: 1.8,
+                      },
+                  ]
+                : variant === 'alternate'
                 ? [
                       // Torus wireframe
                       {
@@ -451,6 +480,7 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                           rotY: 0.25,
                           floatSp: 0.6,
                           floatAm: 0.22,
+                          mobileX: -1.0,
                       },
                       // Octahedron wireframe
                       {
@@ -463,6 +493,7 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                           rotY: 0.35,
                           floatSp: 0.45,
                           floatAm: 0.18,
+                          mobileX: 1.0,
                       },
                   ]
                 : [
@@ -479,6 +510,7 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                           floatAm: 0.25,
                           innerGeo: register(new THREE.BoxGeometry(0.48, 0.48, 0.48)),
                           innerColor: 0x1d4ed8, // Blue
+                          mobileX: -1.0,
                       },
                       // Icosahedron wireframe
                       {
@@ -491,6 +523,7 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                           rotY: 0.28,
                           floatSp: 0.4,
                           floatAm: 0.2,
+                          mobileX: 1.0,
                       },
                   ];
 
@@ -610,19 +643,23 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
                 renderer.setSize(width, height, false);
                 camera.aspect = width / height;
 
+                const vpWidth = window.innerWidth;
+
                 // Responsive positioning adjustments
-                if (width < 768) {
-                    // Pull meshes closer inwards on smaller viewports
-                    activeMeshes.forEach((mesh, idx) => {
-                        mesh.group.position.x = idx === 0 ? -1.0 : 1.0;
-                        mesh.baseX = idx === 0 ? -1.0 : 1.0;
-                    });
-                    meshesGroup.scale.setScalar(width < 640 ? 0.54 : 0.72);
+                activeMeshes.forEach((mesh, idx) => {
+                    let targetX = shapesData[idx].x;
+                    if (vpWidth < 768) {
+                        targetX = shapesData[idx].mobileX !== undefined ? shapesData[idx].mobileX : (idx === 0 ? -1.0 : 1.0);
+                    } else if (vpWidth < 1024) {
+                        targetX = shapesData[idx].tabletX !== undefined ? shapesData[idx].tabletX : shapesData[idx].x;
+                    }
+                    mesh.group.position.x = targetX;
+                    mesh.baseX = targetX;
+                });
+
+                if (vpWidth < 768) {
+                    meshesGroup.scale.setScalar(vpWidth < 640 ? 0.54 : 0.72);
                 } else {
-                    activeMeshes.forEach((mesh, idx) => {
-                        mesh.group.position.x = idx === 0 ? shapesData[idx].x : shapesData[idx].x;
-                        mesh.baseX = shapesData[idx].x;
-                    });
                     meshesGroup.scale.setScalar(1.0);
                 }
 
@@ -710,6 +747,168 @@ export const FloatingDataNodes: React.FC<SparseAnimationProps & { variant?: 'def
         </div>
     );
 };
+
+/**
+ * WaveFieldAnimation: Subtle wave‑field particle background.
+ * Renders a grid of points whose y‑position oscillates over time, creating a flowing field effect.
+ * Matches the visual language of other sections and avoids gimmicky 3‑D loops.
+ */
+export const WaveFieldAnimation: React.FC<SparseAnimationProps> = ({
+  className = '',
+  seed = 123,
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !canvasRef.current || !containerRef.current) return;
+
+    let frameId = 0;
+    let disposed = false;
+    let isVisible = true;
+    let resizeObserver: ResizeObserver | null = null;
+    let visibilityObserver: IntersectionObserver | null = null;
+    let teardownScene: (() => void) | null = null;
+
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    const random = createSeededRandom(seed);
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const bootScene = async () => {
+      const THREE = await import('three');
+      if (disposed || !canvasRef.current) return;
+      const startsSmall = (container.clientWidth || window.innerWidth || 1024) < 640;
+
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        alpha: true,
+        antialias: true,
+        powerPreference: 'high-performance',
+      });
+      renderer.setClearAlpha(0);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, startsSmall ? 1.1 : 1.5));
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+      camera.position.set(0, 0, 6);
+
+      const disposables: Array<{ dispose: () => void }> = [];
+      const register = <T extends { dispose: () => void }>(item: T) => {
+        disposables.push(item);
+        return item;
+      };
+
+      // Build point field
+      const pointCount = startsSmall ? 200 : 400;
+      const positions = new Float32Array(pointCount * 3);
+      const colors = new Float32Array(pointCount * 3);
+
+      for (let i = 0; i < pointCount; i++) {
+        const x = (random() - 0.5) * (startsSmall ? 6 : 9);
+        const z = (random() - 0.5) * (startsSmall ? 2 : 3);
+        const y = 0;
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = z;
+        const hue = 200 + random() * 60; // bluish tones
+        const color = new THREE.Color(`hsl(${hue}, 80%, 70%)`);
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+      }
+
+      const geometry = register(new THREE.BufferGeometry());
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+      const material = register(
+        new THREE.PointsMaterial({
+          size: startsSmall ? 0.12 : 0.18,
+          vertexColors: true,
+          transparent: true,
+          opacity: startsSmall ? 0.5 : 0.8,
+          blending: THREE.NormalBlending,
+          depthWrite: false,
+        })
+      );
+
+      const points = new THREE.Points(geometry, material);
+      scene.add(points);
+
+      const resize = () => {
+        const width = Math.max(1, container.clientWidth);
+        const height = Math.max(1, container.clientHeight);
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      };
+      resize();
+      resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(container);
+
+      const clock = new THREE.Clock();
+
+      const renderFrame = () => {
+        frameId = 0;
+        const t = clock.getElapsedTime();
+        const posAttr = geometry.getAttribute('position') as any;
+        for (let i = 0; i < pointCount; i++) {
+          const x = positions[i * 3];
+          const z = positions[i * 3 + 2];
+          const wave = Math.sin((x + t) * 1.5) * Math.cos((z + t) * 1.2) * (startsSmall ? 0.3 : 0.5);
+          posAttr.setXYZ(i, x, wave, z);
+        }
+        posAttr.needsUpdate = true;
+        renderer.render(scene, camera);
+        if (!reducedMotion && !disposed && isVisible) {
+          frameId = window.requestAnimationFrame(renderFrame);
+        }
+      };
+
+      visibilityObserver = new IntersectionObserver(([entry]) => {
+        isVisible = entry?.isIntersecting ?? true;
+        if (isVisible && !frameId && !reducedMotion && !disposed) {
+          frameId = window.requestAnimationFrame(renderFrame);
+        } else if (!isVisible && frameId) {
+          window.cancelAnimationFrame(frameId);
+          frameId = 0;
+        }
+      }, { threshold: 0.05 });
+      visibilityObserver.observe(container);
+
+      renderFrame();
+
+      teardownScene = () => {
+        if (frameId) window.cancelAnimationFrame(frameId);
+        resizeObserver?.disconnect();
+        visibilityObserver?.disconnect();
+        disposables.forEach((d) => d.dispose());
+        renderer.dispose();
+      };
+    };
+
+    bootScene().catch(() => {
+      if (canvas) canvas.style.opacity = '0';
+    });
+
+    return () => {
+      disposed = true;
+      teardownScene?.();
+    };
+  }, [seed]);
+
+  return (
+    <div ref={containerRef} className={`pointer-events-none absolute inset-0 z-0 overflow-hidden ${className}`}>
+      <canvas ref={canvasRef} className="w-full h-full block opacity-[0.85]" />
+    </div>
+  );
+};
+
+/**
+ * 3. TechRingsScanner: Concentric wireframe rings spinning on different axes,
+ * featuring a central pulsing core/glow. Perfect for CTA background decoration.
+ */
 
 /**
  * 3. TechRingsScanner: Concentric wireframe rings spinning on different axes,
@@ -915,6 +1114,481 @@ export const TechRingsScanner: React.FC<SparseAnimationProps> = ({
     return (
         <div ref={containerRef} className={`pointer-events-none absolute inset-0 z-0 overflow-hidden ${className}`}>
             <canvas ref={canvasRef} className="w-full h-full block opacity-90" />
+        </div>
+    );
+};
+
+/**
+ * 4. WireframeInfinityLoop: A clean, minimalist 3D wireframe infinity loop (lemniscate)
+ * with sliding flow dots, matching the technical wireframe aesthetic of the page.
+ */
+export const WireframeInfinityLoop: React.FC<SparseAnimationProps> = ({
+    className = '',
+    seed = 88,
+}) => {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !canvasRef.current || !containerRef.current) return;
+
+        let frameId = 0;
+        let disposed = false;
+        let isVisible = true;
+        let resizeObserver: ResizeObserver | null = null;
+        let visibilityObserver: IntersectionObserver | null = null;
+        let teardownScene: (() => void) | null = null;
+
+        const canvas = canvasRef.current;
+        const container = containerRef.current;
+        const random = createSeededRandom(seed);
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const pointerFine = window.matchMedia('(pointer: fine)').matches;
+
+        // Mouse tracking for subtle tilt reaction
+        const mouse = { x: 0, y: 0, targetX: 0, targetY: 0 };
+        const handleMouseMove = (e: MouseEvent) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.targetX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.targetY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        };
+
+        if (pointerFine) {
+            window.addEventListener('mousemove', handleMouseMove, { passive: true });
+        }
+
+        const bootScene = async () => {
+            const THREE = await import('three');
+            if (disposed || !canvasRef.current) return;
+            const startsSmall = (container.clientWidth || window.innerWidth || 1024) < 640;
+
+            const renderer = new THREE.WebGLRenderer({
+                canvas,
+                alpha: true,
+                antialias: true,
+                powerPreference: 'high-performance',
+            });
+            renderer.setClearAlpha(0);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, startsSmall ? 1.1 : 1.5));
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+            camera.position.set(0, 0, 7.5);
+
+            const disposables: Array<{ dispose: () => void }> = [];
+            const register = <T extends { dispose: () => void }>(item: T) => {
+                disposables.push(item);
+                return item;
+            };
+
+            const rootGroup = new THREE.Group();
+            scene.add(rootGroup);
+
+            // Custom parametric 3D Infinity Loop (Lemniscate of Bernoulli with Z-depth modulation)
+            class InfinityCurve extends THREE.Curve<Vector3> {
+                constructor(public scaleFactor = 1) {
+                    super();
+                }
+                getPoint(t: number, optionalTarget = new THREE.Vector3()) {
+                    const angle = t * 2 * Math.PI;
+                    const denom = 1 + Math.sin(angle) * Math.sin(angle);
+                    const x = (this.scaleFactor * Math.cos(angle)) / denom;
+                    const y = (this.scaleFactor * Math.sin(angle) * Math.cos(angle)) / denom;
+                    const z = 0.28 * Math.sin(2 * angle) * this.scaleFactor;
+                    return optionalTarget.set(x, y, z);
+                }
+            }
+
+            // Outer Infinity Loop Line (single-pixel thin line loop)
+            const outerPath = new InfinityCurve(1.75);
+            const outerPoints = outerPath.getPoints(120);
+            const outerGeo = register(new THREE.BufferGeometry().setFromPoints(outerPoints));
+            const outerMat = register(new THREE.LineBasicMaterial({
+                color: 0x2563eb, // Blue
+                transparent: true,
+                opacity: startsSmall ? 0.35 : 0.65,
+                blending: THREE.NormalBlending,
+                depthWrite: false,
+            }));
+            const outerLine = new THREE.LineLoop(outerGeo, outerMat);
+            rootGroup.add(outerLine);
+
+            // Inner Infinity Loop Line (slightly scaled down and cyan)
+            const innerPath = new InfinityCurve(1.58);
+            const innerPoints = innerPath.getPoints(120);
+            const innerGeo = register(new THREE.BufferGeometry().setFromPoints(innerPoints));
+            const innerMat = register(new THREE.LineBasicMaterial({
+                color: 0x06b6d4, // Cyan
+                transparent: true,
+                opacity: startsSmall ? 0.25 : 0.45,
+                blending: THREE.NormalBlending,
+                depthWrite: false,
+            }));
+            const innerLine = new THREE.LineLoop(innerGeo, innerMat);
+            rootGroup.add(innerLine);
+
+            // Sliding flow dots along the outer curve representing data flow
+            const dotGeo = register(new THREE.SphereGeometry(0.038, 8, 8));
+            const dotMat = register(new THREE.MeshBasicMaterial({
+                color: 0x22d3ee, // Bright cyan/sky glow
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending,
+            }));
+
+            const flowDots: Array<{ mesh: Mesh; offset: number; speed: number }> = [];
+            const dotCount = startsSmall ? 3 : 5;
+            for (let i = 0; i < dotCount; i++) {
+                const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+                rootGroup.add(dotMesh);
+                flowDots.push({
+                    mesh: dotMesh,
+                    offset: i / dotCount,
+                    speed: 0.06,
+                });
+            }
+
+            // Background micro-particles (slow drifting stars)
+            const starCount = startsSmall ? 16 : 30;
+            const starPositions = new Float32Array(starCount * 3);
+            const starColors = new Float32Array(starCount * 3);
+            const starStates: Array<{ x: number; y: number; z: number; speed: number; phase: number }> = [];
+
+            for (let i = 0; i < starCount; i++) {
+                const x = (random() - 0.5) * 8.0;
+                const y = (random() - 0.5) * 5.0;
+                const z = -1.0 - random() * 2.0;
+
+                starPositions[i * 3] = x;
+                starPositions[i * 3 + 1] = y;
+                starPositions[i * 3 + 2] = z;
+
+                const color = new THREE.Color(random() > 0.5 ? 0x2563eb : 0x06b6d4);
+                starColors[i * 3] = color.r;
+                starColors[i * 3 + 1] = color.g;
+                starColors[i * 3 + 2] = color.b;
+
+                starStates.push({
+                    x,
+                    y,
+                    z,
+                    speed: 0.1 + random() * 0.15,
+                    phase: random() * Math.PI * 2,
+                });
+            }
+
+            const starGeometry = register(new THREE.BufferGeometry());
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+
+            const starCanvas = document.createElement('canvas');
+            starCanvas.width = 16;
+            starCanvas.height = 16;
+            const sCtx = starCanvas.getContext('2d');
+            if (sCtx) {
+                sCtx.clearRect(0, 0, 16, 16);
+                const g = sCtx.createRadialGradient(8, 8, 0, 8, 8, 8);
+                g.addColorStop(0, 'rgba(255,255,255,1)');
+                g.addColorStop(0.4, 'rgba(56,189,248,0.5)');
+                g.addColorStop(1, 'rgba(0,0,0,0)');
+                sCtx.fillStyle = g;
+                sCtx.fillRect(0, 0, 16, 16);
+            }
+            const starTexture = register(new THREE.CanvasTexture(starCanvas));
+
+            const starMaterial = register(new THREE.PointsMaterial({
+                size: startsSmall ? 0.08 : 0.12,
+                vertexColors: true,
+                transparent: true,
+                opacity: startsSmall ? 0.30 : 0.55,
+                map: starTexture,
+                blending: THREE.NormalBlending,
+                depthWrite: false,
+            }));
+
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+
+            const resize = () => {
+                const width = Math.max(1, container.clientWidth);
+                const height = Math.max(1, container.clientHeight);
+                renderer.setSize(width, height, false);
+                camera.aspect = width / height;
+
+                // Center position
+                if (width < 640) {
+                    rootGroup.position.set(0, 0, -0.6);
+                    rootGroup.scale.setScalar(0.72);
+                } else if (width < 1024) {
+                    rootGroup.position.set(0, 0, -0.4);
+                    rootGroup.scale.setScalar(0.98);
+                } else {
+                    rootGroup.position.set(0, 0, -0.2);
+                    rootGroup.scale.setScalar(1.24);
+                }
+                camera.updateProjectionMatrix();
+            };
+
+            resize();
+            resizeObserver = new ResizeObserver(resize);
+            resizeObserver.observe(container);
+
+            teardownScene = () => {
+                if (frameId) window.cancelAnimationFrame(frameId);
+                resizeObserver?.disconnect();
+                visibilityObserver?.disconnect();
+                if (pointerFine) {
+                    window.removeEventListener('mousemove', handleMouseMove);
+                }
+                disposables.forEach((d) => d.dispose());
+                renderer.dispose();
+            };
+
+            const clock = new THREE.Clock();
+
+            const renderFrame = () => {
+                frameId = 0;
+                const elapsed = clock.getElapsedTime();
+
+                // Rotate outer and inner line paths in opposite directions
+                outerLine.rotation.x = elapsed * 0.06;
+                outerLine.rotation.y = elapsed * 0.09;
+
+                innerLine.rotation.x = -elapsed * 0.09;
+                innerLine.rotation.y = -elapsed * 0.06;
+
+                // Move flow dots along the outer curve path
+                flowDots.forEach((dot) => {
+                    const t = (elapsed * dot.speed + dot.offset) % 1.0;
+                    outerPath.getPoint(t, dot.mesh.position);
+                    // Apply the same rotation as the outer line to the dots so they stay on it
+                    dot.mesh.position.applyEuler(outerLine.rotation);
+                });
+
+                // Mouse interaction tilt
+                mouse.x += (mouse.targetX - mouse.x) * 0.06;
+                mouse.y += (mouse.targetY - mouse.y) * 0.06;
+                rootGroup.rotation.y = mouse.x * 0.18;
+                rootGroup.rotation.x = -mouse.y * 0.18;
+
+                // Drifting background micro-particles
+                const starPosAttr = starGeometry.getAttribute('position') as BufferAttribute;
+                for (let i = 0; i < starCount; i++) {
+                    const state = starStates[i];
+                    const driftY = Math.sin(elapsed * state.speed + state.phase) * 0.04;
+                    starPosAttr.setXYZ(i, state.x, state.y + driftY, state.z);
+                }
+                starPosAttr.needsUpdate = true;
+
+                renderer.render(scene, camera);
+
+                if (!reducedMotion && !disposed && isVisible) {
+                    frameId = window.requestAnimationFrame(renderFrame);
+                }
+            };
+
+            visibilityObserver = new IntersectionObserver(([entry]) => {
+                isVisible = entry?.isIntersecting ?? true;
+                if (isVisible && !frameId && !reducedMotion && !disposed) {
+                    frameId = window.requestAnimationFrame(renderFrame);
+                } else if (!isVisible && frameId) {
+                    window.cancelAnimationFrame(frameId);
+                    frameId = 0;
+                }
+            }, { threshold: 0.05 });
+            visibilityObserver.observe(container);
+
+            renderFrame();
+        };
+
+        bootScene().catch(() => {
+            canvas.style.opacity = '0';
+        });
+
+        return () => {
+            disposed = true;
+            teardownScene?.();
+        };
+    }, [seed]);
+
+    return (
+        <div ref={containerRef} className={`pointer-events-none absolute inset-0 z-0 overflow-hidden ${className}`}>
+            <canvas ref={canvasRef} className="w-full h-full block opacity-[0.95]" />
+        </div>
+    );
+};
+
+/**
+ * 5. WireframeGyroscope: Concentric wireframe rings spinning on different axes,
+ * matching the gyroscope wireframe theme of the page.
+ */
+export const WireframeGyroscope: React.FC<SparseAnimationProps> = ({
+    className = '',
+    seed = 99,
+}) => {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !canvasRef.current || !containerRef.current) return;
+
+        let frameId = 0;
+        let disposed = false;
+        let isVisible = true;
+        let resizeObserver: ResizeObserver | null = null;
+        let visibilityObserver: IntersectionObserver | null = null;
+        let teardownScene: (() => void) | null = null;
+
+        const canvas = canvasRef.current;
+        const container = containerRef.current;
+        const random = createSeededRandom(seed);
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        const bootScene = async () => {
+            const THREE = await import('three');
+            if (disposed || !canvasRef.current) return;
+            const startsSmall = (container.clientWidth || window.innerWidth || 1024) < 640;
+
+            const renderer = new THREE.WebGLRenderer({
+                canvas,
+                alpha: true,
+                antialias: true,
+                powerPreference: 'high-performance',
+            });
+            renderer.setClearAlpha(0);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, startsSmall ? 1.1 : 1.5));
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+            camera.position.set(0, 0, 7.5);
+
+            const disposables: Array<{ dispose: () => void }> = [];
+            const register = <T extends { dispose: () => void }>(item: T) => {
+                disposables.push(item);
+                return item;
+            };
+
+            const rootGroup = new THREE.Group();
+            scene.add(rootGroup);
+
+            // 3 Concentric Torus Rings (very thin, wireframe)
+            // Ring 1: Cyan
+            const ringMat1 = register(new THREE.MeshBasicMaterial({
+                color: 0x0284c7, // Cyan
+                wireframe: true,
+                transparent: true,
+                opacity: startsSmall ? 0.22 : 0.42,
+                blending: THREE.NormalBlending,
+                depthWrite: false,
+            }));
+            const ring1 = new THREE.Mesh(register(new THREE.TorusGeometry(1.3, 0.05, 8, 80)), ringMat1);
+
+            // Ring 2: Blue
+            const ringMat2 = register(new THREE.MeshBasicMaterial({
+                color: 0x2563eb, // Blue
+                wireframe: true,
+                transparent: true,
+                opacity: startsSmall ? 0.18 : 0.35,
+                blending: THREE.NormalBlending,
+                depthWrite: false,
+            }));
+            const ring2 = new THREE.Mesh(register(new THREE.TorusGeometry(1.9, 0.04, 6, 80)), ringMat2);
+
+            // Ring 3: Teal/Green
+            const ringMat3 = register(new THREE.MeshBasicMaterial({
+                color: 0x0f766e, // Teal
+                wireframe: true,
+                transparent: true,
+                opacity: startsSmall ? 0.14 : 0.28,
+                blending: THREE.NormalBlending,
+                depthWrite: false,
+            }));
+            const ring3 = new THREE.Mesh(register(new THREE.TorusGeometry(2.5, 0.03, 4, 80)), ringMat3);
+
+            rootGroup.add(ring1, ring2, ring3);
+
+            const resize = () => {
+                const width = Math.max(1, container.clientWidth);
+                const height = Math.max(1, container.clientHeight);
+                renderer.setSize(width, height, false);
+                camera.aspect = width / height;
+
+                // Right aligned for the SDK section background
+                if (width < 640) {
+                    rootGroup.position.set(0.85, 0.05, -0.65);
+                    rootGroup.scale.setScalar(0.58);
+                } else if (width < 1024) {
+                    rootGroup.position.set(1.4, -0.1, -0.6);
+                    rootGroup.scale.setScalar(1.02);
+                } else {
+                    rootGroup.position.set(2.2, -0.2, -0.8);
+                    rootGroup.scale.setScalar(1.28);
+                }
+                camera.updateProjectionMatrix();
+            };
+
+            resize();
+            resizeObserver = new ResizeObserver(resize);
+            resizeObserver.observe(container);
+
+            teardownScene = () => {
+                if (frameId) window.cancelAnimationFrame(frameId);
+                resizeObserver?.disconnect();
+                visibilityObserver?.disconnect();
+                disposables.forEach((d) => d.dispose());
+                renderer.dispose();
+            };
+
+            const clock = new THREE.Clock();
+
+            const renderFrame = () => {
+                frameId = 0;
+                const elapsed = clock.getElapsedTime();
+
+                // Rotate rings on multiple axes
+                ring1.rotation.x = elapsed * 0.18;
+                ring1.rotation.y = elapsed * 0.24;
+
+                ring2.rotation.y = -elapsed * 0.28;
+                ring2.rotation.z = elapsed * 0.14;
+
+                ring3.rotation.x = -elapsed * 0.1;
+                ring3.rotation.z = -elapsed * 0.18;
+
+                renderer.render(scene, camera);
+
+                if (!reducedMotion && !disposed && isVisible) {
+                    frameId = window.requestAnimationFrame(renderFrame);
+                }
+            };
+
+            visibilityObserver = new IntersectionObserver(([entry]) => {
+                isVisible = entry?.isIntersecting ?? true;
+                if (isVisible && !frameId && !reducedMotion && !disposed) {
+                    frameId = window.requestAnimationFrame(renderFrame);
+                } else if (!isVisible && frameId) {
+                    window.cancelAnimationFrame(frameId);
+                    frameId = 0;
+                }
+            }, { threshold: 0.05 });
+            visibilityObserver.observe(container);
+
+            renderFrame();
+        };
+
+        bootScene().catch(() => {
+            canvas.style.opacity = '0';
+        });
+
+        return () => {
+            disposed = true;
+            teardownScene?.();
+        };
+    }, [seed]);
+
+    return (
+        <div ref={containerRef} className={`pointer-events-none absolute inset-0 z-0 overflow-hidden ${className}`}>
+            <canvas ref={canvasRef} className="w-full h-full block opacity-95" />
         </div>
     );
 };
