@@ -1,0 +1,342 @@
+name: rejourney
+
+# ============================================================================
+# Coolify-ready compose for rejourney.
+# Changes from the upstream self-host file:
+#   1. Traefik entrypoints: websecure -> https  (Coolify's HTTPS entrypoint name)
+#   2. Middlewares (rejourney-security / -compress / -www-redirect) are DEFINED
+#      inline here, since the upstream Traefik config that defined them isn't
+#      present. A router referencing a missing middleware is dropped by Traefik.
+#   3. bootstrap: removed the `build:` block (no build context in a Coolify
+#      compose deploy) — it pulls the published migration image instead.
+#   4. Removed the custom `rejourney-network` + per-service network keys.
+#      Coolify creates an isolated per-stack network and attaches its proxy to
+#      it; services still resolve each other by service name. (Coolify's docs
+#      recommend NOT hand-defining networks — it can cause Gateway Timeouts.)
+#
+# In the Coolify UI: leave each service's "Domains" field EMPTY. Routing is
+# driven entirely by the labels below; setting a domain there too would make
+# Coolify inject duplicate/conflicting routers.
+# ============================================================================
+
+x-app-env: &app-env
+  DOCKER_ENV: "true"
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: ${DATABASE_URL}
+  REDIS_URL: ${REDIS_URL}
+  S3_ENDPOINT: ${S3_ENDPOINT}
+  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_BUCKET: ${S3_BUCKET}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+  INGEST_HMAC_SECRET: ${INGEST_HMAC_SECRET}
+  STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY}
+  SUPERWALL_API_KEY_ENCRYPTION_KEY: ${SUPERWALL_API_KEY_ENCRYPTION_KEY:-}
+  REVENUECAT_API_KEY_ENCRYPTION_KEY: ${REVENUECAT_API_KEY_ENCRYPTION_KEY:-}
+  PUBLIC_DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL}
+  PUBLIC_API_URL: ${PUBLIC_API_URL}
+  PUBLIC_INGEST_URL: ${PUBLIC_INGEST_URL}
+  DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN}
+  TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+  TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM: ${SMTP_FROM:-}
+  SMTP_SECURE: ${SMTP_SECURE:-true}
+  GEOIP_PREFER_MMDB: ${GEOIP_PREFER_MMDB:-true}
+  GEOIP_MMDB_AUTO_DOWNLOAD: ${GEOIP_MMDB_AUTO_DOWNLOAD:-true}
+  GEOIP_MMDB_URL: ${GEOIP_MMDB_URL:-https://cdn.jsdelivr.net/npm/geolite2-city/GeoLite2-City.mmdb.gz}
+  GEOIP_MMDB_PATH: ${GEOIP_MMDB_PATH:-/tmp/rejourney/GeoLite2-City.mmdb}
+  INGEST_MAX_OBJECT_BYTES: ${INGEST_MAX_OBJECT_BYTES:-26214400}
+  INGEST_DEVICE_BYTES_PER_MINUTE: ${INGEST_DEVICE_BYTES_PER_MINUTE:-52428800}
+  INGEST_DEVICE_BYTES_PER_DAY: ${INGEST_DEVICE_BYTES_PER_DAY:-2147483648}
+  INGEST_PROJECT_BYTES_PER_MINUTE: ${INGEST_PROJECT_BYTES_PER_MINUTE:-536870912}
+  INGEST_PROJECT_BYTES_PER_DAY: ${INGEST_PROJECT_BYTES_PER_DAY:-107374182400}
+  INGEST_IP_BYTES_PER_MINUTE: ${INGEST_IP_BYTES_PER_MINUTE:-104857600}
+  INGEST_IP_BYTES_PER_DAY: ${INGEST_IP_BYTES_PER_DAY:-5368709120}
+  SHOW_ISSUE_DETECTION_UI: ${SHOW_ISSUE_DETECTION_UI:-true}
+  ISSUE_DETECTION_API_URL: ${ISSUE_DETECTION_API_URL:-}
+  ISSUE_DETECTION_SERVICE_SECRET: ${ISSUE_DETECTION_SERVICE_SECRET:-}
+  REJOURNEY_INTERNAL_API_URL: ${REJOURNEY_INTERNAL_API_URL:-}
+  REJOURNEY_INTERNAL_SERVICE_SECRET: ${REJOURNEY_INTERNAL_SERVICE_SECRET:-}
+
+x-api-image: &api-image ghcr.io/rejourneyco/rejourney/api:${IMAGE_TAG:-latest}
+x-web-image: &web-image ghcr.io/rejourneyco/rejourney/web:${IMAGE_TAG:-latest}
+x-migration-image: &migration-image ghcr.io/rejourneyco/rejourney/migration:${IMAGE_TAG:-latest}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rejourney}
+      POSTGRES_USER: ${POSTGRES_USER:-rejourney}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rejourney} -d ${POSTGRES_DB:-rejourney}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8.4-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --save 900 1
+      --loglevel warning
+      --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  bootstrap:
+    image: *migration-image
+    restart: "no"
+    environment:
+      <<: *app-env
+      STORAGE_SYNC_LABEL: selfhosted-bootstrap
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        node --import tsx scripts/applyDatabaseSchema.ts && \
+        node --import tsx scripts/seedIfDatabaseEmpty.ts && \
+        node --import tsx scripts/bootstrapSystemData.ts && \
+        node --import tsx scripts/syncStorageEndpoint.ts
+
+  api:
+    image: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: "3000"
+      COOKIE_SECURE: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+    labels:
+      - traefik.enable=true
+      # --- Middleware definitions (shared across routers in this stack) -------
+      - traefik.http.middlewares.rejourney-compress.compress=true
+      # NOTE: rejourney-security is a RECONSTRUCTION (upstream definition was not
+      # in the file). Sensible HTTPS hardening; no frame-deny so replay/embeds
+      # aren't broken. Adjust to taste.
+      - traefik.http.middlewares.rejourney-security.headers.stsSeconds=63072000
+      - traefik.http.middlewares.rejourney-security.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.rejourney-security.headers.stsPreload=true
+      - traefik.http.middlewares.rejourney-security.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.rejourney-security.headers.referrerPolicy=strict-origin-when-cross-origin
+      # --- API host -----------------------------------------------------------
+      - traefik.http.routers.rejourney-api.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.rejourney-api.priority=1
+      - traefik.http.routers.rejourney-api.entrypoints=https
+      - traefik.http.routers.rejourney-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.rejourney-api.middlewares=rejourney-security,rejourney-compress
+      # --- Ingest host catch-all (the /upload path is overridden below) -------
+      - traefik.http.routers.rejourney-api-ingest.rule=Host(`${INGEST_DOMAIN}`)
+      - traefik.http.routers.rejourney-api-ingest.priority=1
+      - traefik.http.routers.rejourney-api-ingest.entrypoints=https
+      - traefik.http.routers.rejourney-api-ingest.tls.certresolver=letsencrypt
+      - traefik.http.routers.rejourney-api-ingest.middlewares=rejourney-security,rejourney-compress
+      - traefik.http.services.rejourney-api.loadbalancer.server.port=3000
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  ingest-upload:
+    image: *api-image
+    restart: unless-stopped
+    command: ["node", "dist/uploadServer.js"]
+    environment:
+      <<: *app-env
+      PORT: "3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rejourney-ingest.rule=Host(`${INGEST_DOMAIN}`) && PathPrefix(`/upload`)
+      - traefik.http.routers.rejourney-ingest.priority=100
+      - traefik.http.routers.rejourney-ingest.entrypoints=https
+      - traefik.http.routers.rejourney-ingest.tls.certresolver=letsencrypt
+      - traefik.http.routers.rejourney-ingest.middlewares=rejourney-security,rejourney-compress
+      - traefik.http.services.rejourney-ingest.loadbalancer.server.port=3001
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  web:
+    image: *web-image
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_URL: http://api:3000
+      VITE_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      SHOW_ISSUE_DETECTION_UI: ${SHOW_ISSUE_DETECTION_UI:-true}
+    depends_on:
+      api:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+    labels:
+      - traefik.enable=true
+      # www -> apex redirect middleware (compose needs $$ to emit a literal $)
+      - 'traefik.http.middlewares.rejourney-www-redirect.redirectregex.regex=^https?://www\.(.+)'
+      - 'traefik.http.middlewares.rejourney-www-redirect.redirectregex.replacement=https://$${1}'
+      - traefik.http.middlewares.rejourney-www-redirect.redirectregex.permanent=true
+      # --- Dashboard ----------------------------------------------------------
+      - traefik.http.routers.rejourney-web.rule=Host(`${DASHBOARD_DOMAIN}`)
+      - traefik.http.routers.rejourney-web.entrypoints=https
+      - traefik.http.routers.rejourney-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.rejourney-web.middlewares=rejourney-security,rejourney-compress
+      # --- www redirect -------------------------------------------------------
+      - traefik.http.routers.rejourney-web-www.rule=Host(`${WWW_DOMAIN}`)
+      - traefik.http.routers.rejourney-web-www.entrypoints=https
+      - traefik.http.routers.rejourney-web-www.tls.certresolver=letsencrypt
+      - traefik.http.routers.rejourney-web-www.middlewares=rejourney-www-redirect
+      - traefik.http.services.rejourney-web.loadbalancer.server.port=8080
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  ingest-worker:
+    image: *api-image
+    restart: unless-stopped
+    command: ["node", "dist/worker/ingestArtifactWorker.js"]
+    healthcheck:
+      disable: true
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+
+  replay-worker:
+    image: *api-image
+    restart: unless-stopped
+    command: ["node", "dist/worker/replayArtifactWorker.js"]
+    healthcheck:
+      disable: true
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+
+  session-lifecycle-worker:
+    image: *api-image
+    restart: unless-stopped
+    command: ["node", "dist/worker/sessionLifecycleWorker.js"]
+    healthcheck:
+      disable: true
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+
+  # Matches k8s/workers.yaml retention-worker CronJob (*/15 * * * *): single-shot runs with backlog drain.
+  retention-worker:
+    image: *api-image
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        while true; do
+          node dist/worker/retentionWorker.js --once --drain-backlog --trigger=scheduled
+          sleep 900
+        done
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+
+  alert-worker:
+    image: *api-image
+    restart: unless-stopped
+    command: ["node", "dist/worker/alertWorker.js"]
+    healthcheck:
+      disable: true
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+
+  revenue-sync-worker:
+    image: *api-image
+    restart: unless-stopped
+    command: ["node", "dist/worker/revenueSyncWorker.js"]
+    healthcheck:
+      disable: true
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  redisdata:
