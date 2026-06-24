@@ -1,22 +1,39 @@
 name: rejourney
 
 # ============================================================================
-# Coolify-ready compose for rejourney.
-# Changes from the upstream self-host file:
-#   1. Traefik entrypoints: websecure -> https  (Coolify's HTTPS entrypoint name)
-#   2. Middlewares (rejourney-security / -compress / -www-redirect) are DEFINED
-#      inline here, since the upstream Traefik config that defined them isn't
-#      present. A router referencing a missing middleware is dropped by Traefik.
-#   3. bootstrap: removed the `build:` block (no build context in a Coolify
-#      compose deploy) — it pulls the published migration image instead.
-#   4. Removed the custom `rejourney-network` + per-service network keys.
-#      Coolify creates an isolated per-stack network and attaches its proxy to
-#      it; services still resolve each other by service name. (Coolify's docs
-#      recommend NOT hand-defining networks — it can cause Gateway Timeouts.)
+# Coolify-ready compose for rejourney — routing driven by the Coolify UI.
 #
-# In the Coolify UI: leave each service's "Domains" field EMPTY. Routing is
-# driven entirely by the labels below; setting a domain there too would make
-# Coolify inject duplicate/conflicting routers.
+# Why no Traefik labels: Coolify does NOT interpolate ${VARS} inside compose
+# labels, so hand-written Host(`${API_DOMAIN}`) rules reach Traefik literally
+# and fail. Instead, routing is configured in Coolify's per-service "Domains"
+# fields (values live in Coolify's config, not this file — so it stays clean
+# and portable across redeploys). Set these in the UI:
+#
+#   Domains for api:           https://api.rejourney.prpl.se:3000,
+#                              https://ingest.rejourney.prpl.se:3000
+#   Domains for ingest-upload: https://ingest.rejourney.prpl.se:3001/upload
+#   Domains for web:           https://app.rejourney.prpl.se:8080
+#   (bootstrap + all *-worker services: leave empty)
+#
+# The :PORT is the container port; Coolify still serves on 443 externally.
+# The /upload path-router out-prioritizes api's ingest catch-all by Traefik's
+# default rule-length ordering. Verify post-deploy that /upload != /health.
+#
+# Other changes from the upstream self-host file:
+#   - bootstrap: removed the `build:` block (no build context in a Coolify
+#     compose deploy) — it pulls the published migration image instead.
+#   - Removed the custom `rejourney-network` — Coolify manages the network and
+#     attaches its proxy; services still resolve each other by service name.
+#
+# Dropped vs. the upstream Traefik setup (UI Domains can't express these):
+#   - www->apex redirect. DASHBOARD_ORIGIN is apex-pinned, so don't expose www;
+#     add a proxy-level redirect later if wanted.
+#   - custom security-headers middleware. Add a proxy-level dynamic config if
+#     you want HSTS etc.; Coolify applies its own compression.
+#
+# The API_DOMAIN / INGEST_DOMAIN / DASHBOARD_DOMAIN / WWW_DOMAIN env vars are
+# no longer referenced and can be deleted from Coolify. The app still needs
+# PUBLIC_API_URL / PUBLIC_INGEST_URL / PUBLIC_DASHBOARD_URL / DASHBOARD_ORIGIN.
 # ============================================================================
 
 x-app-env: &app-env
@@ -141,31 +158,8 @@ services:
         condition: service_healthy
       bootstrap:
         condition: service_completed_successfully
-    labels:
-      - traefik.enable=true
-      # --- Middleware definitions (shared across routers in this stack) -------
-      - traefik.http.middlewares.rejourney-compress.compress=true
-      # NOTE: rejourney-security is a RECONSTRUCTION (upstream definition was not
-      # in the file). Sensible HTTPS hardening; no frame-deny so replay/embeds
-      # aren't broken. Adjust to taste.
-      - traefik.http.middlewares.rejourney-security.headers.stsSeconds=63072000
-      - traefik.http.middlewares.rejourney-security.headers.stsIncludeSubdomains=true
-      - traefik.http.middlewares.rejourney-security.headers.stsPreload=true
-      - traefik.http.middlewares.rejourney-security.headers.contentTypeNosniff=true
-      - traefik.http.middlewares.rejourney-security.headers.referrerPolicy=strict-origin-when-cross-origin
-      # --- API host -----------------------------------------------------------
-      - traefik.http.routers.rejourney-api.rule=Host(`${API_DOMAIN}`)
-      - traefik.http.routers.rejourney-api.priority=1
-      - traefik.http.routers.rejourney-api.entrypoints=https
-      - traefik.http.routers.rejourney-api.tls.certresolver=letsencrypt
-      - traefik.http.routers.rejourney-api.middlewares=rejourney-security,rejourney-compress
-      # --- Ingest host catch-all (the /upload path is overridden below) -------
-      - traefik.http.routers.rejourney-api-ingest.rule=Host(`${INGEST_DOMAIN}`)
-      - traefik.http.routers.rejourney-api-ingest.priority=1
-      - traefik.http.routers.rejourney-api-ingest.entrypoints=https
-      - traefik.http.routers.rejourney-api-ingest.tls.certresolver=letsencrypt
-      - traefik.http.routers.rejourney-api-ingest.middlewares=rejourney-security,rejourney-compress
-      - traefik.http.services.rejourney-api.loadbalancer.server.port=3000
+    # Routing via Coolify UI -> Domains for api:
+    #   https://api.rejourney.prpl.se:3000,https://ingest.rejourney.prpl.se:3000
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
@@ -186,14 +180,8 @@ services:
         condition: service_healthy
       bootstrap:
         condition: service_completed_successfully
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.rejourney-ingest.rule=Host(`${INGEST_DOMAIN}`) && PathPrefix(`/upload`)
-      - traefik.http.routers.rejourney-ingest.priority=100
-      - traefik.http.routers.rejourney-ingest.entrypoints=https
-      - traefik.http.routers.rejourney-ingest.tls.certresolver=letsencrypt
-      - traefik.http.routers.rejourney-ingest.middlewares=rejourney-security,rejourney-compress
-      - traefik.http.services.rejourney-ingest.loadbalancer.server.port=3001
+    # Routing via Coolify UI -> Domains for ingest-upload:
+    #   https://ingest.rejourney.prpl.se:3001/upload
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
@@ -213,23 +201,8 @@ services:
         condition: service_healthy
       bootstrap:
         condition: service_completed_successfully
-    labels:
-      - traefik.enable=true
-      # www -> apex redirect middleware (compose needs $$ to emit a literal $)
-      - 'traefik.http.middlewares.rejourney-www-redirect.redirectregex.regex=^https?://www\.(.+)'
-      - 'traefik.http.middlewares.rejourney-www-redirect.redirectregex.replacement=https://$${1}'
-      - traefik.http.middlewares.rejourney-www-redirect.redirectregex.permanent=true
-      # --- Dashboard ----------------------------------------------------------
-      - traefik.http.routers.rejourney-web.rule=Host(`${DASHBOARD_DOMAIN}`)
-      - traefik.http.routers.rejourney-web.entrypoints=https
-      - traefik.http.routers.rejourney-web.tls.certresolver=letsencrypt
-      - traefik.http.routers.rejourney-web.middlewares=rejourney-security,rejourney-compress
-      # --- www redirect -------------------------------------------------------
-      - traefik.http.routers.rejourney-web-www.rule=Host(`${WWW_DOMAIN}`)
-      - traefik.http.routers.rejourney-web-www.entrypoints=https
-      - traefik.http.routers.rejourney-web-www.tls.certresolver=letsencrypt
-      - traefik.http.routers.rejourney-web-www.middlewares=rejourney-www-redirect
-      - traefik.http.services.rejourney-web.loadbalancer.server.port=8080
+    # Routing via Coolify UI -> Domains for web:
+    #   https://app.rejourney.prpl.se:8080
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
